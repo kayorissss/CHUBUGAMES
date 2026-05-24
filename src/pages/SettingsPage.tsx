@@ -1,205 +1,224 @@
+import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Bell, Vibrate, Volume2, Moon, Sun, Smartphone, Shield, Info, Trash2 } from 'lucide-react';
+import {
+  Vibrate, Volume2, Moon, Sun, Smartphone,
+  Trash2, Download, RefreshCw, ChevronRight, Radio,
+} from 'lucide-react';
 import Card from '../components/Card';
-import { useSettings } from '../context/SettingsContext';
+import { useSettings, APP_VERSION } from '../context/SettingsContext';
 
-function Toggle({ on, onChange }: { on: boolean; onChange: () => void }) {
+/* ── Toggle ── */
+function Toggle({ on, onTap }: { on: boolean; onTap: () => void }) {
   return (
     <button
-      onClick={onChange}
-      className="relative w-12 h-7 rounded-full cursor-pointer shrink-0 transition-colors duration-200"
+      onClick={onTap}
+      className="relative w-[50px] h-[28px] rounded-full cursor-pointer shrink-0 transition-colors duration-200"
       style={{ background: on ? 'var(--accent)' : 'var(--border-color)' }}
     >
       <motion.div
-        className="absolute top-0.5 w-6 h-6 rounded-full shadow-md"
-        style={{ background: on ? 'white' : 'var(--text-muted)' }}
-        animate={{ left: on ? 22 : 2 }}
+        className="absolute top-[3px] w-[22px] h-[22px] rounded-full"
+        style={{
+          background: 'white',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.25)',
+        }}
+        animate={{ left: on ? 24 : 3 }}
         transition={{ type: 'spring', stiffness: 500, damping: 30 }}
       />
     </button>
   );
 }
 
-function SettingRow({
-  icon: Icon,
-  title,
-  subtitle,
-  right,
-  onClick,
-}: {
-  icon: typeof Bell;
-  title: string;
-  subtitle?: string;
-  right?: React.ReactNode;
-  onClick?: () => void;
+/* ── Row ── */
+function Row({ icon: Icon, title, sub, right, onClick, danger }: {
+  icon: typeof Vibrate; title: string; sub?: string;
+  right?: React.ReactNode; onClick?: () => void; danger?: boolean;
 }) {
+  const iconColor = danger ? 'var(--accent)' : 'var(--text-secondary)';
   return (
     <div
       onClick={onClick}
-      className={`flex items-center gap-3 px-4 py-3.5 ${onClick ? 'cursor-pointer active:opacity-70' : ''}`}
+      className={`flex items-center gap-3.5 px-4 py-3.5 ${onClick ? 'cursor-pointer active:opacity-60 transition-opacity' : ''}`}
     >
-      <div
-        className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
-        style={{ background: 'rgba(220,38,38,0.1)' }}
-      >
-        <Icon size={18} style={{ color: 'var(--accent)' }} />
-      </div>
+      <Icon size={20} style={{ color: iconColor }} className="shrink-0" />
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>{title}</p>
-        {subtitle && <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>{subtitle}</p>}
+        <p className="text-[14px]" style={{ color: danger ? 'var(--accent)' : 'var(--text-primary)' }}>{title}</p>
+        {sub && <p className="text-[12px] mt-0.5" style={{ color: 'var(--text-muted)' }}>{sub}</p>}
       </div>
       {right}
     </div>
   );
 }
 
-function Divider() {
-  return <div style={{ height: 1, background: 'var(--border-color)', marginLeft: 56 }} />;
+function Separator() {
+  return <div className="mx-4" style={{ height: 1, background: 'var(--border-color)' }} />;
 }
 
-export default function SettingsPage() {
-  const { settings, updateSetting, vibrate } = useSettings();
+function SectionLabel({ text }: { text: string }) {
+  return (
+    <p className="text-[12px] font-semibold uppercase tracking-wider mb-2 px-1"
+      style={{ color: 'var(--text-muted)' }}>
+      {text}
+    </p>
+  );
+}
 
-  const toggle = (key: keyof typeof settings) => {
-    vibrate(20);
-    updateSetting(key, !settings[key]);
+/* ══════════════════════════════════════ */
+export default function SettingsPage() {
+  const { settings, toggle, vibrate } = useSettings();
+  const [cleared, setCleared] = useState(false);
+
+  const handleToggle = (key: keyof typeof settings) => {
+    vibrate(15);
+    toggle(key);
   };
 
   const clearHistory = () => {
     vibrate(30);
     localStorage.removeItem('nfc-history');
-    alert('История очищена');
+    setCleared(true);
+    setTimeout(() => setCleared(false), 2000);
   };
 
   return (
     <div className="h-full flex flex-col overflow-y-auto pb-20">
       {/* Header */}
-      <header className="text-center px-6 pt-8 pb-6">
-        <h1 className="text-2xl font-bold" style={{ color: 'var(--text-primary)' }}>
-          Настройки
-        </h1>
-        <p className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>
-          Параметры приложения
-        </p>
+      <header className="text-center px-6 pt-8 pb-4">
+        <h1 className="text-2xl font-bold" style={{ color: 'var(--text-primary)' }}>Настройки</h1>
+        <p className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>Параметры приложения</p>
       </header>
 
-      <div className="px-4 space-y-6">
-        {/* Feedback */}
-        <section>
-          <p className="text-xs font-semibold uppercase tracking-wider mb-2 px-1" style={{ color: 'var(--text-muted)' }}>
-            Обратная связь
-          </p>
-          <Card>
-            <SettingRow
-              icon={Vibrate}
-              title="Вибрация"
-              subtitle="Вибрировать при событиях"
-              right={<Toggle on={settings.vibration} onChange={() => toggle('vibration')} />}
-            />
-            <Divider />
-            <SettingRow
-              icon={Volume2}
-              title="Звук"
-              subtitle="Звуковые уведомления"
-              right={<Toggle on={settings.sound} onChange={() => toggle('sound')} />}
-            />
-            <Divider />
-            <SettingRow
-              icon={Bell}
-              title="Уведомления"
-              subtitle="Push-уведомления"
-              right={<Toggle on={settings.notifications} onChange={() => toggle('notifications')} />}
-            />
-          </Card>
-        </section>
+      <div className="px-4 space-y-6 mt-2">
 
-        {/* Appearance */}
+        {/* ── Сканер ── */}
         <section>
-          <p className="text-xs font-semibold uppercase tracking-wider mb-2 px-1" style={{ color: 'var(--text-muted)' }}>
-            Внешний вид
-          </p>
+          <SectionLabel text="Сканер" />
           <Card>
-            <SettingRow
-              icon={settings.darkMode ? Moon : Sun}
-              title="Тема"
-              subtitle={settings.darkMode ? 'Тёмная тема' : 'Светлая тема'}
-              right={<Toggle on={settings.darkMode} onChange={() => toggle('darkMode')} />}
-            />
-          </Card>
-        </section>
-
-        {/* NFC */}
-        <section>
-          <p className="text-xs font-semibold uppercase tracking-wider mb-2 px-1" style={{ color: 'var(--text-muted)' }}>
-            NFC
-          </p>
-          <Card>
-            <SettingRow
+            <Row
               icon={Smartphone}
               title="Авто-сканирование"
-              subtitle="Автоматически начинать сканирование"
-              right={<Toggle on={settings.autoScan} onChange={() => toggle('autoScan')} />}
-            />
-            <Divider />
-            <SettingRow
-              icon={Shield}
-              title="Безопасность"
-              subtitle="Данные хранятся локально"
-              right={
-                <span className="text-xs px-2 py-1 rounded-lg" style={{ background: 'rgba(34,197,94,0.1)', color: 'var(--success)' }}>
-                  Защищено
-                </span>
-              }
+              sub="Сканировать сразу при открытии"
+              right={<Toggle on={settings.autoScan} onTap={() => handleToggle('autoScan')} />}
             />
           </Card>
         </section>
 
-        {/* Data */}
+        {/* ── Звук и вибрация ── */}
         <section>
-          <p className="text-xs font-semibold uppercase tracking-wider mb-2 px-1" style={{ color: 'var(--text-muted)' }}>
-            Данные
-          </p>
+          <SectionLabel text="Отклик" />
           <Card>
-            <SettingRow
+            <Row
+              icon={Vibrate}
+              title="Вибрация"
+              sub="При нажатиях и событиях"
+              right={<Toggle on={settings.vibration} onTap={() => handleToggle('vibration')} />}
+            />
+            <Separator />
+            <Row
+              icon={Volume2}
+              title="Звук"
+              sub="При успешном сканировании"
+              right={<Toggle on={settings.sound} onTap={() => handleToggle('sound')} />}
+            />
+          </Card>
+        </section>
+
+        {/* ── Тема ── */}
+        <section>
+          <SectionLabel text="Оформление" />
+          <Card>
+            <Row
+              icon={settings.darkMode ? Moon : Sun}
+              title={settings.darkMode ? 'Тёмная тема' : 'Светлая тема'}
+              sub="Переключить оформление"
+              right={<Toggle on={settings.darkMode} onTap={() => handleToggle('darkMode')} />}
+            />
+          </Card>
+        </section>
+
+        {/* ── Данные ── */}
+        <section>
+          <SectionLabel text="Данные" />
+          <Card>
+            <Row
               icon={Trash2}
               title="Очистить историю"
-              subtitle="Удалить все записи сканирований"
+              sub={cleared ? 'Очищено ✓' : 'Удалить все записи сканирований'}
               onClick={clearHistory}
-              right={<span style={{ color: 'var(--accent)' }}>→</span>}
+              danger
+              right={<ChevronRight size={16} style={{ color: 'var(--text-muted)' }} />}
             />
           </Card>
         </section>
 
-        {/* About */}
+        {/* ── Обновление ── */}
         <section>
-          <p className="text-xs font-semibold uppercase tracking-wider mb-2 px-1" style={{ color: 'var(--text-muted)' }}>
-            О приложении
-          </p>
+          <SectionLabel text="Обновление" />
           <Card>
-            <SettingRow
-              icon={Info}
-              title="NFC Tester"
-              subtitle="Версия 1.0.0"
+            <Row
+              icon={Download}
+              title="Загрузить обновление"
+              sub="Установить новую версию APK"
+              onClick={() => {
+                vibrate(20);
+                // Opens file picker to install APK manually
+                const input = document.createElement('input');
+                input.type = 'file';
+                input.accept = '.apk';
+                input.onchange = () => {
+                  if (input.files?.[0]) {
+                    const url = URL.createObjectURL(input.files[0]);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = input.files[0].name;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                  }
+                };
+                input.click();
+              }}
+              right={<ChevronRight size={16} style={{ color: 'var(--text-muted)' }} />}
+            />
+            <Separator />
+            <Row
+              icon={RefreshCw}
+              title="Проверить обновления"
+              sub="Открыть страницу загрузки"
+              onClick={() => {
+                vibrate(20);
+                // Try to open GitHub releases — user puts their repo URL here
+                const repoUrl = localStorage.getItem('update-url');
+                if (repoUrl) {
+                  window.open(repoUrl, '_blank');
+                } else {
+                  const url = prompt('Вставьте ссылку на страницу с обновлениями\n(например, ссылку на ваш GitHub репозиторий):');
+                  if (url) {
+                    localStorage.setItem('update-url', url);
+                    window.open(url, '_blank');
+                  }
+                }
+              }}
+              right={<ChevronRight size={16} style={{ color: 'var(--text-muted)' }} />}
             />
           </Card>
         </section>
 
-        {/* Info box */}
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
-          className="rounded-2xl p-4"
-          style={{ background: 'rgba(220,38,38,0.05)', border: '1px solid rgba(220,38,38,0.1)' }}
-        >
-          <p className="text-xs leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
-            <span style={{ color: 'var(--accent)', fontWeight: 600 }}>Совет:</span> Для работы NFC сканера
-            откройте приложение в Chrome на Android. Web NFC API работает только через HTTPS и требует
-            разрешения на доступ к NFC.
-          </p>
-        </motion.div>
+        {/* ── Версия ── */}
+        <section>
+          <Card>
+            <div className="flex items-center gap-3.5 px-4 py-4">
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
+                style={{ background: 'var(--accent)' }}>
+                <Radio size={20} color="white" />
+              </div>
+              <div>
+                <p className="text-[14px] font-semibold" style={{ color: 'var(--text-primary)' }}>NFC Tester</p>
+                <p className="text-[12px]" style={{ color: 'var(--text-muted)' }}>Версия {APP_VERSION}</p>
+              </div>
+            </div>
+          </Card>
+        </section>
 
-        <div className="h-4" />
+        <div className="h-2" />
       </div>
     </div>
   );
