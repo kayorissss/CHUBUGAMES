@@ -29,7 +29,7 @@ jobs:
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
-          java-version: '17'
+          java-version: '21'   # ← ИСПРАВЛЕНО: было 17, теперь 21
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
@@ -72,4 +72,3 @@ jobs:
           name: NFC-Tester-APK
           path: android/app/build/outputs/apk/debug/NFC-Tester.apk
           retention-days: 30
-
