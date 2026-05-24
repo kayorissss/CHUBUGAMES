@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { Nfc, Radar, Settings } from 'lucide-react';
+import { Cpu, Radio, Settings } from 'lucide-react';
 
 export type TabType = 'check' | 'scan' | 'settings';
 
@@ -8,9 +8,9 @@ interface Props {
   onChange: (t: TabType) => void;
 }
 
-const tabs: { id: TabType; icon: typeof Nfc; label: string }[] = [
-  { id: 'check', icon: Nfc, label: 'Проверка' },
-  { id: 'scan', icon: Radar, label: 'Сканер' },
+const tabs: { id: TabType; icon: typeof Cpu; label: string }[] = [
+  { id: 'check', icon: Cpu, label: 'Проверка' },
+  { id: 'scan', icon: Radio, label: 'Сканер' },
   { id: 'settings', icon: Settings, label: 'Настройки' },
 ];
 
@@ -20,42 +20,38 @@ export default function BottomNav({ active, onChange }: Props) {
       className="fixed bottom-0 inset-x-0 z-50"
       style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
     >
-      {/* frosted glass bar */}
       <div
-        className="mx-auto max-w-md"
+        className="mx-auto max-w-lg border-t"
         style={{
-          background: 'rgba(12,12,14,0.72)',
-          backdropFilter: 'blur(32px) saturate(180%)',
-          WebkitBackdropFilter: 'blur(32px) saturate(180%)',
-          borderTop: '1px solid rgba(255,255,255,0.05)',
+          background: 'var(--bg-secondary)',
+          borderColor: 'var(--border-color)',
         }}
       >
-        <div className="grid grid-cols-3 h-[60px]">
+        <div className="grid grid-cols-3 h-16">
           {tabs.map((t) => {
-            const on = active === t.id;
+            const isActive = active === t.id;
             return (
               <button
                 key={t.id}
                 onClick={() => onChange(t.id)}
-                className="relative flex flex-col items-center justify-center gap-[3px] cursor-pointer"
+                className="relative flex flex-col items-center justify-center gap-1 cursor-pointer transition-colors"
               >
-                {on && (
-                  <motion.span
-                    layoutId="pill"
-                    className="absolute -top-px left-1/2 h-[2px] w-8 -translate-x-1/2 rounded-full"
-                    style={{ background: '#dc2626' }}
-                    transition={{ type: 'spring', stiffness: 500, damping: 35 }}
+                {isActive && (
+                  <motion.div
+                    layoutId="nav-indicator"
+                    className="absolute top-0 left-1/2 -translate-x-1/2 w-12 h-0.5 rounded-full"
+                    style={{ background: 'var(--accent)' }}
+                    transition={{ type: 'spring', stiffness: 400, damping: 30 }}
                   />
                 )}
                 <t.icon
-                  size={20}
-                  strokeWidth={on ? 2.2 : 1.6}
-                  className="transition-colors duration-200"
-                  color={on ? '#ef4444' : '#52525b'}
+                  size={22}
+                  strokeWidth={isActive ? 2 : 1.5}
+                  style={{ color: isActive ? 'var(--accent)' : 'var(--text-muted)' }}
                 />
                 <span
-                  className="text-[10px] font-medium transition-colors duration-200"
-                  style={{ color: on ? '#ef4444' : '#52525b' }}
+                  className="text-[11px] font-medium"
+                  style={{ color: isActive ? 'var(--accent)' : 'var(--text-muted)' }}
                 >
                   {t.label}
                 </span>

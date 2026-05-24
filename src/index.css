@@ -1,9 +1,5 @@
 @import "tailwindcss";
 
-@theme {
-  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
-}
-
 * {
   margin: 0;
   padding: 0;
@@ -11,50 +7,73 @@
   -webkit-tap-highlight-color: transparent;
 }
 
+html {
+  font-size: 16px;
+}
+
 html, body, #root {
   height: 100%;
   width: 100%;
   overflow: hidden;
-  background: #09090b;
+}
+
+/* Dark theme (default) */
+:root, .dark {
+  --bg-primary: #09090b;
+  --bg-secondary: #18181b;
+  --bg-card: rgba(39, 39, 42, 0.5);
+  --bg-card-solid: #27272a;
+  --border-color: rgba(63, 63, 70, 0.5);
+  --text-primary: #fafafa;
+  --text-secondary: #a1a1aa;
+  --text-muted: #71717a;
+  --accent: #dc2626;
+  --accent-light: #ef4444;
+  --success: #22c55e;
+  --warning: #f59e0b;
+}
+
+/* Light theme */
+.light {
+  --bg-primary: #ffffff;
+  --bg-secondary: #f4f4f5;
+  --bg-card: rgba(244, 244, 245, 0.8);
+  --bg-card-solid: #e4e4e7;
+  --border-color: rgba(212, 212, 216, 0.8);
+  --text-primary: #18181b;
+  --text-secondary: #52525b;
+  --text-muted: #a1a1aa;
+  --accent: #dc2626;
+  --accent-light: #ef4444;
+  --success: #16a34a;
+  --warning: #d97706;
 }
 
 body {
-  color: #fafafa;
-  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
 }
 
 ::-webkit-scrollbar { width: 0; display: none; }
 
-/* ── Conic radar sweep ─────────────────────────── */
-@keyframes radar {
+/* Animations */
+@keyframes radar-sweep {
   from { transform: rotate(0deg); }
-  to   { transform: rotate(360deg); }
-}
-.animate-radar {
-  animation: radar 2.4s linear infinite;
+  to { transform: rotate(360deg); }
 }
 
-/* ── Orbit dot ─────────────────────────────────── */
-@keyframes orbit {
-  from { transform: rotate(0deg) translateX(54px) rotate(0deg); }
-  to   { transform: rotate(360deg) translateX(54px) rotate(-360deg); }
+@keyframes pulse-ring {
+  0%, 100% { transform: scale(1); opacity: 0.6; }
+  50% { transform: scale(1.15); opacity: 0.3; }
 }
-.animate-orbit {
-  animation: orbit 3s linear infinite;
+
+@keyframes dot-orbit {
+  from { transform: rotate(0deg) translateX(60px) rotate(0deg); }
+  to { transform: rotate(360deg) translateX(60px) rotate(-360deg); }
 }
-@keyframes orbit2 {
-  from { transform: rotate(120deg) translateX(78px) rotate(-120deg); }
-  to   { transform: rotate(480deg) translateX(78px) rotate(-480deg); }
-}
-.animate-orbit2 {
-  animation: orbit2 4.5s linear infinite;
-}
-@keyframes orbit3 {
-  from { transform: rotate(240deg) translateX(100px) rotate(-240deg); }
-  to   { transform: rotate(600deg) translateX(100px) rotate(-600deg); }
-}
-.animate-orbit3 {
-  animation: orbit3 6s linear infinite;
-}
+
+.animate-radar { animation: radar-sweep 2s linear infinite; }
+.animate-pulse-ring { animation: pulse-ring 2s ease-in-out infinite; }
+.animate-orbit { animation: dot-orbit 3s linear infinite; }
