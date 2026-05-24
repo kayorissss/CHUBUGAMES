@@ -1,0 +1,60 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html, body, #root {
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+  background: #09090b;
+}
+
+body {
+  color: #fafafa;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+::-webkit-scrollbar { width: 0; display: none; }
+
+/* ── Conic radar sweep ─────────────────────────── */
+@keyframes radar {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+.animate-radar {
+  animation: radar 2.4s linear infinite;
+}
+
+/* ── Orbit dot ─────────────────────────────────── */
+@keyframes orbit {
+  from { transform: rotate(0deg) translateX(54px) rotate(0deg); }
+  to   { transform: rotate(360deg) translateX(54px) rotate(-360deg); }
+}
+.animate-orbit {
+  animation: orbit 3s linear infinite;
+}
+@keyframes orbit2 {
+  from { transform: rotate(120deg) translateX(78px) rotate(-120deg); }
+  to   { transform: rotate(480deg) translateX(78px) rotate(-480deg); }
+}
+.animate-orbit2 {
+  animation: orbit2 4.5s linear infinite;
+}
+@keyframes orbit3 {
+  from { transform: rotate(240deg) translateX(100px) rotate(-240deg); }
+  to   { transform: rotate(600deg) translateX(100px) rotate(-600deg); }
+}
+.animate-orbit3 {
+  animation: orbit3 6s linear infinite;
+}
