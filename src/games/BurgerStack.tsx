@@ -17,11 +17,27 @@ interface Layer {
   w: number;
   y: number;     // индекс слоя снизу
   hue: number;
+  /** Слой уже въехал в кадр — можно разворачивать у краёв */
+  entered?: boolean;
 }
 
 const BASE_W = 0.62;   // доля ширины экрана
 const LAYER_H = 26;
 const PERFECT = 6;
+
+/** Сколько слоёв в одном этаже — дальше меняется оформление и темп */
+const FLOOR_SIZE = 8;
+
+/** Этажи башни: свой фон, название и прибавка к скорости */
+const FLOORS = [
+  { name: "СТОЛОВАЯ",  top: "#0b0b10", bot: "#15151d", tint: "#FFB020" },
+  { name: "ОБЩАГА",    top: "#0a0f16", bot: "#131c26", tint: "#8FD3FF" },
+  { name: "КРЫША",     top: "#120a16", bot: "#1d1226", tint: "#C89BFF" },
+  { name: "ОБЛАКА",    top: "#0a1614", bot: "#12241f", tint: "#59FF9E" },
+  { name: "КОСМОС",    top: "#08080c", bot: "#101019", tint: "#FF6B8A" },
+];
+
+const floorOf = (n: number) => Math.min(FLOORS.length - 1, Math.floor(n / FLOOR_SIZE));
 
 export default function BurgerStack({ onExit }: { onExit: () => void }) {
   const { s, addCoins, addXp, finishGame, questProgress } = useGame();
@@ -29,6 +45,7 @@ export default function BurgerStack({ onExit }: { onExit: () => void }) {
   const [cd, setCd] = useState(3);
   const [score, setScore] = useState(0);
   const [combo, setCombo] = useState(0);
+  const [floor, setFloor] = useState(0);
   const [result, setResult] = useState({ score: 0, coins: 0, xp: 0 });
 
   const best = s.games.stack?.best || 0;
@@ -48,13 +65,16 @@ export default function BurgerStack({ onExit }: { onExit: () => void }) {
     shake: 0,
     chips: [] as { x: number; y: number; w: number; vy: number; vx: number; hue: number }[],
     flash: 0,
+    floor: 0,
+    floorFlash: 0,
+    wid: 0,          // ширина канваса, нужна для старта слоя за краем
   });
 
   const reset = useCallback((w: number) => {
     const g = G.current;
     const bw = w * BASE_W;
     g.layers = [{ x: (w - bw) / 2, w: bw, y: 0, hue: 0 }];
-    g.cur = { x: 0, w: bw, y: 1, hue: 1 };
+    g.cur = { x: 0, w: bw, y: 1, hue: 1, entered: true };
     g.dir = 1;
     g.speed = speedBase;
     g.camY = 0;
@@ -63,6 +83,10 @@ export default function BurgerStack({ onExit }: { onExit: () => void }) {
     g.chips = [];
     g.shake = 0;
     g.flash = 0;
+    g.floor = 0;
+    g.floorFlash = 0;
+    g.wid = w;
+    setFloor(0);
     g.startT = Date.now();
     setScore(0);
     setCombo(0);
@@ -152,10 +176,27 @@ export default function BurgerStack({ onExit }: { onExit: () => void }) {
     setScore(Math.floor(g.score));
     setCombo(g.combo);
 
-    // следующий слой
+    // следующий слой: заезжает то слева, то справа
     g.speed = Math.min(0.78, g.speed + 0.011);
-    g.dir = Math.random() < 0.5 ? 1 : -1;
-    g.cur = { x: 0, w: cur.w, y: cur.y + 1, hue: cur.hue + 1 };
+    const fromLeft = Math.random() < 0.5;
+    g.dir = fromLeft ? 1 : -1;
+    const nextY = cur.y + 1;
+    // на новом этаже слой ещё и ускоряется
+    const fl = floorOf(nextY);
+    if (fl > g.floor) {
+      g.floor = fl;
+      g.speed = Math.min(0.9, g.speed + 0.05);
+      g.floorFlash = 1;
+      setFloor(fl);
+      sfx.achieve?.();
+      haptic("success");
+    }
+    g.cur = {
+      x: fromLeft ? -cur.w : g.wid,   // старт за краем экрана
+      w: cur.w,
+      y: nextY,
+      hue: cur.hue + 1,
+    };
   }, [end]);
 
   const canvasRef = useCanvas(
@@ -164,12 +205,17 @@ export default function BurgerStack({ onExit }: { onExit: () => void }) {
       if (!g.layers.length) reset(w);
 
       // ---- физика ----
+      g.wid = w;
       if (g.running && g.cur) {
         const c = g.cur;
         c.x += g.dir * g.speed * dt;
         const maxX = w - c.w;
-        if (c.x <= 0) { c.x = 0; g.dir = 1; }
-        if (c.x >= maxX) { c.x = maxX; g.dir = -1; }
+        // пока слой не въехал в кадр — не разворачиваем его
+        if (c.x > 0 && c.x < maxX) c.entered = true;
+        if (c.entered) {
+          if (c.x <= 0) { c.x = 0; g.dir = 1; }
+          if (c.x >= maxX) { c.x = maxX; g.dir = -1; }
+        }
       }
       for (const ch of g.chips) {
         ch.vy += dt * 0.0022;
@@ -184,12 +230,23 @@ export default function BurgerStack({ onExit }: { onExit: () => void }) {
       const targetCam = Math.max(0, (g.layers.length - 5) * LAYER_H);
       g.camY += (targetCam - g.camY) * Math.min(1, dt * 0.008);
 
-      // ---- фон ----
+      // ---- фон: свой на каждом этаже, плавно перетекает ----
+      const fl = FLOORS[floorOf(g.layers.length)];
       const grd = ctx.createLinearGradient(0, 0, 0, h);
-      grd.addColorStop(0, "#0b0b10");
-      grd.addColorStop(1, "#15151d");
+      grd.addColorStop(0, fl.top);
+      grd.addColorStop(1, fl.bot);
       ctx.fillStyle = grd;
       ctx.fillRect(0, 0, w, h);
+
+      // подсветка этажа
+      if (g.floorFlash > 0) {
+        g.floorFlash = Math.max(0, g.floorFlash - dt * 0.0012);
+        const rg = ctx.createRadialGradient(w / 2, h * 0.55, 0, w / 2, h * 0.55, w * 0.9);
+        rg.addColorStop(0, `${fl.tint}${Math.round(g.floorFlash * 40).toString(16).padStart(2, "0")}`);
+        rg.addColorStop(1, "transparent");
+        ctx.fillStyle = rg;
+        ctx.fillRect(0, 0, w, h);
+      }
 
       if (g.flash > 0) {
         ctx.fillStyle = `rgba(255,220,140,${g.flash * 0.13})`;
@@ -309,7 +366,19 @@ export default function BurgerStack({ onExit }: { onExit: () => void }) {
         onExit={onExit}
         label="ЭТАЖИ"
         extra={
-          combo > 1 ? (
+          <div className="flex items-center shrink-0" style={{ gap: 7 }}>
+            <div
+              className="t-label shrink-0"
+              style={{
+                padding: "8px 11px", borderRadius: "var(--r-md)",
+                background: "var(--btn-bg)",
+                border: `1px solid ${FLOORS[floor].tint}66`,
+                color: FLOORS[floor].tint, fontSize: 9.5,
+              }}
+            >
+              {FLOORS[floor].name}
+            </div>
+            {combo > 1 ? (
             <div
               className="t-num shrink-0"
               style={{
@@ -321,7 +390,8 @@ export default function BurgerStack({ onExit }: { onExit: () => void }) {
             >
               ×{combo}
             </div>
-          ) : undefined
+            ) : null}
+          </div>
         }
       />
 

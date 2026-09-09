@@ -22,6 +22,13 @@ import Icon from "../ui/Icon";
  * плотных серий ударов в одной полосе.
  */
 
+/** Встроенный трек — лежит в приложении, работает офлайн */
+const BUILTIN_TRACK = {
+  src: "femboichik.mp3",
+  title: "Фембойчик",
+  artist: "onokami",
+};
+
 type Phase = "menu" | "count" | "play" | "over";
 
 interface Note {
@@ -120,6 +127,8 @@ export default function RadomirBeat({ onExit }: { onExit: () => void }) {
   const [trackName, setTrackName] = useState<string | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
   const [loadErr, setLoadErr] = useState<string | null>(null);
+  /** Играет встроенный «Фембойчик» (свой трек не загружен) */
+  const [builtinReady, setBuiltinReady] = useState(false);
   const audioBuf = useRef<AudioBuffer | null>(null);
   const chartRef = useRef<Note[] | null>(null);
   const clockRef = useRef<(() => number) | null>(null);
@@ -143,21 +152,45 @@ export default function RadomirBeat({ onExit }: { onExit: () => void }) {
     endAt: 0,
   });
 
-  /* ---------- загрузка сохранённого трека ---------- */
+  /* ---------- загрузка трека ----------
+     Сначала пробуем свой (из IndexedDB), иначе — встроенный «Фембойчик»,
+     который лежит в приложении и работает офлайн.                        */
   useEffect(() => {
     let alive = true;
     void (async () => {
       const st = await loadTrack();
-      if (!alive || !st) return;
-      setTrackName(st.name);
-      try {
-        const buf = await decode(st.data);
-        if (!alive) return;
-        audioBuf.current = buf;
-        chartRef.current = chartFromOnsets(detectOnsets(buf), s.settings.difficulty);
-      } catch {
-        setLoadErr("Файл не читается, загрузи заново");
+
+      if (st) {
+        setTrackName(st.name);
+        try {
+          const buf = await decode(st.data);
+          if (!alive) return;
+          audioBuf.current = buf;
+          chartRef.current = chartFromOnsets(detectOnsets(buf), s.settings.difficulty);
+        } catch {
+          setLoadErr("Файл не читается, загрузи заново");
+        }
+        return;
       }
+
+      // Встроенный трек
+      setAnalyzing(true);
+      try {
+        const res = await fetch(BUILTIN_TRACK.src);
+        if (!res.ok) throw new Error("нет файла");
+        const data = await res.arrayBuffer();
+        const buf = await decode(data);
+        if (!alive) return;
+        const ons = detectOnsets(buf);
+        if (ons.length >= 12) {
+          audioBuf.current = buf;
+          chartRef.current = chartFromOnsets(ons, s.settings.difficulty);
+          setBuiltinReady(true);
+        }
+      } catch {
+        // трека нет — остаётся синтезированный бит, игра не ломается
+      }
+      if (alive) setAnalyzing(false);
     })();
     return () => { alive = false; };
   }, []);
@@ -195,7 +228,7 @@ export default function RadomirBeat({ onExit }: { onExit: () => void }) {
     sfx.click();
   };
 
-  const useOwn = !!(trackName && audioBuf.current && chartRef.current);
+  const useOwn = !!(audioBuf.current && chartRef.current);
 
   const reset = useCallback(() => {
     const g = G.current;
@@ -606,10 +639,15 @@ export default function RadomirBeat({ onExit }: { onExit: () => void }) {
                   <Icon name="music" size={17} accent />
                   <div className="min-w-0 flex-1">
                     <div className="t-body clip1" style={{ fontWeight: 600 }}>
-                      {trackName || "Встроенный бит"}
+                      {trackName
+                        || (builtinReady ? BUILTIN_TRACK.title : "Встроенный бит")}
                     </div>
-                    <div className="t-caption">
-                      {trackName ? "твой трек, ноты из музыки" : "синтезируется в приложении"}
+                    <div className="t-caption clip1">
+                      {trackName
+                        ? "твой трек, ноты из музыки"
+                        : builtinReady
+                          ? `${BUILTIN_TRACK.artist} — ноты из музыки`
+                          : analyzing ? "загружаю трек…" : "синтезируется в приложении"}
                     </div>
                   </div>
                 </div>

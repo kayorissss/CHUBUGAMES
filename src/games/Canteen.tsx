@@ -7,10 +7,11 @@ import { Panel } from "../ui/Glass";
 import Icon from "../ui/Icon";
 
 /**
- * СТОЛОВКА — раздавай подносы по окнам нужного цвета.
- * Поднос едет снизу, свайпаешь его пальцем в одно из трёх окон.
- * Правильно — очки и время; ошибка — минус жизнь.
- * Управление именно перетаскиванием, а не тапом.
+ * СТОЛОВКА — разноси блюда по окнам раздачи.
+ * На подносе только название блюда, без цветовой подсказки: сам решай,
+ * первое это, второе или компот. Окна сверху время от времени меняются
+ * местами, поэтому играть вслепую по позициям не выйдет.
+ * Управление — перетаскиванием пальцем, а не тапом.
  */
 
 type Slot = 0 | 1 | 2;
@@ -47,6 +48,10 @@ export default function Canteen({ onExit }: { onExit: () => void }) {
   const [hover, setHover] = useState<Slot | null>(null);
   const [pop, setPop] = useState<{ id: number; slot: Slot; ok: boolean } | null>(null);
   const [served, setServed] = useState(0);
+  /** Какой тип блюда сейчас в каждом окне: order[позиция] = тип.
+      Перемешивается по ходу раунда, чтобы нельзя было играть вслепую. */
+  const [order, setOrder] = useState<Slot[]>([0, 1, 2]);
+  const [shuffling, setShuffling] = useState(false);
 
   const best = s.games.sort?.best || 0;
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -84,6 +89,7 @@ export default function Canteen({ onExit }: { onExit: () => void }) {
     setServed(0);
     setTimeLeft(ROUND_MS);
     setTray(null);
+    setOrder([0, 1, 2]);
     setPhase("count");
     setCd(3);
   }, []);
@@ -120,6 +126,32 @@ export default function Canteen({ onExit }: { onExit: () => void }) {
     questProgress("plays", 1);
   }, [addCoins, addXp, finishGame, questProgress, s.prestige]);
 
+  // Перетасовка окон: чем дальше, тем чаще — сложность растёт
+  useEffect(() => {
+    if (phase !== "play") return;
+    const delay = () => 9000 - Math.min(4500, servedRef.current * 260);
+    let tm: number;
+    const plan = () => {
+      tm = window.setTimeout(() => {
+        setOrder((prev) => {
+          const next = [...prev];
+          // меняем местами две случайные позиции — заметно, но не хаос
+          const a = Math.floor(Math.random() * 3);
+          let b = Math.floor(Math.random() * 3);
+          if (b === a) b = (a + 1) % 3;
+          [next[a], next[b]] = [next[b], next[a]];
+          return next;
+        });
+        setShuffling(true);
+        sfx.swoosh?.();
+        window.setTimeout(() => setShuffling(false), 700);
+        plan();
+      }, delay());
+    };
+    plan();
+    return () => clearTimeout(tm);
+  }, [phase]);
+
   // таймер раунда
   useEffect(() => {
     if (phase !== "play") return;
@@ -131,12 +163,12 @@ export default function Canteen({ onExit }: { onExit: () => void }) {
     return () => clearInterval(iv);
   }, [phase, finish]);
 
-  /** Отдать поднос в окно */
+  /** Отдать поднос в окно (slot — позиция на экране, не тип блюда) */
   const serve = useCallback(
     (slot: Slot) => {
       const t = tray;
       if (!t || !running.current) return;
-      const ok = slot === t.kind;
+      const ok = order[slot] === t.kind;
       setPop({ id: t.id, slot, ok });
       setTimeout(() => setPop(null), 420);
 
@@ -165,7 +197,7 @@ export default function Canteen({ onExit }: { onExit: () => void }) {
       }
       nextTray();
     },
-    [tray, nextTray, finish],
+    [tray, nextTray, finish, order],
   );
 
   /* ---------- перетаскивание ---------- */
@@ -255,11 +287,13 @@ export default function Canteen({ onExit }: { onExit: () => void }) {
         <div className="flex" style={{ gap: 8, padding: "0 12px", height: "31%" }}>
           {[0, 1, 2].map((i) => {
             const on = hover === i;
-            const col = SLOT_COLORS[i];
+            const kind = order[i];          // что раздают в этом окне сейчас
+            const col = SLOT_COLORS[kind];
             return (
               <motion.div
                 key={i}
-                animate={{ scale: on ? 1.04 : 1 }}
+                layout
+                animate={{ scale: on ? 1.04 : shuffling ? 1.02 : 1 }}
                 transition={{ type: "spring", stiffness: 420, damping: 24 }}
                 className="flex-1 flex flex-col items-center justify-center"
                 style={{
@@ -270,15 +304,21 @@ export default function Canteen({ onExit }: { onExit: () => void }) {
                   gap: 8,
                 }}
               >
-                <span
-                  style={{
-                    width: 34, height: 34, borderRadius: 10,
-                    background: col, opacity: on ? 1 : 0.75,
-                  }}
+                <motion.span
+                  animate={{ background: col, opacity: on ? 1 : 0.75 }}
+                  transition={{ duration: 0.3 }}
+                  style={{ width: 34, height: 34, borderRadius: 10 }}
                 />
-                <span className="t-label" style={{ fontSize: 9, color: on ? col : "var(--text-mute)" }}>
-                  {SLOT_NAMES[i]}
-                </span>
+                <motion.span
+                  key={kind}
+                  initial={{ opacity: 0, y: -6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.25 }}
+                  className="t-label"
+                  style={{ fontSize: 9, color: on ? col : "var(--text-mute)" }}
+                >
+                  {SLOT_NAMES[kind]}
+                </motion.span>
 
                 <AnimatePresence>
                   {pop && pop.slot === i && (
@@ -326,26 +366,30 @@ export default function Canteen({ onExit }: { onExit: () => void }) {
                     : { type: "spring", stiffness: 320, damping: 26 }
                 }
               >
+                {/* Поднос нейтральный: цвет не подсказывает окно,
+                    ориентируемся только по названию блюда */}
                 <Panel
                   r="lg"
                   strong
                   className="flex flex-col items-center"
                   style={{
                     padding: "16px 22px", gap: 9, minWidth: 148,
-                    border: `2px solid ${SLOT_COLORS[tray.kind]}`,
-                    boxShadow: `0 12px 34px -12px ${SLOT_COLORS[tray.kind]}`,
+                    border: "2px solid var(--btn-brd)",
+                    boxShadow: "0 12px 34px -14px rgba(0,0,0,0.8)",
                   }}
                 >
                   <span
+                    className="flex items-center justify-center"
                     style={{
                       width: 42, height: 42, borderRadius: 12,
-                      background: SLOT_COLORS[tray.kind],
+                      background: "var(--surface-2)",
+                      border: "1px solid var(--btn-brd)",
+                      color: "var(--text)",
                     }}
-                  />
-                  <span className="t-title-sm" style={{ fontSize: 14 }}>{tray.dish}</span>
-                  <span className="t-label" style={{ fontSize: 8.5 }}>
-                    {SLOT_NAMES[tray.kind]}
+                  >
+                    <Icon name="burger" size={20} />
                   </span>
+                  <span className="t-title-sm" style={{ fontSize: 15 }}>{tray.dish}</span>
                 </Panel>
               </motion.div>
             )}
