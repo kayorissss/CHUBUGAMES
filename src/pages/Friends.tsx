@@ -1,9 +1,11 @@
 import { useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useGame } from "../core/store";
+import { bossStats } from "../core/save";
 import { RARITY_COLOR, RARITY_LABEL } from "../core/content";
 import { Card, Tap, Button, Bar, SectionTitle, Screen } from "../ui/Glass";
 import HeadView from "../ui/HeadView";
+import Icon from "../ui/Icon";
 import { sfx, haptic } from "../core/fx";
 import type { Friend, FriendLook, Rarity } from "../core/types";
 
@@ -17,6 +19,7 @@ const GLASS_NAMES = ["Нет", "Круглые", "Прямые"];
 
 export default function Friends() {
   const { s, set, mainFriend, toast } = useGame();
+  const bonus = bossStats(s);
   const [editing, setEditing] = useState<Friend | null>(null);
   const [creating, setCreating] = useState(false);
 
@@ -49,7 +52,7 @@ export default function Friends() {
     sfx.power();
     haptic("success");
     const f = s.friends.find((x) => x.id === id);
-    toast({ title: "Главный босс сменён", sub: f?.name, icon: "👑" });
+    toast({ title: "Главный босс сменён", sub: f?.name, icon: "crown" });
   };
 
   return (
@@ -107,10 +110,34 @@ export default function Friends() {
             className="grid grid-cols-2"
             style={{ columnGap: 18, rowGap: 12, marginTop: 16 }}
           >
-            <StatBar l="Сила плевка" v={mainFriend.stats.spit} />
-            <StatBar l="Чабность" v={mainFriend.stats.chub} />
-            <StatBar l="Хаос" v={mainFriend.stats.chaos} />
-            <StatBar l="Удача" v={mainFriend.stats.luck} />
+            <StatBar
+              l="Меткость"
+              v={mainFriend.stats.spit}
+              effect={`+${(bonus.critBonus * 100).toFixed(1)}% к криту в кликере`}
+            />
+            <StatBar
+              l="Выносливость"
+              v={mainFriend.stats.chub}
+              effect={`+${Math.round(bonus.offlineBonus * 100)}% офлайн-дохода`}
+            />
+            <StatBar
+              l="Безбашенность"
+              v={mainFriend.stats.chaos}
+              effect={`+${Math.round(bonus.coinBonus * 100)}% монет везде`}
+            />
+            <StatBar
+              l="Удача"
+              v={mainFriend.stats.luck}
+              effect={`+${Math.round(bonus.luckBonus * 100)}% к редким дропам`}
+            />
+          </div>
+
+          <div
+            className="t-caption"
+            style={{ marginTop: 14, lineHeight: 1.5, opacity: 0.85 }}
+          >
+            Статы работают, пока друг стоит главным боссом. Меняешь босса —
+            меняются бонусы.
           </div>
         </Card>
 
@@ -153,15 +180,17 @@ export default function Friends() {
                   >
                     {isMain ? "Босс" : "Выбрать"}
                   </Button>
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    sound="none"
-                    onClick={() => { setEditing({ ...f, look: { ...f.look }, stats: { ...f.stats } }); setCreating(false); }}
-                    style={{ padding: "8px 10px" }}
-                  >
-                    ✏️
-                  </Button>
+                  {!f.builtin && (
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      sound="none"
+                      onClick={() => { setEditing({ ...f, look: { ...f.look }, stats: { ...f.stats } }); setCreating(false); }}
+                      style={{ padding: "8px 10px" }}
+                    >
+                      <Icon name="settings" size={14} />
+                    </Button>
+                  )}
                 </div>
               </Card>
             );
@@ -171,7 +200,8 @@ export default function Friends() {
           className="t-caption text-center"
           style={{ marginTop: 20, paddingInline: 12, lineHeight: 1.55 }}
         >
-          Загрузи настоящее фото друга — оно станет головой-боссом в играх.
+          Создай своего персонажа кнопкой сверху — его можно сделать главным
+          боссом и загрузить настоящее фото.
           Всё хранится только на твоём телефоне.
         </div>
 
@@ -189,7 +219,7 @@ export default function Friends() {
   );
 }
 
-function StatBar({ l, v }: { l: string; v: number }) {
+function StatBar({ l, v, effect }: { l: string; v: number; effect?: string }) {
   return (
     <div style={{ minWidth: 0 }}>
       <div className="flex justify-between items-baseline" style={{ gap: 6, marginBottom: 6 }}>
@@ -197,6 +227,11 @@ function StatBar({ l, v }: { l: string; v: number }) {
         <span className="t-num shrink-0" style={{ fontSize: 11 }}>{v}</span>
       </div>
       <Bar pct={v / 100} h={5} />
+      {effect && (
+        <div className="t-caption clip1" style={{ marginTop: 4, fontSize: 9.5 }}>
+          {effect}
+        </div>
+      )}
     </div>
   );
 }
@@ -227,7 +262,7 @@ function Editor({ friend, isNew, onClose }: { friend: Friend; isNew: boolean; on
     });
     sfx.legend();
     haptic("success");
-    toast({ title: isNew ? "Друг добавлен" : "Сохранено", sub: f.name, icon: "👥" });
+    toast({ title: isNew ? "Друг добавлен" : "Сохранено", sub: f.name, icon: "users" });
     onClose();
   };
 
@@ -323,7 +358,7 @@ function Editor({ friend, isNew, onClose }: { friend: Friend; isNew: boolean; on
                       background: "#ff4a30", color: "#fff", fontSize: 12, border: "2px solid var(--bg)",
                     }}
                   >
-                    ✕
+                    <Icon name="cross" size={15} />
                   </button>
                 )}
               </div>
@@ -363,10 +398,14 @@ function Editor({ friend, isNew, onClose }: { friend: Friend; isNew: boolean; on
 
             <div className="flex gap-2 mb-4">
               <Tap onClick={() => fileRef.current?.click()} r="md" className="flex-1 py-2.5 t-title" style={{ fontSize: 11 }} sound="none">
-                📷 ФОТО
+                <span className="inline-flex items-center justify-center" style={{ gap: 6 }}>
+                  <Icon name="eye" size={13} /> ФОТО
+                </span>
               </Tap>
               <Tap onClick={randomize} r="md" className="flex-1 py-2.5 t-title" style={{ fontSize: 11 }} sound="none">
-                🎲 СЛУЧАЙНО
+                <span className="inline-flex items-center justify-center" style={{ gap: 6 }}>
+                  <Icon name="dice" size={13} /> СЛУЧАЙНО
+                </span>
               </Tap>
               <input ref={fileRef} type="file" accept="image/*" hidden onChange={pickPhoto} />
             </div>
@@ -425,7 +464,7 @@ function Editor({ friend, isNew, onClose }: { friend: Friend; isNew: boolean; on
             </Row>
 
             <Row label="Характеристики">
-              {([["spit", "СИЛА ПЛЕВКА"], ["chub", "ЧАБНОСТЬ"], ["chaos", "ХАОС"], ["luck", "УДАЧА"]] as const).map(([k, l]) => (
+              {([["spit", "МЕТКОСТЬ"], ["chub", "ВЫНОСЛИВОСТЬ"], ["chaos", "БЕЗБАШЕННОСТЬ"], ["luck", "УДАЧА"]] as const).map(([k, l]) => (
                 <div key={k} className="mb-2">
                   <div className="flex justify-between">
                     <span className="t-label" style={{ fontSize: 7 }}>{l}</span>
@@ -443,7 +482,7 @@ function Editor({ friend, isNew, onClose }: { friend: Friend; isNew: boolean; on
             <div className="flex gap-2 mt-4">
               {!isNew && !f.builtin && (
                 <Tap onClick={del} r="md" className="px-4 py-3.5" style={{ fontSize: 13 }} sound="none">
-                  🗑
+                  <Icon name="trash" size={15} />
                 </Tap>
               )}
               <Tap onClick={onClose} r="md" className="px-5 py-3.5 t-title" style={{ fontSize: 12 }}>

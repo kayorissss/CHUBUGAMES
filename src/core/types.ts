@@ -2,15 +2,35 @@ export type Rarity = "common" | "rare" | "epic" | "legend";
 
 export type GameId = "burger" | "clicker" | "bite" | "dino" | "radomir" | "merge" | "whack";
 
+/**
+ * 0 лысый, 1 короткие, 2 шапка волос, 3 ирокез, 4 кудри-облако,
+ * 5 кепка, 6 ёжик-разнобой, 7 длинные, 8 штрихкод (прямые пряди),
+ * 9 очень короткая стрижка (почти под машинку)
+ */
+export type HairStyle = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
+
+/** 0 нет / 1 щетина / 2 борода / 3 усы / 4 козлиная квадратная */
+export type Facial = 0 | 1 | 2 | 3 | 4;
+
+/** 0 нет / 1 круглые / 2 прямоугольные */
+export type Glasses = 0 | 1 | 2;
+
 export interface FriendLook {
   skin: string;
   hair: string;
-  hairStyle: 0 | 1 | 2 | 3 | 4 | 5; // 0 лысый, 1 короткие, 2 шапка волос, 3 ирокез, 4 кудри, 5 кепка
+  hairStyle: HairStyle;
   eyes: string;
   brow: 0 | 1 | 2; // нейтральные / злые / удивлённые
-  facial: 0 | 1 | 2 | 3; // нет / щетина / борода / усы
-  glasses: 0 | 1 | 2; // нет / круглые / прямоугольные
-  wide: number; // 0.85..1.2 ширина лица
+  facial: Facial;
+  glasses: Glasses;
+  wide: number; // 0.8..1.25 ширина лица
+  /** брекеты на зубах */
+  braces?: boolean;
+  /** цвет и тип одежды/аксессуара под головой */
+  shirt?: "plain" | "mesh" | "suit" | "hoodie";
+  shirtColor?: string;
+  /** аксессуар в руке/у лица */
+  prop?: "none" | "beer" | "clipboard";
 }
 
 export interface Friend {

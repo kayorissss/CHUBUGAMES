@@ -113,7 +113,7 @@ ok(app.includes('<RadomirBeat'),'игра Радомира подключена 
 const clk=fs.readFileSync('src/games/Clicker.tsx','utf8');
 ok(clk.includes('clickerStage')&&clk.includes('wings'),'внешность в кликере растёт с тапами');
 ok(fs.existsSync('src/core/nav.ts')&&app.includes('pushBack'),'системный свайп «назад» поддержан');
-ok(fs.existsSync('src/core/netcheck.ts')&&fs.existsSync('src/ui/NetCheck.tsx'),'режим проверки глушилок есть');
+ok(fs.existsSync('src/core/netcheck.ts')&&fs.existsSync('src/pages/Network.tsx'),'проверка глушилок — отдельная страница');
 const nc=fs.readFileSync('src/core/netcheck.ts','utf8');
 ok(nc.includes('measureSpeed')&&/gosuslugi|yandex/.test(nc),'глушилки: есть российские хосты и спидтест');
 ok(fs.existsSync('src/core/i18n.ts'),'локализация RU/EN есть');
@@ -123,13 +123,29 @@ ok(fs.existsSync('src/ui/UpdateBanner.tsx')&&app.includes('<UpdateBanner'),'ав
 ok(fs.existsSync('src/ui/GameIcon.tsx'),'иконки игр векторные, без эмодзи');
 const home=fs.readFileSync('src/pages/Home.tsx','utf8');
 ok(home.includes('GameIcon')&&home.includes('onOpenProfile'),'уровень кликабельный, ведёт в статистику');
-ok(fs.existsSync('src/core/ai.ts')&&fs.existsSync('src/ui/AiChat.tsx'),'бета-режим с DeepSeek есть');
+ok(fs.existsSync('src/core/ai.ts')&&fs.existsSync('src/pages/AiPage.tsx'),'«Спросить у ИИ» — отдельная страница');
 const bite=fs.readFileSync('src/games/ArtyomBite.tsx','utf8');
 ok(bite.includes('"rules"'),'у «Зубов Артёма» есть экран правил');
 const run=fs.readFileSync('src/games/ShitovRun.tsx','utf8');
 ok(run.includes('gap')&&!/chase\b(?!X)/.test(run.split('gap')[0]),'в побеге показывается реальный отрыв от Шитова');
 const head=fs.readFileSync('src/core/head.ts','utf8');
 ok(head.includes('clip()'),'борода не вылезает за лицо');
+
+// --- пакет из 22 требований ---
+const net=fs.readFileSync('src/pages/Network.tsx','utf8');
+ok(net.includes('ГЛУШИЛКИ')&&net.includes('СКОРОСТЬ'),'в сетевом экране две вкладки');
+ok(net.includes('РОССИЙСКИЕ СЕРВИСЫ')&&net.includes('ЗАРУБЕЖНЫЕ СЕРВИСЫ'),'сервисы разделены на РУ и иностранные');
+const setg=fs.readFileSync('src/pages/Settings.tsx','utf8');
+ok(setg.includes('showSaveFilePicker'),'экспорт сохранения через «Сохранить как»');
+ok(setg.includes('DiffPicker')&&setg.includes('#59FF9E')&&setg.includes('#FF3B2F'),'сложность с цветным свечением');
+ok(!setg.includes('<NetCheck')&&!setg.includes('<AiChat'),'тяжёлые режимы вынесены из настроек');
+const frn=fs.readFileSync('src/pages/Friends.tsx','utf8');
+ok(frn.includes('!f.builtin')&&frn.includes('bossStats'),'редактор только для своих, статы работают');
+const sv=fs.readFileSync('src/core/save.ts','utf8');
+ok(sv.includes('bossStats')&&sv.includes('offlineBonus'),'статы босса влияют на экономику');
+ok(fs.readFileSync('src/core/head.ts','utf8').includes('look.braces'),'у Артёма есть брекеты');
+const gl=fs.readFileSync('src/ui/Glass.tsx','utf8');
+ok(gl.includes('minHeight: minH')&&gl.includes('Unbounded'),'кнопки с отступами и фирменным шрифтом');
 
 console.log(fails===0?'\n✅ ВСЕ ПРОВЕРКИ ВЁРСТКИ ПРОЙДЕНЫ\n':`\n❌ ПРОВАЛЕНО: ${fails}\n`);
 process.exit(fails?1:0);

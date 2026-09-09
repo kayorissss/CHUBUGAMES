@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Button, Bar } from "./Glass";
+import Icon from "./Icon";
 import { useGame } from "../core/store";
 import { haptic, sfx } from "../core/fx";
 import {
@@ -55,7 +56,7 @@ export default function UpdateBanner() {
         (l, t2) => { setLoaded(l); if (t2) setTotal(t2); },
         ac.signal,
       );
-      toast({ title: "Открываю установщик", sub: "Разреши установку", icon: "📦", tone: "gold" });
+      toast({ title: "Открываю установщик", sub: "Разреши установку", icon: "case", tone: "gold" });
       setInfo(null);
     } catch (e: any) {
       if (e?.name !== "AbortError") setErr(e?.message || "Не удалось скачать");
@@ -103,10 +104,10 @@ export default function UpdateBanner() {
                 className="shrink-0 flex items-center justify-center"
                 style={{
                   width: 42, height: 42, borderRadius: "var(--r-md)",
-                  background: "var(--acc)", color: "var(--acc-ink)", fontSize: 20,
+                  background: "var(--acc)", color: "var(--acc-ink)",
                 }}
               >
-                ⬇
+                <Icon name="download" size={21} />
               </div>
               <div className="min-w-0 flex-1">
                 <div className="t-title-sm">Вышло обновление</div>

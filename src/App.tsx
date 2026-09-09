@@ -5,11 +5,14 @@ import { Aurora } from "./ui/Glass";
 import Nav, { type Tab } from "./components/Nav";
 import { Toasts, OfflineModal } from "./components/Overlays";
 import UpdateBanner from "./ui/UpdateBanner";
+import Icon from "./ui/Icon";
 import Home from "./pages/Home";
 import ProgressPage from "./pages/Progress";
 import Shop from "./pages/Shop";
 import Friends from "./pages/Friends";
 import Settings from "./pages/Settings";
+import Network from "./pages/Network";
+import AiPage from "./pages/AiPage";
 import BurgerRain from "./games/BurgerRain";
 import Clicker from "./games/Clicker";
 import MergeHeads from "./games/MergeHeads";
@@ -43,9 +46,9 @@ function Splash({ done }: { done: () => void }) {
         <motion.div
           animate={{ y: [0, -9, 0], rotate: [0, 5, -5, 0] }}
           transition={{ repeat: Infinity, duration: 3.4, ease: "easeInOut" }}
-          style={{ fontSize: 62 }}
+          style={{ color: "var(--acc)", display: "flex", justifyContent: "center" }}
         >
-          🍔
+          <Icon name="burger" size={64} />
         </motion.div>
         <div
           className="t-display mt-3"
@@ -92,6 +95,8 @@ function Shell() {
   const [splash, setSplash] = useState(true);
   const [tab, setTab] = useState<Tab>("home");
   const [game, setGame] = useState<GameId | null>(null);
+  // отдельные подстраницы поверх вкладок
+  const [sub, setSub] = useState<"network" | "ai" | null>(null);
 
   useEffect(() => {
     const unlock = () => unlockAudio();
@@ -105,11 +110,17 @@ function Shell() {
     return pushBack("game", () => setGame(null));
   }, [game]);
 
+  // «назад» закрывает подстраницу
+  useEffect(() => {
+    if (!sub) return;
+    return pushBack(`sub:${sub}`, () => setSub(null));
+  }, [sub]);
+
   // с любой вкладки «назад» возвращает на Игры
   useEffect(() => {
-    if (game || tab === "home") return;
+    if (game || sub || tab === "home") return;
     return pushBack(`tab:${tab}`, () => setTab("home"));
-  }, [tab, game]);
+  }, [tab, game, sub]);
 
   // блокируем зум/скролл жестами
   useEffect(() => {
@@ -127,7 +138,7 @@ function Shell() {
     progress: <ProgressPage />,
     shop: <Shop />,
     friends: <Friends />,
-    settings: <Settings />,
+    settings: <Settings onOpen={setSub} />,
   };
 
   return (
@@ -148,6 +159,24 @@ function Shell() {
           </motion.div>
         </AnimatePresence>
       </div>
+
+      {/* Подстраницы поверх вкладок */}
+      <AnimatePresence>
+        {sub && (
+          <motion.div
+            key={sub}
+            initial={{ opacity: 0, x: 26 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: 26 }}
+            transition={{ duration: 0.2, ease: "easeOut" }}
+            className="absolute inset-0"
+            style={{ zIndex: 40, background: "var(--bg)" }}
+          >
+            {sub === "network" && <Network onBack={() => setSub(null)} />}
+            {sub === "ai" && <AiPage onBack={() => setSub(null)} />}
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {!game && <Nav tab={tab} onTab={setTab} />}
 

@@ -71,8 +71,9 @@ export function Button({
   icon?: ReactNode;
 }) {
   const pad =
-    size === "lg" ? "14px 20px" : size === "sm" ? "8px 12px" : "11px 16px";
+    size === "lg" ? "15px 26px" : size === "sm" ? "9px 16px" : "12px 20px";
   const fs = size === "lg" ? 14 : size === "sm" ? 11.5 : 13;
+  const minH = size === "lg" ? 50 : size === "sm" ? 34 : 42;
 
   const skin: Record<BtnVariant, CSSProperties> = {
     primary: {
@@ -115,14 +116,18 @@ export function Button({
         display: "inline-flex",
         alignItems: "center",
         justifyContent: "center",
-        gap: 7,
+        gap: 8,
         width: full ? "100%" : undefined,
+        minHeight: minH,
         padding: pad,
+        boxSizing: "border-box",
         borderRadius: rad(r),
+        fontFamily: '"Unbounded", "Inter Variable", system-ui, sans-serif',
         fontSize: fs,
-        fontWeight: 700,
-        letterSpacing: "-0.005em",
-        lineHeight: 1,
+        fontWeight: 600,
+        letterSpacing: "0.005em",
+        lineHeight: 1.15,
+        textAlign: "center",
         whiteSpace: "nowrap",
         cursor: disabled ? "default" : "pointer",
         opacity: disabled ? 0.4 : 1,
@@ -140,11 +145,13 @@ export function Button({
 /** Кликабельная область произвольного вида (карточка-кнопка) */
 export function Tap({
   children, onClick, className = "", style, disabled, r = "md",
-  accent, sound = "click", strong, solid,
+  accent, sound = "click", strong, solid, center,
 }: {
   children?: ReactNode; onClick?: () => void; className?: string;
   style?: CSSProperties; disabled?: boolean; r?: R; accent?: boolean;
   strong?: boolean; solid?: boolean; sound?: keyof typeof sfx | "none";
+  /** выравнивать содержимое по центру (для кнопок-табов) */
+  center?: boolean;
 }) {
   const base = solid ? "solid" : "glass";
   return (
@@ -164,7 +171,7 @@ export function Tap({
         borderRadius: rad(r),
         opacity: disabled ? 0.42 : 1,
         cursor: disabled ? "default" : "pointer",
-        textAlign: "left",
+        textAlign: center ? "center" : "left",
         ...style,
       }}
     >

@@ -1,4 +1,5 @@
 import type { Friend, Rarity } from "./types";
+import type { IconName } from "../ui/Icon";
 
 /* ============ ДРУЗЬЯ (дефолтные, переименовываются в приложении) ============ */
 export const DEFAULT_FRIENDS: Friend[] = [
@@ -17,14 +18,15 @@ export const DEFAULT_FRIENDS: Friend[] = [
   },
   {
     id: "vanya",
-    name: "ВАНЯ",
-    nick: "Автор всего этого",
+    name: "ВАНЯ СТАРОСТОВИЧ",
+    nick: "Староста группы",
     builtin: true,
     rarity: "legend",
-    quote: "Я просто хотел почилить на паре.",
+    quote: "Так, кого сегодня отмечать? Я всё вижу.",
     look: {
       skin: "#eec9a8", hair: "#2b2118", hairStyle: 1, eyes: "#4a5a3a",
       brow: 0, facial: 0, glasses: 0, wide: 0.98,
+      shirt: "suit", shirtColor: "#2a3140", prop: "clipboard",
     },
     stats: { spit: 55, chub: 50, chaos: 40, luck: 88 },
   },
@@ -36,8 +38,9 @@ export const DEFAULT_FRIENDS: Friend[] = [
     rarity: "epic",
     quote: "Немного толстый? Прям много толстый.",
     look: {
-      skin: "#f2cba6", hair: "#8a6a3e", hairStyle: 1, eyes: "#3a2c1e",
-      brow: 1, facial: 1, glasses: 0, wide: 1.22,
+      skin: "#f2cba6", hair: "#6b5230", hairStyle: 1, eyes: "#3a2c1e",
+      brow: 1, facial: 4, glasses: 0, wide: 1.08,
+      shirt: "plain", shirtColor: "#4a4033", prop: "beer",
     },
     stats: { spit: 84, chub: 99, chaos: 90, luck: 31 },
   },
@@ -63,7 +66,7 @@ export const DEFAULT_FRIENDS: Friend[] = [
     quote: "Стой смирно, я только куснууу.",
     look: {
       skin: "#f4d2b0", hair: "#d8c48a", hairStyle: 2, eyes: "#5a7a9a",
-      brow: 1, facial: 0, glasses: 0, wide: 1.0,
+      brow: 1, facial: 0, glasses: 0, wide: 1.0, braces: true,
     },
     stats: { spit: 92, chub: 44, chaos: 97, luck: 38 },
   },
@@ -75,8 +78,9 @@ export const DEFAULT_FRIENDS: Friend[] = [
     rarity: "legend",
     quote: "Ой... а можно я не буду драться?",
     look: {
-      skin: "#f6d3b0", hair: "#7a5a3a", hairStyle: 2, eyes: "#4a6a5a",
-      brow: 2, facial: 0, glasses: 1, wide: 0.9,
+      skin: "#f6d3b0", hair: "#8a6440", hairStyle: 6, eyes: "#4a6a5a",
+      brow: 2, facial: 0, glasses: 2, wide: 0.9,
+      shirt: "hoodie", shirtColor: "#c86a9a",
     },
     stats: { spit: 22, chub: 30, chaos: 44, luck: 99 },
   },
@@ -88,8 +92,9 @@ export const DEFAULT_FRIENDS: Friend[] = [
     rarity: "rare",
     quote: "Я-я тебе помогу, брат... наверное.",
     look: {
-      skin: "#c98a5e", hair: "#1a1410", hairStyle: 4, eyes: "#2a1c12",
-      brow: 1, facial: 1, glasses: 0, wide: 0.96,
+      skin: "#d69a6e", hair: "#3d2a1c", hairStyle: 4, eyes: "#3a2a1a",
+      brow: 0, facial: 0, glasses: 0, wide: 0.94,
+      shirt: "hoodie", shirtColor: "#3d4756",
     },
     stats: { spit: 58, chub: 42, chaos: 76, luck: 55 },
   },
@@ -101,10 +106,39 @@ export const DEFAULT_FRIENDS: Friend[] = [
     rarity: "legend",
     quote: "Кто трогал настройки в тридцать первом кабинете?",
     look: {
-      skin: "#e2b088", hair: "#5a5a68", hairStyle: 1, eyes: "#4a4a55",
-      brow: 1, facial: 2, glasses: 2, wide: 1.04,
+      skin: "#e8b48c", hair: "#17131a", hairStyle: 9, eyes: "#3a3340",
+      brow: 1, facial: 0, glasses: 2, wide: 1.24,
+      shirt: "plain", shirtColor: "#31384a",
     },
     stats: { spit: 66, chub: 58, chaos: 70, luck: 74 },
+  },
+  {
+    id: "artur",
+    name: "АРТУР ТИГРАНОВИЧ",
+    nick: "Помощник Шитова",
+    builtin: true,
+    rarity: "epic",
+    quote: "Андрей Николаевич занят. Я за него.",
+    look: {
+      skin: "#dda878", hair: "#16121c", hairStyle: 8, eyes: "#2a2028",
+      brow: 1, facial: 1, glasses: 0, wide: 1.0,
+      shirt: "mesh", shirtColor: "#c0392b",
+    },
+    stats: { spit: 61, chub: 47, chaos: 66, luck: 58 },
+  },
+  {
+    id: "kirill",
+    name: "КИРИЛЛ",
+    nick: "Тихий длинноволосый",
+    builtin: true,
+    rarity: "rare",
+    quote: "Да мне норм, я просто посижу.",
+    look: {
+      skin: "#f3ddc8", hair: "#14110f", hairStyle: 7, eyes: "#3a3028",
+      brow: 0, facial: 0, glasses: 0, wide: 0.82,
+      shirt: "hoodie", shirtColor: "#22252e",
+    },
+    stats: { spit: 44, chub: 18, chaos: 52, luck: 71 },
   },
 ];
 
@@ -159,18 +193,18 @@ export interface SkillNode {
   cost: (lvl: number) => number;
   branch: "coin" | "power" | "luck";
   req?: string;
-  icon: string;
+  icon: IconName;
 }
 export const SKILLS: SkillNode[] = [
-  { id: "greed", name: "Жадность", desc: "+10% монет за уровень", max: 10, cost: (l) => 1 + l, branch: "coin", icon: "🪙" },
-  { id: "vault", name: "Хранилище", desc: "+15% офлайн-дохода", max: 8, cost: (l) => 2 + l * 2, branch: "coin", req: "greed", icon: "🏦" },
-  { id: "midas", name: "Мидас", desc: "+50% монет, но −10% XP", max: 5, cost: (l) => 6 + l * 4, branch: "coin", req: "vault", icon: "👑" },
-  { id: "fist", name: "Кулак", desc: "+12% сила тапа", max: 10, cost: (l) => 1 + l, branch: "power", icon: "✊" },
-  { id: "engine", name: "Мотор", desc: "+18% автодоход", max: 8, cost: (l) => 2 + l * 2, branch: "power", req: "fist", icon: "⚙️" },
-  { id: "berserk", name: "Берсерк", desc: "Комбо держится дольше на 20%", max: 5, cost: (l) => 5 + l * 3, branch: "power", req: "engine", icon: "🔥" },
-  { id: "clover", name: "Клевер", desc: "+3% шанс крита", max: 10, cost: (l) => 1 + l, branch: "luck", icon: "🍀" },
-  { id: "magnet", name: "Магнит", desc: "Бонусы падают на 12% чаще", max: 8, cost: (l) => 2 + l * 2, branch: "luck", req: "clover", icon: "🧲" },
-  { id: "fate", name: "Судьба", desc: "+8% редкие карточки из кейсов", max: 5, cost: (l) => 5 + l * 3, branch: "luck", req: "magnet", icon: "🎲" },
+  { id: "greed", name: "Жадность", desc: "+10% монет за уровень", max: 10, cost: (l) => 1 + l, branch: "coin", icon: "coin" },
+  { id: "vault", name: "Хранилище", desc: "+15% офлайн-дохода", max: 8, cost: (l) => 2 + l * 2, branch: "coin", req: "greed", icon: "bank" },
+  { id: "midas", name: "Мидас", desc: "+50% монет, но −10% XP", max: 5, cost: (l) => 6 + l * 4, branch: "coin", req: "vault", icon: "crown" },
+  { id: "fist", name: "Кулак", desc: "+12% сила тапа", max: 10, cost: (l) => 1 + l, branch: "power", icon: "fist" },
+  { id: "engine", name: "Мотор", desc: "+18% автодоход", max: 8, cost: (l) => 2 + l * 2, branch: "power", req: "fist", icon: "gear" },
+  { id: "berserk", name: "Берсерк", desc: "Комбо держится дольше на 20%", max: 5, cost: (l) => 5 + l * 3, branch: "power", req: "engine", icon: "fire" },
+  { id: "clover", name: "Клевер", desc: "+3% шанс крита", max: 10, cost: (l) => 1 + l, branch: "luck", icon: "clover" },
+  { id: "magnet", name: "Магнит", desc: "Бонусы падают на 12% чаще", max: 8, cost: (l) => 2 + l * 2, branch: "luck", req: "clover", icon: "magnet" },
+  { id: "fate", name: "Судьба", desc: "+8% редкие карточки из кейсов", max: 5, cost: (l) => 5 + l * 3, branch: "luck", req: "magnet", icon: "dice" },
 ];
 
 /* ============ АЧИВКИ ============ */
@@ -308,11 +342,11 @@ export const RARITY_MULT: Record<Rarity, number> = { common: 1, rare: 2.2, epic:
 
 /* ============ ИГРЫ ============ */
 export const GAME_META = [
-  { id: "burger" as const, name: "ЛЁХА-БУРГЕР", tag: "Уклоняйся", desc: "Лёха плюётся бургерами с двух метров. Не поймай ни одного.", unlockLvl: 0, icon: "🍔" },
-  { id: "clicker" as const, name: "ЧУБКЛИКЕР", tag: "Фарм", desc: "Тапай по морде. Копи миллиарды. Не спи.", unlockLvl: 0, icon: "👆" },
-  { id: "bite" as const, name: "ЗУБЫ АРТЁМА", tag: "Нервы", desc: "Держи палец и копи. Артём кусается — успей убрать руку.", unlockLvl: 0, icon: "🦷" },
-  { id: "dino" as const, name: "ПОБЕГ ОТ ШИТОВА", tag: "Бег", desc: "Препод бежит за тобой по колледжу. Прыгай через системники.", unlockLvl: 0, icon: "🖥" },
-  { id: "radomir" as const, name: "РИТМ РАДОМИРА", tag: "Ритм", desc: "Лови ноты под трек. Радомир стесняется, но танцует.", unlockLvl: 0, icon: "🎵" },
-  { id: "merge" as const, name: "СЛИЯНИЕ ГОЛОВ", tag: "Пазл", desc: "Сливай одинаковых пацанов в новых. 2048 из голов.", unlockLvl: 0, icon: "🧩" },
-  { id: "whack" as const, name: "ПРИБЕЙ ДРУГА", tag: "Реакция", desc: "Головы лезут из люков. Прибей. Но не всех.", unlockLvl: 0, icon: "🔨" },
+  { id: "burger" as const, name: "ЛЁХА-БУРГЕР", tag: "Уклоняйся", desc: "Лёха плюётся бургерами с двух метров. Не поймай ни одного.", unlockLvl: 0, icon: "burger" as IconName },
+  { id: "clicker" as const, name: "ЧУБКЛИКЕР", tag: "Фарм", desc: "Тапай по морде. Копи миллиарды. Не спи.", unlockLvl: 0, icon: "tap" as IconName },
+  { id: "bite" as const, name: "ЗУБЫ АРТЁМА", tag: "Нервы", desc: "Держи палец и копи. Артём кусается — успей убрать руку.", unlockLvl: 0, icon: "tooth" as IconName },
+  { id: "dino" as const, name: "ПОБЕГ ОТ ШИТОВА", tag: "Бег", desc: "Препод бежит за тобой по колледжу. Прыгай через системники.", unlockLvl: 0, icon: "run" as IconName },
+  { id: "radomir" as const, name: "РИТМ РАДОМИРА", tag: "Ритм", desc: "Лови ноты под трек. Радомир стесняется, но танцует.", unlockLvl: 0, icon: "music" as IconName },
+  { id: "merge" as const, name: "СЛИЯНИЕ ГОЛОВ", tag: "Пазл", desc: "Сливай одинаковых пацанов в новых. 2048 из голов.", unlockLvl: 0, icon: "case" as IconName },
+  { id: "whack" as const, name: "ПРИБЕЙ ДРУГА", tag: "Реакция", desc: "Головы лезут из люков. Прибей. Но не всех.", unlockLvl: 0, icon: "hammer" as IconName },
 ];

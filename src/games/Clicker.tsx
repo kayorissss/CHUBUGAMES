@@ -8,6 +8,7 @@ import {
 import { drawHead } from "../core/head";
 import { fmt } from "../core/format";
 import { sfx, haptic } from "../core/fx";
+import Icon from "../ui/Icon";
 import { Panel, Tap, Bar } from "../ui/Glass";
 
 interface FloatTxt { id: number; x: number; y: number; txt: string; crit: boolean }
@@ -205,16 +206,9 @@ export default function Clicker({ onExit }: { onExit: () => void }) {
             squish: a.squish, tilt: a.tilt, blink: a.blink,
             mouth: a.mouth, cheeks: a.squish * 0.7,
           });
-          if (st.idx > 0) {
-            ctx.strokeStyle = `${st.color}${st.idx >= 3 ? "cc" : "77"}`;
-            ctx.lineWidth = 2 + st.idx * 0.7;
-            ctx.shadowColor = st.color;
-            ctx.shadowBlur = 10 + st.idx * 6;
-            ctx.beginPath();
-            ctx.arc(W / 2, cy, r * 1.08, 0, Math.PI * 2);
-            ctx.stroke();
-            ctx.shadowBlur = 0;
-          }
+          // Внешность растёт вместе со стадией: свечение кожи,
+          // татуировки энергии, огненная аура и нимб — вместо круга.
+          drawEvolution(ctx, W / 2, cy, r, st, now);
         }
       }
       raf = requestAnimationFrame(loop);
@@ -333,23 +327,25 @@ export default function Clicker({ onExit }: { onExit: () => void }) {
               <span className="t-label" style={{ fontSize: 9 }}>CHUBCOINS</span>
             </div>
             <div className="flex items-center gap-3 mt-0.5" style={{ fontSize: 10, color: "var(--text-mute)" }}>
-              <span>👆 {fmt(tv)}/тап</span>
-              <span>⚙️ {fmt(ar)}/сек</span>
-              {cc > 0 && <span>💥 {(cc * 100).toFixed(0)}%</span>}
+              <span className="inline-flex items-center" style={{ gap: 5 }}><Icon name="tap" size={12} /> {fmt(tv)}/тап</span>
+              <span className="inline-flex items-center" style={{ gap: 5 }}><Icon name="gear" size={12} /> {fmt(ar)}/сек</span>
+              {cc > 0 && <span className="inline-flex items-center" style={{ gap: 5 }}><Icon name="bolt" size={12} /> {(cc * 100).toFixed(0)}%</span>}
             </div>
           </Panel>
         </div>
 
         <div className="flex gap-2 mt-2">
           <Tap
-            onClick={() => setTab("tap")} r="sm" accent={tab === "tap"}
-            className="flex-1 py-2.5 t-title" style={{ fontSize: 12 }}
+            onClick={() => setTab("tap")} r="md" accent={tab === "tap"} center
+            className="flex-1 t-title-sm"
+            style={{ fontSize: 12.5, padding: "11px 10px", letterSpacing: "0.04em", fontWeight: 700 }}
           >
             ТАПАТЬ
           </Tap>
           <Tap
-            onClick={() => setTab("shop")} r="sm" accent={tab === "shop"}
-            className="flex-1 py-2.5 t-title" style={{ fontSize: 12 }}
+            onClick={() => setTab("shop")} r="md" accent={tab === "shop"} center
+            className="flex-1 t-title-sm"
+            style={{ fontSize: 12.5, padding: "11px 10px", letterSpacing: "0.04em", fontWeight: 700 }}
           >
             АПГРЕЙДЫ
           </Tap>
@@ -437,7 +433,7 @@ export default function Clicker({ onExit }: { onExit: () => void }) {
                   fontWeight: 900,
                 }}
               >
-                {f.crit && "💥 "}{f.txt}
+                {f.txt}
               </motion.div>
             ))}
           </AnimatePresence>
@@ -483,7 +479,7 @@ export default function Clicker({ onExit }: { onExit: () => void }) {
                     style={{ fontSize: 13 }}
                     sound="none"
                   >
-                    🪙 {fmt(cost)}
+                    <span className="inline-flex items-center" style={{ gap: 5 }}><Icon name="coin" size={12} /> {fmt(cost)}</span>
                   </Tap>
                   <Tap
                     onClick={() => buyMax(u.key, u.base, u.growth)}
@@ -507,6 +503,93 @@ export default function Clicker({ onExit }: { onExit: () => void }) {
       )}
     </div>
   );
+}
+
+/**
+ * Визуальные признаки стадии поверх головы: чем больше тапов,
+ * тем эпичнее выглядит персонаж.
+ */
+function drawEvolution(
+  ctx: CanvasRenderingContext2D,
+  cx: number, cy: number, r: number,
+  st: Stage, now: number,
+) {
+  if (st.idx <= 0) return;
+  ctx.save();
+
+  // 1 стадия: тёплое свечение по контуру лица
+  ctx.globalCompositeOperation = "lighter";
+  const glow = ctx.createRadialGradient(cx, cy, r * 0.72, cx, cy, r * 1.16);
+  glow.addColorStop(0, `${st.color}00`);
+  glow.addColorStop(0.75, `${st.color}${st.idx >= 3 ? "44" : "22"}`);
+  glow.addColorStop(1, `${st.color}00`);
+  ctx.fillStyle = glow;
+  ctx.beginPath();
+  ctx.arc(cx, cy, r * 1.2, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.globalCompositeOperation = "source-over";
+
+  // 2 стадия: светящиеся руны на щеках
+  if (st.idx >= 2) {
+    ctx.strokeStyle = `${st.color}dd`;
+    ctx.lineWidth = Math.max(1.6, r * 0.035);
+    ctx.lineCap = "round";
+    ctx.shadowColor = st.color;
+    ctx.shadowBlur = 12;
+    const pulse = 0.65 + Math.sin(now * 0.004) * 0.35;
+    ctx.globalAlpha = pulse;
+    for (const dir of [-1, 1]) {
+      ctx.beginPath();
+      ctx.moveTo(cx + dir * r * 0.52, cy + r * 0.06);
+      ctx.lineTo(cx + dir * r * 0.66, cy + r * 0.24);
+      ctx.moveTo(cx + dir * r * 0.44, cy + r * 0.24);
+      ctx.lineTo(cx + dir * r * 0.62, cy + r * 0.4);
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+    ctx.shadowBlur = 0;
+  }
+
+  // 3 стадия: языки пламени по краям головы
+  if (st.idx >= 3) {
+    ctx.globalCompositeOperation = "lighter";
+    const flames = 9;
+    for (let i = 0; i < flames; i++) {
+      const a = Math.PI + (i / (flames - 1)) * Math.PI;
+      const wob = Math.sin(now * 0.006 + i * 1.7) * 0.5 + 0.5;
+      const len = r * (0.26 + wob * 0.3);
+      const bx = cx + Math.cos(a) * r * 0.97;
+      const by = cy + Math.sin(a) * r * 0.97;
+      const fg = ctx.createLinearGradient(bx, by, bx + Math.cos(a) * len, by + Math.sin(a) * len);
+      fg.addColorStop(0, `${st.color}bb`);
+      fg.addColorStop(1, `${st.color}00`);
+      ctx.fillStyle = fg;
+      ctx.beginPath();
+      ctx.moveTo(bx + Math.cos(a + 0.16) * r * 0.1, by + Math.sin(a + 0.16) * r * 0.1);
+      ctx.lineTo(bx + Math.cos(a) * len, by + Math.sin(a) * len);
+      ctx.lineTo(bx + Math.cos(a - 0.16) * r * 0.1, by + Math.sin(a - 0.16) * r * 0.1);
+      ctx.closePath();
+      ctx.fill();
+    }
+    ctx.globalCompositeOperation = "source-over";
+  }
+
+  // 4 стадия: нимб над головой
+  if (st.idx >= 4) {
+    ctx.save();
+    ctx.translate(cx, cy - r * 1.3);
+    ctx.scale(1, 0.32);
+    ctx.strokeStyle = st.color;
+    ctx.lineWidth = Math.max(2.4, r * 0.07);
+    ctx.shadowColor = st.color;
+    ctx.shadowBlur = 20;
+    ctx.beginPath();
+    ctx.arc(0, 0, r * 0.62, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  ctx.restore();
 }
 
 /* ================= ЭВОЛЮЦИЯ ГЕРОЯ ================= */

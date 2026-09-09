@@ -1,31 +1,72 @@
 import { useRef, useState } from "react";
+import { motion } from "framer-motion";
 import { useGame } from "../core/store";
 import { Card, Button, SectionTitle, Screen, Divider } from "../ui/Glass";
 import Updater from "../ui/Updater";
-import NetCheck from "../ui/NetCheck";
-import AiChat from "../ui/AiChat";
+import Icon, { type IconName } from "../ui/Icon";
 import { ACCENTS } from "../core/content";
 import { SAVE_KEY, migrate, persistNow } from "../core/save";
 import { sfx, haptic, unlockAudio } from "../core/fx";
 import { fmt } from "../core/format";
 import { APP_VERSION } from "../core/version";
 
-export default function Settings() {
+export default function Settings({
+  onOpen,
+}: {
+  onOpen?: (page: "network" | "ai") => void;
+}) {
   const { s, set, hardReset, toast, t } = useGame();
   const [confirmReset, setConfirmReset] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  const exportSave = () => {
+  const exportSave = async () => {
     const data = localStorage.getItem(SAVE_KEY) || "{}";
+    const name = `chubgames-save-${new Date().toISOString().slice(0, 10)}.json`;
+
+    // 1) Системный «Сохранить как» — пользователь сам выбирает папку
+    const picker = (window as any).showSaveFilePicker;
+    if (typeof picker === "function") {
+      try {
+        const handle = await picker({
+          suggestedName: name,
+          types: [{ description: "Сохранение ЧУБУГЕЙМ", accept: { "application/json": [".json"] } }],
+        });
+        const w = await handle.createWritable();
+        await w.write(data);
+        await w.close();
+        sfx.buy();
+        toast({ title: "Файл сохранён", sub: handle.name, icon: "download" });
+        return;
+      } catch (e: any) {
+        if (e?.name === "AbortError") return; // сам отменил
+      }
+    }
+
+    // 2) Поделиться файлом — на Android откроется системное меню,
+    //    оттуда можно сохранить куда угодно или отправить себе
+    try {
+      const file = new File([data], name, { type: "application/json" });
+      const nav = navigator as any;
+      if (nav.canShare?.({ files: [file] })) {
+        await nav.share({ files: [file], title: "Сохранение ЧУБУГЕЙМ" });
+        sfx.buy();
+        toast({ title: "Файл отправлен", sub: "Выбери, куда положить", icon: "download" });
+        return;
+      }
+    } catch (e: any) {
+      if (e?.name === "AbortError") return;
+    }
+
+    // 3) Обычное скачивание в папку загрузок
     const blob = new Blob([data], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `chubgames-save-${new Date().toISOString().slice(0, 10)}.json`;
+    a.download = name;
     a.click();
     setTimeout(() => URL.revokeObjectURL(url), 1500);
     sfx.buy();
-    toast({ title: "Сохранение выгружено", icon: "💾" });
+    toast({ title: "Сохранено в Загрузки", sub: name, icon: "download" });
   };
 
   const importSave = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -39,7 +80,7 @@ export default function Settings() {
         persistNow(mig);
         sfx.legend();
         haptic("success");
-        toast({ title: "Загружено", sub: "Перезапуск...", icon: "📥", tone: "gold" });
+        toast({ title: "Загружено", sub: "Перезапуск...", icon: "upload", tone: "gold" });
         setTimeout(() => window.location.reload(), 900);
       } catch {
         sfx.error();
@@ -109,11 +150,9 @@ export default function Settings() {
 
       <SectionTitle>{t("settings.game")}</SectionTitle>
       <Card r="lg" style={{ marginBottom: 22, overflow: "hidden" }}>
-        <Seg
-          label={t("settings.difficulty")}
+        <DiffPicker
           value={s.settings.difficulty}
-          opts={[["chill", t("settings.chill")], ["normal", t("settings.normal")], ["insane", t("settings.insane")]]}
-          onPick={(v) => set((d) => { d.settings.difficulty = v as any; })}
+          onPick={(v) => set((d) => { d.settings.difficulty = v; })}
         />
         <Divider inset={14} />
         <Toggle
@@ -137,15 +176,22 @@ export default function Settings() {
         <Updater />
       </div>
 
-      <SectionTitle>{t("settings.internet")}</SectionTitle>
-      <div style={{ marginBottom: 22 }}>
-        <NetCheck />
-      </div>
-
-      <SectionTitle>Бета-режимы</SectionTitle>
-      <div style={{ marginBottom: 22 }}>
-        <AiChat />
-      </div>
+      <SectionTitle>Инструменты</SectionTitle>
+      <Card r="lg" style={{ padding: 0, marginBottom: 22, overflow: "hidden" }}>
+        <NavRow
+          icon="wifi"
+          title="Проверка глушилок"
+          sub="Пинг российских и зарубежных сервисов, скорость"
+          onClick={() => onOpen?.("network")}
+        />
+        <Divider inset={14} />
+        <NavRow
+          icon="brain"
+          title="Спросить у ИИ"
+          sub="Чат с DeepSeek · бета"
+          onClick={() => onOpen?.("ai")}
+        />
+      </Card>
 
       <SectionTitle>{t("settings.save")}</SectionTitle>
       <Card r="lg" style={{ padding: 14, marginBottom: 22 }}>
@@ -155,10 +201,10 @@ export default function Settings() {
         </div>
         <div className="flex" style={{ gap: 8 }}>
           <Button variant="secondary" full onClick={exportSave} sound="none">
-            💾 Выгрузить
+            <span className="inline-flex items-center" style={{ gap: 7 }}><Icon name="download" size={14} /> Выгрузить</span>
           </Button>
           <Button variant="secondary" full onClick={() => fileRef.current?.click()} sound="none">
-            📥 Загрузить
+            <span className="inline-flex items-center" style={{ gap: 7 }}><Icon name="upload" size={14} /> Загрузить</span>
           </Button>
           <input ref={fileRef} type="file" accept="application/json" hidden onChange={importSave} />
         </div>
@@ -209,10 +255,10 @@ export default function Settings() {
             style={{
               width: 44, height: 44, borderRadius: "var(--r-md)",
               background: "var(--btn-bg)", border: "1px solid var(--btn-brd)",
-              fontSize: 21,
+              color: "var(--acc)",
             }}
           >
-            🍔
+            <Icon name="burger" size={22} />
           </div>
           <div className="min-w-0 flex-1">
             <div className="t-title-sm">Чубуков Иван Сергеевич</div>
@@ -234,7 +280,7 @@ export default function Settings() {
               }
             }}
           >
-            ✈ Telegram: @kayorisan
+            Telegram: @kayorisan
           </Button>
         </div>
         <div className="t-caption" style={{ marginTop: 10, lineHeight: 1.5 }}>
@@ -325,6 +371,121 @@ function Seg({
               }}
             >
               {l}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/** Строка-переход на отдельный экран */
+function NavRow({
+  icon, title, sub, onClick,
+}: {
+  icon: IconName; title: string; sub: string; onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={() => { sfx.click(); haptic("light"); onClick(); }}
+      className="w-full flex items-center text-left"
+      style={{ gap: 12, padding: "14px 14px" }}
+    >
+      <span
+        className="shrink-0 flex items-center justify-center"
+        style={{
+          width: 36, height: 36, borderRadius: "var(--r-sm)",
+          background: "var(--btn-bg)", border: "1px solid var(--btn-brd)",
+          color: "var(--acc)",
+        }}
+      >
+        <Icon name={icon} size={17} />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="t-title-sm block">{title}</span>
+        <span className="t-caption block clip1" style={{ marginTop: 2 }}>{sub}</span>
+      </span>
+      <span className="shrink-0" style={{ color: "var(--text-mute)" }}>
+        <Icon name="chevron" size={15} />
+      </span>
+    </button>
+  );
+}
+
+/* ============ ВЫБОР СЛОЖНОСТИ ============ */
+
+type Diff = "chill" | "normal" | "insane";
+
+const DIFFS: {
+  id: Diff; name: string; desc: string; color: string; icon: IconName;
+}[] = [
+  { id: "chill",  name: "ЧИЛЛ",   desc: "Медленно, для расслабона", color: "#59FF9E", icon: "clover" },
+  { id: "normal", name: "НОРМАС", desc: "Как задумано",             color: "#FFB020", icon: "bolt" },
+  { id: "insane", name: "АДСКИЙ", desc: "Быстро и злобно",          color: "#FF3B2F", icon: "fire" },
+];
+
+function DiffPicker({ value, onPick }: { value: Diff; onPick: (v: Diff) => void }) {
+  return (
+    <div style={{ padding: "13px 14px" }}>
+      <div className="t-label" style={{ fontSize: 9.5, marginBottom: 11 }}>
+        СЛОЖНОСТЬ
+      </div>
+      <div className="flex" style={{ gap: 9 }}>
+        {DIFFS.map((d) => {
+          const on = value === d.id;
+          return (
+            <button
+              key={d.id}
+              type="button"
+              onClick={() => { sfx.click(); haptic(on ? "light" : "medium"); onPick(d.id); }}
+              className="flex-1 min-w-0 flex flex-col items-center"
+              style={{
+                position: "relative",
+                gap: 7, padding: "14px 6px",
+                borderRadius: "var(--r-md)",
+                background: on ? `${d.color}1a` : "var(--btn-bg)",
+                border: `1.5px solid ${on ? d.color : "var(--btn-brd)"}`,
+                boxShadow: on
+                  ? `0 0 0 3px ${d.color}22, 0 6px 22px -4px ${d.color}88, inset 0 0 22px -8px ${d.color}`
+                  : "none",
+                transition: "background .18s, border-color .18s, box-shadow .28s",
+              }}
+            >
+              {on && (
+                <motion.span
+                  layoutId="diffglow"
+                  className="absolute inset-0"
+                  style={{
+                    borderRadius: "var(--r-md)",
+                    background: `radial-gradient(120% 80% at 50% 0%, ${d.color}30, transparent 70%)`,
+                    pointerEvents: "none",
+                  }}
+                  transition={{ type: "spring", stiffness: 300, damping: 28 }}
+                />
+              )}
+              <motion.span
+                animate={on ? { scale: [1, 1.14, 1] } : { scale: 1 }}
+                transition={on ? { repeat: Infinity, duration: 2.1, ease: "easeInOut" } : {}}
+                style={{ color: on ? d.color : "var(--text-mute)", lineHeight: 0, zIndex: 1 }}
+              >
+                <Icon name={d.icon} size={21} />
+              </motion.span>
+              <span
+                className="t-title-sm"
+                style={{
+                  fontSize: 11.5, letterSpacing: "0.05em", zIndex: 1,
+                  color: on ? d.color : "var(--text)",
+                }}
+              >
+                {d.name}
+              </span>
+              <span
+                className="t-caption text-center"
+                style={{ fontSize: 9, lineHeight: 1.35, zIndex: 1, paddingInline: 2 }}
+              >
+                {d.desc}
+              </span>
             </button>
           );
         })}

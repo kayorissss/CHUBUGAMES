@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import { motion } from "framer-motion";
 import { Panel, Tap } from "../ui/Glass";
 import { fmt } from "../core/format";
+import Icon from "../ui/Icon";
 
 export function useCanvas(
   draw: (ctx: CanvasRenderingContext2D, w: number, h: number, dt: number, t: number) => void,
@@ -110,7 +111,7 @@ export function GameOver({
               className="inline-block px-3 py-1 rounded-full mb-3 t-label"
               style={{ background: "var(--acc)", color: "var(--acc-ink)", fontSize: 10 }}
             >
-              🏅 НОВЫЙ РЕКОРД
+              <span className="inline-flex items-center" style={{ gap: 7 }}><Icon name="medal" size={14} /> НОВЫЙ РЕКОРД</span>
             </motion.div>
           )}
           <div className="t-display" style={{ fontSize: 36 }}>{title}</div>

@@ -8,6 +8,7 @@ import { fmt } from "../core/format";
 import { Card, Tap, Button, Chip, SectionTitle, Screen } from "../ui/Glass";
 import HeadView from "../ui/HeadView";
 import { sfx, haptic } from "../core/fx";
+import Icon from "../ui/Icon";
 import type { Friend, Rarity } from "../core/types";
 
 type Tab = "cases" | "skins" | "themes";
@@ -21,8 +22,12 @@ export default function Shop() {
       right={
         <Card r="md" className="shrink-0" style={{ padding: "8px 12px" }}>
           <div className="flex items-center" style={{ gap: 10 }}>
-            <span className="t-num acc-text" style={{ fontSize: 14 }}>🪙 {fmt(s.coins)}</span>
-            <span className="t-num" style={{ fontSize: 14 }}>💎 {s.gems}</span>
+            <span className="t-num acc-text inline-flex items-center" style={{ fontSize: 14, gap: 5 }}>
+            <Icon name="coin" size={14} /> {fmt(s.coins)}
+          </span>
+            <span className="t-num inline-flex items-center" style={{ fontSize: 14, gap: 5 }}>
+            <Icon name="gem" size={14} /> {s.gems}
+          </span>
           </div>
         </Card>
       }
@@ -90,7 +95,7 @@ function Cases() {
       if (rarity === "legend") sfx.legend();
       else sfx.achieve();
       haptic("success");
-      if (dupe) toast({ title: "Дубликат", sub: `+${fmt(comp)} 🪙 компенсация`, icon: "♻️" });
+      if (dupe) toast({ title: "Дубликат", sub: `+${fmt(comp)} монет компенсации`, icon: "refresh" });
     }, 2600);
   };
 
@@ -106,9 +111,9 @@ function Cases() {
         <Card key={c.id} r="lg" className="relative overflow-hidden" style={{ padding: 15, marginBottom: 12 }}>
           <div
             className="absolute pointer-events-none"
-            style={{ right: -8, top: -14, fontSize: 72, opacity: 0.08, lineHeight: 1 }}
+            style={{ right: 4, top: 2, opacity: 0.09, lineHeight: 0 }}
           >
-            📦
+            <Icon name="case" size={72} />
           </div>
           <div className="t-title-sm clip1" style={{ maxWidth: "78%" }}>{c.name}</div>
           <div className="t-caption clip1" style={{ marginTop: 3, maxWidth: "78%" }}>{c.desc}</div>
@@ -134,7 +139,9 @@ function Cases() {
             disabled={s.coins < c.price || spinning}
             onClick={() => open(c.id)}
           >
-            Открыть · 🪙 {fmt(c.price)}
+            <span className="inline-flex items-center" style={{ gap: 6 }}>
+                    Открыть <Icon name="coin" size={13} /> {fmt(c.price)}
+                  </span>
           </Button>
         </Card>
       ))}
@@ -273,7 +280,7 @@ function Skins() {
     set((d) => { d.ownedSkins.push(id); d.heroSkin = id; });
     sfx.legend();
     haptic("success");
-    toast({ title: "Скин куплен", sub: name, icon: "👕", tone: "gold" });
+    toast({ title: "Скин куплен", sub: name, icon: "user", tone: "gold" });
   };
 
   return (
@@ -310,7 +317,11 @@ function Skins() {
                 color: active ? "var(--acc-ink)" : owned ? "var(--text-dim)" : RARITY_COLOR[sk.rarity],
               }}
             >
-              {active ? "Надет" : owned ? "Надеть" : `🪙 ${fmt(sk.price)}`}
+              {active ? "Надет" : owned ? "Надеть" : (
+                    <span className="inline-flex items-center" style={{ gap: 5 }}>
+                      <Icon name="coin" size={12} /> {fmt(sk.price)}
+                    </span>
+                  )}
             </div>
           </Tap>
         );
@@ -351,7 +362,7 @@ function Themes() {
     set((d) => { d.ownedThemes.push(id); d.settings.accent = id; });
     sfx.legend();
     haptic("success");
-    toast({ title: "Акцент куплен", sub: name, icon: "🎨", tone: "gold" });
+    toast({ title: "Акцент куплен", sub: name, icon: "sparkle", tone: "gold" });
   };
   return (
     <>
@@ -381,7 +392,11 @@ function Themes() {
                 className="t-num"
                 style={{ fontSize: 11, marginTop: 4, color: active ? a.hex : "var(--text-mute)" }}
               >
-                {active ? "Активен" : owned ? "Выбрать" : `🪙 ${fmt(a.price)}`}
+                {active ? "Активен" : owned ? "Выбрать" : (
+                    <span className="inline-flex items-center" style={{ gap: 5 }}>
+                      <Icon name="coin" size={12} /> {fmt(a.price)}
+                    </span>
+                  )}
               </div>
             </Tap>
           );

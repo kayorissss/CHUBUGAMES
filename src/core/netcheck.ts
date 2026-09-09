@@ -138,35 +138,85 @@ export async function runNetCheck(): Promise<NetVerdict> {
 }
 
 /**
- * Грубый замер скорости: качаем известный файл и делим размер на время.
- * Точность так себе (мешает TCP slow start), поэтому показываем «примерно».
+ * Замер скорости загрузки.
+ *
+ * Качаем несколько файлов параллельно (один поток на мобильной сети
+ * почти всегда упирается не в канал, а в задержку), первые 400 мс
+ * отбрасываем — за это время TCP ещё разгоняется и цифра врёт.
  */
+export interface SpeedResult {
+  mbps: number;
+  bytes: number;
+  ms: number;
+  /** субъективная оценка */
+  verdict: string;
+}
+
+const SPEED_SOURCES = [
+  "https://yastatic.net/s3/frontend/yandex-lego/1.0.0/lego.css",
+  "https://yastatic.net/jquery/3.3.1/jquery.min.js",
+  "https://yastatic.net/react/17.0.2/react-dom.production.min.js",
+  "https://vk.com/images/icons/favicons/fav_logo.ico",
+];
+
+function speedVerdict(mbps: number): string {
+  if (mbps >= 50) return "Отличная скорость, можно всё";
+  if (mbps >= 20) return "Хорошо: видео в HD тянет спокойно";
+  if (mbps >= 8) return "Нормально для соцсетей и музыки";
+  if (mbps >= 3) return "Медленно, видео будет подтормаживать";
+  if (mbps >= 1) return "Очень медленно, похоже на ограничение";
+  return "Почти не грузит — скорее всего режут";
+}
+
 export async function measureSpeed(
-  onProgress?: (loaded: number) => void,
-): Promise<{ mbps: number; bytes: number; ms: number } | null> {
-  // ~1.5 МБ статики с российского CDN — доступен даже при шейпинге
-  const url = `https://yastatic.net/s3/frontend/yandex-lego/1.0.0/lego.css?_=${Date.now()}`;
+  onProgress?: (loaded: number, mbps: number) => void,
+  signal?: AbortSignal,
+): Promise<SpeedResult | null> {
   const started = performance.now();
-  try {
-    const res = await fetch(url, { cache: "no-store" });
-    if (!res.ok) return null;
-    const reader = res.body?.getReader();
-    let bytes = 0;
-    if (reader) {
-      for (;;) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        bytes += value?.byteLength || 0;
-        onProgress?.(bytes);
+  const WARMUP = 400; // мс разгона, не учитываем в расчёте
+  let total = 0;
+  let counted = 0;
+  let countedFrom = 0;
+
+  const pull = async (url: string) => {
+    const u = `${url}${url.includes("?") ? "&" : "?"}_=${Date.now()}${Math.random()}`;
+    const res = await fetch(u, { cache: "no-store", signal });
+    if (!res.ok || !res.body) return;
+    const reader = res.body.getReader();
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      const n = value?.byteLength || 0;
+      total += n;
+      const el = performance.now() - started;
+      if (el > WARMUP) {
+        if (countedFrom === 0) countedFrom = el;
+        counted += n;
+        const dur = (el - countedFrom) / 1000;
+        if (dur > 0.15) onProgress?.(total, (counted * 8) / dur / 1e6);
       }
-    } else {
-      bytes = (await res.blob()).size;
     }
-    const ms = performance.now() - started;
-    if (bytes < 1000 || ms < 1) return null;
-    const mbps = (bytes * 8) / (ms / 1000) / 1e6;
-    return { mbps: Math.round(mbps * 10) / 10, bytes, ms: Math.round(ms) };
+  };
+
+  try {
+    // качаем каждый источник дважды — так набирается достаточный объём
+    await Promise.all([...SPEED_SOURCES, ...SPEED_SOURCES].map((u) => pull(u).catch(() => {})));
   } catch {
     return null;
   }
+
+  const ms = performance.now() - started;
+  const dur = Math.max(0.2, (ms - Math.max(WARMUP, countedFrom)) / 1000);
+  const useBytes = counted > 20000 ? counted : total;
+  const useDur = counted > 20000 ? dur : ms / 1000;
+  if (useBytes < 5000) return null;
+
+  const mbps = Math.round(((useBytes * 8) / useDur / 1e6) * 10) / 10;
+  return { mbps, bytes: total, ms: Math.round(ms), verdict: speedVerdict(mbps) };
+}
+
+export function fmtBytesShort(b: number) {
+  if (b >= 1e6) return `${(b / 1e6).toFixed(1)} МБ`;
+  if (b >= 1e3) return `${Math.round(b / 1e3)} КБ`;
+  return `${b} Б`;
 }

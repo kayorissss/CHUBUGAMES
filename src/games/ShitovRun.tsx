@@ -4,12 +4,13 @@ import { useGame } from "../core/store";
 import { drawHead } from "../core/head";
 import { useCanvas, GameHUD, GameOver, Countdown } from "./shell";
 import { sfx, haptic } from "../core/fx";
+import Icon from "../ui/Icon";
 
 /**
  * ПОБЕГ ОТ ШИТОВА — раннер в духе оффлайн-динозаврика.
  *
  * Ты бежишь по коридору колледжа, Шитов Андреевич догоняет сзади.
- * Тап — прыжок (можно двойной), свайп вниз / удержание — подкат.
+ * Верхняя часть экрана — прыжок (двойной), нижняя треть — держать для подката.
  * Врезался в системник — препод приближается. Догнал — конец.
  */
 
@@ -17,13 +18,21 @@ type Phase = "count" | "play" | "over";
 type ObType = "pc" | "monitor" | "chair" | "cable";
 
 interface Obstacle {
-  x: number;
+  x: number; // левый край, в долях ширины
   type: ObType;
-  w: number;
-  h: number;
-  air: boolean; // висит в воздухе — нужно подкатиться
+  w: number; // ширина в долях ширины
+  /** нижняя граница препятствия над землёй (в долях высоты) */
+  bottom: number;
+  /** верхняя граница над землёй (в долях высоты) */
+  top: number;
+  air: boolean; // висит в воздухе — надо подкатиться
   passed: boolean;
 }
+
+/* Габариты героя в долях высоты экрана */
+const HERO_H = 0.15; // рост стоя
+const HERO_DUCK_H = 0.072; // рост в подкате
+const HERO_W = 0.052;
 
 const GRAV = 0.0028;
 const JUMP_V = -0.95;
@@ -121,26 +130,32 @@ export default function ShitovRun({ onExit }: { onExit: () => void }) {
     const el = surfRef.current;
     if (!el) return;
 
+    // Управление сделано предсказуемым:
+    // нижняя треть экрана — держишь палец, герой в подкате;
+    // остальной экран — тап прыгает. Плюс свайп вниз тоже приседает.
     const down = (e: PointerEvent) => {
       e.preventDefault();
+      el.setPointerCapture?.(e.pointerId);
+      const r = el.getBoundingClientRect();
+      const lowZone = e.clientY - r.top > r.height * 0.62;
       touchStart.current = { x: e.clientX, y: e.clientY, t: performance.now() };
+      if (lowZone) {
+        G.current.ducking = true;
+      } else {
+        jump();
+      }
     };
     const move = (e: PointerEvent) => {
       const st = touchStart.current;
       if (!st) return;
       const dy = e.clientY - st.y;
-      // тянем вниз — подкат
-      G.current.ducking = dy > 26 && G.current.y <= 0.02;
+      // потянул вниз в любой зоне — тоже подкат
+      if (dy > 24) G.current.ducking = true;
+      if (dy < -34) G.current.ducking = false;
     };
-    const up = (e: PointerEvent) => {
-      const st = touchStart.current;
+    const up = () => {
       touchStart.current = null;
       G.current.ducking = false;
-      if (!st) return;
-      const dy = e.clientY - st.y;
-      const dt = performance.now() - st.t;
-      // короткий тап без протяжки вниз — прыжок
-      if (dy < 24 && dt < 420) jump();
     };
 
     el.addEventListener("pointerdown", down);
@@ -208,35 +223,43 @@ export default function ShitovRun({ onExit }: { onExit: () => void }) {
         g.spawnT = Math.max(620, base);
         const roll = Math.random();
         let type: ObType = "pc";
-        let air = false;
-        if (roll > 0.82) { type = "cable"; air = true; }
-        else if (roll > 0.6) type = "monitor";
-        else if (roll > 0.4) type = "chair";
+        if (roll > 0.78) type = "cable";
+        else if (roll > 0.56) type = "monitor";
+        else if (roll > 0.34) type = "chair";
+
+        // Провод висит так, что под ним ровно проходит подкат,
+        // но не проходит бегущий в полный рост.
+        const air = type === "cable";
+        const bottom = air ? HERO_DUCK_H + 0.022 : 0;
+        const topOf: Record<ObType, number> = {
+          pc: 0.105,
+          monitor: 0.132,
+          chair: 0.086,
+          cable: bottom + 0.075,
+        };
         g.obstacles.push({
           x: 1.12,
           type,
-          w: type === "monitor" ? 0.1 : type === "cable" ? 0.16 : 0.075,
-          h: type === "monitor" ? 0.13 : type === "chair" ? 0.1 : 0.11,
+          w: type === "monitor" ? 0.1 : type === "cable" ? 0.17 : 0.075,
+          bottom,
+          top: topOf[type],
           air,
           passed: false,
         });
       }
 
-      // движение препятствий
-      const heroTop = g.y + (g.ducking ? 0.03 : 0.075);
+      // движение препятствий: честная проверка прямоугольников
       const heroBottom = g.y;
+      const heroTop = g.y + (g.ducking ? HERO_DUCK_H : HERO_H);
       for (let i = g.obstacles.length - 1; i >= 0; i--) {
         const o = g.obstacles[i];
         o.x -= (dt * g.speed) / 1000;
         if (o.x < -0.2) { g.obstacles.splice(i, 1); continue; }
 
         const heroXn = heroX / W;
-        const hit =
-          o.x < heroXn + 0.05 &&
-          o.x + o.w > heroXn - 0.05 &&
-          (o.air
-            ? heroTop > 0.055 // висящий провод: надо пригнуться
-            : heroBottom < o.h * 0.85); // наземное: надо перепрыгнуть
+        const overlapX = o.x < heroXn + HERO_W && o.x + o.w > heroXn - HERO_W;
+        const overlapY = heroBottom < o.top && heroTop > o.bottom;
+        const hit = overlapX && overlapY;
 
         if (hit && !o.passed) {
           o.passed = true;
@@ -310,9 +333,42 @@ export default function ShitovRun({ onExit }: { onExit: () => void }) {
     for (const o of g.obstacles) {
       const ox = o.x * W;
       const ow = o.w * W;
-      const oh = o.h * H;
-      const oy = o.air ? groundY - H * 0.3 : groundY - oh;
+      const oh = (o.top - o.bottom) * H;
+      const oy = groundY - o.top * H;
       drawObstacle(ctx, o.type, ox, oy, ow, oh);
+
+      // Подсказка над препятствием: что с ним делать.
+      // Без неё непонятно, где прыгать, а где подкатываться.
+      if (o.x > 0.1 && o.x < 1.05 && !o.passed) {
+        const cxp = ox + ow / 2;
+        const cyp = groundY - o.top * H - H * 0.05;
+        const fade = Math.max(0, Math.min(1, (1.05 - o.x) * 3));
+        ctx.save();
+        ctx.globalAlpha = fade * 0.85;
+        ctx.strokeStyle = o.air ? "#8FD3FF" : "#FFB020";
+        ctx.lineWidth = 2.4;
+        ctx.lineCap = "round";
+        ctx.lineJoin = "round";
+        const a = H * 0.016;
+        ctx.beginPath();
+        if (o.air) {
+          // стрелка вниз — подкат
+          ctx.moveTo(cxp, cyp - a);
+          ctx.lineTo(cxp, cyp + a);
+          ctx.moveTo(cxp - a * 0.7, cyp + a * 0.3);
+          ctx.lineTo(cxp, cyp + a);
+          ctx.lineTo(cxp + a * 0.7, cyp + a * 0.3);
+        } else {
+          // стрелка вверх — прыжок
+          ctx.moveTo(cxp, cyp + a);
+          ctx.lineTo(cxp, cyp - a);
+          ctx.moveTo(cxp - a * 0.7, cyp - a * 0.3);
+          ctx.lineTo(cxp, cyp - a);
+          ctx.lineTo(cxp + a * 0.7, cyp - a * 0.3);
+        }
+        ctx.stroke();
+        ctx.restore();
+      }
     }
 
     // ШИТОВ сзади
@@ -386,7 +442,7 @@ export default function ShitovRun({ onExit }: { onExit: () => void }) {
               background: "var(--btn-bg)", border: "1px solid var(--btn-brd)",
             }}
           >
-            <span style={{ fontSize: 13 }}>🎓</span>
+            <Icon name="skull" size={13} />
             <div
               style={{
                 width: 26, height: 4, borderRadius: 999, marginTop: 4,
@@ -410,7 +466,9 @@ export default function ShitovRun({ onExit }: { onExit: () => void }) {
           className="absolute left-0 right-0 text-center pointer-events-none"
           style={{ bottom: "calc(var(--sab) + 22px)" }}
         >
-          <div className="t-caption">Тап — прыжок (можно двойной) · потяни вниз — подкат</div>
+          <div className="t-caption">
+            Верх экрана — прыжок (двойной тоже) · низ экрана держи — подкат
+          </div>
         </div>
       )}
 

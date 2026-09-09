@@ -2,6 +2,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { useGame } from "../core/store";
 import { Panel, Tap } from "../ui/Glass";
 import { fmt, fmtTime } from "../core/format";
+import Icon from "../ui/Icon";
 
 export function Toasts() {
   const { toasts } = useGame();
@@ -33,7 +34,14 @@ export function Toasts() {
                     : "0 16px 40px -10px rgba(0,0,0,0.9)",
               }}
             >
-              {t.icon && <span style={{ fontSize: 22, lineHeight: 1 }}>{t.icon}</span>}
+              {t.icon && (
+                <span
+                  className="shrink-0 flex items-center justify-center"
+                  style={{ width: 24, height: 24, color: t.tone === "gold" ? "var(--acc)" : "var(--text)" }}
+                >
+                  <Icon name={t.icon} size={21} />
+                </span>
+              )}
               <div className="flex-1 min-w-0">
                 <div
                   className="t-title clip1"
@@ -73,7 +81,7 @@ export function OfflineModal() {
             className="w-full max-w-xs"
           >
             <Panel r="xl" strong className="p-6 text-center">
-              <div style={{ fontSize: 44 }}>🧊</div>
+              <div style={{ color: "var(--acc)" }}><Icon name="snow" size={42} /></div>
               <div className="t-display mt-2" style={{ fontSize: 22 }}>ПОКА ТЕБЯ НЕ БЫЛО</div>
               <div style={{ fontSize: 11.5, color: "var(--text-mute)", marginTop: 6, lineHeight: 1.5 }}>
                 {mainFriend.name} жрал {fmtTime(offlineReport.hours * 3600000)} и накопил

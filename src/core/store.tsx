@@ -14,12 +14,13 @@ import { today, daysBetween } from "./format";
 import { sfx, haptic, setSound, setHaptics } from "./fx";
 import { pickQuests } from "./save";
 import { makeT } from "./i18n";
+import type { IconName } from "../ui/Icon";
 
 export interface Toast {
   id: number;
   title: string;
   sub?: string;
-  icon?: string;
+  icon?: IconName;
   tone?: "normal" | "gold" | "bad";
 }
 
@@ -164,7 +165,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
           setTimeout(() => {
             sfx.achieve();
             haptic("success");
-            toast({ title: a.name, sub: `Ачивка • +${a.reward.toLocaleString("ru-RU")} 🪙`, icon: "🏆", tone: "gold" });
+            toast({ title: a.name, sub: `Ачивка · +${a.reward.toLocaleString("ru-RU")}`, icon: "trophy", tone: "gold" });
           }, 260);
         }
       }
@@ -189,7 +190,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
       if (ref.current.coins < n) {
         sfx.error();
         haptic("error");
-        toast({ title: "Не хватает монет", icon: "🪙", tone: "bad" });
+        toast({ title: "Не хватает монет", icon: "coin", tone: "bad" });
         return false;
       }
       set((d) => {
@@ -226,7 +227,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
           setTimeout(() => {
             sfx.levelUp();
             haptic("success");
-            toast({ title: `УРОВЕНЬ ${d.level}`, sub: `+${(d.level * 1200).toLocaleString("ru-RU")} 🪙`, icon: "⬆️", tone: "gold" });
+            toast({ title: `УРОВЕНЬ ${d.level}`, sub: `+${(d.level * 1200).toLocaleString("ru-RU")} монет`, icon: "arrowUp", tone: "gold" });
           }, 120);
         }
         checkAch(d);
@@ -262,7 +263,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
         if (changed) {
           setTimeout(() => {
             sfx.achieve();
-            toast({ title: "Задание выполнено", sub: "Забери награду в Прогрессе", icon: "✅" });
+            toast({ title: "Задание выполнено", sub: "Забери награду в Прогрессе", icon: "check" });
           }, 200);
         }
       });
@@ -283,7 +284,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
         if (isRecord && score > 0) {
           setTimeout(() => {
             sfx.legend();
-            toast({ title: "НОВЫЙ РЕКОРД", sub: `${score.toLocaleString("ru-RU")} очков`, icon: "🏅", tone: "gold" });
+            toast({ title: "НОВЫЙ РЕКОРД", sub: `${score.toLocaleString("ru-RU")} очков`, icon: "medal", tone: "gold" });
           }, 400);
         }
       });
@@ -297,7 +298,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
     const f = freshSave();
     persistNow(f);
     setS(f);
-    toast({ title: "Прогресс сброшен", icon: "💀", tone: "bad" });
+    toast({ title: "Прогресс сброшен", icon: "skull", tone: "bad" });
   }, [toast]);
 
   const mainFriend = useMemo(

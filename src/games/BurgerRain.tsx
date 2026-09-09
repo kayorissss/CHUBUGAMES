@@ -4,6 +4,7 @@ import { useGame } from "../core/store";
 import { HERO_SKINS } from "../core/content";
 import { drawHead } from "../core/head";
 import { sfx, haptic } from "../core/fx";
+import Icon, { type IconName } from "../ui/Icon";
 import { useCanvas, GameHUD, GameOver, Countdown } from "./shell";
 import { Panel } from "../ui/Glass";
 
@@ -286,7 +287,7 @@ export default function BurgerRain({ onExit }: { onExit: () => void }) {
             g.shake = 26;
             g.flash = 1;
             burst(g, p.x, p.y, "#ff5a3c", 30);
-            g.pops.push({ x: p.x, y: p.y, txt: "-1 ♥", life: 900, c: "#ff5a3c" });
+            g.pops.push({ x: p.x, y: p.y, txt: "-1 ЖИЗНЬ", life: 900, c: "#ff5a3c" });
             sfx.hit();
             haptic("heavy");
             if (g.lives <= 0) { end(); return; }
@@ -490,9 +491,12 @@ export default function BurgerRain({ onExit }: { onExit: () => void }) {
         onExit={onExit}
         extra={
           <Panel r="md" className="px-3 py-2 shrink-0">
-            <div style={{ fontSize: 15, letterSpacing: 1 }}>
-              {"♥".repeat(Math.max(0, uiLives))}
-              <span style={{ opacity: 0.2 }}>{"♥".repeat(Math.max(0, 3 - uiLives))}</span>
+            <div className="flex items-center" style={{ gap: 3 }}>
+              {[0, 1, 2].map((i) => (
+                <span key={i} style={{ opacity: i < uiLives ? 1 : 0.2, lineHeight: 0, color: "#ff5a6a" }}>
+                  <Icon name="heart" size={14} />
+                </span>
+              ))}
             </div>
           </Panel>
         }
@@ -510,7 +514,7 @@ export default function BurgerRain({ onExit }: { onExit: () => void }) {
                 exit={{ x: -50, opacity: 0 }}
               >
                 <Panel r="sm" className="px-2.5 py-1.5 flex items-center gap-1.5">
-                  <span style={{ fontSize: 14 }}>{BONUS_ICON[k]}</span>
+                  <Icon name={BONUS_ICON[k]} size={14} accent />
                   <span className="t-num" style={{ fontSize: 11 }}>{(uiBuffs[k] / 1000).toFixed(1)}</span>
                 </Panel>
               </motion.div>
@@ -568,7 +572,9 @@ export default function BurgerRain({ onExit }: { onExit: () => void }) {
 
 /* ================= помощники ================= */
 
-const BONUS_ICON: Record<BType, string> = { shield: "🛡", slow: "⏱", magnet: "🧲", x2: "✨", heal: "❤️" };
+const BONUS_ICON: Record<BType, IconName> = {
+  shield: "shield", slow: "clock", magnet: "magnet", x2: "sparkle", heal: "heart",
+};
 const BONUS_LABEL: Record<BType, string> = {
   shield: "ЩИТ", slow: "SLOW-MO", magnet: "МАГНИТ", x2: "×2 ОЧКИ", heal: "+1 ЖИЗНЬ",
 };
@@ -700,11 +706,73 @@ function drawBonus(ctx: CanvasRenderingContext2D, b: Bonus, x: number, y: number
   ctx.fill();
   ctx.stroke();
   ctx.shadowBlur = 0;
-  ctx.font = `${Math.floor(r * 1.15)}px system-ui`;
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  ctx.fillText(BONUS_ICON[b.type], 0, 1);
+  drawBonusGlyph(ctx, b.type, r * 0.62);
   ctx.restore();
+}
+
+/** Векторные символы бонусов — вместо эмодзи, чтобы вид был одинаковый везде */
+function drawBonusGlyph(ctx: CanvasRenderingContext2D, type: BType, r: number) {
+  ctx.strokeStyle = "#ffd88a";
+  ctx.fillStyle = "#ffd88a";
+  ctx.lineWidth = Math.max(1.6, r * 0.24);
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  ctx.beginPath();
+  switch (type) {
+    case "shield":
+      ctx.moveTo(0, -r);
+      ctx.lineTo(r * 0.82, -r * 0.5);
+      ctx.lineTo(r * 0.82, r * 0.16);
+      ctx.quadraticCurveTo(r * 0.82, r * 0.86, 0, r);
+      ctx.quadraticCurveTo(-r * 0.82, r * 0.86, -r * 0.82, r * 0.16);
+      ctx.lineTo(-r * 0.82, -r * 0.5);
+      ctx.closePath();
+      ctx.stroke();
+      break;
+    case "slow":
+      ctx.arc(0, 0, r * 0.85, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(0, -r * 0.45);
+      ctx.lineTo(0, 0);
+      ctx.lineTo(r * 0.42, r * 0.24);
+      ctx.stroke();
+      break;
+    case "magnet":
+      ctx.moveTo(-r * 0.66, r * 0.7);
+      ctx.lineTo(-r * 0.66, -r * 0.16);
+      ctx.arc(0, -r * 0.16, r * 0.66, Math.PI, 0);
+      ctx.lineTo(r * 0.66, r * 0.7);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(-r * 0.66, r * 0.24);
+      ctx.lineTo(-r * 0.2, r * 0.24);
+      ctx.moveTo(r * 0.2, r * 0.24);
+      ctx.lineTo(r * 0.66, r * 0.24);
+      ctx.stroke();
+      break;
+    case "x2":
+      ctx.moveTo(-r * 0.7, -r * 0.6);
+      ctx.lineTo(r * 0.1, r * 0.24);
+      ctx.moveTo(r * 0.1, -r * 0.6);
+      ctx.lineTo(-r * 0.7, r * 0.24);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(r * 0.3, -r * 0.3);
+      ctx.quadraticCurveTo(r * 0.95, -r * 0.66, r * 0.95, -r * 0.05);
+      ctx.lineTo(r * 0.32, r * 0.62);
+      ctx.lineTo(r * 0.98, r * 0.62);
+      ctx.stroke();
+      break;
+    case "heal":
+      ctx.moveTo(0, r * 0.72);
+      ctx.quadraticCurveTo(-r, r * 0.02, -r * 0.52, -r * 0.44);
+      ctx.quadraticCurveTo(-r * 0.1, -r * 0.76, 0, -r * 0.28);
+      ctx.quadraticCurveTo(r * 0.1, -r * 0.76, r * 0.52, -r * 0.44);
+      ctx.quadraticCurveTo(r, r * 0.02, 0, r * 0.72);
+      ctx.fill();
+      break;
+  }
 }
 
 function drawHero(

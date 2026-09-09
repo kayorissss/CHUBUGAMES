@@ -9,6 +9,7 @@ import { fmt, fmtTime, today, daysBetween } from "../core/format";
 import { spentSkillPoints, xpForLevel } from "../core/save";
 import { Card, Button, Bar, Chip, SectionTitle, Screen, Divider } from "../ui/Glass";
 import GameIcon from "../ui/GameIcon";
+import Icon, { type IconName } from "../ui/Icon";
 import { sfx, haptic } from "../core/fx";
 import { freshSave } from "../core/save";
 
@@ -60,8 +61,8 @@ function Daily() {
     });
     toast({
       title: `День ${newStreak}`,
-      sub: `+${rw.coins.toLocaleString("ru-RU")} 🪙${rw.gems ? ` +${rw.gems} 💎` : ""}`,
-      icon: "🎁", tone: "gold",
+      sub: `+${rw.coins.toLocaleString("ru-RU")} монет${rw.gems ? ` · +${rw.gems} кристаллов` : ""}`,
+      icon: "gift", tone: "gold",
     });
   };
 
@@ -78,12 +79,14 @@ function Daily() {
       d.xp += 80;
       d.season.xp += 80;
     });
-    toast({ title: "Награда получена", sub: `+${def.reward.toLocaleString("ru-RU")} 🪙`, icon: "✅" });
+    toast({ title: "Награда получена", sub: `+${def.reward.toLocaleString("ru-RU")} монет`, icon: "check" });
   };
 
   return (
     <>
-      <SectionTitle right={<span className="t-label acc-text">🔥 {s.daily.streak} дней</span>}>
+      <SectionTitle right={<span className="t-label acc-text flex items-center" style={{ gap: 5 }}>
+            <Icon name="fire" size={13} /> {s.daily.streak} дней
+          </span>}>
         Ежедневный вход
       </SectionTitle>
       <Card r="lg" style={{ padding: 14, marginBottom: 22 }}>
@@ -109,7 +112,9 @@ function Daily() {
                 >
                   Д{i + 1}
                 </div>
-                <div style={{ fontSize: 13, marginTop: 3 }}>{claimed ? "✓" : r.gems ? "💎" : "🪙"}</div>
+                <div className="flex justify-center" style={{ marginTop: 4 }}>
+                    <Icon name={claimed ? "check" : r.gems ? "gem" : "coin"} size={13} />
+                  </div>
               </div>
             );
           })}
@@ -119,7 +124,7 @@ function Daily() {
           onClick={claim} disabled={!canClaim}
         >
           {canClaim
-            ? `Забрать ${DAILY_LADDER[streakIdx].coins.toLocaleString("ru-RU")} 🪙`
+            ? `Забрать ${DAILY_LADDER[streakIdx].coins.toLocaleString("ru-RU")} монет`
             : "Уже забрал · заходи завтра"}
         </Button>
       </Card>
@@ -150,7 +155,9 @@ function Daily() {
                   Забрать
                 </Button>
               )}
-              {q.claimed && <span className="t-label" style={{ fontSize: 9 }}>✓ получено</span>}
+              {q.claimed && <span className="t-label flex items-center" style={{ fontSize: 9, gap: 4 }}>
+                    <Icon name="check" size={10} /> получено
+                  </span>}
             </div>
           </Card>
         );
@@ -177,7 +184,7 @@ function Season() {
       d.totalCoinsEver += rw.coins;
       d.gems += rw.gems;
     });
-    toast({ title: `Уровень сезона ${i + 1}`, sub: `+${fmt(rw.coins)} 🪙`, icon: "🎖", tone: "gold" });
+    toast({ title: `Уровень сезона ${i + 1}`, sub: `+${fmt(rw.coins)} монет`, icon: "medal", tone: "gold" });
   };
 
   const restart = () => {
@@ -187,7 +194,7 @@ function Season() {
       d.season = { id: d.season.id + 1, xp: 0, claimed: [], startedAt: Date.now() };
       d.gems += 15;
     });
-    toast({ title: "НОВЫЙ СЕЗОН", sub: "+15 💎 за завершение", icon: "🏁", tone: "gold" });
+    toast({ title: "НОВЫЙ СЕЗОН", sub: "+15 кристаллов за завершение", icon: "flag", tone: "gold" });
   };
 
   return (
@@ -207,7 +214,7 @@ function Season() {
         {tier >= SEASON_TIERS && (
           <div style={{ marginTop: 14 }}>
             <Button variant="primary" size="lg" full sound="none" onClick={restart}>
-              Завершить сезон · +15 💎
+              Завершить сезон · +15 кристаллов
             </Button>
           </div>
         )}
@@ -236,7 +243,7 @@ function Season() {
               </div>
               <div className="flex-1 min-w-0">
                 <div className="t-num" style={{ fontSize: 13 }}>
-                  {fmt(rw.coins)} 🪙 {rw.gems > 0 && `· ${rw.gems} 💎`}
+                  {fmt(rw.coins)} монет {rw.gems > 0 && `· ${rw.gems} крист.`}
                 </div>
                 {rw.label && (
                   <div className="t-label acc-text" style={{ fontSize: 8.5, marginTop: 2 }}>
@@ -245,13 +252,13 @@ function Season() {
                 )}
               </div>
               {claimed ? (
-                <span className="t-label shrink-0" style={{ fontSize: 10 }}>✓</span>
+                <span className="shrink-0"><Icon name="check" size={12} /></span>
               ) : unlocked ? (
                 <Button variant="primary" size="sm" sound="none" onClick={() => claim(i)}>
                   Взять
                 </Button>
               ) : (
-                <span className="shrink-0" style={{ fontSize: 12, opacity: 0.5 }}>🔒</span>
+                <span className="shrink-0" style={{ opacity: 0.5 }}><Icon name="lock" size={12} /></span>
               )}
             </Card>
           );
@@ -286,7 +293,7 @@ function Skills() {
       d.lastSeen = Date.now();
     });
     setConfirm(false);
-    toast({ title: `ПЕРЕРОЖДЕНИЕ ★${s.prestige + 1}`, sub: `+${gain} очков навыков`, icon: "🌀", tone: "gold" });
+    toast({ title: `ПЕРЕРОЖДЕНИЕ ${s.prestige + 1}`, sub: `+${gain} очков навыков`, icon: "sparkle", tone: "gold" });
   };
 
   const upgrade = (id: string) => {
@@ -301,10 +308,10 @@ function Skills() {
     set((d) => { d.skills[id] = (d.skills[id] || 0) + 1; });
   };
 
-  const branches: { k: "coin" | "power" | "luck"; name: string; icon: string }[] = [
-    { k: "coin", name: "ЖАДНОСТЬ", icon: "🪙" },
-    { k: "power", name: "СИЛА", icon: "✊" },
-    { k: "luck", name: "УДАЧА", icon: "🍀" },
+  const branches: { k: "coin" | "power" | "luck"; name: string; icon: IconName }[] = [
+    { k: "coin", name: "ЖАДНОСТЬ", icon: "coin" as const },
+    { k: "power", name: "СИЛА", icon: "fist" as const },
+    { k: "luck", name: "УДАЧА", icon: "clover" as const },
   ];
 
   return (
@@ -313,7 +320,9 @@ function Skills() {
         <div className="flex items-start justify-between" style={{ gap: 12 }}>
           <div className="min-w-0">
             <div className="t-label">Перерождение</div>
-            <div className="t-display-sm" style={{ marginTop: 4 }}>★ {s.prestige}</div>
+            <div className="t-display-sm flex items-center justify-center" style={{ marginTop: 4, gap: 6 }}>
+              <Icon name="star" size={17} accent /> {s.prestige}
+            </div>
           </div>
           <div className="text-right shrink-0">
             <div className="t-num acc-text" style={{ fontSize: 22 }}>{freePoints}</div>
@@ -345,7 +354,11 @@ function Skills() {
 
       {branches.map((b) => (
         <div key={b.k} style={{ marginBottom: 22 }}>
-          <SectionTitle>{b.icon} {b.name}</SectionTitle>
+          <SectionTitle>
+            <span className="inline-flex items-center" style={{ gap: 7 }}>
+              <Icon name={b.icon} size={14} accent /> {b.name}
+            </span>
+          </SectionTitle>
           {SKILLS.filter((n) => n.branch === b.k).map((node) => {
             const lvl = s.skills[node.id] || 0;
             const maxed = lvl >= node.max;
@@ -358,7 +371,9 @@ function Skills() {
                 className="flex items-center"
                 style={{ padding: 12, gap: 12, marginBottom: 8, opacity: locked ? 0.42 : 1 }}
               >
-                <div className="shrink-0" style={{ fontSize: 22 }}>{locked ? "🔒" : node.icon}</div>
+                <div className="shrink-0" style={{ color: locked ? "var(--text-mute)" : "var(--acc)" }}>
+                <Icon name={locked ? "lock" : node.icon} size={21} />
+              </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-baseline" style={{ gap: 7 }}>
                     <span className="t-title-sm clip1">{node.name}</span>
@@ -374,7 +389,11 @@ function Skills() {
                   disabled={!can} onClick={() => upgrade(node.id)}
                   className="shrink-0"
                 >
-                  {maxed ? "MAX" : `★${cost}`}
+                  {maxed ? "MAX" : (
+                    <span className="inline-flex items-center" style={{ gap: 4 }}>
+                      <Icon name="star" size={10} /> {cost}
+                    </span>
+                  )}
                 </Button>
               </Card>
             );
@@ -425,7 +444,7 @@ function Achievements() {
                   border: `1px solid ${done ? `${RARITY_COLOR[a.rarity]}66` : "var(--btn-brd)"}`,
                 }}
               >
-                {done ? "🏆" : "🔒"}
+                <Icon name={done ? "trophy" : "lock"} size={18} />
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-baseline" style={{ gap: 7 }}>
@@ -443,7 +462,7 @@ function Achievements() {
                 className="t-num shrink-0"
                 style={{ fontSize: 11.5, color: done ? "var(--acc)" : "var(--text-mute)" }}
               >
-                {fmt(a.reward)}🪙
+                {fmt(a.reward)}
               </div>
             </Card>
           </motion.div>
@@ -458,7 +477,7 @@ function Stats() {
   const { s } = useGame();
   const rows: [string, string][] = [
     ["Уровень", `${s.level} (${fmt(s.xp)}/${fmt(xpForLevel(s.level))} XP)`],
-    ["Перерождений", `★ ${s.prestige}`],
+    ["Перерождений", `${s.prestige}`],
     ["Очков навыков", `${s.prestigePoints} (потрачено ${spentSkillPoints(s)})`],
     ["Монет сейчас", fmt(s.coins)],
     ["Монет за всё время", fmt(s.totalCoinsEver)],

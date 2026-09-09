@@ -6,6 +6,7 @@ import { xpForLevel, autoRate } from "../core/save";
 import { Card, Tap, Bar, SectionTitle, Screen } from "../ui/Glass";
 import HeadView from "../ui/HeadView";
 import GameIcon from "../ui/GameIcon";
+import Icon from "../ui/Icon";
 import type { GameId } from "../core/types";
 
 export default function Home({
@@ -42,7 +43,7 @@ export default function Home({
         </div>
         <Card r="md" className="shrink-0" style={{ padding: "8px 12px" }}>
           <div className="flex items-center gap-1.5">
-            <span style={{ fontSize: 13 }}>🪙</span>
+            <Icon name="coin" size={14} accent />
             <span className="t-num acc-text" style={{ fontSize: 15 }}>{fmt(s.coins)}</span>
           </div>
           {rate > 0 && (

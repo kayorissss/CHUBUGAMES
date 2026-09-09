@@ -4,6 +4,7 @@ import { useGame } from "../core/store";
 import { drawHead } from "../core/head";
 import { useCanvas, GameHUD, GameOver, Countdown } from "./shell";
 import { sfx, haptic } from "../core/fx";
+import Icon from "../ui/Icon";
 
 /**
  * ЗУБЫ АРТЁМА — игра на нервах.
@@ -19,6 +20,18 @@ type Attack = "bite" | "pen";
 
 const WARN_COLOR = "#ff6a4d";
 
+/** Что орёт Артём, когда промахнулся мимо пальца */
+const RAGE_LINES = [
+  "БЛЯ, УВЁРНУЛСЯ!",
+  "ДА ТЫ ЧИТЕР!",
+  "СУКА, ЕЩЁ РАЗ!",
+  "ДАВАЙ ПАЛЕЦ, ГНИДА",
+  "ТЫ ЗАДРАЛ УЖЕ",
+  "НУ ХОРОШ БЕГАТЬ!",
+  "Я ТЕБЯ ДОСТАНУ",
+  "ЧЁ ЗА ХРЕНЬ?!",
+];
+
 export default function ArtyomBite({ onExit }: { onExit: () => void }) {
   const { s, addCoins, addXp, bump, finishGame, questProgress } = useGame();
   const artyom =
@@ -30,6 +43,7 @@ export default function ArtyomBite({ onExit }: { onExit: () => void }) {
   const [uiLives, setUiLives] = useState(3);
   const [uiHold, setUiHold] = useState(false);
   const [uiCharge, setUiCharge] = useState(0);
+  const [uiRage, setUiRage] = useState("");
   const [result, setResult] = useState({ score: 0, coins: 0, xp: 0 });
 
   const G = useRef({
@@ -53,6 +67,9 @@ export default function ArtyomBite({ onExit }: { onExit: () => void }) {
     pops: [] as { x: number; y: number; txt: string; c: string; life: number }[],
     bites: 0,
     safeReleases: 0,
+    rage: 0, // 0..1 краснота от злости
+    rageLine: "",
+    rageT: 0,
   });
 
   const reset = useCallback(() => {
@@ -62,7 +79,8 @@ export default function ArtyomBite({ onExit }: { onExit: () => void }) {
     g.approach = 0; g.windup = 0; g.attackIn = 0; g.biting = 0;
     g.mouth = 0; g.shake = 0; g.flash = 0; g.round = 0; g.combo = 0;
     g.pops = []; g.bites = 0; g.safeReleases = 0;
-    setUiScore(0); setUiLives(3); setUiHold(false); setUiCharge(0);
+    g.rage = 0; g.rageLine = ""; g.rageT = 0;
+    setUiScore(0); setUiLives(3); setUiHold(false); setUiCharge(0); setUiRage("");
   }, []);
 
   const start = useCallback(() => {
@@ -143,6 +161,12 @@ export default function ArtyomBite({ onExit }: { onExit: () => void }) {
       });
       sfx.coin?.();
       haptic("light");
+
+      // Артём не успел — краснеет и орёт
+      g.rage = Math.min(1, g.rage + 0.42);
+      g.rageLine = RAGE_LINES[Math.floor(Math.random() * RAGE_LINES.length)];
+      g.rageT = 1500;
+      setUiRage(g.rageLine);
     }
     g.charge = 0;
     g.approach = 0;
@@ -216,6 +240,13 @@ export default function ArtyomBite({ onExit }: { onExit: () => void }) {
 
       if (g.biting > 0) g.biting -= dt;
 
+      // ярость спадает
+      if (g.rageT > 0) {
+        g.rageT -= dt;
+        if (g.rageT <= 0) { g.rageLine = ""; setUiRage(""); }
+      }
+      g.rage = Math.max(0, g.rage - dt * 0.00022);
+
       for (let i = g.pops.length - 1; i >= 0; i--) {
         g.pops[i].life -= dt;
         g.pops[i].y -= dt * 0.00012;
@@ -249,7 +280,7 @@ export default function ArtyomBite({ onExit }: { onExit: () => void }) {
     const bite = g.biting > 0 ? Math.sin((1 - g.biting / 320) * Math.PI) : 0;
     drawHead(ctx, artyom.look, W / 2, artY + bite * 26, headR, {
       mouth: Math.max(g.mouth, bite),
-      angry: 0.3 + g.approach * 0.6,
+      angry: Math.min(1, 0.3 + g.approach * 0.6 + g.rage * 0.6),
       cheeks: 0,
       tilt: Math.sin(g.elapsed * 0.002) * 0.05 + bite * 0.12,
     });
@@ -336,8 +367,8 @@ export default function ArtyomBite({ onExit }: { onExit: () => void }) {
         extra={
           <div className="flex shrink-0" style={{ gap: 4 }}>
             {[0, 1, 2].map((i) => (
-              <span key={i} style={{ fontSize: 17, opacity: i < uiLives ? 1 : 0.22 }}>
-                🦷
+              <span key={i} style={{ opacity: i < uiLives ? 1 : 0.22, lineHeight: 0 }}>
+                <Icon name="tooth" size={16} />
               </span>
             ))}
           </div>
@@ -445,6 +476,36 @@ export default function ArtyomBite({ onExit }: { onExit: () => void }) {
                 Выйти
               </button>
             </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Артём матерится, когда не успел укусить */}
+      <AnimatePresence>
+        {phase === "play" && uiRage && (
+          <motion.div
+            key={uiRage}
+            initial={{ opacity: 0, y: 8, scale: 0.9 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.94 }}
+            transition={{ type: "spring", stiffness: 480, damping: 26 }}
+            className="absolute left-0 right-0 flex justify-center pointer-events-none"
+            style={{ top: "calc(var(--sat) + 108px)", padding: "0 24px" }}
+          >
+            <div
+              className="t-title-sm text-center"
+              style={{
+                padding: "8px 14px",
+                borderRadius: "var(--r-md)",
+                background: "rgba(190,40,30,0.92)",
+                border: "1px solid rgba(255,120,100,0.6)",
+                color: "#fff",
+                fontSize: 13,
+                maxWidth: 300,
+              }}
+            >
+              {uiRage}
+            </div>
           </motion.div>
         )}
       </AnimatePresence>

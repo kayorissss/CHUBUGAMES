@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { useGame } from "../core/store";
 import { drawHead } from "../core/head";
 import { sfx, haptic } from "../core/fx";
+import Icon from "../ui/Icon";
 import { GameHUD, GameOver, Countdown } from "./shell";
 import { Panel } from "../ui/Glass";
 import type { Friend } from "../core/types";
@@ -157,7 +158,7 @@ export default function WhackFriend({ onExit }: { onExit: () => void }) {
       setCombo(0);
       sfx.hit();
       haptic("heavy");
-      pushFx(m.hole, "−1 ♥", true);
+      pushFx(m.hole, "−1 ЖИЗНЬ", true);
     } else {
       whacks.current++;
       comboRef.current++;
@@ -185,9 +186,12 @@ export default function WhackFriend({ onExit }: { onExit: () => void }) {
         extra={
           <Panel r="md" className="px-3 py-2 shrink-0 text-center">
             <div className="t-num" style={{ fontSize: 15 }}>{Math.ceil(timeLeft / 1000)}с</div>
-            <div style={{ fontSize: 10, letterSpacing: 1 }}>
-              {"♥".repeat(Math.max(0, lives))}
-              <span style={{ opacity: 0.2 }}>{"♥".repeat(Math.max(0, 3 - lives))}</span>
+            <div className="flex items-center" style={{ gap: 3 }}>
+              {[0, 1, 2].map((i) => (
+                <span key={i} style={{ opacity: i < lives ? 1 : 0.2, lineHeight: 0, color: "#ff5a6a" }}>
+                  <Icon name="heart" size={11} />
+                </span>
+              ))}
             </div>
           </Panel>
         }
@@ -318,12 +322,12 @@ function MoleHead({ friend, bad, gold }: { friend: Friend; bad: boolean; gold: b
         <canvas ref={ref} style={{ width: "100%", height: "100%" }} />
       )}
       {bad && (
-        <div className="absolute inset-0 flex items-start justify-center" style={{ fontSize: 18 }}>
-          ⛔
+        <div className="absolute inset-0 flex items-start justify-center" style={{ color: "#ff5a3c" }}>
+          <Icon name="cross" size={18} />
         </div>
       )}
       {gold && (
-        <div className="absolute" style={{ top: -4, right: 0, fontSize: 16 }}>⭐</div>
+        <div className="absolute" style={{ top: -4, right: 0, color: "var(--acc)" }}><Icon name="star" size={15} /></div>
       )}
     </div>
   );

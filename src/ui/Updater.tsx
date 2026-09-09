@@ -2,6 +2,7 @@ import { useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Card, Button, Bar } from "./Glass";
 import { useGame } from "../core/store";
+import Icon from "./Icon";
 import { sfx, haptic } from "../core/fx";
 import {
   APP_VERSION_LABEL,
@@ -40,7 +41,7 @@ export default function Updater() {
       } else {
         setPhase("fresh");
         sfx.click();
-        toast({ title: "У тебя последняя версия", icon: "✅" });
+        toast({ title: "У тебя последняя версия", icon: "check" });
       }
     } catch (e: any) {
       setPhase("idle");
@@ -65,7 +66,7 @@ export default function Updater() {
       );
       setPhase("installing");
       haptic("success");
-      toast({ title: "Открываю установщик", sub: "Разреши установку", icon: "📦", tone: "gold" });
+      toast({ title: "Открываю установщик", sub: "Разреши установку", icon: "case", tone: "gold" });
     } catch (e: any) {
       if (e?.name === "AbortError") { setPhase("found"); return; }
       setPhase("found");
@@ -89,7 +90,7 @@ export default function Updater() {
     try {
       setPhase("installing");
       await installFromFile(f);
-      toast({ title: "Открываю установщик", sub: f.name, icon: "📦", tone: "gold" });
+      toast({ title: "Открываю установщик", sub: f.name, icon: "case", tone: "gold" });
     } catch (e2: any) {
       setPhase("idle");
       setErr(e2?.message || "Не удалось открыть файл");
@@ -102,7 +103,20 @@ export default function Updater() {
   return (
     <Card r="lg" style={{ padding: 14 }}>
       <div className="flex items-center justify-between" style={{ gap: 12 }}>
-        <div className="min-w-0">
+        <span
+          className="shrink-0 flex items-center justify-center"
+          style={{
+            width: 36, height: 36, borderRadius: "var(--r-sm)",
+            background: "var(--btn-bg)", border: "1px solid var(--btn-brd)",
+            color: phase === "found" ? "var(--acc)" : phase === "fresh" ? "#59ff9e" : "var(--text-mute)",
+          }}
+        >
+          <Icon
+            name={phase === "found" ? "download" : phase === "fresh" ? "check" : "refresh"}
+            size={17}
+          />
+        </span>
+        <div className="min-w-0 flex-1">
           <div className="t-title-sm">Версия {APP_VERSION_LABEL}</div>
           <div className="t-caption" style={{ marginTop: 2 }}>
             {phase === "found" && info
@@ -199,7 +213,7 @@ export default function Updater() {
           </Button>
         ) : phase === "found" ? (
           <Button variant="primary" full onClick={download} sound="power">
-            ⬇ Скачать и установить
+            <span className="inline-flex items-center" style={{ gap: 8 }}><Icon name="download" size={15} /> Скачать и установить</span>
           </Button>
         ) : (
           <Button
@@ -222,7 +236,7 @@ export default function Updater() {
           sound="none"
           onClick={() => fileRef.current?.click()}
         >
-          📂 Обновить из файла
+          <span className="inline-flex items-center" style={{ gap: 8 }}><Icon name="case" size={15} /> Обновить из файла</span>
         </Button>
         <input
           ref={fileRef}

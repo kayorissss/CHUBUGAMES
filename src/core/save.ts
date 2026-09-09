@@ -135,6 +135,26 @@ export function skillLvl(s: SaveState, id: string) {
   return s.skills[id] || 0;
 }
 
+/**
+ * Статы главного босса — не декорация, они реально работают.
+ * Каждый стат 0..100 даёт свой бонус:
+ *   Меткость      → шанс крита в ЧУБКЛИКЕРЕ (до +8%)
+ *   Выносливость  → офлайн-доход, пока приложение закрыто (до +40%)
+ *   Безбашенность → монеты за все мини-игры (до +15%)
+ *   Удача         → шанс редких бонусов и хороших дропов (до +10%)
+ */
+export function bossStats(s: SaveState) {
+  const f = s.friends.find((x) => x.id === s.mainFriendId) || s.friends[0];
+  const st = f?.stats || { spit: 0, chub: 0, chaos: 0, luck: 0 };
+  const n = (v: number) => Math.max(0, Math.min(100, v)) / 100;
+  return {
+    critBonus: n(st.spit) * 0.08,
+    offlineBonus: n(st.chub) * 0.4,
+    coinBonus: n(st.chaos) * 0.15,
+    luckBonus: n(st.luck) * 0.1,
+  };
+}
+
 export function coinMult(s: SaveState): number {
   let m = 1;
   m *= 1 + 0.1 * skillLvl(s, "greed");
@@ -145,6 +165,8 @@ export function coinMult(s: SaveState): number {
   // бонус от коллекции карточек
   const cardBonus = Object.values(s.cards).reduce((a, b) => a + b, 0) * 0.004;
   m *= 1 + cardBonus;
+  // бонус от безбашенности главного босса
+  m *= 1 + bossStats(s).coinBonus;
   return m;
 }
 
@@ -164,7 +186,10 @@ export function autoRate(s: SaveState): number {
 }
 
 export function critChance(s: SaveState): number {
-  return Math.min(0.75, s.clicker.critLvl * 0.022 + skillLvl(s, "clover") * 0.03);
+  return Math.min(
+    0.75,
+    s.clicker.critLvl * 0.022 + skillLvl(s, "clover") * 0.03 + bossStats(s).critBonus,
+  );
 }
 export function critMult(s: SaveState): number {
   return 3 + s.clicker.critLvl * 0.28;
@@ -179,15 +204,20 @@ export function offlineCapHours(s: SaveState): number {
   return 2 + s.clicker.offlineLvl * 1.5;
 }
 export function offlineRate(s: SaveState): number {
-  return autoRate(s) * (0.35 + 0.05 * s.clicker.offlineLvl) * (1 + 0.15 * skillLvl(s, "vault"));
+  return (
+    autoRate(s) *
+    (0.35 + 0.05 * s.clicker.offlineLvl) *
+    (1 + 0.15 * skillLvl(s, "vault")) *
+    (1 + bossStats(s).offlineBonus)
+  );
 }
 
 export const UPGRADES = [
-  { key: "tapPower" as const, name: "Сила тапа", icon: "✊", desc: "Больше монет за каждый тап", base: 60, growth: 1.16 },
-  { key: "autoLvl" as const, name: "Автокормилка", icon: "⚙️", desc: "Друг жрёт сам и приносит монеты", base: 400, growth: 1.19 },
-  { key: "critLvl" as const, name: "Криты", icon: "💥", desc: "Шанс критического тапа", base: 1200, growth: 1.23 },
-  { key: "comboLvl" as const, name: "Комбо", icon: "🔥", desc: "Множитель за серию тапов", base: 3000, growth: 1.26 },
-  { key: "offlineLvl" as const, name: "Холодильник", icon: "🧊", desc: "Дольше копит, пока ты спишь", base: 8000, growth: 1.3 },
+  { key: "tapPower" as const, name: "Сила тапа", icon: "fist", desc: "Больше монет за каждый тап", base: 60, growth: 1.16 },
+  { key: "autoLvl" as const, name: "Автокормилка", icon: "gear", desc: "Друг жрёт сам и приносит монеты", base: 400, growth: 1.19 },
+  { key: "critLvl" as const, name: "Криты", icon: "bolt", desc: "Шанс критического тапа", base: 1200, growth: 1.23 },
+  { key: "comboLvl" as const, name: "Комбо", icon: "fire", desc: "Множитель за серию тапов", base: 3000, growth: 1.26 },
+  { key: "offlineLvl" as const, name: "Холодильник", icon: "snow", desc: "Дольше копит, пока ты спишь", base: 8000, growth: 1.3 },
 ];
 
 export function upgradeCost(base: number, growth: number, lvl: number) {

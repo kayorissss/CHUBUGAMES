@@ -4,6 +4,7 @@ import { useGame } from "../core/store";
 import { drawHead } from "../core/head";
 import { fmt } from "../core/format";
 import { sfx, haptic } from "../core/fx";
+import Icon from "../ui/Icon";
 import { GameHUD, GameOver } from "./shell";
 import { Panel, Tap } from "../ui/Glass";
 import type { Friend } from "../core/types";
@@ -206,7 +207,7 @@ export default function MergeHeads({ onExit }: { onExit: () => void }) {
             style={{ fontSize: 11, fontWeight: 700 }}
             sound="none"
           >
-            ↩ Отмена · 2K🪙
+            <span className="inline-flex items-center" style={{ gap: 6 }}><Icon name="refresh" size={12} /> Отмена · 2K</span>
           </Tap>
         </div>
 
@@ -218,10 +219,11 @@ export default function MergeHeads({ onExit }: { onExit: () => void }) {
                 className="absolute"
                 style={{
                   left: `${((i % N) * 100) / N}%`, top: `${(Math.floor(i / N) * 100) / N}%`,
-                  width: `${100 / N}%`, height: `${100 / N}%`, padding: 4,
+                  width: `${100 / N}%`, height: `${100 / N}%`, padding: 5,
+                  boxSizing: "border-box",
                 }}
               >
-                <div style={{ width: "100%", height: "100%", borderRadius: 14, background: "rgba(255,255,255,0.045)" }} />
+                <div style={{ width: "100%", height: "100%", borderRadius: 12, background: "rgba(255,255,255,0.05)" }} />
               </div>
             ))}
             <AnimatePresence>
@@ -239,7 +241,10 @@ export default function MergeHeads({ onExit }: { onExit: () => void }) {
                   }}
                   exit={{ opacity: 0, scale: 0.6 }}
                   transition={{ type: "spring", stiffness: 520, damping: 34 }}
-                  style={{ width: `${100 / N}%`, height: `${100 / N}%`, padding: 4 }}
+                  style={{
+                    width: `${100 / N}%`, height: `${100 / N}%`,
+                    padding: 5, boxSizing: "border-box",
+                  }}
                 >
                   <Tile v={c.v} friends={friends} pop={!!c.merged} />
                 </motion.div>
@@ -257,8 +262,8 @@ export default function MergeHeads({ onExit }: { onExit: () => void }) {
             <div className="t-num" style={{ fontSize: 17 }}>{mergesRef.current}</div>
             <div className="t-label" style={{ fontSize: 9 }}>слияний</div>
           </Panel>
-          <Tap onClick={restart} r="md" className="px-4 py-2 t-title" style={{ fontSize: 12 }} sound="swoosh">
-            ↻
+          <Tap onClick={restart} r="md" center className="px-4 py-2" sound="swoosh">
+            <Icon name="refresh" size={16} />
           </Tap>
         </div>
       </div>
@@ -276,21 +281,34 @@ export default function MergeHeads({ onExit }: { onExit: () => void }) {
 
 function Tile({ v, friends, pop }: { v: number; friends: Friend[]; pop: boolean }) {
   const ref = useRef<HTMLCanvasElement>(null);
-  const lvl = Math.log2(v) - 1; // 2 -> 1
-  const f = friends[(lvl - 1) % friends.length];
+  // v = 2 -> первый друг, дальше по порядку. Раньше индекс уходил в -1
+  // и часть плиток оставалась пустой.
+  const step = Math.max(0, Math.round(Math.log2(v)) - 1);
+  const f = friends.length ? friends[step % friends.length] : undefined;
   const isBig = v >= 128;
 
   useEffect(() => {
     const c = ref.current;
     if (!c || !f || f.photo) return;
-    const dpr = Math.min(2.5, window.devicePixelRatio || 1);
-    const size = 90;
-    c.width = size * dpr;
-    c.height = size * dpr;
-    const ctx = c.getContext("2d")!;
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.clearRect(0, 0, size, size);
-    drawHead(ctx, f.look, size / 2, size * 0.55, size * 0.33, { mouth: isBig ? 0.35 : 0.08 });
+
+    const paint = () => {
+      const rect = c.getBoundingClientRect();
+      const size = Math.max(24, Math.round(rect.width || 90));
+      const dpr = Math.min(2.5, window.devicePixelRatio || 1);
+      c.width = Math.round(size * dpr);
+      c.height = Math.round(size * dpr);
+      const ctx = c.getContext("2d");
+      if (!ctx) return;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.clearRect(0, 0, size, size);
+      drawHead(ctx, f.look, size / 2, size * 0.55, size * 0.33, { mouth: isBig ? 0.35 : 0.08 });
+    };
+
+    paint();
+    // плитка меняет размер при повороте экрана — перерисовываем
+    const ro = new ResizeObserver(paint);
+    ro.observe(c);
+    return () => ro.disconnect();
   }, [f, isBig]);
 
   return (
@@ -311,7 +329,7 @@ function Tile({ v, friends, pop }: { v: number; friends: Friend[]; pop: boolean 
       {f?.photo ? (
         <img src={f.photo} alt="" style={{ width: "62%", height: "62%", borderRadius: "50%", objectFit: "cover" }} />
       ) : (
-        <canvas ref={ref} style={{ width: "72%", height: "72%" }} />
+        <canvas ref={ref} style={{ width: "78%", height: "78%", display: "block" }} />
       )}
       <div
         className="t-num absolute"
