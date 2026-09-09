@@ -640,9 +640,23 @@ export default function RadomirBeat({ onExit }: { onExit: () => void }) {
                 />
               </div>
 
-              <div className="t-caption" style={{ marginTop: 10, lineHeight: 1.5 }}>
-                Скачай «Фембойчик» от onokami в mp3 и загрузи сюда — игра сама разложит
-                удары по дорожкам. Файл хранится на телефоне.
+              <div
+                className="t-caption"
+                style={{
+                  marginTop: 10, lineHeight: 1.6, padding: "11px 12px",
+                  borderRadius: "var(--r-md)",
+                  background: "var(--btn-bg)", border: "1px solid var(--btn-brd)",
+                }}
+              >
+                <span className="t-title-sm" style={{ fontSize: 11.5, display: "block", marginBottom: 5 }}>
+                  КАК ПОСТАВИТЬ «ФЕМБОЙЧИК»
+                </span>
+                1. Открой ru.hitmoz.org/song/81331674 в браузере.<br />
+                2. Скачай mp3 в память телефона.<br />
+                3. Жми «Загрузить свой трек» и выбери файл.<br />
+                Игра сама разложит удары по дорожкам. Трек останется на телефоне
+                и будет играть офлайн — авторские права остаются у onokami,
+                поэтому файл не зашит в приложение.
               </div>
 
               <button
