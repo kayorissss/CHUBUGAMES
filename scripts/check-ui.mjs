@@ -199,6 +199,11 @@ ok(mp.includes('startSurvival')&&mp.includes('startSprint'),'новые режи
 const shp=fs.readFileSync('src/pages/Shop.tsx','utf8');
 ok(shp.includes('nearEnd'),'у кейсов есть фаза замедления перед открытием');
 ok(shp.includes('conic-gradient'),'редкий дроп подсвечивается лучами');
+ok(shp.includes('SHOP_TABS'),'вкладки магазина крупные, с иконками');
+ok(shp.includes('activeTab.title'),'видно, в каком разделе магазина находишься');
+ok(shp.includes('CASE_SKIN'),'кейсы различаются по виду');
+ok(shp.includes('setFlash'),'в момент вскрытия кейса срабатывает вспышка');
+
 const stg2=fs.readFileSync('src/pages/Settings.tsx','utf8');
 ok(stg2.includes('notifyUpdates'),'тумблер уведомлений хранит своё состояние');
 const ty=fs.readFileSync('src/core/types.ts','utf8');

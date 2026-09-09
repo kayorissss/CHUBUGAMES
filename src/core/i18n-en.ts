@@ -36,6 +36,17 @@ export const EN_TEXT: Record<string, string> = {
   "ВРЕМЯ ВЫШЛО": "TIME'S UP",
   "Очков за две минуты": "Points in two minutes",
 
+  /* --- магазин: вкладки и кейсы --- */
+  "Кейсы с друзьями": "Friend cases",
+  "Открывай и собирай карточки — каждая даёт прибавку к монетам":
+    "Open and collect cards — each one boosts your coins",
+  "Скины героя": "Hero skins",
+  "Как выглядит твой персонаж в играх": "How your character looks in games",
+  "Цвет интерфейса": "Interface colour",
+  "Акцентный цвет кнопок, полосок и подсветки": "Accent colour of buttons, bars and glow",
+  "Дубликаты возвращают 35% стоимости.": "Duplicates refund 35% of the price.",
+  "Не хватает": "Not enough",
+
   /* --- навигация и общее --- */
   "Игры": "Games",
   "Прогресс": "Progress",

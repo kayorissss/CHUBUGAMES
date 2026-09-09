@@ -6,17 +6,40 @@ import {
   HERO_SKINS, ACCENTS, CASES, RARITY_COLOR, RARITY_LABEL,
 } from "../core/content";
 import { fmt } from "../core/format";
-import { Card, Tap, Button, Chip, SectionTitle, Screen } from "../ui/Glass";
+import { Card, Tap, Button, SectionTitle, Screen } from "../ui/Glass";
 import HeadView from "../ui/HeadView";
 import { sfx, haptic } from "../core/fx";
 import Icon from "../ui/Icon";
 import type { Friend, Rarity } from "../core/types";
+import type { IconName } from "../ui/Icon";
 
 type Tab = "cases" | "skins" | "themes";
+
+/** Вкладки магазина: иконка и подпись, чтобы раздел читался с одного взгляда */
+const SHOP_TABS: {
+  id: Tab; label: string; icon: IconName; title: string; hint: string;
+}[] = [
+  {
+    id: "cases", label: "Кейсы", icon: "case",
+    title: "Кейсы с друзьями",
+    hint: "Открывай и собирай карточки — каждая даёт прибавку к монетам",
+  },
+  {
+    id: "skins", label: "Скины", icon: "user",
+    title: "Скины героя",
+    hint: "Как выглядит твой персонаж в играх",
+  },
+  {
+    id: "themes", label: "Темы", icon: "sparkle",
+    title: "Цвет интерфейса",
+    hint: "Акцентный цвет кнопок, полосок и подсветки",
+  },
+];
 
 export default function Shop() {
   const [tab, setTab] = useState<Tab>("cases");
   const { s } = useGame();
+  const activeTab = SHOP_TABS.find((t) => t.id === tab)!;
   return (
     <Screen
       title={tr("МАГАЗИН")}
@@ -33,17 +56,68 @@ export default function Shop() {
         </Card>
       }
     >
-      <div className="flex" style={{ gap: 8, marginBottom: 18 }}>
-        <Chip active={tab === "cases"} onClick={() => setTab("cases")}>{tr("Кейсы")}</Chip>
-        <Chip active={tab === "skins"} onClick={() => setTab("skins")}>{tr("Скины")}</Chip>
-        <Chip active={tab === "themes"} onClick={() => setTab("themes")}>{tr("Темы")}</Chip>
+      {/* Вкладки: крупные, с иконкой и подписью — сразу видно, где находишься */}
+      <div className="flex" style={{ gap: 8, marginBottom: 16 }}>
+        {SHOP_TABS.map((t) => {
+          const on = tab === t.id;
+          return (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => { sfx.click(); haptic("light"); setTab(t.id); }}
+              className="flex-1 relative overflow-hidden"
+              style={{
+                padding: "11px 6px 10px",
+                borderRadius: "var(--r-md)",
+                background: on ? "var(--acc)" : "var(--btn-bg)",
+                color: on ? "var(--acc-ink)" : "var(--text-dim)",
+                border: `1px solid ${on ? "transparent" : "var(--btn-brd)"}`,
+                boxShadow: on ? "0 8px 22px -10px var(--acc-glow)" : undefined,
+                transition: "background 0.18s, color 0.18s",
+              }}
+            >
+              <span className="flex flex-col items-center" style={{ gap: 5 }}>
+                <Icon name={t.icon} size={17} />
+                <span
+                  className="t-label"
+                  style={{ fontSize: 9.5, color: "inherit", letterSpacing: "0.02em" }}
+                >
+                  {tr(t.label)}
+                </span>
+              </span>
+            </button>
+          );
+        })}
       </div>
+
+      {/* Где я сейчас: заголовок раздела с пояснением */}
+      <div style={{ marginBottom: 16 }}>
+        <div className="t-display-sm" style={{ fontSize: 19 }}>{tr(activeTab.title)}</div>
+        <div className="t-caption" style={{ marginTop: 3 }}>{tr(activeTab.hint)}</div>
+      </div>
+
       {tab === "cases" && <Cases />}
       {tab === "skins" && <Skins />}
       {tab === "themes" && <Themes />}
     </Screen>
   );
 }
+
+/** Внешний вид кейсов: бумажный, фольга, золотой */
+const CASE_SKIN: Record<string, { box: string; ink: string; line: string; glow: string }> = {
+  bronze: {
+    box: "rgba(190,140,90,0.18)", ink: "#c89b62",
+    line: "rgba(200,155,98,0.32)", glow: "rgba(200,155,98,0.10)",
+  },
+  silver: {
+    box: "rgba(190,200,215,0.18)", ink: "#c2ccd8",
+    line: "rgba(194,204,216,0.34)", glow: "rgba(194,204,216,0.10)",
+  },
+  gold: {
+    box: "rgba(255,176,32,0.20)", ink: "#ffb020",
+    line: "rgba(255,176,32,0.42)", glow: "rgba(255,176,32,0.14)",
+  },
+};
 
 /* ============ КЕЙСЫ ============ */
 function Cases() {
@@ -55,6 +129,8 @@ function Cases() {
   const [pending, setPending] = useState<Rarity>("common");
   /** «почти доехали» — на этой фазе лента ползёт и экран дрожит */
   const [nearEnd, setNearEnd] = useState(false);
+  /** Короткая вспышка в момент, когда барабан встал */
+  const [flash, setFlash] = useState(false);
 
   const open = (caseId: string) => {
     const c = CASES.find((x) => x.id === caseId)!;
@@ -107,6 +183,9 @@ function Cases() {
       setSpinning(false);
       setNearEnd(false);
       setRolling({ friend: picked, rarity, dupe });
+      // вспышка цветом редкости — момент вскрытия читается физически
+      setFlash(true);
+      setTimeout(() => setFlash(false), 420);
       if (rarity === "legend") sfx.legend();
       else sfx.achieve();
       haptic("success");
@@ -116,48 +195,129 @@ function Cases() {
 
   return (
     <>
-      <SectionTitle>{tr("Кейсы с карточками друзей")}</SectionTitle>
-      <div className="t-body" style={{ marginBottom: 14 }}>{tr("Каждая карточка навсегда даёт")}<span className="acc-text">{tr("+0.4% ко всем монетам")}</span>.
-        Дубликаты возвращают 35% стоимости кейса.
+      <div className="t-body" style={{ marginBottom: 16 }}>
+        {tr("Каждая карточка навсегда даёт")}{" "}
+        <span className="acc-text">{tr("+0.4% ко всем монетам")}</span>.{" "}
+        {tr("Дубликаты возвращают 35% стоимости.")}
       </div>
 
-      {CASES.map((c) => (
-        <Card key={c.id} r="lg" className="relative overflow-hidden" style={{ padding: 15, marginBottom: 12 }}>
-          <div
-            className="absolute pointer-events-none"
-            style={{ right: 4, top: 2, opacity: 0.09, lineHeight: 0 }}
+      {CASES.map((c, ci) => {
+        const skin = CASE_SKIN[c.id] ?? CASE_SKIN.bronze;
+        const afford = s.coins >= c.price;
+        // Лучший шанс показываем крупно: именно ради него кейс и открывают
+        const topRarity: Rarity = c.odds.legend >= 0.1
+          ? "legend" : c.odds.epic >= 0.3 ? "epic" : "rare";
+        return (
+          <motion.div
+            key={c.id}
+            initial={{ opacity: 0, y: 14 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: ci * 0.07 }}
           >
-            <Icon name="case" size={72} />
-          </div>
-          <div className="t-title-sm clip1" style={{ maxWidth: "78%" }}>{c.name}</div>
-          <div className="t-caption clip1" style={{ marginTop: 3, maxWidth: "78%" }}>{c.desc}</div>
-          <div className="flex flex-wrap" style={{ gap: 6, marginTop: 12, marginBottom: 14 }}>
-            {(Object.keys(c.odds) as Rarity[]).map((r) => (
+            <Card
+              r="lg"
+              className="relative overflow-hidden"
+              style={{
+                padding: 0,
+                marginBottom: 12,
+                border: `1px solid ${skin.line}`,
+              }}
+            >
+              {/* цветная подложка — кейсы отличаются с одного взгляда */}
               <div
-                key={r}
-                className="t-label"
+                className="absolute pointer-events-none"
                 style={{
-                  fontSize: 8.5, padding: "4px 8px", borderRadius: 999, whiteSpace: "nowrap",
-                  background: `${RARITY_COLOR[r]}1e`, color: RARITY_COLOR[r],
+                  inset: 0,
+                  background: `linear-gradient(135deg, ${skin.glow}, transparent 58%)`,
                 }}
-              >
-                {RARITY_LABEL[r]} {(c.odds[r] * 100).toFixed(c.odds[r] < 0.02 ? 1 : 0)}%
-              </div>
-            ))}
-          </div>
-          <Button
-            variant="primary"
-            full
-            size="lg"
-            sound="none"
-            disabled={s.coins < c.price || spinning}
-            onClick={() => open(c.id)}
-          >
-            <span className="inline-flex items-center" style={{ gap: 6 }}>{tr("Открыть")}<Icon name="coin" size={13} /> {fmt(c.price)}
+              />
+              <div className="relative" style={{ padding: 15 }}>
+                <div className="flex items-start" style={{ gap: 13 }}>
+                  {/* сам «кейс» */}
+                  <motion.span
+                    className="shrink-0 flex items-center justify-center"
+                    animate={{ y: [0, -4, 0] }}
+                    transition={{
+                      duration: 3.2, repeat: Infinity,
+                      ease: "easeInOut", delay: ci * 0.4,
+                    }}
+                    style={{
+                      width: 58, height: 58,
+                      borderRadius: "var(--r-md)",
+                      background: skin.box,
+                      color: skin.ink,
+                      boxShadow: `0 10px 26px -12px ${skin.ink}`,
+                    }}
+                  >
+                    <Icon name="case" size={28} />
+                  </motion.span>
+
+                  <div className="flex-1 min-w-0">
+                    <div className="t-title-sm clip1">{c.name}</div>
+                    <div className="t-caption clip1" style={{ marginTop: 3 }}>{c.desc}</div>
+                    <div
+                      className="t-label"
+                      style={{ marginTop: 7, fontSize: 9, color: RARITY_COLOR[topRarity] }}
+                    >
+                      {RARITY_LABEL[topRarity]} {(c.odds[topRarity] * 100).toFixed(
+                        c.odds[topRarity] < 0.02 ? 1 : 0,
+                      )}%
+                    </div>
+                  </div>
+                </div>
+
+                {/* Полоса шансов вместо россыпи бейджей: видно соотношение */}
+                <div
+                  className="flex overflow-hidden"
+                  style={{ height: 7, borderRadius: 999, marginTop: 13, gap: 2 }}
+                >
+                  {(Object.keys(c.odds) as Rarity[]).map((r) => (
+                    <span
+                      key={r}
+                      style={{
+                        width: `${c.odds[r] * 100}%`,
+                        background: RARITY_COLOR[r],
+                        opacity: 0.9,
+                      }}
+                    />
+                  ))}
+                </div>
+                <div className="flex flex-wrap" style={{ gap: 10, marginTop: 8, marginBottom: 14 }}>
+                  {(Object.keys(c.odds) as Rarity[]).map((r) => (
+                    <span
+                      key={r}
+                      className="t-label inline-flex items-center"
+                      style={{ fontSize: 8.5, gap: 4, color: RARITY_COLOR[r] }}
+                    >
+                      <span
+                        style={{
+                          width: 6, height: 6, borderRadius: 999,
+                          background: RARITY_COLOR[r], display: "inline-block",
+                        }}
+                      />
+                      {(c.odds[r] * 100).toFixed(c.odds[r] < 0.02 ? 1 : 0)}%
+                    </span>
+                  ))}
+                </div>
+
+                <Button
+                  variant="primary"
+                  full
+                  size="lg"
+                  sound="none"
+                  disabled={!afford || spinning}
+                  onClick={() => open(c.id)}
+                >
+                  <span className="inline-flex items-center" style={{ gap: 6 }}>
+                    {afford ? tr("Открыть") : tr("Не хватает")}
+                    <Icon name="coin" size={13} /> {fmt(c.price)}
                   </span>
-          </Button>
-        </Card>
-      ))}
+                </Button>
+              </div>
+            </Card>
+          </motion.div>
+        );
+      })}
 
       <div style={{ marginTop: 22 }}>
         <SectionTitle
@@ -206,6 +366,18 @@ function Cases() {
             style={{ background: "rgba(3,3,5,0.86)", backdropFilter: "blur(20px)" }}
             onClick={() => !spinning && setRolling(null)}
           >
+            {flash && (
+              <motion.div
+                className="fixed inset-0 pointer-events-none"
+                initial={{ opacity: 0.85 }}
+                animate={{ opacity: 0 }}
+                transition={{ duration: 0.42 }}
+                style={{
+                  background: `radial-gradient(circle at 50% 50%, ${RARITY_COLOR[pending]}, transparent 70%)`,
+                  zIndex: 90,
+                }}
+              />
+            )}
             {spinning ? (
               <motion.div
                 className="w-full max-w-sm"
