@@ -1,4 +1,5 @@
-import { motion } from "framer-motion";
+import { useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
 import { useGame } from "../core/store";
 import { GAME_META } from "../core/content";
 import { fmt } from "../core/format";
@@ -8,6 +9,9 @@ import HeadView from "../ui/HeadView";
 import GameIcon from "../ui/GameIcon";
 import Icon from "../ui/Icon";
 import type { GameId } from "../core/types";
+import AdModal from "../ui/AdModal";
+import { bonusesLeft, hasAds, noteBonus } from "../core/ads";
+import ModesPanel from "../ui/ModesPanel";
 
 export default function Home({
   onPlay, onOpenProfile,
@@ -15,8 +19,12 @@ export default function Home({
   onPlay: (g: GameId) => void;
   onOpenProfile?: () => void;
 }) {
-  const { s, mainFriend, levelPct } = useGame();
+  const { s, mainFriend, levelPct, addCoins, toast } = useGame();
   const rate = autoRate(s);
+  const [showAd, setShowAd] = useState(false);
+  const [adLeft, setAdLeft] = useState(() => bonusesLeft());
+  // награда — как 3 минуты автодохода, но не меньше осмысленной суммы
+  const adReward = Math.max(500, Math.floor(rate * 180) + s.level * 250);
   const featured = GAME_META.filter((g) => s.unlockedGames.includes(g.id)).sort(
     (a, b) => s.games[b.id].plays - s.games[a.id].plays,
   )[0];
@@ -141,6 +149,60 @@ export default function Home({
           </Tap>
         </div>
       )}
+
+      {/* Режимы: марафон и испытание дня */}
+      <ModesPanel />
+
+      {/* Бонус за рекламу */}
+      {hasAds() && adLeft > 0 && (
+        <Tap
+          onClick={() => setShowAd(true)}
+          r="lg"
+          className="w-full"
+          style={{
+            padding: 14, marginBottom: 18,
+            border: "1.5px solid rgba(89,255,158,0.45)",
+            background: "rgba(89,255,158,0.07)",
+          }}
+          sound="power"
+        >
+          <div className="flex items-center" style={{ gap: 12 }}>
+            <span
+              className="shrink-0 flex items-center justify-center"
+              style={{
+                width: 40, height: 40, borderRadius: "var(--r-sm)",
+                background: "rgba(89,255,158,0.14)", color: "#59FF9E",
+              }}
+            >
+              <Icon name="play" size={19} />
+            </span>
+            <span className="flex-1 min-w-0">
+              <span className="t-title-sm block">Бонус за ролик</span>
+              <span className="t-caption block" style={{ marginTop: 2 }}>
+                10 секунд — и {fmt(adReward)} монет
+              </span>
+            </span>
+            <span className="t-num shrink-0" style={{ fontSize: 11, color: "var(--text-mute)" }}>
+              {adLeft}/5
+            </span>
+          </div>
+        </Tap>
+      )}
+
+      <AnimatePresence>
+        {showAd && (
+          <AdModal
+            reason={`+${fmt(adReward)} монет`}
+            onReward={() => {
+              addCoins(adReward);
+              noteBonus();
+              setAdLeft(bonusesLeft());
+              toast({ title: "Награда получена", sub: `+${fmt(adReward)}`, icon: "coin", tone: "gold" });
+            }}
+            onClose={() => setShowAd(false)}
+          />
+        )}
+      </AnimatePresence>
 
       {/* Сетка игр */}
       <SectionTitle right={<span className="t-num" style={{ fontSize: 11, color: "var(--text-mute)" }}>{s.unlockedGames.length}/{GAME_META.length}</span>}>

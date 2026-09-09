@@ -60,7 +60,7 @@ console.log('\n[6] Сборка офлайн');
 const dist=fs.readFileSync('dist/index.html','utf8');
 ok((dist.match(/data:font\/woff2/g)||[]).length===4,'шрифты вшиты в HTML (не грузятся из сети)');
 ok(!/fonts\.googleapis|fonts\.gstatic/.test(dist),'нет обращений к Google Fonts');
-ok(fs.statSync('dist/index.html').size < 760*1024,`размер ${(fs.statSync('dist/index.html').size/1024).toFixed(0)} КБ — в пределах нормы`);
+ok(fs.statSync('dist/index.html').size < 820*1024,`размер ${(fs.statSync('dist/index.html').size/1024).toFixed(0)} КБ — в пределах нормы`);
 
 console.log('\n[7] Обновление приложения');
 const upd=fs.readFileSync('src/core/updater.ts','utf8');

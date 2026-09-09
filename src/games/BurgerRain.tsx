@@ -6,6 +6,8 @@ import { drawHead } from "../core/head";
 import { sfx, haptic } from "../core/fx";
 import Icon, { type IconName } from "../ui/Icon";
 import { useCanvas, GameHUD, GameOver, Countdown } from "./shell";
+import AdModal from "../ui/AdModal";
+import { hasAds, noteRevive } from "../core/ads";
 import { Panel } from "../ui/Glass";
 
 type PType = "burger" | "cheese" | "nugget" | "shake" | "fries";
@@ -27,6 +29,9 @@ const DIFF = {
 export default function BurgerRain({ onExit }: { onExit: () => void }) {
   const { s, mainFriend, addCoins, addXp, bump, finishGame, questProgress } = useGame();
   const [phase, setPhase] = useState<"count" | "play" | "over">("count");
+  // реклама за воскрешение: одна попытка на забег
+  const [showAd, setShowAd] = useState(false);
+  const revivedRef = useRef(false);
   const [cd, setCd] = useState(3);
   const [uiScore, setUiScore] = useState(0);
   const [uiLives, setUiLives] = useState(3);
@@ -157,6 +162,21 @@ export default function BurgerRain({ onExit }: { onExit: () => void }) {
   };
 
   /* ---------- игровой цикл ---------- */
+  /** Продолжить забег после рекламы: чистим экран и даём 2 жизни */
+  const revive = useCallback(() => {
+    const g = G.current;
+    g.lives = 2;
+    setUiLives(2);
+    g.projs = [];
+    g.bonuses = [];
+    g.spawnT = 1400;
+    g.rage = 0;
+    g.running = true;
+    setPhase("play");
+    sfx.power?.();
+    haptic("success");
+  }, []);
+
   const canvasRef = useCanvas((ctx, W, H, dt) => {
     const g = G.current;
     ctx.clearRect(0, 0, W, H);
@@ -564,8 +584,30 @@ export default function BurgerRain({ onExit }: { onExit: () => void }) {
           onExit={onExit}
           title="СЪЕЛ"
           sub={`Уклонился от ${G.current.dodged} снарядов`}
+          onRevive={
+            hasAds() && !revivedRef.current
+              ? () => setShowAd(true)
+              : undefined
+          }
         />
       )}
+
+      <AnimatePresence>
+        {showAd && (
+          <AdModal
+            reason="Вторая жизнь"
+            onReward={() => {
+              revivedRef.current = true;
+              noteRevive();
+            }}
+            onClose={() => {
+              setShowAd(false);
+              // награда засчитана — продолжаем с того же счёта
+              if (revivedRef.current) revive();
+            }}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }

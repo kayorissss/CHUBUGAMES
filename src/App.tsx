@@ -7,6 +7,7 @@ import { Toasts, OfflineModal } from "./components/Overlays";
 import UpdateBanner from "./ui/UpdateBanner";
 import Icon from "./ui/Icon";
 import Home from "./pages/Home";
+import { ModesProvider } from "./core/modes";
 import ProgressPage from "./pages/Progress";
 import Shop from "./pages/Shop";
 import Friends from "./pages/Friends";
@@ -147,6 +148,7 @@ function Shell() {
   };
 
   return (
+    <ModesProvider onSwitchGame={(g) => setGame(g)} currentGame={game}>
     <div className="h-full w-full relative overflow-hidden" style={{ background: "var(--bg)" }}>
       {s.settings.fx && <Aurora />}
 
@@ -217,6 +219,7 @@ function Shell() {
 
       <AnimatePresence>{splash && <Splash done={() => setSplash(false)} />}</AnimatePresence>
     </div>
+    </ModesProvider>
   );
 }
 

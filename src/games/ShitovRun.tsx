@@ -3,6 +3,8 @@ import { AnimatePresence } from "framer-motion";
 import { useGame } from "../core/store";
 import { drawHead } from "../core/head";
 import { useCanvas, GameHUD, GameOver, Countdown } from "./shell";
+import AdModal from "../ui/AdModal";
+import { hasAds, noteRevive } from "../core/ads";
 import { sfx, haptic } from "../core/fx";
 import Icon from "../ui/Icon";
 
@@ -43,6 +45,9 @@ export default function ShitovRun({ onExit }: { onExit: () => void }) {
   const hero = s.friends.find((f) => f.id === "vanya") || s.friends[0];
 
   const [phase, setPhase] = useState<Phase>("count");
+  // реклама за второй шанс: одна на забег
+  const [showAd, setShowAd] = useState(false);
+  const revivedRef = useRef(false);
   const [cd, setCd] = useState(3);
   const [uiScore, setUiScore] = useState(0);
   const [uiGap, setUiGap] = useState(0.62);
@@ -185,6 +190,22 @@ export default function ShitovRun({ onExit }: { onExit: () => void }) {
   }, [phase]);
 
   /* ---------- цикл ---------- */
+  /** Второй шанс: отталкиваем Шитова и убираем препятствия перед носом */
+  const revive = useCallback(() => {
+    const g = G.current;
+    g.gap = 0.72;
+    g.obstacles = [];
+    g.spawnT = 1500;
+    g.y = 0;
+    g.vy = 0;
+    g.ducking = false;
+    g.speed = Math.max(0.26, g.speed * 0.8);
+    g.running = true;
+    setPhase("play");
+    sfx.power?.();
+    haptic("success");
+  }, []);
+
   const canvasRef = useCanvas((ctx, W, H, dt) => {
     const g = G.current;
     ctx.clearRect(0, 0, W, H);
@@ -485,6 +506,22 @@ export default function ShitovRun({ onExit }: { onExit: () => void }) {
             onExit={onExit}
             title="ДОГНАЛ"
             sub="«Ну и куда мы бежим?»"
+            onRevive={
+              hasAds() && !revivedRef.current ? () => setShowAd(true) : undefined
+            }
+          />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {showAd && (
+          <AdModal
+            reason="Убежать от Шитова"
+            onReward={() => { revivedRef.current = true; noteRevive(); }}
+            onClose={() => {
+              setShowAd(false);
+              if (revivedRef.current) revive();
+            }}
           />
         )}
       </AnimatePresence>

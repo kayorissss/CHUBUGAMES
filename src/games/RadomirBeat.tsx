@@ -36,42 +36,63 @@ interface Note {
 }
 
 const LANES = 3;
-const FALL_MS = 1500;
-const PERFECT = 95;
-const GOOD = 180;
+/** Сколько нота летит сверху вниз. Больше = больше времени среагировать. */
+const FALL_MS = 2100;
+/** Окна попадания. Расширены: играем большим пальцем на ходу, а не на клавиатуре. */
+const PERFECT = 130;
+const GOOD = 250;
 
-/** Встроенный чарт под синтезированный бит (124 BPM) */
-function builtinChart(): Note[] {
+/**
+ * Встроенный чарт под синтезированный бит (124 BPM).
+ *
+ * Играют одним-двумя пальцами на телефоне, поэтому:
+ *  - ноты идут по целым долям (а не по восьмым) — минимум 484 мс между ними;
+ *  - аккорды (две ноты разом) только на адском уровне;
+ *  - плотность растёт плавно и зависит от выбранной сложности.
+ */
+function builtinChart(diff: "chill" | "normal" | "insane"): Note[] {
   const notes: Note[] = [];
   const beat = 60000 / 124;
-  let t = 1600;
+  // шаг между возможными нотами: на чилле реже, на адском чаще
+  const step = diff === "insane" ? beat / 2 : beat;
+  let t = 2000;
   let i = 0;
   while (t < 95000) {
     const bar = Math.floor(i / 8);
-    const density = bar < 4 ? 2 : bar < 10 ? 3 : bar < 18 ? 4 : 5;
+    const dMax = diff === "chill" ? 3 : diff === "insane" ? 5 : 4;
+    const density = Math.min(dMax, bar < 4 ? 2 : bar < 10 ? 3 : bar < 18 ? 4 : 5);
     if (i % 8 < density) {
       const lane = ((i * 7 + bar * 3) % LANES) as 0 | 1 | 2;
-      // каждые 4 такта — длинная нота
+      // длинная нота пореже, чтобы не сбивать ритм
       const hold = bar >= 6 && i % 32 === 0 ? beat * 2 : 0;
       notes.push({ lane, t, hold, hit: false, missed: false, holding: false, holdOk: 0, done: false });
-      if (bar >= 10 && i % 8 === 0) {
+      // аккорд на два пальца — только для тех, кто сам выбрал адский
+      if (diff === "insane" && bar >= 12 && i % 16 === 0) {
         notes.push({
           lane: ((lane + 2) % LANES) as 0 | 1 | 2, t, hold: 0,
           hit: false, missed: false, holding: false, holdOk: 0, done: false,
         });
       }
     }
-    t += beat / 2;
+    t += step;
     i += 1;
   }
   return notes;
 }
 
 /** Чарт из онсетов реального трека */
-function chartFromOnsets(ons: Onset[]): Note[] {
+function chartFromOnsets(
+  ons: Onset[],
+  diff: "chill" | "normal" | "insane" = "normal",
+): Note[] {
   const notes: Note[] = [];
+  // Минимальный промежуток между нотами: пальцем быстрее просто не успеть
+  const minGap = diff === "chill" ? 420 : diff === "insane" ? 220 : 320;
+  let lastT = -9999;
   for (let i = 0; i < ons.length; i++) {
     const o = ons[i];
+    if (o.t - lastT < minGap) continue;
+    lastT = o.t;
     // длинная нота: если в этой же полосе дальше пауза > 700 мс, а удар сильный
     const nextSame = ons.find((x, j) => j > i && x.band === o.band);
     const gapMs = nextSame ? nextSame.t - o.t : 9999;
@@ -133,7 +154,7 @@ export default function RadomirBeat({ onExit }: { onExit: () => void }) {
         const buf = await decode(st.data);
         if (!alive) return;
         audioBuf.current = buf;
-        chartRef.current = chartFromOnsets(detectOnsets(buf));
+        chartRef.current = chartFromOnsets(detectOnsets(buf), s.settings.difficulty);
       } catch {
         setLoadErr("Файл не читается, загрузи заново");
       }
@@ -154,7 +175,7 @@ export default function RadomirBeat({ onExit }: { onExit: () => void }) {
         return;
       }
       audioBuf.current = buf;
-      chartRef.current = chartFromOnsets(ons);
+      chartRef.current = chartFromOnsets(ons, s.settings.difficulty);
       await saveTrack(f.name, data);
       setTrackName(f.name);
       sfx.achieve?.();
@@ -179,7 +200,7 @@ export default function RadomirBeat({ onExit }: { onExit: () => void }) {
   const reset = useCallback(() => {
     const g = G.current;
     g.running = false;
-    g.notes = (useOwn ? chartRef.current! : builtinChart()).map((n) => ({ ...n }));
+    g.notes = (useOwn ? chartRef.current! : builtinChart(s.settings.difficulty)).map((n) => ({ ...n }));
     g.time = 0; g.score = 0; g.combo = 0; g.bestCombo = 0;
     g.lives = 5; g.hits = 0; g.perfect = 0;
     g.flash = [0, 0, 0]; g.held = [false, false, false];
@@ -286,7 +307,7 @@ export default function RadomirBeat({ onExit }: { onExit: () => void }) {
       if (n.lane === lane && n.holding && !n.done) {
         n.holding = false;
         // отпустил раньше конца — нота не засчитана целиком
-        if (n.holdOk < n.hold * 0.75) {
+        if (n.holdOk < n.hold * 0.6) {
           n.done = true;
           g.combo = 0;
           setUiCombo(0);

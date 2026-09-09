@@ -3,6 +3,8 @@ import { motion } from "framer-motion";
 import { Panel, Tap } from "../ui/Glass";
 import { fmt } from "../core/format";
 import Icon from "../ui/Icon";
+import { useModes, MARATHON_ROUNDS } from "../core/modes";
+import { useGame } from "../core/store";
 
 export function useCanvas(
   draw: (ctx: CanvasRenderingContext2D, w: number, h: number, dt: number, t: number) => void,
@@ -83,12 +85,136 @@ export function GameHUD({
 }
 
 export function GameOver({
-  score, best, coins, xp, onRetry, onExit, title = "ВСЁ", sub,
+  score, best, coins, xp, onRetry, onExit, title = "ВСЁ", sub, onRevive,
 }: {
   score: number; best: number; coins: number; xp: number;
   onRetry: () => void; onExit: () => void; title?: string; sub?: string;
+  /** Если передан — покажем «Продолжить за рекламу» (одна попытка за забег) */
+  onRevive?: () => void;
 }) {
   const isRecord = score >= best && score > 0;
+  const modes = useModes();
+  const run = modes?.run ?? null;
+  const { addCoins, toast } = useGame();
+
+  // В марафоне свой экран итогов: очки складываются, «Ещё раз» не нужен
+  const reported = useRef(false);
+  useEffect(() => {
+    if (run && !run.pending && !run.finished && !reported.current) {
+      reported.current = true;
+      modes?.reportRound(score);
+    }
+  }, [run, score, modes]);
+
+  // Испытание дня засчитывается из любой игры — проверяем один раз за заход
+  const chDone = useRef(false);
+  useEffect(() => {
+    if (chDone.current || !modes?.currentGame) return;
+    chDone.current = true;
+    if (modes.reportChallenge(modes.currentGame, score)) {
+      setTimeout(() => {
+        toast({
+          title: "Испытание дня выполнено",
+          sub: "Забери награду на главной",
+          icon: "target",
+          tone: "gold",
+        });
+      }, 900);
+    }
+  }, [modes, score, toast]);
+
+  if (run) {
+    const total = run.scores.reduce((a, b) => a + b, 0);
+    const roundNo = Math.min(run.idx + 1, MARATHON_ROUNDS);
+    return (
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        className="absolute inset-0 z-40 flex items-center justify-center px-6"
+        style={{ background: "rgba(4,4,6,0.72)", backdropFilter: "blur(18px)" }}
+      >
+        <motion.div
+          initial={{ scale: 0.86, y: 30, opacity: 0 }}
+          animate={{ scale: 1, y: 0, opacity: 1 }}
+          transition={{ type: "spring", stiffness: 320, damping: 26 }}
+          className="w-full max-w-sm"
+        >
+          <Panel r="xl" strong className="p-6 text-center">
+            <div className="t-label" style={{ marginBottom: 6 }}>
+              {run.finished ? "Марафон пройден" : `Раунд ${roundNo} из ${MARATHON_ROUNDS}`}
+            </div>
+            <div className="t-display" style={{ fontSize: 32 }}>
+              {run.finished ? "ФИНИШ" : title}
+            </div>
+
+            <div className="my-5">
+              <div className="t-label mb-1">{run.finished ? "Всего очков" : "Сумма"}</div>
+              <div className="t-num acc-text" style={{ fontSize: 50, lineHeight: 1 }}>
+                {fmt(total)}
+              </div>
+              <div className="text-xs mt-1" style={{ color: "var(--text-mute)" }}>
+                за этот раунд +{fmt(score)}
+              </div>
+            </div>
+
+            {/* Точки прогресса марафона */}
+            <div className="flex justify-center" style={{ gap: 7, marginBottom: 20 }}>
+              {Array.from({ length: MARATHON_ROUNDS }).map((_, i) => (
+                <span
+                  key={i}
+                  style={{
+                    width: 9, height: 9, borderRadius: 99,
+                    background: i < run.scores.length ? "var(--acc)" : "rgba(255,255,255,0.16)",
+                  }}
+                />
+              ))}
+            </div>
+
+            {run.finished ? (
+              <Tap
+                onClick={() => {
+                  // бонус за то, что дошёл до конца, а не бросил на середине
+                  const bonus = 2500 + total * 3;
+                  addCoins(bonus);
+                  toast({
+                    title: "Марафон пройден",
+                    sub: `+${fmt(bonus)} сверху`,
+                    icon: "trophy",
+                    tone: "gold",
+                  });
+                  modes?.closeMarathon();
+                }}
+                accent r="md" center
+                className="w-full py-3.5 t-title"
+                style={{ fontSize: 14 }}
+                sound="coin"
+              >
+                ЗАБРАТЬ +{fmt(2500 + total * 3)}
+              </Tap>
+            ) : (
+              <div className="flex gap-2.5">
+                <Tap
+                  onClick={() => modes?.closeMarathon()}
+                  r="md" className="px-5 py-3.5 t-title"
+                  style={{ fontSize: 13 }} sound="swoosh"
+                >
+                  Сдаться
+                </Tap>
+                <Tap
+                  onClick={() => modes?.nextRound()}
+                  accent r="md" className="flex-1 py-3.5 t-title"
+                  style={{ fontSize: 14 }} sound="power"
+                >
+                  ДАЛЬШЕ
+                </Tap>
+              </div>
+            )}
+          </Panel>
+        </motion.div>
+      </motion.div>
+    );
+  }
+
   return (
     <motion.div
       initial={{ opacity: 0 }}
@@ -135,6 +261,26 @@ export function GameOver({
               <div className="t-label" style={{ fontSize: 9 }}>опыта</div>
             </Panel>
           </div>
+
+          {onRevive && (
+            <Tap
+              onClick={onRevive}
+              r="md"
+              solid
+              center
+              className="w-full py-3.5 t-title"
+              style={{
+                fontSize: 13, marginBottom: 10,
+                border: "1.5px solid #59FF9E",
+                color: "#59FF9E",
+              }}
+              sound="power"
+            >
+              <span className="inline-flex items-center" style={{ gap: 8 }}>
+                <Icon name="play" size={15} /> ПРОДОЛЖИТЬ ЗА РЕКЛАМУ
+              </span>
+            </Tap>
+          )}
 
           <div className="flex gap-2.5">
             <Tap onClick={onExit} r="md" className="px-5 py-3.5 t-title" style={{ fontSize: 13 }} sound="swoosh">
