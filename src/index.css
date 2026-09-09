@@ -94,6 +94,8 @@
   --danger-brd: rgba(255, 106, 77, 0.34);
   --toast-bg: #1b1b22;
   --toast-brd: rgba(255,255,255,0.16);
+  --nav-bg: #16161c;
+  --nav-brd: rgba(255, 255, 255, 0.09);
 
   /* Сдержанные радиусы: карточки — прямоугольные с лёгким скруглением,
      капсулы остаются ТОЛЬКО у чипов, таб-бара и полос прогресса */
@@ -144,6 +146,8 @@ html.light {
   --danger-brd: rgba(217, 52, 43, 0.3);
   --toast-bg: #ffffff;
   --toast-brd: rgba(0,0,0,0.14);
+  --nav-bg: #ffffff;
+  --nav-brd: rgba(0, 0, 0, 0.1);
   color-scheme: light;
 }
 

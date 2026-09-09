@@ -13,6 +13,7 @@ import {
 import { today, daysBetween } from "./format";
 import { sfx, haptic, setSound, setHaptics } from "./fx";
 import { pickQuests } from "./save";
+import { makeT } from "./i18n";
 
 export interface Toast {
   id: number;
@@ -39,6 +40,7 @@ interface Ctx {
   hardReset: () => void;
   levelPct: number;
   accentHex: string;
+  t: (k: string) => string;
   prestigeAvailable: number;
   freePoints: number;
 }
@@ -303,6 +305,8 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
     [s.friends, s.mainFriendId],
   );
 
+  const t = useMemo(() => makeT(s.settings.lang || "ru"), [s.settings.lang]);
+
   const accentHex = useMemo(
     () => (ACCENTS.find((a) => a.id === s.settings.accent) || ACCENTS[0]).hex,
     [s.settings.accent],
@@ -315,7 +319,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
   const value: Ctx = {
     s, set, addCoins, spendCoins, addXp, bump, questProgress, finishGame,
     toasts, toast, mainFriend, offlineReport, clearOffline: () => setOfflineReport(null),
-    hardReset, levelPct, accentHex, prestigeAvailable, freePoints,
+    hardReset, levelPct, accentHex, prestigeAvailable, freePoints, t,
   };
 
   return <C.Provider value={value}>{children}</C.Provider>;

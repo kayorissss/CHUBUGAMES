@@ -174,6 +174,15 @@ export async function installApk(uri: string) {
   });
 }
 
+/** Тихая фоновая проверка при запуске. Никогда не бросает исключений. */
+export async function checkQuietly(): Promise<UpdateInfo | null> {
+  try {
+    return await checkForUpdate();
+  } catch {
+    return null;
+  }
+}
+
 /** Полный цикл: скачать -> сохранить -> открыть установщик */
 export async function downloadAndInstall(
   info: UpdateInfo,

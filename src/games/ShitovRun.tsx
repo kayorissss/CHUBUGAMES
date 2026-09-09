@@ -36,20 +36,20 @@ export default function ShitovRun({ onExit }: { onExit: () => void }) {
   const [phase, setPhase] = useState<Phase>("count");
   const [cd, setCd] = useState(3);
   const [uiScore, setUiScore] = useState(0);
-  const [uiDanger, setUiDanger] = useState(0);
+  const [uiGap, setUiGap] = useState(0.62);
   const [result, setResult] = useState({ score: 0, coins: 0, xp: 0 });
 
   const G = useRef({
     running: false,
     dist: 0,
-    speed: 0.42,
+    speed: 0.26,
     y: 0, // высота над землёй, в долях
     vy: 0,
     jumps: 0,
     ducking: false,
     obstacles: [] as Obstacle[],
     spawnT: 900,
-    chase: 0.18, // 0 далеко .. 1 схватил
+    gap: 0.62, // 0 схватил .. 1 далеко позади
     elapsed: 0,
     shake: 0,
     flash: 0,
@@ -60,12 +60,12 @@ export default function ShitovRun({ onExit }: { onExit: () => void }) {
 
   const reset = useCallback(() => {
     const g = G.current;
-    g.running = false; g.dist = 0; g.speed = 0.42;
+    g.running = false; g.dist = 0; g.speed = 0.26;
     g.y = 0; g.vy = 0; g.jumps = 0; g.ducking = false;
-    g.obstacles = []; g.spawnT = 900; g.chase = 0.18;
+    g.obstacles = []; g.spawnT = 900; g.gap = 0.62;
     g.elapsed = 0; g.shake = 0; g.flash = 0; g.run = 0;
     g.pops = []; g.hits = 0;
-    setUiScore(0); setUiDanger(0);
+    setUiScore(0); setUiGap(0.62);
   }, []);
 
   const start = useCallback(() => {
@@ -182,10 +182,12 @@ export default function ShitovRun({ onExit }: { onExit: () => void }) {
       g.elapsed += dt;
       g.shake *= 0.9;
       g.flash *= 0.92;
-      g.run += dt * 0.012 * (g.speed / 0.42);
+      g.run += dt * 0.012 * (g.speed / 0.26);
 
-      // разгон с потолком
-      g.speed = Math.min(0.92, 0.42 + g.elapsed * 0.000018);
+      // Разгон по ступеням: сначала спокойный бег, потом ускорение.
+      // Первые 10 секунд — «стандарт», дальше плавно быстрее, потолок 0.78.
+      const warmup = Math.max(0, g.elapsed - 9000);
+      g.speed = Math.min(0.78, 0.26 + warmup * 0.0000135);
       g.dist += (dt * g.speed) / 9;
       setUiScore(Math.floor(g.dist));
 
@@ -194,15 +196,16 @@ export default function ShitovRun({ onExit }: { onExit: () => void }) {
       g.y -= g.vy * dt * 0.0016;
       if (g.y <= 0) { g.y = 0; g.vy = 0; g.jumps = 0; }
 
-      // препод постепенно отстаёт, пока ты не врезаешься
-      g.chase = Math.max(0.08, g.chase - dt * 0.00002);
-      setUiDanger(g.chase);
+      // Пока бежишь чисто — отрыв медленно растёт
+      g.gap = Math.min(1, g.gap + dt * 0.000022);
+      setUiGap(g.gap);
 
       // спавн препятствий
       g.spawnT -= dt * g.speed;
       if (g.spawnT <= 0) {
-        const gap = 620 + Math.random() * 520 - Math.min(260, g.elapsed * 0.004);
-        g.spawnT = Math.max(300, gap);
+        // интервал зависит от скорости: чем быстрее бежим, тем больше запас
+        const base = 1150 + Math.random() * 700 - Math.min(380, g.elapsed * 0.0035);
+        g.spawnT = Math.max(620, base);
         const roll = Math.random();
         let type: ObType = "pc";
         let air = false;
@@ -238,14 +241,16 @@ export default function ShitovRun({ onExit }: { onExit: () => void }) {
         if (hit && !o.passed) {
           o.passed = true;
           g.hits += 1;
-          g.chase = Math.min(1, g.chase + 0.2);
+          // споткнулся — препод подбирается чуть ближе, но не мгновенно
+          g.gap = Math.max(0, g.gap - 0.17);
+          g.speed = Math.max(0.24, g.speed * 0.82); // сбился с темпа
           g.shake = 24;
           g.flash = 1;
           sfx.hit();
           haptic("heavy");
           g.pops.push({ x: heroXn, y: 0.52, txt: "БАМ!", c: "#ff6a4d", life: 800 });
-          setUiDanger(g.chase);
-          if (g.chase >= 1) { end(); return; }
+          setUiGap(g.gap);
+          if (g.gap <= 0) { end(); return; }
         } else if (!o.passed && o.x + o.w < heroXn - 0.05) {
           o.passed = true;
           g.dist += 12;
@@ -311,7 +316,8 @@ export default function ShitovRun({ onExit }: { onExit: () => void }) {
     }
 
     // ШИТОВ сзади
-    const chaseX = W * (0.03 + (1 - g.chase) * -0.02) + g.chase * heroX * 0.72;
+    // чем меньше отрыв, тем ближе Шитов к спине героя
+    const chaseX = heroX - g.gap * W * 0.42 - W * 0.06;
     const shHop = Math.abs(Math.sin(g.run * 0.9)) * 8;
     drawHead(
       ctx, shitov.look, chaseX + heroR * 0.4, groundY - heroR * 1.35 - shHop,
@@ -329,7 +335,7 @@ export default function ShitovRun({ onExit }: { onExit: () => void }) {
       hy - heroR * (g.ducking ? 0.95 : 1.42), heroR * (g.ducking ? 0.78 : 0.86),
       {
         mouth: 0.35, blink: 0,
-        angry: g.chase > 0.6 ? 0.5 : 0,
+        angry: g.gap < 0.35 ? 0.55 : 0,
         tilt: g.y > 0.01 ? -0.15 : Math.sin(g.run * 0.5) * 0.07,
       },
     );
@@ -389,8 +395,8 @@ export default function ShitovRun({ onExit }: { onExit: () => void }) {
             >
               <div
                 style={{
-                  width: `${Math.round(uiDanger * 100)}%`, height: "100%",
-                  background: uiDanger > 0.6 ? "#ff6a4d" : "var(--acc)",
+                  width: `${Math.round(uiGap * 100)}%`, height: "100%",
+                  background: uiGap < 0.3 ? "#ff6a4d" : "var(--acc)",
                   transition: "width 0.2s",
                 }}
               />

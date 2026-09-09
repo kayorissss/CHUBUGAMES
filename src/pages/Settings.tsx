@@ -2,13 +2,16 @@ import { useRef, useState } from "react";
 import { useGame } from "../core/store";
 import { Card, Button, SectionTitle, Screen, Divider } from "../ui/Glass";
 import Updater from "../ui/Updater";
+import NetCheck from "../ui/NetCheck";
+import AiChat from "../ui/AiChat";
+import { ACCENTS } from "../core/content";
 import { SAVE_KEY, migrate, persistNow } from "../core/save";
 import { sfx, haptic, unlockAudio } from "../core/fx";
 import { fmt } from "../core/format";
 import { APP_VERSION } from "../core/version";
 
 export default function Settings() {
-  const { s, set, hardReset, toast } = useGame();
+  const { s, set, hardReset, toast, t } = useGame();
   const [confirmReset, setConfirmReset] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -47,39 +50,74 @@ export default function Settings() {
   };
 
   return (
-    <Screen title="НАСТРОЙКИ">
-      <SectionTitle>Оформление</SectionTitle>
+    <Screen title={t("settings.title")}>
+      <SectionTitle>{t("settings.appearance")}</SectionTitle>
       <Card r="lg" style={{ marginBottom: 22, overflow: "hidden" }}>
         <Seg
-          label="Тема"
+          label={t("settings.theme")}
           value={s.settings.theme}
-          opts={[["dark", "Тёмная"], ["light", "Светлая"]]}
+          opts={[["dark", t("settings.dark")], ["light", t("settings.light")]]}
           onPick={(v) => set((d) => { d.settings.theme = v as any; })}
         />
         <Divider inset={14} />
         <Toggle
-          label="Жидкое стекло и свечения"
-          hint="Выключи, если телефон греется"
+          label={t("settings.glass")}
+          hint={t("settings.glassHint")}
           on={s.settings.fx}
           onToggle={() => set((d) => { d.settings.fx = !d.settings.fx; })}
         />
         <Divider inset={14} />
-        <div className="t-caption" style={{ padding: "12px 14px", lineHeight: 1.5 }}>
-          Акцентный цвет меняется в <span className="acc-text">Магазине → Темы</span>
+        <Seg
+          label={t("settings.language")}
+          value={s.settings.lang || "ru"}
+          opts={[["ru", "Русский"], ["en", "English"]]}
+          onPick={(v) => set((d) => { d.settings.lang = v as any; })}
+        />
+        <Divider inset={14} />
+        <div style={{ padding: "13px 14px" }}>
+          <div className="t-title-sm" style={{ fontWeight: 600, marginBottom: 10 }}>
+            {t("settings.accent")}
+          </div>
+          <div className="flex flex-wrap" style={{ gap: 9 }}>
+            {ACCENTS.filter((a) => s.ownedThemes.includes(a.id)).map((a) => {
+              const on = s.settings.accent === a.id;
+              return (
+                <button
+                  key={a.id}
+                  type="button"
+                  onClick={() => {
+                    sfx.click(); haptic("light");
+                    set((d) => { d.settings.accent = a.id; });
+                  }}
+                  title={a.name}
+                  style={{
+                    width: 34, height: 34, borderRadius: "var(--r-sm)",
+                    background: a.hex,
+                    border: on ? "2.5px solid var(--text)" : "1px solid var(--btn-brd)",
+                    boxShadow: on ? `0 0 14px -3px ${a.hex}` : "none",
+                    transition: "border-color 0.15s, box-shadow 0.15s",
+                  }}
+                />
+              );
+            })}
+          </div>
+          <div className="t-caption" style={{ marginTop: 9 }}>
+            Ещё цвета — в <span className="acc-text">Магазине → Темы</span>
+          </div>
         </div>
       </Card>
 
-      <SectionTitle>Игра</SectionTitle>
+      <SectionTitle>{t("settings.game")}</SectionTitle>
       <Card r="lg" style={{ marginBottom: 22, overflow: "hidden" }}>
         <Seg
-          label="Сложность"
+          label={t("settings.difficulty")}
           value={s.settings.difficulty}
-          opts={[["chill", "Чилл"], ["normal", "Норма"], ["insane", "Ад"]]}
+          opts={[["chill", t("settings.chill")], ["normal", t("settings.normal")], ["insane", t("settings.insane")]]}
           onPick={(v) => set((d) => { d.settings.difficulty = v as any; })}
         />
         <Divider inset={14} />
         <Toggle
-          label="Звук"
+          label={t("settings.sound")}
           on={s.settings.sound}
           onToggle={() => {
             unlockAudio();
@@ -88,18 +126,28 @@ export default function Settings() {
         />
         <Divider inset={14} />
         <Toggle
-          label="Вибрация"
+          label={t("settings.haptics")}
           on={s.settings.haptics}
           onToggle={() => set((d) => { d.settings.haptics = !d.settings.haptics; })}
         />
       </Card>
 
-      <SectionTitle>Обновление</SectionTitle>
+      <SectionTitle>{t("settings.update")}</SectionTitle>
       <div style={{ marginBottom: 22 }}>
         <Updater />
       </div>
 
-      <SectionTitle>Сохранение</SectionTitle>
+      <SectionTitle>{t("settings.internet")}</SectionTitle>
+      <div style={{ marginBottom: 22 }}>
+        <NetCheck />
+      </div>
+
+      <SectionTitle>Бета-режимы</SectionTitle>
+      <div style={{ marginBottom: 22 }}>
+        <AiChat />
+      </div>
+
+      <SectionTitle>{t("settings.save")}</SectionTitle>
       <Card r="lg" style={{ padding: 14, marginBottom: 22 }}>
         <div className="t-body" style={{ marginBottom: 14 }}>
           Прогресс хранится только на этом телефоне и не требует интернета.
@@ -116,7 +164,7 @@ export default function Settings() {
         </div>
       </Card>
 
-      <SectionTitle>Опасная зона</SectionTitle>
+      <SectionTitle>{t("settings.danger")}</SectionTitle>
       <Card r="lg" style={{ padding: 14, marginBottom: 22 }}>
         {!confirmReset ? (
           <Button
@@ -153,7 +201,7 @@ export default function Settings() {
         )}
       </Card>
 
-      <SectionTitle>Об игре</SectionTitle>
+      <SectionTitle>{t("settings.about")}</SectionTitle>
       <Card r="lg" style={{ padding: 14, marginBottom: 22 }}>
         <div className="flex items-center" style={{ gap: 13 }}>
           <div
@@ -169,7 +217,7 @@ export default function Settings() {
           <div className="min-w-0 flex-1">
             <div className="t-title-sm">Чубуков Иван Сергеевич</div>
             <div className="t-caption" style={{ marginTop: 2 }}>
-              автор и разработчик ЧУБУГЕЙМ
+              {t("settings.author")}
             </div>
           </div>
         </div>
@@ -197,10 +245,10 @@ export default function Settings() {
       <div className="text-center" style={{ paddingBlock: 18 }}>
         <div className="t-display-sm" style={{ opacity: 0.22 }}>ЧУБУГЕЙМ</div>
         <div className="t-caption" style={{ marginTop: 5 }}>
-          версия {APP_VERSION} · работает офлайн
+          {t("common.version")} {APP_VERSION} · {t("settings.offline")}
         </div>
         <div className="t-caption" style={{ marginTop: 2, opacity: 0.6 }}>
-          сделано для своих
+          {t("settings.forOurs")}
         </div>
       </div>
     </Screen>

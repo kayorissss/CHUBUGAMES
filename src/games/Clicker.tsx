@@ -27,6 +27,11 @@ export default function Clicker({ onExit }: { onExit: () => void }) {
   const anim = useRef({ squish: 0, tilt: 0, blink: 0, blinkT: 1200, mouth: 0.08, rings: [] as any[] });
   const photoRef = useRef<HTMLImageElement | null>(null);
 
+  // Эволюция героя: чем больше тапов, тем эпичнее выглядит
+  const stage = clickerStage(s.clicker.totalTaps);
+  const stageRef = useRef(stage);
+  stageRef.current = stage;
+
   const tv = tapValue(s);
   const ar = autoRate(s);
   const cc = critChance(s);
@@ -105,12 +110,79 @@ export default function Clicker({ onExit }: { onExit: () => void }) {
           ctx.stroke();
         }
 
-        // свечение
-        const glow = ctx.createRadialGradient(W / 2, cy, r * 0.4, W / 2, cy, r * 1.7);
-        glow.addColorStop(0, "rgba(255,176,32,0.16)");
+        // свечение усиливается со стадией
+        const st = stageRef.current;
+        const glow = ctx.createRadialGradient(W / 2, cy, r * 0.4, W / 2, cy, r * (1.7 + st.idx * 0.16));
+        glow.addColorStop(0, `rgba(255,176,32,${0.14 + st.idx * 0.06})`);
         glow.addColorStop(1, "rgba(255,176,32,0)");
         ctx.fillStyle = glow;
         ctx.fillRect(0, 0, W, H);
+
+        // лучи (со 2-й стадии)
+        if (st.rays) {
+          ctx.save();
+          ctx.translate(W / 2, cy);
+          ctx.rotate(now * 0.00022);
+          const rays = 12;
+          for (let i = 0; i < rays; i++) {
+            ctx.rotate((Math.PI * 2) / rays);
+            const len = r * (1.5 + Math.sin(now * 0.002 + i) * 0.12);
+            const g2 = ctx.createLinearGradient(0, -r * 0.9, 0, -len);
+            g2.addColorStop(0, `${st.color}55`);
+            g2.addColorStop(1, "rgba(0,0,0,0)");
+            ctx.fillStyle = g2;
+            ctx.beginPath();
+            ctx.moveTo(-r * 0.07, -r * 0.9);
+            ctx.lineTo(r * 0.07, -r * 0.9);
+            ctx.lineTo(0, -len);
+            ctx.closePath();
+            ctx.fill();
+          }
+          ctx.restore();
+        }
+
+        // крылья (с 3-й стадии)
+        if (st.wings) {
+          const flap = Math.sin(now * 0.004) * 0.16;
+          for (const dir of [-1, 1]) {
+            ctx.save();
+            ctx.translate(W / 2 + dir * r * 0.86, cy - r * 0.1);
+            ctx.rotate(dir * (0.34 + flap));
+            ctx.scale(dir, 1);
+            const wg = ctx.createLinearGradient(0, 0, r * 1.25, 0);
+            wg.addColorStop(0, `${st.color}dd`);
+            wg.addColorStop(1, `${st.color}18`);
+            ctx.fillStyle = wg;
+            ctx.beginPath();
+            ctx.moveTo(0, 0);
+            ctx.quadraticCurveTo(r * 0.9, -r * 0.75, r * 1.3, -r * 0.15);
+            ctx.quadraticCurveTo(r * 0.85, r * 0.05, r * 0.95, r * 0.5);
+            ctx.quadraticCurveTo(r * 0.45, r * 0.2, 0, r * 0.28);
+            ctx.closePath();
+            ctx.fill();
+            ctx.restore();
+          }
+        }
+
+        // корона (4-я стадия)
+        if (st.crown) {
+          ctx.save();
+          ctx.translate(W / 2, cy - r * 1.12);
+          ctx.fillStyle = st.color;
+          ctx.shadowColor = st.color;
+          ctx.shadowBlur = 18;
+          ctx.beginPath();
+          ctx.moveTo(-r * 0.42, 0);
+          ctx.lineTo(-r * 0.3, -r * 0.42);
+          ctx.lineTo(-r * 0.12, -r * 0.14);
+          ctx.lineTo(0, -r * 0.5);
+          ctx.lineTo(r * 0.12, -r * 0.14);
+          ctx.lineTo(r * 0.3, -r * 0.42);
+          ctx.lineTo(r * 0.42, 0);
+          ctx.closePath();
+          ctx.fill();
+          ctx.restore();
+        }
 
         if (photoRef.current) {
           const sq = 1 + a.squish * 0.1;
@@ -133,6 +205,16 @@ export default function Clicker({ onExit }: { onExit: () => void }) {
             squish: a.squish, tilt: a.tilt, blink: a.blink,
             mouth: a.mouth, cheeks: a.squish * 0.7,
           });
+          if (st.idx > 0) {
+            ctx.strokeStyle = `${st.color}${st.idx >= 3 ? "cc" : "77"}`;
+            ctx.lineWidth = 2 + st.idx * 0.7;
+            ctx.shadowColor = st.color;
+            ctx.shadowBlur = 10 + st.idx * 6;
+            ctx.beginPath();
+            ctx.arc(W / 2, cy, r * 1.08, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.shadowBlur = 0;
+          }
         }
       }
       raf = requestAnimationFrame(loop);
@@ -140,6 +222,7 @@ export default function Clicker({ onExit }: { onExit: () => void }) {
     raf = requestAnimationFrame(loop);
     return () => { cancelAnimationFrame(raf); ro.disconnect(); };
   }, [mainFriend]);
+
 
   useEffect(() => {
     const st = sessionStart.current;
@@ -277,6 +360,39 @@ export default function Clicker({ onExit }: { onExit: () => void }) {
         <div className="flex-1 relative" onPointerDown={doTap} style={{ touchAction: "none" }}>
           <canvas ref={canvasRef} className="absolute inset-0 w-full h-full" />
 
+          {/* стадия эволюции */}
+          <div
+            className="absolute left-0 right-0 flex flex-col items-center pointer-events-none"
+            style={{ bottom: 10, padding: "0 28px" }}
+          >
+            <div
+              className="t-label"
+              style={{ color: stage.color, fontSize: 10, letterSpacing: "0.1em" }}
+            >
+              {stage.name}
+            </div>
+            {stage.next !== null && (
+              <>
+                <div
+                  style={{
+                    width: "100%", maxWidth: 210, height: 4, marginTop: 7,
+                    borderRadius: 999, background: "var(--track)", overflow: "hidden",
+                  }}
+                >
+                  <div
+                    style={{
+                      width: `${Math.min(100, (s.clicker.totalTaps / stage.next) * 100)}%`,
+                      height: "100%", background: stage.color, transition: "width 0.3s",
+                    }}
+                  />
+                </div>
+                <div className="t-caption" style={{ marginTop: 5, fontSize: 10 }}>
+                  {fmt(s.clicker.totalTaps)} / {fmt(stage.next)} тапов до следующей формы
+                </div>
+              </>
+            )}
+          </div>
+
           {/* комбо */}
           <AnimatePresence>
             {combo > 2 && (
@@ -391,4 +507,40 @@ export default function Clicker({ onExit }: { onExit: () => void }) {
       )}
     </div>
   );
+}
+
+/* ================= ЭВОЛЮЦИЯ ГЕРОЯ ================= */
+
+export interface Stage {
+  idx: number;
+  name: string;
+  color: string;
+  rays: boolean;
+  wings: boolean;
+  crown: boolean;
+  next: number | null;
+}
+
+const STAGES: { at: number; name: string; color: string }[] = [
+  { at: 0, name: "Обычный", color: "#8f8f9c" },
+  { at: 500, name: "Разогретый", color: "#5fa8ff" },
+  { at: 5000, name: "Сияющий", color: "#b07bff" },
+  { at: 30000, name: "Крылатый", color: "#ffb020" },
+  { at: 150000, name: "ИМБОВЫЙ", color: "#59ff9e" },
+];
+
+/** Стадия внешности по общему числу тапов */
+export function clickerStage(taps: number): Stage {
+  let i = 0;
+  for (let k = 0; k < STAGES.length; k++) if (taps >= STAGES[k].at) i = k;
+  const def = STAGES[i];
+  return {
+    idx: i,
+    name: def.name,
+    color: def.color,
+    rays: i >= 2,
+    wings: i >= 3,
+    crown: i >= 4,
+    next: i < STAGES.length - 1 ? STAGES[i + 1].at : null,
+  };
 }

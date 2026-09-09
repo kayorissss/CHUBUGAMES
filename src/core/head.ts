@@ -184,23 +184,30 @@ export function drawHead(
 
   // Растительность на лице
   if (look.facial === 1) {
-    ctx.fillStyle = `rgba(${hexRgb(look.hair)},0.25)`;
+    ctx.fillStyle = `rgba(${hexRgb(look.hair)},0.22)`;
     ctx.beginPath();
-    ctx.ellipse(0, h * 0.46, w * 0.7, h * 0.42, 0, 0, Math.PI);
+    ctx.ellipse(0, h * 0.42, w * 0.6, h * 0.3, 0, 0, Math.PI);
     ctx.fill();
   } else if (look.facial === 2) {
+    // Борода обрезается по контуру лица — раньше она вылезала
+    // на треть высоты ниже подбородка и выглядела как лопата.
+    ctx.save();
+    ctx.beginPath();
+    ctx.ellipse(0, 0, w, h, 0, 0, Math.PI * 2);
+    ctx.clip();
     ctx.fillStyle = look.hair;
     ctx.beginPath();
-    ctx.moveTo(-w * 0.76, h * 0.14);
-    ctx.quadraticCurveTo(-w * 0.6, h * 1.18, 0, h * 1.02);
-    ctx.quadraticCurveTo(w * 0.6, h * 1.18, w * 0.76, h * 0.14);
-    ctx.quadraticCurveTo(w * 0.4, h * 0.6, 0, h * 0.56);
-    ctx.quadraticCurveTo(-w * 0.4, h * 0.6, -w * 0.76, h * 0.14);
+    ctx.moveTo(-w * 0.68, h * 0.16);
+    ctx.quadraticCurveTo(-w * 0.56, h * 0.92, 0, h * 0.9);
+    ctx.quadraticCurveTo(w * 0.56, h * 0.92, w * 0.68, h * 0.16);
+    ctx.quadraticCurveTo(w * 0.36, h * 0.52, 0, h * 0.5);
+    ctx.quadraticCurveTo(-w * 0.36, h * 0.52, -w * 0.68, h * 0.16);
     ctx.fill();
+    ctx.restore();
   } else if (look.facial === 3) {
     ctx.fillStyle = look.hair;
     ctx.beginPath();
-    ctx.ellipse(0, my - mh - r * 0.11, w * 0.34, r * 0.1, 0, 0, Math.PI * 2);
+    ctx.ellipse(0, my - mh - r * 0.1, w * 0.3, r * 0.085, 0, 0, Math.PI * 2);
     ctx.fill();
   }
 

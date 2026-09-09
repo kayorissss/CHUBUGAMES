@@ -110,13 +110,19 @@ export const DEFAULT_FRIENDS: Friend[] = [
 
 /* ============ АКЦЕНТЫ ============ */
 export const ACCENTS = [
+  // 5 базовых цветов — бесплатны и доступны сразу
   { id: "amber", name: "Янтарь", hex: "#FFB020", price: 0 },
+  { id: "violet", name: "Фиолет", hex: "#A77BFF", price: 0 },
+  { id: "grey", name: "Графит", hex: "#B4B4C4", price: 0 },
+  { id: "red", name: "Красный", hex: "#FF4D4D", price: 0 },
+  { id: "yellow", name: "Жёлтый", hex: "#F5DD3C", price: 0 },
+  // тема Радомира
   { id: "radomir", name: "Радомир", hex: "#FF9FD6", price: 0 },
-  { id: "sky", name: "Небо Радомира", hex: "#8FD3FF", price: 6000 },
+  { id: "sky", name: "Небо Радомира", hex: "#8FD3FF", price: 0 },
+  // покупные
   { id: "lime", name: "Кислота", hex: "#B6F23C", price: 12000 },
   { id: "cyan", name: "Лёд", hex: "#3EE0E0", price: 12000 },
   { id: "rose", name: "Малина", hex: "#FF4D7E", price: 25000 },
-  { id: "violet", name: "Ультра", hex: "#A77BFF", price: 25000 },
   { id: "mono", name: "Платина", hex: "#E8E8F0", price: 90000 },
   { id: "blood", name: "Кровь", hex: "#FF2E2E", price: 180000 },
   { id: "toxic", name: "Радиация", hex: "#59FF9E", price: 400000 },
@@ -213,7 +219,7 @@ export const ACHIEVEMENTS: Achievement[] = [
   A("case_100", "Кейсомания", "Открой 100 кейсов", "epic", 150000, (s) => s.stats.casesOpened >= 100),
   A("friends_10", "Компания", "Заведи 10 друзей", "rare", 15000, (s) => s.friends.length >= 10),
   A("all_games", "Всё Попробовал", "Сыграй во все игры", "rare", 12000, (s) =>
-    ["burger", "clicker", "bite", "dino", "merge", "whack"].every((g) => s.games[g].plays >= 1)),
+    ["burger", "clicker", "bite", "dino", "radomir", "merge", "whack"].every((g) => s.games[g].plays >= 1)),
   A("skin_5", "Модник", "Купи 5 скинов", "rare", 18000, (s) => s.ownedSkins.length >= 5),
   A("skill_max", "Мастер Навыков", "Прокачай любой навык до максимума", "epic", 100000, (s) =>
     Object.entries(s.skills).some(([k, v]: any) => {
@@ -226,6 +232,9 @@ export const ACHIEVEMENTS: Achievement[] = [
   A("dino_first", "Прогульщик", "Сыграй в «Побег от Шитова»", "common", 500, (s) => s.games.dino.plays >= 1),
   A("dino_1000", "Быстрее Препода", "1 000 метров от Шитова", "rare", 16000, (s) => s.games.dino.best >= 1000),
   A("dino_5000", "Отчислен Заочно", "5 000 метров от Шитова", "legend", 400000, (s) => s.games.dino.best >= 5000),
+  A("rad_first", "Фембойчик", "Сыграй в «Ритм Радомира»", "common", 500, (s) => s.games.radomir.plays >= 1),
+  A("rad_combo", "Идеальный Слух", "Комбо 40 в «Ритме Радомира»", "rare", 18000, (s) => s.games.radomir.best >= 400),
+  A("rad_master", "Танцуй Как Радомир", "1 200 очков в «Ритме Радомира»", "epic", 140000, (s) => s.games.radomir.best >= 1200),
   A("night", "Ночной Дожор", "Играй между 02:00 и 05:00", "rare", 8000, () => {
     const h = new Date().getHours();
     return h >= 2 && h < 5;
@@ -303,6 +312,7 @@ export const GAME_META = [
   { id: "clicker" as const, name: "ЧУБКЛИКЕР", tag: "Фарм", desc: "Тапай по морде. Копи миллиарды. Не спи.", unlockLvl: 0, icon: "👆" },
   { id: "bite" as const, name: "ЗУБЫ АРТЁМА", tag: "Нервы", desc: "Держи палец и копи. Артём кусается — успей убрать руку.", unlockLvl: 0, icon: "🦷" },
   { id: "dino" as const, name: "ПОБЕГ ОТ ШИТОВА", tag: "Бег", desc: "Препод бежит за тобой по колледжу. Прыгай через системники.", unlockLvl: 0, icon: "🖥" },
+  { id: "radomir" as const, name: "РИТМ РАДОМИРА", tag: "Ритм", desc: "Лови ноты под трек. Радомир стесняется, но танцует.", unlockLvl: 0, icon: "🎵" },
   { id: "merge" as const, name: "СЛИЯНИЕ ГОЛОВ", tag: "Пазл", desc: "Сливай одинаковых пацанов в новых. 2048 из голов.", unlockLvl: 0, icon: "🧩" },
   { id: "whack" as const, name: "ПРИБЕЙ ДРУГА", tag: "Реакция", desc: "Головы лезут из люков. Прибей. Но не всех.", unlockLvl: 0, icon: "🔨" },
 ];

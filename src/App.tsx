@@ -4,6 +4,7 @@ import { GameProvider, useGame } from "./core/store";
 import { Aurora } from "./ui/Glass";
 import Nav, { type Tab } from "./components/Nav";
 import { Toasts, OfflineModal } from "./components/Overlays";
+import UpdateBanner from "./ui/UpdateBanner";
 import Home from "./pages/Home";
 import ProgressPage from "./pages/Progress";
 import Shop from "./pages/Shop";
@@ -15,7 +16,9 @@ import MergeHeads from "./games/MergeHeads";
 import WhackFriend from "./games/WhackFriend";
 import ArtyomBite from "./games/ArtyomBite";
 import ShitovRun from "./games/ShitovRun";
+import RadomirBeat from "./games/RadomirBeat";
 import { unlockAudio } from "./core/fx";
+import { pushBack } from "./core/nav";
 import type { GameId } from "./core/types";
 
 function Splash({ done }: { done: () => void }) {
@@ -96,6 +99,18 @@ function Shell() {
     return () => window.removeEventListener("pointerdown", unlock);
   }, []);
 
+  // системная кнопка/жест «назад» закрывает игру, а не приложение
+  useEffect(() => {
+    if (!game) return;
+    return pushBack("game", () => setGame(null));
+  }, [game]);
+
+  // с любой вкладки «назад» возвращает на Игры
+  useEffect(() => {
+    if (game || tab === "home") return;
+    return pushBack(`tab:${tab}`, () => setTab("home"));
+  }, [tab, game]);
+
   // блокируем зум/скролл жестами
   useEffect(() => {
     const prevent = (e: Event) => e.preventDefault();
@@ -108,7 +123,7 @@ function Shell() {
   }, []);
 
   const pages: Record<Tab, React.ReactNode> = {
-    home: <Home onPlay={(g) => setGame(g)} />,
+    home: <Home onPlay={(g) => setGame(g)} onOpenProfile={() => setTab("progress")} />,
     progress: <ProgressPage />,
     shop: <Shop />,
     friends: <Friends />,
@@ -152,12 +167,14 @@ function Shell() {
             {game === "whack" && <WhackFriend onExit={() => setGame(null)} />}
             {game === "bite" && <ArtyomBite onExit={() => setGame(null)} />}
             {game === "dino" && <ShitovRun onExit={() => setGame(null)} />}
+            {game === "radomir" && <RadomirBeat onExit={() => setGame(null)} />}
           </motion.div>
         )}
       </AnimatePresence>
 
       <Toasts />
       <OfflineModal />
+      {!game && <UpdateBanner />}
 
       <AnimatePresence>{splash && <Splash done={() => setSplash(false)} />}</AnimatePresence>
     </div>

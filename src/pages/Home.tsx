@@ -5,9 +5,15 @@ import { fmt } from "../core/format";
 import { xpForLevel, autoRate } from "../core/save";
 import { Card, Tap, Bar, SectionTitle, Screen } from "../ui/Glass";
 import HeadView from "../ui/HeadView";
+import GameIcon from "../ui/GameIcon";
 import type { GameId } from "../core/types";
 
-export default function Home({ onPlay }: { onPlay: (g: GameId) => void }) {
+export default function Home({
+  onPlay, onOpenProfile,
+}: {
+  onPlay: (g: GameId) => void;
+  onOpenProfile?: () => void;
+}) {
   const { s, mainFriend, levelPct } = useGame();
   const rate = autoRate(s);
   const featured = GAME_META.filter((g) => s.unlockedGames.includes(g.id)).sort(
@@ -47,8 +53,15 @@ export default function Home({ onPlay }: { onPlay: (g: GameId) => void }) {
         </Card>
       </div>
 
-      {/* Профиль */}
-      <Card r="lg" style={{ padding: 14, marginBottom: 18 }}>
+      {/* Профиль — тап открывает статистику */}
+      <Tap
+        solid
+        r="lg"
+        onClick={() => onOpenProfile?.()}
+        sound="click"
+        className="w-full"
+        style={{ padding: 14, marginBottom: 18, display: "block" }}
+      >
         <div className="flex items-center" style={{ gap: 13 }}>
           <div className="relative shrink-0">
             <HeadView friend={mainFriend} size={46} />
@@ -72,8 +85,15 @@ export default function Home({ onPlay }: { onPlay: (g: GameId) => void }) {
             </div>
             <Bar pct={levelPct} h={6} />
           </div>
+          <svg
+            className="shrink-0" width="15" height="15" viewBox="0 0 24 24"
+            fill="none" stroke="currentColor" strokeWidth="2.4"
+            strokeLinecap="round" style={{ color: "var(--text-mute)" }}
+          >
+            <path d="M9 6l6 6-6 6" />
+          </svg>
         </div>
-      </Card>
+      </Tap>
 
       {/* Продолжить */}
       {featured && (
@@ -86,11 +106,9 @@ export default function Home({ onPlay }: { onPlay: (g: GameId) => void }) {
           >
             <div
               className="absolute pointer-events-none"
-              style={{
-                right: -6, bottom: -14, fontSize: 96, opacity: 0.12, lineHeight: 1,
-              }}
+              style={{ right: 6, bottom: -6, opacity: 0.14, lineHeight: 0 }}
             >
-              {featured.icon}
+              <GameIcon id={featured.id} size={104} />
             </div>
             <div style={{ padding: 18, position: "relative" }}>
               <div className="t-label acc-text">Продолжить</div>
@@ -153,7 +171,16 @@ export default function Home({ onPlay }: { onPlay: (g: GameId) => void }) {
                   style={{ padding: 13, minHeight: 152 }}
                 >
                   <div className="flex items-start justify-between" style={{ marginBottom: 10 }}>
-                    <span style={{ fontSize: 26, lineHeight: 1 }}>{unlocked ? g.icon : "🔒"}</span>
+                    <span style={{ lineHeight: 0, color: "var(--text)" }}>
+                      {unlocked ? (
+                        <GameIcon id={g.id} size={27} />
+                      ) : (
+                        <svg width="27" height="27" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <rect x="5" y="11" width="14" height="10" rx="2" />
+                          <path d="M8 11V8a4 4 0 018 0v3" />
+                        </svg>
+                      )}
+                    </span>
                     <span
                       className="t-label"
                       style={{

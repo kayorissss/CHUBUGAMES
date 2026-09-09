@@ -41,25 +41,25 @@ export function freshSave(): SaveState {
     skills: {},
     games: {
       burger: emptyGame(), clicker: emptyGame(), bite: emptyGame(),
-      dino: emptyGame(), merge: emptyGame(), whack: emptyGame(),
+      dino: emptyGame(), radomir: emptyGame(), merge: emptyGame(), whack: emptyGame(),
     },
     friends: DEFAULT_FRIENDS.map((f) => ({ ...f, look: { ...f.look }, stats: { ...f.stats } })),
     mainFriendId: "lyoha",
     heroSkin: "default",
     ownedSkins: ["default"],
-    ownedThemes: ["amber"],
+    ownedThemes: ["amber", "violet", "grey", "red", "yellow", "radomir", "sky"],
     cards: { lyoha: 1 },
     achievements: {},
     daily: { lastClaim: "", streak: 0, quests: pickQuests(today()), questsDate: today() },
     season: { id: 1, xp: 0, claimed: [], startedAt: now },
     settings: {
-      theme: "dark", accent: "amber", sound: true, haptics: true,
+      theme: "dark", lang: "ru", accent: "amber", sound: true, haptics: true,
       fx: true, controls: "touchpad", difficulty: "normal",
     },
-    unlockedGames: ["burger", "clicker", "bite", "dino", "merge", "whack"],
+    unlockedGames: ["burger", "clicker", "bite", "dino", "radomir", "merge", "whack"],
     stats: {
       burgersDodged: 0, burgersHit: 0, tapsTotal: 0, merges: 0,
-      whacks: 0, casesOpened: 0, sessions: 0, bites: 0, metersRun: 0,
+      whacks: 0, casesOpened: 0, sessions: 0, bites: 0, metersRun: 0, notesHit: 0,
     },
   };
 }
@@ -84,7 +84,7 @@ export function migrate(s: any): SaveState {
   out.season = { ...base.season, ...(s.season || {}) };
   out.daily = { ...base.daily, ...(s.daily || {}) };
   out.games = { ...base.games, ...(s.games || {}) };
-  (["burger", "clicker", "bite", "dino", "merge", "whack"] as GameId[]).forEach((g) => {
+  (["burger", "clicker", "bite", "dino", "radomir", "merge", "whack"] as GameId[]).forEach((g) => {
     out.games[g] = { ...emptyGame(), ...(out.games[g] || {}) };
   });
   out.skills = s.skills || {};
@@ -93,8 +93,12 @@ export function migrate(s: any): SaveState {
   out.achievements = s.achievements || {};
   out.ownedSkins = Array.isArray(s.ownedSkins) && s.ownedSkins.length ? s.ownedSkins : ["default"];
   out.ownedThemes = Array.isArray(s.ownedThemes) && s.ownedThemes.length ? s.ownedThemes : ["amber"];
+  // бесплатные темы доступны всем, включая старые сохранения
+  for (const free of ["amber", "violet", "grey", "red", "yellow", "radomir", "sky"]) {
+    if (!out.ownedThemes.includes(free)) out.ownedThemes.push(free);
+  }
   // Все мини-игры доступны сразу — в том числе в старых сохранениях
-  out.unlockedGames = ["burger", "clicker", "bite", "dino", "merge", "whack"];
+  out.unlockedGames = ["burger", "clicker", "bite", "dino", "radomir", "merge", "whack"];
   // Досыпаем новых друзей тем, кто уже играл
   const have = new Set(out.friends.map((f) => f.id));
   for (const f of base.friends) {

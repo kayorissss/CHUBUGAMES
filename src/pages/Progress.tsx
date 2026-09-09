@@ -8,6 +8,7 @@ import {
 import { fmt, fmtTime, today, daysBetween } from "../core/format";
 import { spentSkillPoints, xpForLevel } from "../core/save";
 import { Card, Button, Bar, Chip, SectionTitle, Screen, Divider } from "../ui/Glass";
+import GameIcon from "../ui/GameIcon";
 import { sfx, haptic } from "../core/fx";
 import { freshSave } from "../core/save";
 
@@ -479,7 +480,7 @@ function Stats() {
         return (
           <Card key={g.id} r="md" tone={2} style={{ padding: 13, marginBottom: 8 }}>
             <div className="flex items-center" style={{ gap: 9, marginBottom: 12 }}>
-              <span style={{ fontSize: 18 }}>{g.icon}</span>
+              <span style={{ lineHeight: 0 }}><GameIcon id={g.id} size={19} /></span>
               <span className="t-title-sm clip1">{g.name}</span>
             </div>
             <div className="grid grid-cols-4 text-center" style={{ gap: 8 }}>

@@ -14,7 +14,7 @@ import { sfx, haptic } from "../core/fx";
  * Не успел — минус жизнь.
  */
 
-type Phase = "count" | "play" | "over";
+type Phase = "rules" | "count" | "play" | "over";
 type Attack = "bite" | "pen";
 
 const WARN_COLOR = "#ff6a4d";
@@ -24,7 +24,7 @@ export default function ArtyomBite({ onExit }: { onExit: () => void }) {
   const artyom =
     s.friends.find((f) => f.id === "artyom") || s.friends[0];
 
-  const [phase, setPhase] = useState<Phase>("count");
+  const [phase, setPhase] = useState<Phase>("rules");
   const [cd, setCd] = useState(3);
   const [uiScore, setUiScore] = useState(0);
   const [uiLives, setUiLives] = useState(3);
@@ -358,15 +358,96 @@ export default function ArtyomBite({ onExit }: { onExit: () => void }) {
               +{uiCharge}
             </div>
           ) : (
-            <div className="t-title-sm" style={{ opacity: 0.75 }}>
-              Держи палец на экране
+            <div className="t-title-sm" style={{ opacity: 0.85 }}>
+              Прижми и держи палец — очки капают
             </div>
           )}
           <div className="t-caption text-center" style={{ marginTop: 8 }}>
-            {uiHold ? "Убери палец до укуса!" : "Отпустишь вовремя — заберёшь очки"}
+            {uiHold ? "УБЕРИ ПАЛЕЦ, ПОКА НЕ УКУСИЛ" : "Отпустишь вовремя — заберёшь накопленное"}
           </div>
         </div>
       )}
+
+      <AnimatePresence>
+        {phase === "rules" && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="absolute inset-0 z-30 flex items-center justify-center"
+            style={{ background: "rgba(6,6,9,0.9)", padding: 20 }}
+          >
+            <motion.div
+              initial={{ y: 24, scale: 0.96 }}
+              animate={{ y: 0, scale: 1 }}
+              className="w-full"
+              style={{
+                maxWidth: 350,
+                background: "var(--surface)",
+                border: "1px solid var(--surface-brd)",
+                borderRadius: "var(--r-xl)",
+                padding: 20,
+              }}
+            >
+              <div className="t-title" style={{ marginBottom: 4 }}>ЗУБЫ АРТЁМА</div>
+              <div className="t-caption" style={{ marginBottom: 16 }}>
+                Игра на нервах. Защищаться не надо — надо рисковать.
+              </div>
+
+              {[
+                ["1", "Держи палец на экране — счётчик очков растёт, пока держишь."],
+                ["2", "Артём подкрадывается и щёлкает зубами. Иногда вместо укуса тычет гелевой ручкой — это не больно, но пугает."],
+                ["3", "Убери палец до укуса — очки за подход зачислены. Убрал рано — очков мало, но живой."],
+                ["4", "Не успел — минус зуб. Их всего три."],
+              ].map(([n, txt]) => (
+                <div key={n} className="flex" style={{ gap: 11, marginBottom: 11 }}>
+                  <div
+                    className="t-num shrink-0 flex items-center justify-center"
+                    style={{
+                      width: 22, height: 22, borderRadius: "var(--r-xs)",
+                      background: "var(--acc)", color: "var(--acc-ink)", fontSize: 11,
+                    }}
+                  >
+                    {n}
+                  </div>
+                  <div className="t-body" style={{ lineHeight: 1.45 }}>{txt}</div>
+                </div>
+              ))}
+
+              <div
+                className="t-caption"
+                style={{
+                  marginTop: 14, padding: "10px 12px",
+                  borderRadius: "var(--r-md)", background: "var(--btn-bg)", lineHeight: 1.5,
+                }}
+              >
+                Чем дольше держишь — тем больше очков и тем выше шанс остаться без зуба.
+                Жадность наказуема.
+              </div>
+
+              <button
+                type="button"
+                onClick={() => { sfx.power?.(); haptic("medium"); start(); }}
+                className="w-full t-title-sm"
+                style={{
+                  marginTop: 16, padding: "13px 0", borderRadius: "var(--r-md)",
+                  background: "var(--acc)", color: "var(--acc-ink)", fontWeight: 700,
+                }}
+              >
+                ПОНЯЛ, ПОЕХАЛИ
+              </button>
+              <button
+                type="button"
+                onClick={onExit}
+                className="w-full t-caption"
+                style={{ marginTop: 10, padding: 6 }}
+              >
+                Выйти
+              </button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <AnimatePresence>{phase === "count" && <Countdown n={cd} />}</AnimatePresence>
 

@@ -297,13 +297,15 @@ function Tile({ v, friends, pop }: { v: number; friends: Friend[]; pop: boolean 
     <motion.div
       animate={pop ? { scale: [1, 1.16, 1] } : {}}
       transition={{ duration: 0.28 }}
-      className="glass w-full h-full flex flex-col items-center justify-center relative overflow-hidden"
+      className="w-full h-full flex flex-col items-center justify-center relative overflow-hidden"
       style={{
-        borderRadius: 14,
+        borderRadius: 12,
+        // плотный непрозрачный фон: на стекле головы сливались с полем
         background: isBig
-          ? `linear-gradient(160deg, color-mix(in srgb, var(--acc) 34%, transparent), rgba(255,255,255,0.05))`
-          : "rgba(255,255,255,0.075)",
-        boxShadow: isBig ? "0 0 24px -6px var(--acc-glow)" : "none",
+          ? `linear-gradient(160deg, color-mix(in srgb, var(--acc) 30%, var(--surface-2)), var(--surface-2))`
+          : "var(--surface-2)",
+        border: `1px solid ${isBig ? "color-mix(in srgb, var(--acc) 55%, transparent)" : "var(--surface-brd)"}`,
+        boxShadow: isBig ? "0 0 20px -8px var(--acc-glow)" : "none",
       }}
     >
       {f?.photo ? (
@@ -314,8 +316,10 @@ function Tile({ v, friends, pop }: { v: number; friends: Friend[]; pop: boolean 
       <div
         className="t-num absolute"
         style={{
-          bottom: 2, fontSize: v >= 1024 ? 9 : 11,
-          color: isBig ? "var(--acc)" : "var(--text-dim)",
+          bottom: 3, fontSize: v >= 1024 ? 9.5 : 11,
+          padding: "1px 6px", borderRadius: 999, lineHeight: 1.35,
+          background: "rgba(0,0,0,0.42)",
+          color: isBig ? "var(--acc)" : "#e8e8f0",
         }}
       >
         {v}

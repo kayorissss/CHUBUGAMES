@@ -1,6 +1,6 @@
 export type Rarity = "common" | "rare" | "epic" | "legend";
 
-export type GameId = "burger" | "clicker" | "bite" | "dino" | "merge" | "whack";
+export type GameId = "burger" | "clicker" | "bite" | "dino" | "radomir" | "merge" | "whack";
 
 export interface FriendLook {
   skin: string;
@@ -62,6 +62,7 @@ export interface SeasonState {
 
 export interface Settings {
   theme: "dark" | "light";
+  lang: "ru" | "en";
   accent: string;
   sound: boolean;
   haptics: boolean;
@@ -105,5 +106,6 @@ export interface SaveState {
     sessions: number;
     bites: number;
     metersRun: number;
+    notesHit: number;
   };
 }

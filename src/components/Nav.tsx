@@ -1,11 +1,12 @@
 import { motion } from "framer-motion";
 import { sfx, haptic } from "../core/fx";
+import { useGame } from "../core/store";
 
 export type Tab = "home" | "progress" | "shop" | "friends" | "settings";
 
 const TABS: { id: Tab; label: string; icon: (a: boolean) => React.ReactNode }[] = [
   {
-    id: "home", label: "Игры",
+    id: "home", label: "nav.games",
     icon: (a) => (
       <svg width="21" height="21" viewBox="0 0 24 24" fill={a ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinejoin="round">
         <rect x="2" y="6" width="20" height="12" rx="5" />
@@ -14,7 +15,7 @@ const TABS: { id: Tab; label: string; icon: (a: boolean) => React.ReactNode }[] 
     ),
   },
   {
-    id: "progress", label: "Прогресс",
+    id: "progress", label: "nav.progress",
     icon: (a) => (
       <svg width="21" height="21" viewBox="0 0 24 24" fill={a ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinejoin="round">
         <path d="M6 3h12v5a6 6 0 01-12 0z" />
@@ -23,7 +24,7 @@ const TABS: { id: Tab; label: string; icon: (a: boolean) => React.ReactNode }[] 
     ),
   },
   {
-    id: "shop", label: "Магазин",
+    id: "shop", label: "nav.shop",
     icon: (a) => (
       <svg width="21" height="21" viewBox="0 0 24 24" fill={a ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinejoin="round">
         <path d="M3 8h18l-1.5 12H4.5z" />
@@ -32,7 +33,7 @@ const TABS: { id: Tab; label: string; icon: (a: boolean) => React.ReactNode }[] 
     ),
   },
   {
-    id: "friends", label: "Друзья",
+    id: "friends", label: "nav.friends",
     icon: (a) => (
       <svg width="21" height="21" viewBox="0 0 24 24" fill={a ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinejoin="round">
         <circle cx="9" cy="8" r="4" />
@@ -42,7 +43,7 @@ const TABS: { id: Tab; label: string; icon: (a: boolean) => React.ReactNode }[] 
     ),
   },
   {
-    id: "settings", label: "Ещё",
+    id: "settings", label: "nav.more",
     icon: (a) => (
       <svg width="21" height="21" viewBox="0 0 24 24" fill={a ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2">
         <circle cx="12" cy="12" r="3.2" />
@@ -53,25 +54,40 @@ const TABS: { id: Tab; label: string; icon: (a: boolean) => React.ReactNode }[] 
 ];
 
 export default function Nav({ tab, onTab }: { tab: Tab; onTab: (t: Tab) => void }) {
+  const { t } = useGame();
   return (
     <div
-      className="fixed left-0 right-0 z-50 px-3"
-      style={{ bottom: "calc(var(--sab) + 10px)" }}
+      className="fixed left-0 right-0 z-50"
+      style={{
+        bottom: 0,
+        // запас под системную полоску жестов Xiaomi/iPhone
+        padding: "0 12px calc(var(--sab) + 10px)",
+        paddingTop: 10,
+        // растушёвка, чтобы контент не «упирался» в панель
+        background:
+          "linear-gradient(to top, var(--bg) 62%, color-mix(in srgb, var(--bg) 55%, transparent) 88%, transparent)",
+      }}
     >
       <div
-        className="glass glass-strong flex items-center justify-around relative"
-        style={{ borderRadius: 26, padding: "7px 5px" }}
+        className="flex items-center justify-around relative"
+        style={{
+          borderRadius: 18,
+          padding: "7px 5px",
+          background: "var(--nav-bg)",
+          border: "1px solid var(--nav-brd)",
+          boxShadow: "0 -2px 24px -8px rgba(0,0,0,0.6), 0 8px 28px -14px rgba(0,0,0,0.9)",
+        }}
       >
-        {TABS.map((t) => {
-          const active = tab === t.id;
+        {TABS.map((item) => {
+          const active = tab === item.id;
           return (
             <button
-              key={t.id}
+              key={item.id}
               onClick={() => {
                 if (active) return;
                 sfx.click();
                 haptic("light");
-                onTab(t.id);
+                onTab(item.id);
               }}
               className="relative flex flex-col items-center justify-center flex-1 py-1.5"
               style={{ color: active ? "var(--acc-ink)" : "var(--text-mute)", zIndex: 2 }}
@@ -82,13 +98,13 @@ export default function Nav({ tab, onTab }: { tab: Tab; onTab: (t: Tab) => void 
                   transition={{ type: "spring", stiffness: 520, damping: 36 }}
                   className="absolute"
                   style={{
-                    inset: "-1px 4px", borderRadius: 20, background: "var(--acc)",
+                    inset: "-1px 4px", borderRadius: 13, background: "var(--acc)",
                     boxShadow: "0 6px 20px -6px var(--acc-glow)", zIndex: -1,
                   }}
                 />
               )}
               <motion.div animate={{ scale: active ? 1.06 : 1, y: active ? -1 : 0 }}>
-                {t.icon(active)}
+                {item.icon(active)}
               </motion.div>
               <span
                 style={{
@@ -96,7 +112,7 @@ export default function Nav({ tab, onTab }: { tab: Tab; onTab: (t: Tab) => void 
                   marginTop: 2.5, textTransform: "uppercase",
                 }}
               >
-                {t.label}
+                {t(item.label)}
               </span>
             </button>
           );
