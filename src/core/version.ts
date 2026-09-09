@@ -1,5 +1,5 @@
 /** Версия сборки. Поднимается при каждом релизе — по ней приложение понимает, что вышло обновление. */
-export const APP_VERSION = "1.4.1";
+export const APP_VERSION = "1.4.2";
 
 /** Репозиторий с релизами APK */
 export const UPDATE_REPO = "kayorissss/CHUBUGAMES";

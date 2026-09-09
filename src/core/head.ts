@@ -129,27 +129,29 @@ export function drawHead(
     ctx.stroke();
   });
 
-  // Глаза
-  const eyeY = -h * 0.1;
-  const eyeR = r * 0.16;
+  // Глаза — миндалевидные, а не круглые «шары»: круглый белок в пол-лица
+  // читается как испуг, поэтому глаз шире, чем выше.
+  const eyeY = -h * 0.08;
+  const eyeR = r * 0.125;
   [-1, 1].forEach((s) => {
-    const ex = s * w * 0.4;
+    const ex = s * w * 0.38;
     ctx.fillStyle = "#fbfbfd";
     ctx.beginPath();
-    ctx.ellipse(ex, eyeY, eyeR * 1.1, eyeR * (1 - blink * 0.92), 0, 0, Math.PI * 2);
+    ctx.ellipse(ex, eyeY, eyeR * 1.15, eyeR * (0.82 - blink * 0.76), 0, 0, Math.PI * 2);
     ctx.fill();
     if (blink < 0.6) {
+      // радужка крупная относительно белка — взгляд «живой», без выпучивания
       ctx.fillStyle = look.eyes;
       ctx.beginPath();
-      ctx.arc(ex + s * eyeR * 0.12, eyeY + eyeR * 0.08, eyeR * 0.52, 0, Math.PI * 2);
+      ctx.arc(ex + s * eyeR * 0.08, eyeY + eyeR * 0.04, eyeR * 0.66, 0, Math.PI * 2);
       ctx.fill();
       ctx.fillStyle = "#0b0b0e";
       ctx.beginPath();
-      ctx.arc(ex + s * eyeR * 0.12, eyeY + eyeR * 0.08, eyeR * 0.25, 0, Math.PI * 2);
+      ctx.arc(ex + s * eyeR * 0.08, eyeY + eyeR * 0.04, eyeR * 0.3, 0, Math.PI * 2);
       ctx.fill();
       ctx.fillStyle = "rgba(255,255,255,0.9)";
       ctx.beginPath();
-      ctx.arc(ex - eyeR * 0.2, eyeY - eyeR * 0.26, eyeR * 0.16, 0, Math.PI * 2);
+      ctx.arc(ex - eyeR * 0.24, eyeY - eyeR * 0.3, eyeR * 0.19, 0, Math.PI * 2);
       ctx.fill();
     }
   });
@@ -177,22 +179,34 @@ export function drawHead(
     ctx.stroke();
   }
 
-  // Нос
-  ctx.strokeStyle = shade(look.skin, -52);
-  ctx.lineWidth = Math.max(2, r * 0.055);
+  // Нос — лёгкая тень крыла, а не жирный тёмный крючок посреди лица
+  ctx.strokeStyle = shade(look.skin, -26);
+  ctx.lineWidth = Math.max(1.4, r * 0.035);
+  ctx.lineCap = "round";
   ctx.beginPath();
-  ctx.moveTo(0, eyeY + h * 0.1);
-  ctx.quadraticCurveTo(w * 0.1, h * 0.18, -w * 0.03, h * 0.22);
+  ctx.moveTo(-w * 0.015, eyeY + h * 0.16);
+  ctx.quadraticCurveTo(w * 0.075, h * 0.2, -w * 0.02, h * 0.235);
   ctx.stroke();
 
   // Рот
   const my = h * 0.44;
   const mw = w * (0.34 + mouth * 0.22);
   const mh = r * (0.05 + mouth * 0.55);
-  ctx.fillStyle = "#2a0c10";
-  ctx.beginPath();
-  ctx.ellipse(0, my + mh * 0.2, mw, mh, 0, 0, Math.PI * 2);
-  ctx.fill();
+  if (mouth <= 0.14) {
+    // Спокойное лицо: мягкая линия губ, а не чёрная дыра посреди лица
+    ctx.strokeStyle = shade(look.skin, -46);
+    ctx.lineWidth = Math.max(1.6, r * 0.045);
+    ctx.lineCap = "round";
+    ctx.beginPath();
+    ctx.moveTo(-mw * 0.62, my);
+    ctx.quadraticCurveTo(0, my + r * (0.05 + mouth * 0.5), mw * 0.62, my);
+    ctx.stroke();
+  } else {
+    ctx.fillStyle = "#2a0c10";
+    ctx.beginPath();
+    ctx.ellipse(0, my + mh * 0.2, mw, mh, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
   if (mouth > 0.25) {
     // Всё содержимое рта режем по контуру самого рта, иначе зубы и язык
     // вылезают за губы и получается «пасть» вместо лица.
