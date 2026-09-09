@@ -20,6 +20,11 @@ import WhackFriend from "./games/WhackFriend";
 import ArtyomBite from "./games/ArtyomBite";
 import ShitovRun from "./games/ShitovRun";
 import RadomirBeat from "./games/RadomirBeat";
+import BurgerStack from "./games/BurgerStack";
+import Canteen from "./games/Canteen";
+import WhoWasIt from "./games/WhoWasIt";
+import RadomirFlight from "./games/RadomirFlight";
+import DormDefense from "./games/DormDefense";
 import { unlockAudio } from "./core/fx";
 import { pushBack } from "./core/nav";
 import type { GameId } from "./core/types";
@@ -197,6 +202,11 @@ function Shell() {
             {game === "bite" && <ArtyomBite onExit={() => setGame(null)} />}
             {game === "dino" && <ShitovRun onExit={() => setGame(null)} />}
             {game === "radomir" && <RadomirBeat onExit={() => setGame(null)} />}
+            {game === "stack" && <BurgerStack onExit={() => setGame(null)} />}
+            {game === "sort" && <Canteen onExit={() => setGame(null)} />}
+            {game === "memory" && <WhoWasIt onExit={() => setGame(null)} />}
+            {game === "flap" && <RadomirFlight onExit={() => setGame(null)} />}
+            {game === "defend" && <DormDefense onExit={() => setGame(null)} />}
           </motion.div>
         )}
       </AnimatePresence>

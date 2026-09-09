@@ -116,6 +116,60 @@ export default function GameIcon({
         </svg>
       );
 
+
+    // Башня из бургеров
+    case "stack":
+      return (
+        <svg {...p} fill="none">
+          <rect x="7" y="22" width="18" height="5" rx="2" stroke="currentColor" strokeWidth="2.2" />
+          <rect x="9" y="15" width="14" height="5" rx="2" stroke={acc} strokeWidth="2.4" />
+          <rect x="11" y="8" width="10" height="5" rx="2" stroke="currentColor" strokeWidth="2.2" />
+          <path d="M16 4v2" stroke={acc} strokeWidth="2.2" strokeLinecap="round" />
+        </svg>
+      );
+
+    // Подносы по цветам
+    case "sort":
+      return (
+        <svg {...p} fill="none">
+          <rect x="4" y="6" width="10" height="8" rx="2.5" stroke="currentColor" strokeWidth="2.2" />
+          <rect x="18" y="6" width="10" height="8" rx="2.5" stroke={acc} strokeWidth="2.4" />
+          <rect x="4" y="18" width="10" height="8" rx="2.5" stroke={acc} strokeWidth="2.4" />
+          <rect x="18" y="18" width="10" height="8" rx="2.5" stroke="currentColor" strokeWidth="2.2" />
+        </svg>
+      );
+
+    // Память
+    case "memory":
+      return (
+        <svg {...p} fill="none">
+          <circle cx="10" cy="10" r="4" stroke="currentColor" strokeWidth="2.2" />
+          <circle cx="22" cy="10" r="4" stroke={acc} strokeWidth="2.4" />
+          <circle cx="10" cy="22" r="4" stroke={acc} strokeWidth="2.4" />
+          <circle cx="22" cy="22" r="4" stroke="currentColor" strokeWidth="2.2" />
+          <path d="M14 10h4M10 14v4" stroke={acc} strokeWidth="2" strokeLinecap="round" />
+        </svg>
+      );
+
+    // Полёт
+    case "flap":
+      return (
+        <svg {...p} fill="none">
+          <path d="M6 16c4-6 9-9 15-9-1 7-5 12-11 14l-4-5z" stroke="currentColor" strokeWidth="2.2" strokeLinejoin="round" />
+          <path d="M10 21l-4 5" stroke={acc} strokeWidth="2.4" strokeLinecap="round" />
+          <circle cx="19" cy="11" r="1.5" fill={acc} />
+        </svg>
+      );
+
+    // Оборона
+    case "defend":
+      return (
+        <svg {...p} fill="none">
+          <path d="M16 4l10 4v8c0 6-4 10-10 12C10 26 6 22 6 16V8l10-4z" stroke="currentColor" strokeWidth="2.2" strokeLinejoin="round" />
+          <path d="M11 16l3.5 3.5L21 13" stroke={acc} strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      );
+
     default:
       return (
         <svg {...p} fill="none">

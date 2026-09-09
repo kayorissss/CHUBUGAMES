@@ -11,7 +11,7 @@ export interface HeadOpts {
   body?: boolean;
 }
 
-function shade(hex: string, amt: number) {
+export function shade(hex: string, amt: number) {
   const n = parseInt(hex.slice(1), 16);
   let r = (n >> 16) & 255,
     g = (n >> 8) & 255,
@@ -22,7 +22,7 @@ function shade(hex: string, amt: number) {
   return `rgb(${r},${g},${b})`;
 }
 
-function hexRgb(hex: string) {
+export function hexRgb(hex: string) {
   const n = parseInt(hex.slice(1), 16);
   return `${(n >> 16) & 255},${(n >> 8) & 255},${n & 255}`;
 }

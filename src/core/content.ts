@@ -349,4 +349,9 @@ export const GAME_META = [
   { id: "radomir" as const, name: "РИТМ РАДОМИРА", tag: "Ритм", desc: "Лови ноты под трек. Радомир стесняется, но танцует.", unlockLvl: 0, icon: "music" as IconName },
   { id: "merge" as const, name: "СЛИЯНИЕ ГОЛОВ", tag: "Пазл", desc: "Сливай одинаковых пацанов в новых. 2048 из голов.", unlockLvl: 0, icon: "case" as IconName },
   { id: "whack" as const, name: "ПРИБЕЙ ДРУГА", tag: "Реакция", desc: "Головы лезут из люков. Прибей. Но не всех.", unlockLvl: 0, icon: "hammer" as IconName },
+  { id: "stack" as const, name: "БАШНЯ ЛЁХИ", tag: "Точность", desc: "Складывай бургеры в башню. Промахнулся — край срезало.", unlockLvl: 0, icon: "level" as IconName },
+  { id: "sort" as const, name: "СТОЛОВКА", tag: "Скорость", desc: "Раздавай подносы по цветам. Очередь не ждёт.", unlockLvl: 0, icon: "target" as IconName },
+  { id: "memory" as const, name: "КТО ЭТО БЫЛ", tag: "Память", desc: "Головы мигают по очереди. Повтори порядок.", unlockLvl: 0, icon: "brain" as IconName },
+  { id: "flap" as const, name: "ПОЛЁТ РАДОМИРА", tag: "Нервы", desc: "Тапай, чтобы не упасть. Пролетай между партами.", unlockLvl: 0, icon: "rocket" as IconName },
+  { id: "defend" as const, name: "ОБОРОНА ОБЩАГИ", tag: "Защита", desc: "Тапай по врагам, пока они не дошли до двери.", unlockLvl: 0, icon: "shield" as IconName },
 ];

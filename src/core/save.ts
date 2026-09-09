@@ -24,6 +24,12 @@ export function pickQuests(seed: string) {
   return out;
 }
 
+/** Все мини-игры — открыты сразу, без уровней-замков. */
+export const ALL_GAMES: GameId[] = [
+  "burger", "clicker", "bite", "dino", "radomir", "merge", "whack",
+  "stack", "sort", "memory", "flap", "defend",
+];
+
 export function freshSave(): SaveState {
   const now = Date.now();
   return {
@@ -42,6 +48,8 @@ export function freshSave(): SaveState {
     games: {
       burger: emptyGame(), clicker: emptyGame(), bite: emptyGame(),
       dino: emptyGame(), radomir: emptyGame(), merge: emptyGame(), whack: emptyGame(),
+      stack: emptyGame(), sort: emptyGame(), memory: emptyGame(),
+      flap: emptyGame(), defend: emptyGame(),
     },
     friends: DEFAULT_FRIENDS.map((f) => ({ ...f, look: { ...f.look }, stats: { ...f.stats } })),
     mainFriendId: "lyoha",
@@ -56,7 +64,7 @@ export function freshSave(): SaveState {
       theme: "dark", lang: "ru", accent: "amber", sound: true, haptics: true,
       fx: true, controls: "touchpad", difficulty: "normal",
     },
-    unlockedGames: ["burger", "clicker", "bite", "dino", "radomir", "merge", "whack"],
+    unlockedGames: ALL_GAMES.slice(),
     stats: {
       burgersDodged: 0, burgersHit: 0, tapsTotal: 0, merges: 0,
       whacks: 0, casesOpened: 0, sessions: 0, bites: 0, metersRun: 0, notesHit: 0,
@@ -84,7 +92,7 @@ export function migrate(s: any): SaveState {
   out.season = { ...base.season, ...(s.season || {}) };
   out.daily = { ...base.daily, ...(s.daily || {}) };
   out.games = { ...base.games, ...(s.games || {}) };
-  (["burger", "clicker", "bite", "dino", "radomir", "merge", "whack"] as GameId[]).forEach((g) => {
+  ALL_GAMES.forEach((g) => {
     out.games[g] = { ...emptyGame(), ...(out.games[g] || {}) };
   });
   out.skills = s.skills || {};
@@ -98,7 +106,7 @@ export function migrate(s: any): SaveState {
     if (!out.ownedThemes.includes(free)) out.ownedThemes.push(free);
   }
   // Все мини-игры доступны сразу — в том числе в старых сохранениях
-  out.unlockedGames = ["burger", "clicker", "bite", "dino", "radomir", "merge", "whack"];
+  out.unlockedGames = ALL_GAMES.slice();
   // Досыпаем новых друзей тем, кто уже играл
   const have = new Set(out.friends.map((f) => f.id));
   for (const f of base.friends) {

@@ -81,9 +81,9 @@ console.log('\n[8] Контент про друзей');
 const cnt=fs.readFileSync('src/core/content.ts','utf8');
 for(const id of ['lyoha','vanya','maks','seryoga','artyom','radomir','kudrya','shitov'])
   ok(cnt.includes(`id: "${id}"`),`друг ${id} есть в игре`);
-ok((cnt.match(/unlockLvl: 0/g)||[]).length===7,'все 7 мини-игр открыты сразу');
+ok((cnt.match(/unlockLvl: 0/g)||[]).length===12,'все 12 мини-игр открыты сразу');
 const sav=fs.readFileSync('src/core/save.ts','utf8');
-ok(/unlockedGames = \["burger", "clicker", "bite", "dino", "radomir", "merge", "whack"\]/.test(sav),'старые сохранения тоже получают все игры');
+ok(/unlockedGames = ALL_GAMES\.slice\(\)/.test(sav)&&/ALL_GAMES: GameId\[\]/.test(sav),'старые сохранения тоже получают все игры');
 ok(sav.includes('if (!have.has(f.id))'),'новые друзья досыпаются в старые сохранения');
 ok(fs.existsSync('src/games/ArtyomBite.tsx'),'мини-игра «Зубы Артёма» есть');
 ok(fs.existsSync('src/games/ShitovRun.tsx'),'мини-игра «Побег от Шитова» есть');
@@ -146,6 +146,11 @@ ok(sv.includes('bossStats')&&sv.includes('offlineBonus'),'статы босса 
 ok(fs.readFileSync('src/core/head.ts','utf8').includes('look.braces'),'у Артёма есть брекеты');
 const gl=fs.readFileSync('src/ui/Glass.tsx','utf8');
 ok(gl.includes('minHeight: minH')&&gl.includes('Unbounded'),'кнопки с отступами и фирменным шрифтом');
+
+// --- пять новых мини-игр ---
+for (const [f,n] of [['BurgerStack','Башня Лёхи'],['Canteen','Столовка'],['WhoWasIt','Кто это был'],['RadomirFlight','Полёт Радомира'],['DormDefense','Оборона общаги']])
+  ok(fs.existsSync(`src/games/${f}.tsx`)&&app.includes(`<${f}`),`новая игра «${n}» подключена`);
+ok(fs.readFileSync('src/core/types.ts','utf8').includes('"stack"'),'новые игры есть в GameId');
 
 console.log(fails===0?'\n✅ ВСЕ ПРОВЕРКИ ВЁРСТКИ ПРОЙДЕНЫ\n':`\n❌ ПРОВАЛЕНО: ${fails}\n`);
 process.exit(fails?1:0);

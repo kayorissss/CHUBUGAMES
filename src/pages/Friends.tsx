@@ -12,10 +12,15 @@ import type { Friend, FriendLook, Rarity } from "../core/types";
 const SKINS = ["#f6d3b0", "#eec9a8", "#e8b48c", "#d9a074", "#c98a5e", "#a9714a", "#7d5233", "#5a3a24"];
 const HAIRS = ["#1a1a1e", "#2b2118", "#4a3520", "#7a4a22", "#a8672c", "#c0392b", "#d8c48a", "#e8e8f0", "#5a5a68", "#3b6ea5", "#7a3ba5", "#2fa86b"];
 const EYES = ["#3a2c1e", "#2f5d3a", "#3b6ea5", "#4a4a55", "#6b3f1d", "#2a1c12"];
-const HAIR_NAMES = ["Лысый", "Короткие", "Шапка", "Ирокез", "Кудри", "Кепка"];
+const SHIRT_COLORS = ["#2a3140", "#3d4756", "#c86a9a", "#c0392b", "#2f6f4f", "#6b5230", "#1f1f26", "#8f63bd"];
+const HAIR_NAMES = ["Лысый", "Короткие", "Шапка", "Ирокез", "Кудри", "Кепка", "Ёжик", "Длинные", "Штрихкод", "Под машинку"];
 const BROW_NAMES = ["Обычные", "Злые", "Домиком"];
-const FACIAL_NAMES = ["Гладко", "Щетина", "Борода", "Усы"];
+const FACIAL_NAMES = ["Гладко", "Щетина", "Борода", "Усы", "Козья"];
 const GLASS_NAMES = ["Нет", "Круглые", "Прямые"];
+const SHIRT_NAMES = ["Обычная", "Сетка", "Костюм", "Худи"];
+const PROP_NAMES = ["Нет", "Пиво", "Планшет"];
+const SHIRT_KEYS = ["plain", "mesh", "suit", "hoodie"] as const;
+const PROP_KEYS = ["none", "beer", "clipboard"] as const;
 
 export default function Friends() {
   const { s, set, mainFriend, toast } = useGame();
@@ -62,10 +67,12 @@ export default function Friends() {
       right={
         <Button
           variant="primary"
+          size="sm"
           onClick={() => { setEditing(newFriend()); setCreating(true); }}
           sound="power"
+          icon={<Icon name="plus" size={13} />}
         >
-          + Добавить
+          СВОЙ
         </Button>
       }
     >
@@ -307,10 +314,10 @@ function Editor({ friend, isNew, onClose }: { friend: Friend; isNew: boolean; on
       d.look = {
         skin: SKINS[Math.floor(Math.random() * SKINS.length)],
         hair: HAIRS[Math.floor(Math.random() * HAIRS.length)],
-        hairStyle: Math.floor(Math.random() * 6) as any,
+        hairStyle: Math.floor(Math.random() * 10) as any,
         eyes: EYES[Math.floor(Math.random() * EYES.length)],
         brow: Math.floor(Math.random() * 3) as any,
-        facial: Math.floor(Math.random() * 4) as any,
+        facial: Math.floor(Math.random() * 5) as any,
         glasses: Math.floor(Math.random() * 3) as any,
         wide: 0.86 + Math.random() * 0.34,
       };
@@ -435,9 +442,37 @@ function Editor({ friend, isNew, onClose }: { friend: Friend; isNew: boolean; on
                 </Row>
                 <Row label={`Ширина лица · ${(f.look.wide * 100).toFixed(0)}%`}>
                   <input
-                    type="range" min={85} max={125} value={f.look.wide * 100}
+                    type="range" min={80} max={125} value={f.look.wide * 100}
                     onChange={(e) => updLook("wide", Number(e.target.value) / 100)}
                     style={{ width: "100%", accentColor: "var(--acc)" }}
+                  />
+                </Row>
+                <Row label="Одежда">
+                  <Opts
+                    list={SHIRT_NAMES}
+                    val={Math.max(0, SHIRT_KEYS.indexOf((f.look.shirt || "plain") as any))}
+                    onPick={(i) => updLook("shirt", SHIRT_KEYS[i])}
+                  />
+                </Row>
+                <Row label="Цвет одежды">
+                  <Swatches
+                    list={SHIRT_COLORS}
+                    val={f.look.shirtColor || SHIRT_COLORS[0]}
+                    onPick={(v) => updLook("shirtColor", v)}
+                  />
+                </Row>
+                <Row label="В руках">
+                  <Opts
+                    list={PROP_NAMES}
+                    val={Math.max(0, PROP_KEYS.indexOf((f.look.prop || "none") as any))}
+                    onPick={(i) => updLook("prop", PROP_KEYS[i])}
+                  />
+                </Row>
+                <Row label="Зубы">
+                  <Opts
+                    list={["Обычные", "Брекеты"]}
+                    val={f.look.braces ? 1 : 0}
+                    onPick={(i) => updLook("braces", i === 1)}
                   />
                 </Row>
               </>
