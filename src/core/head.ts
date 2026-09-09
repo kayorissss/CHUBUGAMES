@@ -79,12 +79,18 @@ export function drawHead(
     ctx.fill();
   }
 
-  // Уши
+  // Уши — прижаты к черепу, иначе выглядят как приклеенные шарики
   ctx.fillStyle = shade(look.skin, -14);
   [-1, 1].forEach((s) => {
     ctx.beginPath();
-    ctx.ellipse(s * w * 0.98, h * 0.06, w * 0.13, h * 0.19, 0, 0, Math.PI * 2);
+    ctx.ellipse(s * w * 0.97, h * 0.04, w * 0.11, h * 0.17, 0, 0, Math.PI * 2);
     ctx.fill();
+    // внутренняя раковина, чтобы ухо читалось
+    ctx.fillStyle = shade(look.skin, -32);
+    ctx.beginPath();
+    ctx.ellipse(s * w * 0.99, h * 0.04, w * 0.05, h * 0.09, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = shade(look.skin, -14);
   });
 
   // Щёки (надутые)
@@ -188,22 +194,29 @@ export function drawHead(
   ctx.ellipse(0, my + mh * 0.2, mw, mh, 0, 0, Math.PI * 2);
   ctx.fill();
   if (mouth > 0.25) {
+    // Всё содержимое рта режем по контуру самого рта, иначе зубы и язык
+    // вылезают за губы и получается «пасть» вместо лица.
+    ctx.save();
+    ctx.beginPath();
+    ctx.ellipse(0, my + mh * 0.2, mw, mh, 0, 0, Math.PI * 2);
+    ctx.clip();
+
     ctx.fillStyle = "#d9556a";
     ctx.beginPath();
     ctx.ellipse(0, my + mh * 0.6, mw * 0.5, mh * 0.42, 0, 0, Math.PI * 2);
     ctx.fill();
-    // зубы
-    const tx = -mw * 0.72, ty = my - mh * 0.86, tw = mw * 1.44, th = mh * 0.3;
+    // зубы — полоска по верхней губе, обрезается клипом
+    const tx = -mw, ty = my - mh * 0.8, tw = mw * 2, th = mh * 0.42;
     ctx.fillStyle = "#f6f6fa";
     ctx.beginPath();
-    ctx.roundRect(tx, ty, tw, th, th * 0.32);
+    ctx.rect(tx, ty, tw, th);
     ctx.fill();
 
     // Брекеты — металлические замочки с дугой
     if (look.braces) {
       ctx.save();
       ctx.beginPath();
-      ctx.roundRect(tx, ty, tw, th, th * 0.32);
+      ctx.rect(tx, ty, tw, th);
       ctx.clip();
       // дуга
       ctx.strokeStyle = "#c8ccd8";
@@ -227,6 +240,7 @@ export function drawHead(
       }
       ctx.restore();
     }
+    ctx.restore(); // снимаем клип рта
   }
 
   // Растительность на лице
@@ -340,7 +354,7 @@ function drawBody(
 
   // Кружка пива в руке
   if (look.prop === "beer") {
-    const bx = w * 1.5, by = h * 1.42;
+    const bx = w * 1.12, by = h * 1.5;
     const bw = r * 0.5, bh = r * 0.66;
     // ручка
     ctx.strokeStyle = "#d8dce8";
@@ -372,7 +386,7 @@ function drawBody(
 
   // Планшет старосты
   if (look.prop === "clipboard") {
-    const bx = w * 1.46, by = h * 1.5;
+    const bx = w * 1.1, by = h * 1.56;
     const bw = r * 0.56, bh = r * 0.72;
     ctx.fillStyle = "#8a6a44";
     ctx.beginPath();
@@ -450,18 +464,18 @@ function drawFacial(
     ctx.ellipse(0, 0, w, h, 0, 0, Math.PI * 2);
     ctx.clip();
     ctx.fillStyle = look.hair;
-    const gw = w * 0.26;
-    const gy = my + mh + r * 0.1;
+    const gw = w * 0.22;
+    const gy = my + mh + r * 0.16;
     ctx.beginPath();
-    ctx.roundRect(-gw, gy, gw * 2, h * 0.34, [w * 0.03, w * 0.03, w * 0.12, w * 0.12]);
+    ctx.roundRect(-gw, gy, gw * 2, h * 0.26, [w * 0.03, w * 0.03, w * 0.1, w * 0.1]);
     ctx.fill();
     // тонкие бакенбарды-перемычки от уголков рта к бородке
-    ctx.lineWidth = Math.max(1.4, r * 0.038);
+    ctx.lineWidth = Math.max(1.2, r * 0.028);
     ctx.strokeStyle = look.hair;
     [-1, 1].forEach((sg) => {
       ctx.beginPath();
-      ctx.moveTo(sg * gw * 0.95, gy + h * 0.04);
-      ctx.quadraticCurveTo(sg * w * 0.42, my, sg * w * 0.34, my - mh - r * 0.04);
+      ctx.moveTo(sg * gw * 0.92, gy + h * 0.02);
+      ctx.quadraticCurveTo(sg * w * 0.4, my + mh * 0.6, sg * w * 0.36, my - mh * 0.2);
       ctx.stroke();
     });
     ctx.restore();
@@ -480,12 +494,15 @@ function drawHair(ctx: CanvasRenderingContext2D, look: FriendLook, w: number, h:
       break;
 
     case 1: // короткие
+      // купол по форме черепа + чуть спущенные виски, без «плиты» сверху
       ctx.beginPath();
-      ctx.ellipse(0, -h * 0.52, w * 0.96, h * 0.52, 0, Math.PI, 0);
+      ctx.ellipse(0, -h * 0.3, w * 1.0, h * 0.74, 0, Math.PI, 0);
       ctx.fill();
-      ctx.beginPath();
-      ctx.roundRect(-w * 0.96, -h * 0.58, w * 1.92, h * 0.2, w * 0.1);
-      ctx.fill();
+      [-1, 1].forEach((sg) => {
+        ctx.beginPath();
+        ctx.ellipse(sg * w * 0.86, -h * 0.3, w * 0.16, h * 0.3, 0, 0, Math.PI * 2);
+        ctx.fill();
+      });
       break;
 
     case 2: // шапка волос
@@ -632,12 +649,12 @@ function drawHair(ctx: CanvasRenderingContext2D, look: FriendLook, w: number, h:
       const light = shade(look.hair, 62);
       ctx.fillStyle = light;
       ctx.beginPath();
-      ctx.ellipse(0, -h * 0.44, w * 1.0, h * 0.62, 0, Math.PI, 0);
+      ctx.ellipse(0, -h * 0.28, w * 1.01, h * 0.76, 0, Math.PI, 0);
       ctx.fill();
 
       ctx.save();
       ctx.beginPath();
-      ctx.ellipse(0, -h * 0.44, w * 1.0, h * 0.62, 0, Math.PI, 0);
+      ctx.ellipse(0, -h * 0.28, w * 1.01, h * 0.76, 0, Math.PI, 0);
       ctx.clip();
       // чёрные штрихи поверх светлой подложки
       ctx.fillStyle = look.hair;
@@ -645,28 +662,39 @@ function drawHair(ctx: CanvasRenderingContext2D, look: FriendLook, w: number, h:
       let x = -w * 1.02;
       for (let i = 0; i < widths.length; i++) {
         const bw = widths[i] * w * 0.075;
-        ctx.fillRect(x, -h * 1.16, bw, h * 0.86);
+        ctx.fillRect(x, -h * 1.16, bw, h * 0.95);
         x += bw + w * 0.052;
         if (x > w) break;
       }
       ctx.restore();
 
-      // ровная плотная чёлка
+      // висок-бакенбарды: пряди спускаются по бокам, лоб остаётся открытым —
+      // без сплошной полосы, которая читалась как козырёк шапки
       ctx.fillStyle = look.hair;
-      ctx.beginPath();
-      ctx.roundRect(-w * 0.99, -h * 0.58, w * 1.98, h * 0.19, w * 0.025);
-      ctx.fill();
+      [-1, 1].forEach((sg) => {
+        ctx.beginPath();
+        ctx.moveTo(sg * w * 0.72, -h * 0.5);
+        ctx.quadraticCurveTo(sg * w * 1.02, -h * 0.34, sg * w * 0.94, h * 0.02);
+        ctx.quadraticCurveTo(sg * w * 0.86, -h * 0.3, sg * w * 0.62, -h * 0.42);
+        ctx.closePath();
+        ctx.fill();
+      });
       break;
     }
 
     case 9: {
       // Очень короткая стрижка почти под машинку: плотно по черепу
       ctx.beginPath();
-      ctx.ellipse(0, -h * 0.6, w * 0.93, h * 0.44, 0, Math.PI, 0);
+      ctx.ellipse(0, -h * 0.34, w * 0.99, h * 0.68, 0, Math.PI, 0);
       ctx.fill();
-      // тонкая кромка у лба
+      // мыс волос на лбу — линия роста, а не ровная полоса-козырёк
       ctx.beginPath();
-      ctx.roundRect(-w * 0.93, -h * 0.64, w * 1.86, h * 0.13, w * 0.04);
+      ctx.moveTo(-w * 0.99, -h * 0.34);
+      ctx.quadraticCurveTo(-w * 0.5, -h * 0.2, 0, -h * 0.26);
+      ctx.quadraticCurveTo(w * 0.5, -h * 0.2, w * 0.99, -h * 0.34);
+      ctx.lineTo(w * 0.99, -h * 0.6);
+      ctx.lineTo(-w * 0.99, -h * 0.6);
+      ctx.closePath();
       ctx.fill();
       // виски темнее
       ctx.save();
@@ -674,7 +702,7 @@ function drawHair(ctx: CanvasRenderingContext2D, look: FriendLook, w: number, h:
       ctx.fillStyle = "#000000";
       [-1, 1].forEach((s) => {
         ctx.beginPath();
-        ctx.ellipse(s * w * 0.82, -h * 0.34, w * 0.16, h * 0.2, 0, 0, Math.PI * 2);
+        ctx.ellipse(s * w * 0.86, -h * 0.2, w * 0.15, h * 0.24, 0, 0, Math.PI * 2);
         ctx.fill();
       });
       ctx.restore();
