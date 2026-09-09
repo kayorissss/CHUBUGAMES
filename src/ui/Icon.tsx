@@ -11,7 +11,7 @@ export type IconName =
   | "target" | "clock" | "calendar" | "gift" | "case" | "lock" | "check"
   | "cross" | "plus" | "minus" | "chevron" | "arrowDown" | "arrowUp"
   | "download" | "refresh" | "settings" | "user" | "users" | "shop"
-  | "chart" | "music" | "sound" | "vibrate" | "moon" | "sun" | "globe"
+  | "chart" | "music" | "sound" | "soundOff" | "vibrate" | "moon" | "sun" | "globe"
   | "wifi" | "speed" | "shield" | "skull" | "burger" | "tooth" | "hammer"
   | "brain" | "sparkle" | "flag" | "medal" | "ticket" | "rocket" | "leaf"
   | "snow" | "magnet" | "clover" | "fist" | "gear" | "bank" | "dice"
@@ -258,6 +258,13 @@ export default function Icon({
         <svg {...p}>
           <path d="M4 9.5h3.5L12 5.5v13L7.5 14.5H4z" />
           <path d="M15.5 9a4.2 4.2 0 010 6M18.2 6.4a8 8 0 010 11.2" />
+        </svg>
+      );
+    case "soundOff":
+      return (
+        <svg {...p}>
+          <path d="M4 9.5h3.5L12 5.5v13L7.5 14.5H4z" />
+          <path d="M16.5 9.8l4.5 4.4M21 9.8l-4.5 4.4" />
         </svg>
       );
     case "vibrate":

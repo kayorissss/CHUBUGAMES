@@ -76,7 +76,7 @@ ok(/setup-android-signing/.test(wf2),'APK подписывается посто�
 ok(/REQUEST_INSTALL_PACKAGES/.test(wf2),'разрешение на установку обновлений выдано');
 ok(/printf 'version: %s/.test(wf2) && /body_path: RELEASE_BODY\.md/.test(wf2),'релиз публикует номер версии для проверки обновлений');
 ok(fs.existsSync('RELEASE_NOTES.md'),'описание релиза лежит в репозитории (не хардкод в workflow)');
-ok(/### Что нового в 1\.5\.1/.test(fs.readFileSync('RELEASE_NOTES.md','utf8')),'описание релиза совпадает с текущей версией');
+ok(/### Что нового в 1\.5\.2/.test(fs.readFileSync('RELEASE_NOTES.md','utf8')),'описание релиза совпадает с текущей версией');
 ok(fs.existsSync('public/ads/promo1.mp4'),'рекламный ролик на месте');
 ok(fs.existsSync('dist/ads/promo1.mp4'),'ролик попал в сборку (значит будет в APK)');
 ok(fs.existsSync('android-signing/chubgames.p12'),'ключ подписи лежит в репозитории');
