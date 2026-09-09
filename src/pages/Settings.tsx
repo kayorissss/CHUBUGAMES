@@ -1,8 +1,13 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { useGame } from "../core/store";
 import { Card, Button, SectionTitle, Screen, Divider } from "../ui/Glass";
 import Updater from "../ui/Updater";
+import {
+  askNotifyPermission,
+  enableBackgroundCheck,
+  notifyGranted,
+} from "../core/notify";
 import Icon, { type IconName } from "../ui/Icon";
 import { ACCENTS } from "../core/content";
 import { SAVE_KEY, migrate, persistNow } from "../core/save";
@@ -173,9 +178,12 @@ export default function Settings({
       </Card>
 
       <SectionTitle>{t("settings.update")}</SectionTitle>
-      <div style={{ marginBottom: 22 }}>
+      <div style={{ marginBottom: 12 }}>
         <Updater />
       </div>
+      <Card r="lg" style={{ marginBottom: 22, overflow: "hidden" }}>
+        <NotifyToggle />
+      </Card>
 
       <SectionTitle>Инструменты</SectionTitle>
       <Card r="lg" style={{ padding: 0, marginBottom: 22, overflow: "hidden" }}>
@@ -299,6 +307,51 @@ export default function Settings({
         </div>
       </div>
     </Screen>
+  );
+}
+
+/**
+ * Уведомление о новой версии, когда игра закрыта.
+ * Разрешение спрашиваем только здесь, по явному нажатию, — а не при
+ * первом запуске, где человек не поймёт, о чём его просят.
+ */
+function NotifyToggle() {
+  const { toast } = useGame();
+  const [on, setOn] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => { void notifyGranted().then(setOn); }, []);
+
+  const toggle = async () => {
+    if (busy) return;
+    if (on) {
+      // Отозвать разрешение из приложения нельзя — это делается в системе
+      toast({
+        title: "Отключается в настройках телефона",
+        sub: "Приложения · ЧУБУГЕЙМ · Уведомления",
+        icon: "info",
+      });
+      return;
+    }
+    setBusy(true);
+    const ok = await askNotifyPermission();
+    if (ok) {
+      await enableBackgroundCheck();
+      setOn(true);
+      toast({ title: "Буду напоминать об обновлениях", icon: "check", tone: "gold" });
+    } else {
+      toast({ title: "Уведомления запрещены", sub: "Разреши их в настройках телефона", icon: "warn", tone: "bad" });
+    }
+    setBusy(false);
+  };
+
+  return (
+    <Toggle
+      label="Уведомлять об обновлениях"
+      hint="Напомню о новой версии, даже когда игра закрыта"
+      on={on}
+      onToggle={() => { void toggle(); }}
+    />
   );
 }
 

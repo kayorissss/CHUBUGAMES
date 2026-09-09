@@ -47,8 +47,11 @@ jobs:
       - name: Install Capacitor
         run: npm install @capacitor/core@7 @capacitor/cli@7 @capacitor/android@7
 
-      - name: Initialize Capacitor
-        run: npx cap init "CHUBGAMES" "com.chubgames.app" --web-dir dist
+      # capacitor.config.json лежит в репозитории (там настройки фоновой
+      # проверки обновлений), поэтому cap init больше не нужен — он бы упал
+      # с ошибкой «config already exists».
+      - name: Check Capacitor config
+        run: cat capacitor.config.json
 
       - name: Add Android platform
         run: npx cap add android
@@ -65,6 +68,10 @@ jobs:
           # Интернет нужен ТОЛЬКО для скачивания обновления; сами игры работают офлайн
           grep -q 'android.permission.INTERNET' $MANIFEST || \
             sed -i '/<application/i\    <uses-permission android:name="android.permission.INTERNET" />' $MANIFEST
+          # Уведомление о новой версии, когда игра закрыта (Android 13+)
+          sed -i '/<application/i\    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />' $MANIFEST
+          # Фоновая проверка должна пережить перезагрузку телефона
+          sed -i '/<application/i\    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />' $MANIFEST
           echo "--- AndroidManifest.xml ---"
           cat $MANIFEST
 
@@ -102,6 +109,18 @@ jobs:
       # ставить обновление поверх с ошибкой «конфликт пакетов».
       - name: Configure signing and version
         run: node scripts/setup-android-signing.mjs "$APP_VER" "${{ github.run_number }}"
+
+      # Плагин фоновой проверки поставляется вместе с нативной библиотекой
+      # android-js-engine-release.aar. Без этой строки Gradle её не найдёт
+      # и сборка упадёт на «Could not find android-js-engine».
+      - name: Wire background runner library
+        run: |
+          GRADLE=android/app/build.gradle
+          if ! grep -q 'background-runner/android/src/main/libs' $GRADLE; then
+            sed -i "s|dirs '../capacitor-cordova-android-plugins/src/main/libs', 'libs'|dirs '../capacitor-cordova-android-plugins/src/main/libs', 'libs'\n        dirs '../../node_modules/@capacitor/background-runner/android/src/main/libs', 'libs'|" $GRADLE
+          fi
+          echo "--- repositories в app/build.gradle ---"
+          sed -n '/repositories/,/}/p' $GRADLE
 
       - name: Sync Capacitor
         run: npx cap sync android

@@ -8,6 +8,8 @@ import Nav, { type Tab } from "./components/Nav";
 export type SubPage = "network" | "ai" | "casino" | "donate" | "boss";
 import { Toasts, OfflineModal } from "./components/Overlays";
 import UpdateBanner from "./ui/UpdateBanner";
+import WhatsNew from "./ui/WhatsNew";
+import { syncInstalledVersion } from "./core/notify";
 import Icon from "./ui/Icon";
 import Home from "./pages/Home";
 import { ModesProvider } from "./core/modes";
@@ -115,6 +117,10 @@ function Shell() {
     window.addEventListener("pointerdown", unlock, { once: true });
     return () => window.removeEventListener("pointerdown", unlock);
   }, []);
+
+  // Сообщаем фоновой проверке, какая версия стоит сейчас, — иначе она
+  // не поймёт, что вышло обновление, пока игра закрыта.
+  useEffect(() => { void syncInstalledVersion(); }, []);
 
   // системная кнопка/жест «назад» закрывает игру, а не приложение
   useEffect(() => {
@@ -225,6 +231,7 @@ function Shell() {
       <Toasts />
       <OfflineModal />
       {!game && <UpdateBanner />}
+      {!game && <WhatsNew />}
 
       <AnimatePresence>{splash && <Splash done={() => setSplash(false)} />}</AnimatePresence>
     </div>

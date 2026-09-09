@@ -76,7 +76,8 @@ ok(/setup-android-signing/.test(wf2),'APK подписывается посто�
 ok(/REQUEST_INSTALL_PACKAGES/.test(wf2),'разрешение на установку обновлений выдано');
 ok(/printf 'version: %s/.test(wf2) && /body_path: RELEASE_BODY\.md/.test(wf2),'релиз публикует номер версии для проверки обновлений');
 ok(fs.existsSync('RELEASE_NOTES.md'),'описание релиза лежит в репозитории (не хардкод в workflow)');
-ok(/### Что нового в 1\.7\.0/.test(fs.readFileSync('RELEASE_NOTES.md','utf8')),'описание релиза совпадает с текущей версией');
+const VER=fs.readFileSync('src/core/version.ts','utf8').match(/APP_VERSION\s*=\s*"([0-9.]+)"/)[1];
+ok(new RegExp('### Что нового в '+VER.replace(/\./g,'\\.')).test(fs.readFileSync('RELEASE_NOTES.md','utf8')),'описание релиза совпадает с версией '+VER);
 ok(fs.existsSync('public/ads/promo1.mp4'),'рекламный ролик на месте');
 ok(fs.existsSync('dist/ads/promo1.mp4'),'ролик попал в сборку (значит будет в APK)');
 ok(fs.existsSync('android-signing/chubgames.p12'),'ключ подписи лежит в репозитории');
@@ -99,7 +100,23 @@ ok(brn.includes('drawHead(ctx, look'),'человечек меняется вм�
 const stg=fs.readFileSync('src/pages/Settings.tsx','utf8');
 ok(stg.includes('t.me/kayorisan'),'есть ссылка на автора');
 const wfl=fs.readFileSync('.github/workflows/build-apk.yml','utf8');
-ok(wfl.includes('com.chubgames.app'),'package id прежний — обновление встанет поверх');
+const cap=JSON.parse(fs.readFileSync('capacitor.config.json','utf8'));
+ok(cap.appId==='com.chubgames.app','package id прежний — обновление встанет поверх');
+ok(cap.plugins?.BackgroundRunner?.src==='runners/update-check.js','фоновая проверка обновлений настроена');
+ok(fs.existsSync('public/runners/update-check.js'),'скрипт фоновой проверки на месте');
+ok(fs.existsSync('dist/runners/update-check.js'),'скрипт фоновой проверки попал в сборку');
+ok(wfl.includes('POST_NOTIFICATIONS'),'разрешение на уведомления прописано');
+ok(wfl.includes('background-runner/android/src/main/libs'),'нативная библиотека фонового движка подключена к Gradle');
+ok(!wfl.includes('npx cap init'),'cap init убран — конфиг лежит в репозитории');
+const wn=fs.readFileSync('src/ui/WhatsNew.tsx','utf8');
+ok(wn.includes('seenVersion'),'экран «что обновилось» помнит показанную версию');
+const chg=fs.readFileSync('src/core/changelog.ts','utf8');
+ok(chg.includes(`"${VER}"`),'в списке изменений есть текущая версия');
+const upb=fs.readFileSync('src/ui/UpdateBanner.tsx','utf8');
+ok(upb.includes('ProgressRing'),'загрузка обновления — полноэкранная, с кольцом прогресса');
+const dd=fs.readFileSync('src/games/DormDefense.tsx','utf8');
+ok(dd.includes('SPEED_BASE')&&dd.includes('0.000167'),'оборона: враги ускорены');
+ok(dd.includes('bestCombo'),'оборона: серия ударов множит очки');
 
 
 console.log('\n[9] Пакет доработок');
