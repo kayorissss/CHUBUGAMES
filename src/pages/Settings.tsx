@@ -9,11 +9,12 @@ import { SAVE_KEY, migrate, persistNow } from "../core/save";
 import { sfx, haptic, unlockAudio } from "../core/fx";
 import { fmt } from "../core/format";
 import { APP_VERSION } from "../core/version";
+import type { SubPage } from "../App";
 
 export default function Settings({
   onOpen,
 }: {
-  onOpen?: (page: "network" | "ai") => void;
+  onOpen?: (page: SubPage) => void;
 }) {
   const { s, set, hardReset, toast, t } = useGame();
   const [confirmReset, setConfirmReset] = useState(false);

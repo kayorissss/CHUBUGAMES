@@ -3,11 +3,16 @@ import { AnimatePresence, motion } from "framer-motion";
 import { GameProvider, useGame } from "./core/store";
 import { Aurora } from "./ui/Glass";
 import Nav, { type Tab } from "./components/Nav";
+
+/** Подстраницы поверх вкладок */
+export type SubPage = "network" | "ai" | "casino" | "donate";
 import { Toasts, OfflineModal } from "./components/Overlays";
 import UpdateBanner from "./ui/UpdateBanner";
 import Icon from "./ui/Icon";
 import Home from "./pages/Home";
 import { ModesProvider } from "./core/modes";
+import Casino from "./pages/Casino";
+import Donate from "./pages/Donate";
 import ProgressPage from "./pages/Progress";
 import Shop from "./pages/Shop";
 import Friends from "./pages/Friends";
@@ -102,7 +107,7 @@ function Shell() {
   const [tab, setTab] = useState<Tab>("home");
   const [game, setGame] = useState<GameId | null>(null);
   // отдельные подстраницы поверх вкладок
-  const [sub, setSub] = useState<"network" | "ai" | null>(null);
+  const [sub, setSub] = useState<SubPage | null>(null);
 
   useEffect(() => {
     const unlock = () => unlockAudio();
@@ -140,7 +145,7 @@ function Shell() {
   }, []);
 
   const pages: Record<Tab, React.ReactNode> = {
-    home: <Home onPlay={(g) => setGame(g)} onOpenProfile={() => setTab("progress")} />,
+    home: <Home onPlay={(g) => setGame(g)} onOpenProfile={() => setTab("progress")} onOpen={setSub} />,
     progress: <ProgressPage />,
     shop: <Shop />,
     friends: <Friends />,
@@ -181,6 +186,8 @@ function Shell() {
           >
             {sub === "network" && <Network onBack={() => setSub(null)} />}
             {sub === "ai" && <AiPage onBack={() => setSub(null)} />}
+            {sub === "casino" && <Casino onBack={() => setSub(null)} />}
+            {sub === "donate" && <Donate onBack={() => setSub(null)} />}
           </motion.div>
         )}
       </AnimatePresence>

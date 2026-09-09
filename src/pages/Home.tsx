@@ -12,12 +12,14 @@ import type { GameId } from "../core/types";
 import AdModal from "../ui/AdModal";
 import { bonusesLeft, hasAds, noteBonus } from "../core/ads";
 import ModesPanel from "../ui/ModesPanel";
+import type { SubPage } from "../App";
 
 export default function Home({
-  onPlay, onOpenProfile,
+  onPlay, onOpenProfile, onOpen,
 }: {
   onPlay: (g: GameId) => void;
   onOpenProfile?: () => void;
+  onOpen?: (page: SubPage) => void;
 }) {
   const { s, mainFriend, levelPct, addCoins, toast } = useGame();
   const rate = autoRate(s);
@@ -153,6 +155,40 @@ export default function Home({
       {/* Режимы: марафон и испытание дня */}
       <ModesPanel />
 
+      {/* Казино */}
+      {onOpen && (
+        <Tap
+          onClick={() => onOpen("casino")}
+          r="lg"
+          className="w-full"
+          style={{
+            padding: 14, marginBottom: 10,
+            border: "1.5px solid rgba(200,155,255,0.42)",
+            background: "rgba(200,155,255,0.07)",
+          }}
+          sound="power"
+        >
+          <div className="flex items-center" style={{ gap: 12 }}>
+            <span
+              className="shrink-0 flex items-center justify-center"
+              style={{
+                width: 40, height: 40, borderRadius: "var(--r-sm)",
+                background: "rgba(200,155,255,0.15)", color: "#C89BFF",
+              }}
+            >
+              <Icon name="dice" size={19} />
+            </span>
+            <span className="flex-1 min-w-0">
+              <span className="t-title-sm block">Казино</span>
+              <span className="t-caption block" style={{ marginTop: 2 }}>
+                Слоты, кейсы, батлы и апгрейд — на жетоны
+              </span>
+            </span>
+            <Icon name="chevron" size={16} />
+          </div>
+        </Tap>
+      )}
+
       {/* Бонус за рекламу */}
       {hasAds() && adLeft > 0 && (
         <Tap
@@ -287,6 +323,40 @@ export default function Home({
         <Stat v={fmt(s.stats.tapsTotal)} l="тапов" />
         <Stat v={fmt(s.totalCoinsEver)} l="монет всего" />
       </div>
+
+      {/* Поддержать проект */}
+      {onOpen && (
+        <Tap
+          onClick={() => onOpen("donate")}
+          r="lg"
+          className="w-full"
+          style={{
+            padding: 14, marginTop: 14,
+            border: "1.5px solid rgba(255,176,32,0.4)",
+            background: "rgba(255,176,32,0.06)",
+          }}
+          sound="coin"
+        >
+          <div className="flex items-center" style={{ gap: 12 }}>
+            <span
+              className="shrink-0 flex items-center justify-center"
+              style={{
+                width: 40, height: 40, borderRadius: "var(--r-sm)",
+                background: "rgba(255,176,32,0.15)", color: "#FFB020",
+              }}
+            >
+              <Icon name="heart" size={19} />
+            </span>
+            <span className="flex-1 min-w-0">
+              <span className="t-title-sm block">Поддержите проект</span>
+              <span className="t-caption block" style={{ marginTop: 2 }}>
+                Игра бесплатная — развивается на энтузиазме
+              </span>
+            </span>
+            <Icon name="chevron" size={16} />
+          </div>
+        </Tap>
+      )}
     </Screen>
   );
 }
