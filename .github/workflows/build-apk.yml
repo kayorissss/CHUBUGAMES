@@ -5,6 +5,10 @@ on:
     branches: [main, master, "arena/**"]
   workflow_dispatch:
 
+# нужно для публикации APK в Releases
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -81,9 +85,37 @@ jobs:
       - name: Rename APK
         run: mv android/app/build/outputs/apk/debug/app-debug.apk CHUBGAMES.apk
 
-      - name: Upload APK
+      - name: Upload APK (артефакт сборки)
         uses: actions/upload-artifact@v4
         with:
           name: CHUBGAMES-APK
           path: CHUBGAMES.apk
           retention-days: 90
+
+      # Кладём APK в Releases — прямая ссылка на скачивание с телефона,
+      # без ZIP-архива и без входа в аккаунт GitHub
+      - name: Publish APK to Releases
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest
+          name: CHUBGAMES — последняя сборка
+          body: |
+            ## 🍔 CHUBGAMES
+
+            Оффлайн-приложение с мини-играми про друзей. Интернет не нужен.
+
+            ### Установка
+            1. Скачай **CHUBGAMES.apk** ниже (прямо с телефона)
+            2. Открой файл — Android спросит разрешение на установку
+            3. Разреши установку из этого источника и жми «Установить»
+
+            Если Android ругается «Play Защита» — жми «Всё равно установить».
+            Это нормально для APK, собранных не через Google Play.
+
+            ---
+            Собрано автоматически из ветки `${{ github.ref_name }}`
+            · коммит `${{ github.sha }}`
+          files: CHUBGAMES.apk
+          make_latest: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
