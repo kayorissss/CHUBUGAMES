@@ -153,8 +153,49 @@ export default function Settings() {
         )}
       </Card>
 
+      <SectionTitle>Об игре</SectionTitle>
+      <Card r="lg" style={{ padding: 14, marginBottom: 22 }}>
+        <div className="flex items-center" style={{ gap: 13 }}>
+          <div
+            className="shrink-0 flex items-center justify-center"
+            style={{
+              width: 44, height: 44, borderRadius: "var(--r-md)",
+              background: "var(--btn-bg)", border: "1px solid var(--btn-brd)",
+              fontSize: 21,
+            }}
+          >
+            🍔
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="t-title-sm">Чубуков Иван Сергеевич</div>
+            <div className="t-caption" style={{ marginTop: 2 }}>
+              автор и разработчик ЧУБУГЕЙМ
+            </div>
+          </div>
+        </div>
+        <div style={{ marginTop: 14 }}>
+          <Button
+            variant="primary"
+            full
+            sound="power"
+            onClick={() => {
+              try {
+                window.open("https://t.me/kayorisan", "_blank", "noopener,noreferrer");
+              } catch {
+                location.href = "https://t.me/kayorisan";
+              }
+            }}
+          >
+            ✈ Telegram: @kayorisan
+          </Button>
+        </div>
+        <div className="t-caption" style={{ marginTop: 10, lineHeight: 1.5 }}>
+          Все друзья, шутки и головы — реальные. Претензии тоже принимаются в телеграм.
+        </div>
+      </Card>
+
       <div className="text-center" style={{ paddingBlock: 18 }}>
-        <div className="t-display-sm" style={{ opacity: 0.22 }}>CHUBGAMES</div>
+        <div className="t-display-sm" style={{ opacity: 0.22 }}>ЧУБУГЕЙМ</div>
         <div className="t-caption" style={{ marginTop: 5 }}>
           версия {APP_VERSION} · работает офлайн
         </div>

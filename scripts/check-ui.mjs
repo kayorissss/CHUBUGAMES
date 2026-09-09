@@ -77,5 +77,25 @@ ok(/REQUEST_INSTALL_PACKAGES/.test(wf2),'разрешение на устано�
 ok(/version: \$\{\{ env\.APP_VER \}\}/.test(wf2),'релиз публикует номер версии для проверки обновлений');
 ok(fs.existsSync('android-signing/chubgames.p12'),'ключ подписи лежит в репозитории');
 
+console.log('\n[8] Контент про друзей');
+const cnt=fs.readFileSync('src/core/content.ts','utf8');
+for(const id of ['lyoha','vanya','maks','seryoga','artyom','radomir','kudrya','shitov'])
+  ok(cnt.includes(`id: "${id}"`),`друг ${id} есть в игре`);
+ok((cnt.match(/unlockLvl: 0/g)||[]).length===6,'все 6 мини-игр открыты сразу');
+const sav=fs.readFileSync('src/core/save.ts','utf8');
+ok(/unlockedGames = \["burger", "clicker", "bite", "dino", "merge", "whack"\]/.test(sav),'старые сохранения тоже получают все игры');
+ok(sav.includes('if (!have.has(f.id))'),'новые друзья досыпаются в старые сохранения');
+ok(fs.existsSync('src/games/ArtyomBite.tsx'),'мини-игра «Зубы Артёма» есть');
+ok(fs.existsSync('src/games/ShitovRun.tsx'),'мини-игра «Побег от Шитова» есть');
+const app=fs.readFileSync('src/App.tsx','utf8');
+ok(app.includes('<ArtyomBite')&&app.includes('<ShitovRun'),'новые игры подключены');
+const brn=fs.readFileSync('src/games/BurgerRain.tsx','utf8');
+ok(/Math\.min\(1\.85/.test(brn),'снаряды не разгоняются до невидимости');
+ok(brn.includes('drawHead(ctx, look'),'человечек меняется вместе с героем');
+const stg=fs.readFileSync('src/pages/Settings.tsx','utf8');
+ok(stg.includes('t.me/kayorisan'),'есть ссылка на автора');
+const wfl=fs.readFileSync('.github/workflows/build-apk.yml','utf8');
+ok(wfl.includes('com.chubgames.app'),'package id прежний — обновление встанет поверх');
+
 console.log(fails===0?'\n✅ ВСЕ ПРОВЕРКИ ВЁРСТКИ ПРОЙДЕНЫ\n':`\n❌ ПРОВАЛЕНО: ${fails}\n`);
 process.exit(fails?1:0);

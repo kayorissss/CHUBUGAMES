@@ -31,7 +31,7 @@ export default function Home({ onPlay }: { onPlay: (g: GameId) => void }) {
               color: "transparent",
             }}
           >
-            CHUBGAMES
+            ЧУБУГЕЙМ
           </h1>
         </div>
         <Card r="md" className="shrink-0" style={{ padding: "8px 12px" }}>

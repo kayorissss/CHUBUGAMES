@@ -36,6 +36,8 @@ export default function BurgerRain({ onExit }: { onExit: () => void }) {
   const [rage, setRage] = useState(false);
 
   const skin = HERO_SKINS.find((h) => h.id === s.heroSkin) || HERO_SKINS[0];
+  // герой на земле — это ты сам
+  const heroFriend = s.friends.find((f) => f.id === "vanya") || s.friends[0];
   const diff = DIFF[s.settings.difficulty];
 
   const G = useRef({
@@ -167,8 +169,10 @@ export default function BurgerRain({ onExit }: { onExit: () => void }) {
       g.elapsed += dt;
       const timeScale = g.slow > 0 ? 0.48 : 1;
       const sdt = dt * timeScale;
-      const speedMul =
-        diff.speed * (1 + g.elapsed * diff.ramp) * (g.rage > 0 ? 1.55 : 1) * timeScale;
+      // Разгон ограничен потолком: иначе через минуту снаряды летят быстрее,
+      // чем их вообще можно заметить.
+      const ramp = Math.min(1.85, 1 + g.elapsed * diff.ramp);
+      const speedMul = diff.speed * ramp * (g.rage > 0 ? 1.4 : 1) * timeScale;
 
       /* ярость */
       g.rageT -= dt;
@@ -222,15 +226,19 @@ export default function BurgerRain({ onExit }: { onExit: () => void }) {
             });
           }
         } else if (type === "fries") {
-          for (let i = 0; i < 3; i++) {
+          // фри летят изо рта веером, а не появляются из воздуха сбоку
+          for (let i = -1; i <= 1; i++) {
             g.projs.push({
-              x: hx + (Math.random() - 0.5) * W * 0.3, y: my - Math.random() * 40,
-              vx: (Math.random() - 0.5) * 0.06 * speedMul, vy: (0.3 + Math.random() * 0.1) * speedMul,
-              r: heroR * 0.34, type: "fries", rot: Math.random() * 6, vr: (Math.random() - 0.5) * 0.03, scored: false,
+              x: hx, y: my,
+              vx: (dirx + i * 0.22) * 0.15 * speedMul,
+              vy: (0.26 + Math.random() * 0.05) * speedMul,
+              r: heroR * 0.34, type: "fries", rot: Math.random() * 6,
+              vr: (Math.random() - 0.5) * 0.03, scored: false,
             });
           }
         } else {
-          const fast = type === "cheese" ? 1.45 : type === "shake" ? 0.78 : 1;
+          // чизбургер больше не разгоняется до неуловимого
+          const fast = type === "cheese" ? 1.16 : type === "shake" ? 0.78 : 1;
           g.projs.push({
             x: hx, y: my, vx: dirx * 0.18 * speedMul * fast,
             vy: (0.26 + Math.random() * 0.05) * speedMul * fast,
@@ -413,7 +421,7 @@ export default function BurgerRain({ onExit }: { onExit: () => void }) {
     const hx = g.px * W;
     const hyy = groundY - heroR;
     const blinkV = g.invuln > 0 && Math.floor(g.invuln / 90) % 2 === 0;
-    if (!blinkV) drawHero(ctx, hx, hyy, heroR, skin, g.pv, g.shield > 0);
+    if (!blinkV) drawHero(ctx, hx, hyy, heroR, skin, g.pv, g.shield > 0, heroFriend.look);
 
     // тень
     ctx.fillStyle = "rgba(0,0,0,0.34)";
@@ -452,7 +460,7 @@ export default function BurgerRain({ onExit }: { onExit: () => void }) {
       ctx.lineWidth = 6;
       ctx.strokeRect(3, 3, W - 6, H - 6);
     }
-  }, [mainFriend, skin, s.settings.difficulty]);
+  }, [mainFriend, skin, heroFriend, s.settings.difficulty]);
 
   const photoImg = useRef<HTMLImageElement | null>(null);
   useEffect(() => {
@@ -702,6 +710,7 @@ function drawBonus(ctx: CanvasRenderingContext2D, b: Bonus, x: number, y: number
 function drawHero(
   ctx: CanvasRenderingContext2D, x: number, y: number, r: number,
   skin: (typeof HERO_SKINS)[number], vel: number, shield: boolean,
+  look?: import("../core/types").FriendLook,
 ) {
   ctx.save();
   ctx.translate(x, y);
@@ -749,42 +758,45 @@ function drawHero(
   ctx.lineTo(r * 1.05 + lean * r * 0.6, r * 0.55);
   ctx.stroke();
 
-  // голова
-  ctx.fillStyle = skin.body;
-  ctx.beginPath();
-  ctx.arc(0, -r * 0.72, r * 0.56, 0, Math.PI * 2);
-  ctx.fill();
-  // глаза
-  ctx.fillStyle = "#0d0d12";
-  ctx.beginPath();
-  ctx.arc(-r * 0.2, -r * 0.78, r * 0.09, 0, Math.PI * 2);
-  ctx.arc(r * 0.2, -r * 0.78, r * 0.09, 0, Math.PI * 2);
-  ctx.fill();
+  // голова: настоящее лицо игрока, если оно есть
+  if (look) {
+    drawHead(ctx, look, 0, -r * 0.82, r * 0.62, { mouth: 0.12 });
+  } else {
+    ctx.fillStyle = skin.body;
+    ctx.beginPath();
+    ctx.arc(0, -r * 0.72, r * 0.56, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "#0d0d12";
+    ctx.beginPath();
+    ctx.arc(-r * 0.2, -r * 0.78, r * 0.09, 0, Math.PI * 2);
+    ctx.arc(r * 0.2, -r * 0.78, r * 0.09, 0, Math.PI * 2);
+    ctx.fill();
+  }
 
   // шляпы
   ctx.fillStyle = skin.accentPart;
   if (skin.hat === 1) {
     ctx.beginPath();
-    ctx.ellipse(0, -r * 1.12, r * 0.58, r * 0.34, 0, Math.PI, 0);
+    ctx.ellipse(0, -r * 1.26, r * 0.6, r * 0.34, 0, Math.PI, 0);
     ctx.fill();
     ctx.beginPath();
-    ctx.ellipse(-r * 0.3, -r * 1.08, r * 0.7, r * 0.1, 0, Math.PI, 0);
+    ctx.ellipse(-r * 0.3, -r * 1.22, r * 0.74, r * 0.1, 0, Math.PI, 0);
     ctx.fill();
   } else if (skin.hat === 2) {
     ctx.beginPath();
-    ctx.moveTo(-r * 0.5, -r * 1.14);
-    ctx.lineTo(-r * 0.36, -r * 1.6);
-    ctx.lineTo(-r * 0.16, -r * 1.28);
-    ctx.lineTo(0, -r * 1.7);
-    ctx.lineTo(r * 0.16, -r * 1.28);
-    ctx.lineTo(r * 0.36, -r * 1.6);
-    ctx.lineTo(r * 0.5, -r * 1.14);
+    ctx.moveTo(-r * 0.54, -r * 1.3);
+    ctx.lineTo(-r * 0.38, -r * 1.78);
+    ctx.lineTo(-r * 0.17, -r * 1.44);
+    ctx.lineTo(0, -r * 1.88);
+    ctx.lineTo(r * 0.17, -r * 1.44);
+    ctx.lineTo(r * 0.38, -r * 1.78);
+    ctx.lineTo(r * 0.54, -r * 1.3);
     ctx.closePath();
     ctx.fill();
   } else if (skin.hat === 3) {
-    ctx.fillRect(-r * 0.4, -r * 1.85, r * 0.8, r * 0.72);
+    ctx.fillRect(-r * 0.42, -r * 2.04, r * 0.84, r * 0.74);
     ctx.beginPath();
-    ctx.ellipse(0, -r * 1.13, r * 0.78, r * 0.11, 0, 0, Math.PI * 2);
+    ctx.ellipse(0, -r * 1.3, r * 0.82, r * 0.11, 0, 0, Math.PI * 2);
     ctx.fill();
   } else if (skin.hat === 4) {
     ctx.strokeStyle = skin.accentPart;
@@ -792,7 +804,7 @@ function drawHero(
     ctx.shadowColor = skin.accentPart;
     ctx.shadowBlur = 14;
     ctx.beginPath();
-    ctx.ellipse(0, -r * 1.45, r * 0.46, r * 0.14, 0, 0, Math.PI * 2);
+    ctx.ellipse(0, -r * 1.66, r * 0.48, r * 0.14, 0, 0, Math.PI * 2);
     ctx.stroke();
     ctx.shadowBlur = 0;
   }

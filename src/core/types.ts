@@ -1,6 +1,6 @@
 export type Rarity = "common" | "rare" | "epic" | "legend";
 
-export type GameId = "burger" | "clicker" | "merge" | "whack";
+export type GameId = "burger" | "clicker" | "bite" | "dino" | "merge" | "whack";
 
 export interface FriendLook {
   skin: string;
@@ -103,5 +103,7 @@ export interface SaveState {
     whacks: number;
     casesOpened: number;
     sessions: number;
+    bites: number;
+    metersRun: number;
   };
 }

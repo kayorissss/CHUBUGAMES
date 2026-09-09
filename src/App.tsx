@@ -13,6 +13,8 @@ import BurgerRain from "./games/BurgerRain";
 import Clicker from "./games/Clicker";
 import MergeHeads from "./games/MergeHeads";
 import WhackFriend from "./games/WhackFriend";
+import ArtyomBite from "./games/ArtyomBite";
+import ShitovRun from "./games/ShitovRun";
 import { unlockAudio } from "./core/fx";
 import type { GameId } from "./core/types";
 
@@ -51,7 +53,7 @@ function Splash({ done }: { done: () => void }) {
             WebkitTextFillColor: "transparent",
           }}
         >
-          CHUBGAMES
+          ЧУБУГЕЙМ
         </div>
         <motion.div
           initial={{ opacity: 0 }}
@@ -59,7 +61,7 @@ function Splash({ done }: { done: () => void }) {
           transition={{ delay: 0.5 }}
           className="t-label mt-2"
         >
-          мини-игры про своих
+          мини-игры про своих пацанов
         </motion.div>
       </motion.div>
       <motion.div
@@ -148,6 +150,8 @@ function Shell() {
             {game === "clicker" && <Clicker onExit={() => setGame(null)} />}
             {game === "merge" && <MergeHeads onExit={() => setGame(null)} />}
             {game === "whack" && <WhackFriend onExit={() => setGame(null)} />}
+            {game === "bite" && <ArtyomBite onExit={() => setGame(null)} />}
+            {game === "dino" && <ShitovRun onExit={() => setGame(null)} />}
           </motion.div>
         )}
       </AnimatePresence>

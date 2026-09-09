@@ -76,8 +76,8 @@ jobs:
 
       - name: Set app label
         run: |
-          sed -i 's|<string name="app_name">.*</string>|<string name="app_name">CHUBGAMES</string>|' android/app/src/main/res/values/strings.xml
-          sed -i 's|<string name="title_activity_main">.*</string>|<string name="title_activity_main">CHUBGAMES</string>|' android/app/src/main/res/values/strings.xml
+          sed -i 's|<string name="app_name">.*</string>|<string name="app_name">ЧУБУГЕЙМ</string>|' android/app/src/main/res/values/strings.xml
+          sed -i 's|<string name="title_activity_main">.*</string>|<string name="title_activity_main">ЧУБУГЕЙМ</string>|' android/app/src/main/res/values/strings.xml
           cat android/app/src/main/res/values/strings.xml
 
       # Ставим иконку приложения. Готовые PNG лежат в репозитории (android-icons/),
@@ -130,11 +130,11 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: latest
-          name: CHUBGAMES — последняя сборка
+          name: ЧУБУГЕЙМ — последняя сборка
           body: |
             version: ${{ env.APP_VER }}
 
-            ## 🍔 CHUBGAMES
+            ## 🍔 ЧУБУГЕЙМ
 
             Оффлайн-приложение с мини-играми про друзей. Интернет не нужен.
 
