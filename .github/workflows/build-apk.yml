@@ -1,14 +1,14 @@
-name: Build Android APK
+name: Build CHUBGAMES APK
 
 on:
   push:
-    branches: [main, master]
+    branches: [main, master, "arena/**"]
   workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -16,45 +16,48 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
-          cache: 'npm'
+          node-version: "20"
+          cache: "npm"
 
       - name: Install dependencies
         run: npm install
 
-      - name: Build web app
+      - name: Build web app (single offline HTML)
         run: npm run build
 
       - name: Setup Java JDK
         uses: actions/setup-java@v4
         with:
-          distribution: 'temurin'
-          java-version: '21'
+          distribution: "temurin"
+          java-version: "21"
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
       - name: Install Capacitor
-        run: |
-          npm install @capacitor/core @capacitor/cli @capacitor/android
+        run: npm install @capacitor/core @capacitor/cli @capacitor/android
 
       - name: Initialize Capacitor
-        run: |
-          npx cap init "NFC Tester" "com.nfctester.app" --web-dir dist
+        run: npx cap init "CHUBGAMES" "com.chubgames.app" --web-dir dist
 
       - name: Add Android platform
         run: npx cap add android
 
-      # НОВЫЙ ШАГ: исправляем конфликт версий Kotlin
-      - name: Fix Kotlin version conflict
+      - name: Configure Android app (portrait, fullscreen, no internet needed)
         run: |
-          echo "allprojects { configurations.all { resolutionStrategy { force 'org.jetbrains.kotlin:kotlin-stdlib:1.8.22', 'org.jetbrains.kotlin:kotlin-stdlib-jdk7:1.8.22', 'org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.8.22' } } }" >> android/build.gradle
+          MANIFEST=android/app/src/main/AndroidManifest.xml
+          # Игра портретная и офлайновая: фиксируем ориентацию, разрешаем вибрацию
+          sed -i 's|<activity|<activity android:screenOrientation="portrait"|' $MANIFEST
+          sed -i '/<application/i\    <uses-permission android:name="android.permission.VIBRATE" />' $MANIFEST
+          # Убираем разрешение на интернет — приложение полностью автономное
+          sed -i '/android.permission.INTERNET/d' $MANIFEST
+          cat $MANIFEST
 
-      - name: Update Android manifest for NFC
+      - name: Set app label
         run: |
-          # Add NFC permissions to AndroidManifest.xml
-          sed -i 's/<manifest/<manifest xmlns:tools="http:\/\/schemas.android.com\/tools"/' android/app/src/main/AndroidManifest.xml
-          sed -i '/<application/i\    <uses-permission android:name="android.permission.NFC" \/>\n    <uses-permission android:name="android.permission.VIBRATE" \/>\n    <uses-feature android:name="android.hardware.nfc" android:required="false" \/>' android/app/src/main/AndroidManifest.xml
+          sed -i 's|<string name="app_name">.*</string>|<string name="app_name">CHUBGAMES</string>|' android/app/src/main/res/values/strings.xml
+          sed -i 's|<string name="title_activity_main">.*</string>|<string name="title_activity_main">CHUBGAMES</string>|' android/app/src/main/res/values/strings.xml
+          cat android/app/src/main/res/values/strings.xml
 
       - name: Sync Capacitor
         run: npx cap sync android
@@ -65,15 +68,14 @@ jobs:
       - name: Build Debug APK
         run: |
           cd android
-          ./gradlew assembleDebug
+          ./gradlew assembleDebug --no-daemon
 
       - name: Rename APK
-        run: |
-          mv android/app/build/outputs/apk/debug/app-debug.apk android/app/build/outputs/apk/debug/NFC-Tester.apk
+        run: mv android/app/build/outputs/apk/debug/app-debug.apk CHUBGAMES.apk
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: NFC-Tester-APK
-          path: android/app/build/outputs/apk/debug/NFC-Tester.apk
-          retention-days: 30
+          name: CHUBGAMES-APK
+          path: CHUBGAMES.apk
+          retention-days: 90

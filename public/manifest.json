@@ -1,12 +1,14 @@
 {
-  "name": "NFC Tester",
-  "short_name": "NFC Tester",
-  "description": "Диагностика NFC модуля и сканирование меток",
+  "name": "CHUBGAMES",
+  "short_name": "CHUBGAMES",
+  "description": "Мини-игры про друзей. Работает без интернета.",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
   "orientation": "portrait",
-  "background_color": "#09090b",
-  "theme_color": "#09090b",
+  "background_color": "#08080A",
+  "theme_color": "#08080A",
+  "categories": ["games", "entertainment"],
   "icons": [
     {
       "src": "/icon-192.png",

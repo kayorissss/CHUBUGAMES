@@ -1,79 +1,334 @@
 @import "tailwindcss";
 
+/* ============================================================
+   CHUBGAMES — Liquid Glass 2026 design system
+   Палитра: чёрный / тёмно-серый / серый / белый + один акцент
+   ============================================================ */
+
+:root {
+  /* Нейтральная шкала */
+  --n-000: #08080a;
+  --n-050: #0e0e11;
+  --n-100: #141418;
+  --n-200: #1c1c21;
+  --n-300: #26262d;
+  --n-400: #34343d;
+  --n-500: #4a4a55;
+  --n-600: #6b6b78;
+  --n-700: #8f8f9c;
+  --n-800: #bcbcc6;
+  --n-900: #f2f2f5;
+
+  --bg: var(--n-000);
+  --text: var(--n-900);
+  --text-dim: var(--n-700);
+  --text-mute: var(--n-600);
+
+  /* Стекло */
+  --glass-bg: rgba(255, 255, 255, 0.055);
+  --glass-bg-strong: rgba(255, 255, 255, 0.085);
+  --glass-brd: rgba(255, 255, 255, 0.1);
+  --glass-hi: rgba(255, 255, 255, 0.42);
+  --glass-blur: 28px;
+  --glass-shadow: 0 12px 40px -12px rgba(0, 0, 0, 0.85);
+
+  /* Акцент (перебивается из JS) */
+  --acc: #ffb020;
+  --acc-soft: rgba(255, 176, 32, 0.16);
+  --acc-glow: rgba(255, 176, 32, 0.42);
+  --acc-ink: #100c02;
+
+  --r-sm: 12px;
+  --r-md: 18px;
+  --r-lg: 26px;
+  --r-xl: 34px;
+
+  --sat: env(safe-area-inset-top, 0px);
+  --sab: env(safe-area-inset-bottom, 0px);
+
+  color-scheme: dark;
+}
+
+/* Светлая тема */
+html.light {
+  --n-000: #f4f4f6;
+  --n-050: #eaeaee;
+  --n-100: #e2e2e7;
+  --n-200: #d6d6dd;
+  --n-300: #c4c4cd;
+  --n-400: #a8a8b4;
+  --n-500: #8a8a97;
+  --n-600: #6a6a77;
+  --n-700: #4c4c58;
+  --n-800: #2a2a33;
+  --n-900: #101014;
+
+  --bg: #ececed;
+  --text: var(--n-900);
+  --text-dim: var(--n-700);
+  --text-mute: var(--n-600);
+
+  --glass-bg: rgba(255, 255, 255, 0.5);
+  --glass-bg-strong: rgba(255, 255, 255, 0.72);
+  --glass-brd: rgba(255, 255, 255, 0.75);
+  --glass-hi: rgba(255, 255, 255, 0.95);
+  --glass-shadow: 0 12px 34px -14px rgba(20, 20, 30, 0.4);
+  color-scheme: light;
+}
+
 * {
   margin: 0;
   padding: 0;
   box-sizing: border-box;
   -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
 }
 
 html {
   font-size: 16px;
+  overscroll-behavior: none;
 }
 
-html, body, #root {
+html,
+body,
+#root {
   height: 100%;
   width: 100%;
   overflow: hidden;
 }
 
-/* Dark theme (default) */
-:root, .dark {
-  --bg-primary: #09090b;
-  --bg-secondary: #18181b;
-  --bg-card: rgba(39, 39, 42, 0.5);
-  --bg-card-solid: #27272a;
-  --border-color: rgba(63, 63, 70, 0.5);
-  --text-primary: #fafafa;
-  --text-secondary: #a1a1aa;
-  --text-muted: #71717a;
-  --accent: #dc2626;
-  --accent-light: #ef4444;
-  --success: #22c55e;
-  --warning: #f59e0b;
-}
-
-/* Light theme */
-.light {
-  --bg-primary: #ffffff;
-  --bg-secondary: #f4f4f5;
-  --bg-card: rgba(244, 244, 245, 0.8);
-  --bg-card-solid: #e4e4e7;
-  --border-color: rgba(212, 212, 216, 0.8);
-  --text-primary: #18181b;
-  --text-secondary: #52525b;
-  --text-muted: #a1a1aa;
-  --accent: #dc2626;
-  --accent-light: #ef4444;
-  --success: #16a34a;
-  --warning: #d97706;
-}
-
 body {
-  background: var(--bg-primary);
-  color: var(--text-primary);
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  font-family:
+    "Inter var", "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    "Helvetica Neue", system-ui, sans-serif;
+  font-feature-settings: "ss01", "cv11", "tnum";
   -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  user-select: none;
+  touch-action: manipulation;
 }
 
-::-webkit-scrollbar { width: 0; display: none; }
-
-/* Animations */
-@keyframes radar-sweep {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+/* ---------- Типографика ---------- */
+.t-display {
+  font-weight: 900;
+  letter-spacing: -0.045em;
+  line-height: 0.92;
+}
+.t-title {
+  font-weight: 800;
+  letter-spacing: -0.03em;
+}
+.t-label {
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  font-size: 0.62rem;
+  color: var(--text-mute);
+}
+.t-num {
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+.t-mono {
+  font-family: ui-monospace, "SF Mono", "JetBrains Mono", "Roboto Mono", monospace;
+  font-variant-numeric: tabular-nums;
 }
 
-@keyframes pulse-ring {
-  0%, 100% { transform: scale(1); opacity: 0.6; }
-  50% { transform: scale(1.15); opacity: 0.3; }
+/* ---------- Жидкое стекло ---------- */
+.glass {
+  position: relative;
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur)) saturate(180%);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(180%);
+  border: 1px solid var(--glass-brd);
+  box-shadow: var(--glass-shadow);
+  isolation: isolate;
+}
+.glass::before {
+  /* specular highlight — блик стекла сверху */
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(
+    170deg,
+    var(--glass-hi) 0%,
+    rgba(255, 255, 255, 0.06) 22%,
+    rgba(255, 255, 255, 0) 46%,
+    rgba(255, 255, 255, 0.05) 100%
+  );
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+  z-index: 2;
+}
+.glass::after {
+  /* внутреннее преломление */
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.07) 0%,
+    rgba(255, 255, 255, 0) 38%,
+    rgba(0, 0, 0, 0.12) 100%
+  );
+  pointer-events: none;
+  z-index: 1;
+}
+.glass > * {
+  position: relative;
+  z-index: 3;
+}
+.glass-strong {
+  background: var(--glass-bg-strong);
+}
+.glass-flat::after {
+  display: none;
 }
 
-@keyframes dot-orbit {
-  from { transform: rotate(0deg) translateX(60px) rotate(0deg); }
-  to { transform: rotate(360deg) translateX(60px) rotate(-360deg); }
+/* Акцентная стеклянная кнопка */
+.glass-acc {
+  background: linear-gradient(
+    170deg,
+    color-mix(in srgb, var(--acc) 92%, white),
+    var(--acc) 55%,
+    color-mix(in srgb, var(--acc) 78%, black)
+  );
+  color: var(--acc-ink);
+  border: 1px solid color-mix(in srgb, var(--acc) 60%, white);
+  box-shadow:
+    0 8px 26px -8px var(--acc-glow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.55);
 }
 
-.animate-radar { animation: radar-sweep 2s linear infinite; }
-.animate-pulse-ring { animation: pulse-ring 2s ease-in-out infinite; }
-.animate-orbit { animation: dot-orbit 3s linear infinite; }
+/* ---------- Фоновые «пятна света» ---------- */
+.aurora {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 0;
+}
+.aurora span {
+  position: absolute;
+  display: block;
+  border-radius: 50%;
+  filter: blur(70px);
+  opacity: 0.5;
+  will-change: transform;
+}
+.aurora .b1 {
+  width: 62vw;
+  height: 62vw;
+  left: -18vw;
+  top: -12vh;
+  background: radial-gradient(circle, var(--acc-glow), transparent 68%);
+  animation: drift1 26s ease-in-out infinite;
+}
+.aurora .b2 {
+  width: 56vw;
+  height: 56vw;
+  right: -20vw;
+  top: 26vh;
+  background: radial-gradient(circle, rgba(140, 145, 170, 0.4), transparent 68%);
+  animation: drift2 34s ease-in-out infinite;
+}
+.aurora .b3 {
+  width: 70vw;
+  height: 70vw;
+  left: -10vw;
+  bottom: -26vh;
+  background: radial-gradient(circle, rgba(90, 92, 110, 0.42), transparent 70%);
+  animation: drift3 30s ease-in-out infinite;
+}
+@keyframes drift1 {
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+  50% { transform: translate3d(14vw, 10vh, 0) scale(1.16); }
+}
+@keyframes drift2 {
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1.08); }
+  50% { transform: translate3d(-16vw, -12vh, 0) scale(0.92); }
+}
+@keyframes drift3 {
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+  50% { transform: translate3d(12vw, -14vh, 0) scale(1.2); }
+}
+html.no-fx .aurora span { animation: none !important; }
+html.no-fx .glass { backdrop-filter: none; -webkit-backdrop-filter: none; background: var(--n-200); }
+
+/* ---------- Прочее ---------- */
+.scroll {
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+}
+.scroll::-webkit-scrollbar {
+  display: none;
+}
+
+.press {
+  transition:
+    transform 0.14s cubic-bezier(0.34, 1.56, 0.64, 1),
+    filter 0.14s ease;
+}
+.press:active {
+  transform: scale(0.955);
+  filter: brightness(1.12);
+}
+
+.acc-text { color: var(--acc); }
+.acc-bg { background: var(--acc); }
+
+.divider {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--glass-brd), transparent);
+}
+
+.shimmer {
+  background: linear-gradient(
+    100deg,
+    transparent 20%,
+    rgba(255, 255, 255, 0.16) 45%,
+    transparent 70%
+  );
+  background-size: 260% 100%;
+  animation: shim 2.4s linear infinite;
+}
+@keyframes shim {
+  from { background-position: 180% 0; }
+  to { background-position: -80% 0; }
+}
+
+.pulse-ring::after {
+  content: "";
+  position: absolute;
+  inset: -4px;
+  border-radius: inherit;
+  border: 2px solid var(--acc);
+  opacity: 0;
+  animation: pring 2s ease-out infinite;
+}
+@keyframes pring {
+  0% { opacity: 0.7; transform: scale(0.96); }
+  100% { opacity: 0; transform: scale(1.14); }
+}
+
+canvas {
+  display: block;
+  touch-action: none;
+}
+
+.rarity-common { --rc: #8f8f9c; }
+.rarity-rare { --rc: #5fa8ff; }
+.rarity-epic { --rc: #b07bff; }
+.rarity-legend { --rc: #ffb020; }
