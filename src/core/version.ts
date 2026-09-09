@@ -2,5 +2,5 @@
 export const APP_VERSION = "1.2.0";
 
 /** Репозиторий с релизами APK */
-export const UPDATE_REPO = "kayorissss/NFC-Check";
+export const UPDATE_REPO = "kayorissss/CHUBUGAMES";
 export const UPDATE_TAG = "latest";
