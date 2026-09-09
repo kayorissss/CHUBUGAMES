@@ -34,8 +34,14 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
+      - name: Install Android SDK packages
+        run: |
+          yes | sdkmanager --licenses > /dev/null 2>&1 || true
+          sdkmanager "platforms;android-35" "build-tools;35.0.0" "platform-tools"
+
+      # Capacitor 7 -> compileSdk 35 / AGP 8.7.2 (Capacitor 8 требует SDK 36 и падает на раннере)
       - name: Install Capacitor
-        run: npm install @capacitor/core @capacitor/cli @capacitor/android
+        run: npm install @capacitor/core@7 @capacitor/cli@7 @capacitor/android@7
 
       - name: Initialize Capacitor
         run: npx cap init "CHUBGAMES" "com.chubgames.app" --web-dir dist
@@ -43,14 +49,16 @@ jobs:
       - name: Add Android platform
         run: npx cap add android
 
-      - name: Configure Android app (portrait, fullscreen, no internet needed)
+      - name: Configure Android app (portrait, offline)
         run: |
           MANIFEST=android/app/src/main/AndroidManifest.xml
-          # Игра портретная и офлайновая: фиксируем ориентацию, разрешаем вибрацию
+          # Игра портретная
           sed -i 's|<activity|<activity android:screenOrientation="portrait"|' $MANIFEST
+          # Вибрация для хаптики
           sed -i '/<application/i\    <uses-permission android:name="android.permission.VIBRATE" />' $MANIFEST
-          # Убираем разрешение на интернет — приложение полностью автономное
+          # Приложение полностью автономно — интернет не нужен
           sed -i '/android.permission.INTERNET/d' $MANIFEST
+          echo "--- AndroidManifest.xml ---"
           cat $MANIFEST
 
       - name: Set app label
@@ -68,7 +76,7 @@ jobs:
       - name: Build Debug APK
         run: |
           cd android
-          ./gradlew assembleDebug --no-daemon
+          ./gradlew assembleDebug --no-daemon --stacktrace
 
       - name: Rename APK
         run: mv android/app/build/outputs/apk/debug/app-debug.apk CHUBGAMES.apk
