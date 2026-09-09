@@ -13,6 +13,7 @@ import {
   isNative,
   type UpdateInfo,
 } from "../core/updater";
+import { UPDATE_REPO } from "../core/version";
 
 type Phase = "idle" | "checking" | "found" | "fresh" | "downloading" | "installing";
 
@@ -195,13 +196,27 @@ export default function Updater() {
 
       {err && (
         <div
-          className="t-body"
           style={{
-            marginTop: 12, padding: "10px 12px", borderRadius: "var(--r-md)",
-            background: "var(--btn-bg)", color: "var(--danger)",
+            marginTop: 12, padding: "11px 12px", borderRadius: "var(--r-md)",
+            background: "var(--btn-bg)",
           }}
         >
-          {err}
+          <div className="t-body" style={{ color: "var(--danger)", lineHeight: 1.5 }}>
+            {err}
+          </div>
+          <a
+            href={`https://github.com/${UPDATE_REPO}/releases/latest`}
+            target="_blank"
+            rel="noreferrer"
+            className="t-caption flex items-center"
+            style={{
+              gap: 6, marginTop: 9, padding: "8px 11px",
+              borderRadius: "var(--r-sm)", border: "1px solid var(--btn-brd)",
+              width: "fit-content", color: "var(--text)",
+            }}
+          >
+            <Icon name="download" size={12} /> Скачать вручную
+          </a>
         </div>
       )}
 

@@ -11,6 +11,7 @@
 
 import { Capacitor } from "@capacitor/core";
 import { Filesystem, Directory } from "@capacitor/filesystem";
+import type { PluginListenerHandle } from "@capacitor/core";
 import { FileOpener } from "@capacitor-community/file-opener";
 import { APP_VERSION, UPDATE_REPO, UPDATE_TAG } from "./version";
 
@@ -74,7 +75,10 @@ export async function checkForUpdate(): Promise<UpdateInfo | null> {
       cache: "no-store",
     });
   } catch {
-    throw new Error("Нет интернета");
+    throw new Error(
+      "Не удалось связаться с GitHub. Проверь интернет — " +
+      "если провайдер режет GitHub, включи VPN.",
+    );
   }
   if (res.status === 404) throw new Error("Релиз не найден");
   if (!res.ok) throw new Error(`GitHub ответил ${res.status}`);
@@ -100,13 +104,63 @@ export async function checkForUpdate(): Promise<UpdateInfo | null> {
   return isNewer(info.version, APP_VERSION) ? info : null;
 }
 
-/** Скачивание APK с реальным прогрессом (ReadableStream) */
+/**
+ * Скачивание APK.
+ *
+ * ВАЖНО: обычный fetch() здесь не работает и падает с «Failed to fetch».
+ * GitHub отдаёт ссылку на релиз с редиректом на release-assets.githubusercontent.com,
+ * а этот домен НЕ присылает заголовок Access-Control-Allow-Origin. Для WebView
+ * это межсайтовый запрос, браузерный движок его блокирует ещё до ответа сервера —
+ * поэтому и VPN не помогал: дело не в блокировке провайдера, а в CORS.
+ *
+ * Решение: на телефоне качаем нативно через Filesystem.downloadFile —
+ * запрос уходит мимо WebView, никаких CORS-ограничений нет.
+ * В браузере (дев-режим) остаётся fetch как запасной путь.
+ */
+export async function downloadApkNative(
+  url: string,
+  name: string,
+  onProgress: (loaded: number, total: number) => void,
+): Promise<string> {
+  let handle: PluginListenerHandle | null = null;
+  try {
+    handle = await Filesystem.addListener("progress", (p) => {
+      onProgress(p.bytes, p.contentLength);
+    });
+
+    const res = await Filesystem.downloadFile({
+      url,
+      path: name,
+      directory: Directory.Cache,
+      progress: true,
+      recursive: true,
+    });
+
+    const { uri } = await Filesystem.getUri({
+      path: name,
+      directory: Directory.Cache,
+    });
+    return res.path || uri;
+  } finally {
+    await handle?.remove();
+  }
+}
+
+/** Скачивание через fetch — только для браузера/дев-режима */
 export async function downloadApk(
   url: string,
   onProgress: (loaded: number, total: number) => void,
   signal?: AbortSignal,
 ): Promise<Blob> {
-  const res = await fetch(url, { signal, cache: "no-store" });
+  let res: Response;
+  try {
+    res = await fetch(url, { signal, cache: "no-store" });
+  } catch {
+    throw new Error(
+      "Не удалось скачать файл. Проверь соединение или скачай APK " +
+      "вручную со страницы релиза.",
+    );
+  }
   if (!res.ok) throw new Error(`Загрузка не удалась (${res.status})`);
 
   const total = Number(res.headers.get("content-length") || 0);
@@ -189,8 +243,17 @@ export async function downloadAndInstall(
   onProgress: (loaded: number, total: number) => void,
   signal?: AbortSignal,
 ) {
+  const name = `CHUBGAMES-${info.version}.apk`;
+
+  // На телефоне качаем нативно: fetch упёрся бы в CORS редиректа GitHub
+  if (isNative()) {
+    const uri = await downloadApkNative(info.url, name, onProgress);
+    await installApk(uri);
+    return uri;
+  }
+
   const blob = await downloadApk(info.url, onProgress, signal);
-  const uri = await saveApk(blob, `CHUBGAMES-${info.version}.apk`);
+  const uri = await saveApk(blob, name);
   await installApk(uri);
   return uri;
 }
