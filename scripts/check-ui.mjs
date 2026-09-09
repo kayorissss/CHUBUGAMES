@@ -74,7 +74,11 @@ const wf2=fs.readFileSync('.github/workflows/build-apk.yml','utf8');
 ok(/assembleRelease/.test(wf2),'CI собирает release-APK');
 ok(/setup-android-signing/.test(wf2),'APK подписывается постоянным ключом (нет «конфликта пакетов»)');
 ok(/REQUEST_INSTALL_PACKAGES/.test(wf2),'разрешение на установку обновлений выдано');
-ok(/version: \$\{\{ env\.APP_VER \}\}/.test(wf2),'релиз публикует номер версии для проверки обновлений');
+ok(/printf 'version: %s/.test(wf2) && /body_path: RELEASE_BODY\.md/.test(wf2),'релиз публикует номер версии для проверки обновлений');
+ok(fs.existsSync('RELEASE_NOTES.md'),'описание релиза лежит в репозитории (не хардкод в workflow)');
+ok(/### Что нового в 1\.5\.1/.test(fs.readFileSync('RELEASE_NOTES.md','utf8')),'описание релиза совпадает с текущей версией');
+ok(fs.existsSync('public/ads/promo1.mp4'),'рекламный ролик на месте');
+ok(fs.existsSync('dist/ads/promo1.mp4'),'ролик попал в сборку (значит будет в APK)');
 ok(fs.existsSync('android-signing/chubgames.p12'),'ключ подписи лежит в репозитории');
 
 console.log('\n[8] Контент про друзей');
