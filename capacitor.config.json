@@ -1,0 +1,15 @@
+{
+  "appId": "com.chubgames.app",
+  "appName": "CHUBGAMES",
+  "webDir": "dist",
+  "plugins": {
+    "BackgroundRunner": {
+      "label": "com.chubgames.update",
+      "src": "runners/update-check.js",
+      "event": "checkUpdate",
+      "repeat": true,
+      "interval": 60,
+      "autoStart": true
+    }
+  }
+}

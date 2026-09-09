@@ -2,7 +2,10 @@ node_modules/
 dist/
 android/
 ios/
-capacitor.config.*
+# capacitor.config.json теперь настоящий файл проекта: в нём настройки
+# фоновой проверки обновлений. Игнорируем только то, что генерит cap init.
+capacitor.config.ts
+capacitor.config.js
 *.apk
 .DS_Store
 *.log

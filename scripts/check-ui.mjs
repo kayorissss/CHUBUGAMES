@@ -1,4 +1,5 @@
 import fs from 'fs';
+import { execSync } from 'child_process';
 import path from 'path';
 let fails=0;
 const ok=(c,m)=>{console.log((c?'  ✓ ':'  ✗ ')+m); if(!c)fails++;};
@@ -100,6 +101,9 @@ ok(brn.includes('drawHead(ctx, look'),'человечек меняется вм�
 const stg=fs.readFileSync('src/pages/Settings.tsx','utf8');
 ok(stg.includes('t.me/kayorisan'),'есть ссылка на автора');
 const wfl=fs.readFileSync('.github/workflows/build-apk.yml','utf8');
+// Файл должен быть именно в индексе git: он был в .gitignore, из-за чего
+// сборка падала на «capacitor.config.json not found».
+ok(execSync('git ls-files capacitor.config.json').toString().trim()!=='','capacitor.config.json закоммичен, а не игнорируется');
 const cap=JSON.parse(fs.readFileSync('capacitor.config.json','utf8'));
 ok(cap.appId==='com.chubgames.app','package id прежний — обновление встанет поверх');
 ok(cap.plugins?.BackgroundRunner?.src==='runners/update-check.js','фоновая проверка обновлений настроена');
