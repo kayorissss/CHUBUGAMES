@@ -21,6 +21,9 @@ import { APP_VERSION } from "./version";
 
 const isNative = () => Capacitor.getPlatform() === "android";
 
+/** Мы в настоящем приложении на телефоне, а не в браузере? */
+export const isNativeApp = isNative;
+
 /** Должен совпадать с label в capacitor.config.ts */
 const RUNNER_LABEL = "com.chubgames.update";
 
@@ -95,6 +98,25 @@ export async function syncInstalledVersion(): Promise<void> {
   }
 }
 
+/**
+ * Выключает напоминания: гасим уже показанное уведомление и просим фоновый
+ * скрипт молчать. Системное разрешение при этом не трогаем — отозвать его
+ * из приложения всё равно нельзя, да и незачем.
+ */
+export async function disableBackgroundCheck(): Promise<void> {
+  const n = await notifications();
+  try { await n?.cancel({ notifications: [{ id: 7001 }] }); } catch { /* нечего гасить */ }
+  const r = await runner();
+  if (!r) return;
+  try {
+    await r.dispatchEvent({
+      label: RUNNER_LABEL,
+      event: "setEnabled",
+      details: { enabled: false },
+    });
+  } catch { /* движок недоступен */ }
+}
+
 /** Включает периодическую фоновую проверку. Вызывать после выдачи разрешения. */
 export async function enableBackgroundCheck(): Promise<boolean> {
   const r = await runner();
@@ -102,6 +124,11 @@ export async function enableBackgroundCheck(): Promise<boolean> {
   try {
     await r.requestPermissions({ apis: ["notifications"] });
     await syncInstalledVersion();
+    await r.dispatchEvent({
+      label: RUNNER_LABEL,
+      event: "setEnabled",
+      details: { enabled: true },
+    });
     return true;
   } catch {
     return false;

@@ -95,6 +95,8 @@ export interface Settings {
   fx: boolean;
   controls: "touchpad" | "buttons";
   difficulty: "chill" | "normal" | "insane";
+  /** Напоминать о новой версии, когда игра закрыта */
+  notifyUpdates: boolean;
 }
 
 export interface SaveState {

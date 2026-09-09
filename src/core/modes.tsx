@@ -24,6 +24,10 @@ type Store = {
   challengeClaimed: boolean;
   /** Серия пройденных испытаний подряд */
   challengeStreak: number;
+  /** Рекорд «Выживания»: сколько игр пройдено без единого провала */
+  survivalBest: number;
+  /** Рекорд «Спринта»: очков за две минуты */
+  sprintBest: number;
 };
 
 const EMPTY: Store = {
@@ -33,6 +37,8 @@ const EMPTY: Store = {
   challengeDone: false,
   challengeClaimed: false,
   challengeStreak: 0,
+  survivalBest: 0,
+  sprintBest: 0,
 };
 
 function read(): Store {
@@ -111,6 +117,51 @@ export type MarathonRun = {
   finished: boolean;
 };
 
+/**
+ * Выживание: игры идут подряд случайным образом, но провал любой из них
+ * заканчивает забег. Чем дальше — тем жирнее множитель наград.
+ */
+export type SurvivalRun = {
+  /** Сколько игр уже пройдено */
+  cleared: number;
+  /** Сумма очков */
+  total: number;
+  /** Текущая игра */
+  game: GameId;
+  /** Ждём решения игрока между играми */
+  pending: boolean;
+  /** Забег окончен */
+  finished: boolean;
+  /** Последний раунд провален */
+  failed: boolean;
+};
+
+/** Спринт: одна игра, две минуты, задача — выбить максимум очков */
+export type SprintRun = {
+  game: GameId;
+  /** Когда закончится, мс эпохи */
+  endsAt: number;
+  score: number;
+  finished: boolean;
+};
+
+export const SPRINT_MS = 2 * 60 * 1000;
+
+/** Порог, ниже которого раунд выживания считается проваленным */
+export function survivalTarget(cleared: number, best: number): number {
+  // Цель растёт вместе с серией, но всегда отталкивается от личного рекорда:
+  // новичку хватит четверти рекорда, к десятой игре нужно почти повторить его.
+  const k = 0.25 + Math.min(cleared, 10) * 0.07;
+  return Math.max(1, Math.floor(best * k));
+}
+
+/** Множитель наград за длину серии выживания */
+export function survivalMult(cleared: number): number {
+  // Потолок нужен: цель раунда перестаёт расти после десятой игры, и без
+  // ограничения сильный игрок фармил бы бесконечно растущий множитель.
+  return 1 + Math.min(cleared, 12) * 0.35;
+}
+
 export function marathonQueue(): GameId[] {
   const pool = [...ALL_GAMES];
   const out: GameId[] = [];
@@ -132,7 +183,21 @@ type Ctx = {
   challengeClaimed: boolean;
   challengeStreak: number;
 
+  /** Активное выживание */
+  survival: SurvivalRun | null;
+  /** Активный спринт */
+  sprint: SprintRun | null;
+
   startMarathon: () => void;
+  startSurvival: () => void;
+  /** Экран итогов сообщает результат раунда выживания */
+  reportSurvival: (score: number) => void;
+  /** Следующая игра в выживании */
+  nextSurvival: () => void;
+  closeSurvival: () => void;
+  startSprint: (g: GameId) => void;
+  reportSprint: (score: number) => void;
+  closeSprint: () => void;
   /** Вызывается экраном итогов игры: записать очки раунда */
   reportRound: (score: number) => void;
   /** Перейти к следующему раунду */
@@ -150,19 +215,25 @@ type Ctx = {
 const ModesCtx = createContext<Ctx | null>(null);
 
 export function ModesProvider({
-  children, onSwitchGame, currentGame = null,
+  children, onSwitchGame, currentGame = null, bestOf,
 }: {
   children: React.ReactNode;
   /** Переключить активную мини-игру (null — выйти в меню) */
   onSwitchGame: (g: GameId | null) => void;
   /** Какая мини-игра открыта сейчас */
   currentGame?: GameId | null;
+  /** Личный рекорд в игре — нужен «Выживанию», чтобы посчитать цель раунда */
+  bestOf: (g: GameId) => number;
 }) {
   const [store, setStore] = useState<Store>(() => read());
   const [run, setRun] = useState<MarathonRun | null>(null);
+  const [survival, setSurvival] = useState<SurvivalRun | null>(null);
+  const [sprint, setSprint] = useState<SprintRun | null>(null);
   const challenge = useMemo(() => dailyChallenge(), []);
   const switchRef = useRef(onSwitchGame);
   switchRef.current = onSwitchGame;
+  const bestRef = useRef(bestOf);
+  bestRef.current = bestOf;
 
   // Новый день — сбрасываем отметки испытания
   useEffect(() => {
@@ -229,6 +300,85 @@ export function ModesProvider({
     switchRef.current(null);
   }, []);
 
+  /* ───────────────────────── Выживание ───────────────────────── */
+
+  const pickGame = useCallback((exclude?: GameId): GameId => {
+    const pool = ALL_GAMES.filter((g) => g !== exclude);
+    return pool[Math.floor(Math.random() * pool.length)];
+  }, []);
+
+  const startSurvival = useCallback(() => {
+    const g = pickGame();
+    setSurvival({ cleared: 0, total: 0, game: g, pending: false, finished: false, failed: false });
+    switchRef.current(g);
+  }, [pickGame]);
+
+  const reportSurvival = useCallback((score: number) => {
+    setSurvival((r) => {
+      if (!r || r.pending || r.finished) return r;
+      // Цель считаем от личного рекорда в этой игре — она лежит в основном
+      // сейве, поэтому берём её через окно, а не через стор режимов.
+      const best = bestRef.current(r.game);
+      const need = survivalTarget(r.cleared, best);
+      const ok = score >= need;
+      if (!ok) {
+        setStore((prev) => {
+          const next: Store = { ...prev, survivalBest: Math.max(prev.survivalBest, r.cleared) };
+          write(next);
+          return next;
+        });
+        return { ...r, pending: true, finished: true, failed: true, total: r.total + score };
+      }
+      return { ...r, pending: true, cleared: r.cleared + 1, total: r.total + score };
+    });
+  }, []);
+
+  const nextSurvival = useCallback(() => {
+    setSurvival((r) => {
+      if (!r || r.finished) return r;
+      const g = pickGame(r.game);
+      switchRef.current(g);
+      return { ...r, game: g, pending: false };
+    });
+  }, [pickGame]);
+
+  const closeSurvival = useCallback(() => {
+    setSurvival(null);
+    switchRef.current(null);
+  }, []);
+
+  /* ────────────────────────── Спринт ────────────────────────── */
+
+  const startSprint = useCallback((g: GameId) => {
+    setSprint({ game: g, endsAt: Date.now() + SPRINT_MS, score: 0, finished: false });
+    switchRef.current(g);
+  }, []);
+
+  const reportSprint = useCallback((score: number) => {
+    setSprint((r) => {
+      if (!r || r.finished) return r;
+      const total = r.score + score;
+      const timeUp = Date.now() >= r.endsAt;
+      if (timeUp) {
+        setStore((prev) => {
+          const next: Store = { ...prev, sprintBest: Math.max(prev.sprintBest, total) };
+          write(next);
+          return next;
+        });
+        return { ...r, score: total, finished: true };
+      }
+      // время ещё есть — сразу перезапускаем ту же игру
+      switchRef.current(null);
+      setTimeout(() => switchRef.current(r.game), 30);
+      return { ...r, score: total };
+    });
+  }, []);
+
+  const closeSprint = useCallback(() => {
+    setSprint(null);
+    switchRef.current(null);
+  }, []);
+
   const reportChallenge = useCallback(
     (g: GameId, score: number) => {
       if (store.challengeDone) return false;
@@ -254,7 +404,16 @@ export function ModesProvider({
     challengeClaimed: store.challengeClaimed,
     challengeStreak: store.challengeStreak,
     currentGame,
+    survival,
+    sprint,
     startMarathon,
+    startSurvival,
+    reportSurvival,
+    nextSurvival,
+    closeSurvival,
+    startSprint,
+    reportSprint,
+    closeSprint,
     reportRound,
     nextRound,
     closeMarathon,

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { tr } from "../core/i18n";
 import { AnimatePresence, motion } from "framer-motion";
 import { Panel, Screen, Tap } from "../ui/Glass";
 import Icon from "../ui/Icon";
@@ -17,11 +18,11 @@ import {
 type Tab = "slots" | "cases" | "battle" | "upgrade" | "stuff";
 
 const TABS: { id: Tab; name: string }[] = [
-  { id: "slots",   name: "СЛОТЫ" },
-  { id: "cases",   name: "КЕЙСЫ" },
-  { id: "battle",  name: "БАТЛ" },
-  { id: "upgrade", name: "АПГРЕЙД" },
-  { id: "stuff",   name: "ВЕЩИ" },
+  { id: "slots",   name: tr("СЛОТЫ") },
+  { id: "cases",   name: tr("КЕЙСЫ") },
+  { id: "battle",  name: tr("БАТЛ") },
+  { id: "upgrade", name: tr("АПГРЕЙД") },
+  { id: "stuff",   name: tr("ВЕЩИ") },
 ];
 
 /** Значок символа слота */
@@ -66,7 +67,7 @@ export default function Casino({ onBack }: { onBack: () => void }) {
     save({ chips: g.chips + FREE_CHIPS, lastFree: Date.now() });
     sfx.coin?.();
     haptic("success");
-    toast({ title: "Жетоны получены", sub: `+${FREE_CHIPS}`, icon: "coin", tone: "gold" });
+    toast({ title: tr("Жетоны получены"), sub: `+${FREE_CHIPS}`, icon: "coin", tone: "gold" });
   };
 
   const freeLeft = freeChipsIn(g);
@@ -75,8 +76,8 @@ export default function Casino({ onBack }: { onBack: () => void }) {
 
   return (
     <Screen
-      title="КАЗИНО"
-      sub="Играем на жетонах — фарм в безопасности"
+      title={tr("КАЗИНО")}
+      sub={tr("Играем на жетонах — фарм в безопасности")}
       right={
         <button
           type="button"
@@ -111,7 +112,7 @@ export default function Casino({ onBack }: { onBack: () => void }) {
             <Icon name="ticket" size={20} />
           </span>
           <span className="flex-1 min-w-0">
-            <span className="t-label block">Жетоны</span>
+            <span className="t-label block">{tr("Жетоны")}</span>
             <span className="t-num block acc-text" style={{ fontSize: 26, lineHeight: 1.1 }}>
               {fmt(g.chips)}
             </span>
@@ -271,7 +272,7 @@ function Slots({ g, save }: { g: GambleStore; save: (p: Partial<GambleStore>) =>
                 className="t-title-sm"
                 style={{ color: win > 0 ? "#59FF9E" : "var(--text-mute)", fontSize: 14 }}
               >
-                {win > 0 ? `+${fmt(win)} жетонов` : "Мимо"}
+                {win > 0 ? `+${fmt(win)} жетонов` : tr("Мимо")}
               </motion.div>
             )}
           </AnimatePresence>
@@ -310,7 +311,7 @@ function Slots({ g, save }: { g: GambleStore; save: (p: Partial<GambleStore>) =>
 
       {/* Таблица выплат */}
       <Panel r="lg" style={{ padding: 14 }}>
-        <div className="t-label" style={{ marginBottom: 10 }}>Выплаты за тройку</div>
+        <div className="t-label" style={{ marginBottom: 10 }}>{tr("Выплаты за тройку")}</div>
         {SLOT_SYMBOLS.map((s) => (
           <div
             key={s.id}
@@ -318,13 +319,11 @@ function Slots({ g, save }: { g: GambleStore; save: (p: Partial<GambleStore>) =>
             style={{ gap: 10, padding: "6px 0" }}
           >
             <SlotGlyph id={s.id} size={18} />
-            <span className="t-caption flex-1">три подряд</span>
+            <span className="t-caption flex-1">{tr("три подряд")}</span>
             <span className="t-num" style={{ fontSize: 12 }}>×{s.pay3}</span>
           </div>
         ))}
-        <div className="t-caption" style={{ marginTop: 8, lineHeight: 1.5 }}>
-          Пара тоже платит, но меньше.
-        </div>
+        <div className="t-caption" style={{ marginTop: 8, lineHeight: 1.5 }}>{tr("Пара тоже платит, но меньше.")}</div>
       </Panel>
     </>
   );
@@ -500,9 +499,7 @@ function Cases({ g, save }: { g: GambleStore; save: (p: Partial<GambleStore>) =>
                       className="w-full py-3.5 t-title"
                       style={{ fontSize: 14 }}
                       sound="coin"
-                    >
-                      ЗАБРАТЬ
-                    </Tap>
+                    >{tr("ЗАБРАТЬ")}</Tap>
                   </Panel>
                 </motion.div>
               )}
@@ -572,13 +569,13 @@ function Battle({ g, save }: { g: GambleStore; save: (p: Partial<GambleStore>) =
     <>
       {!live ? (
         <Panel r="lg" style={{ padding: 15 }}>
-          <div className="t-title-sm" style={{ marginBottom: 4 }}>Кейс-батл</div>
+          <div className="t-title-sm" style={{ marginBottom: 4 }}>{tr("Кейс-батл")}</div>
           <div className="t-caption" style={{ marginBottom: 14, lineHeight: 1.5 }}>
             Открываете кейсы одновременно с соперником. У кого сумма ценности
             больше — забирает все предметы, включая чужие.
           </div>
 
-          <div className="t-label" style={{ marginBottom: 8 }}>Кейс</div>
+          <div className="t-label" style={{ marginBottom: 8 }}>{tr("Кейс")}</div>
           <div className="flex" style={{ gap: 6, marginBottom: 14 }}>
             {GAMBLE_CASES.map((x) => (
               <button
@@ -598,7 +595,7 @@ function Battle({ g, save }: { g: GambleStore; save: (p: Partial<GambleStore>) =
             ))}
           </div>
 
-          <div className="t-label" style={{ marginBottom: 8 }}>Раундов</div>
+          <div className="t-label" style={{ marginBottom: 8 }}>{tr("Раундов")}</div>
           <div className="flex" style={{ gap: 6, marginBottom: 16 }}>
             {[1, 3, 5].map((r) => (
               <button
@@ -638,7 +635,7 @@ function Battle({ g, save }: { g: GambleStore; save: (p: Partial<GambleStore>) =
         <Panel r="lg" style={{ padding: 15 }}>
           <div className="flex" style={{ gap: 10, marginBottom: 12 }}>
             <div className="flex-1 text-center">
-              <div className="t-label">ТЫ</div>
+              <div className="t-label">{tr("ТЫ")}</div>
               <div className="t-num acc-text" style={{ fontSize: 20 }}>
                 {fmt(live.list.slice(0, step).reduce((a, b) => a + b.mine.value, 0))}
               </div>
@@ -699,7 +696,7 @@ function Battle({ g, save }: { g: GambleStore; save: (p: Partial<GambleStore>) =
                   color: live.win ? "#59FF9E" : "#FF6B8A",
                 }}
               >
-                {live.win ? "ПОБЕДА" : "ПРОИГРЫШ"}
+                {live.win ? "ПОБЕДА" : tr("ПРОИГРЫШ")}
               </div>
               <Tap
                 onClick={() => { setLive(null); setStep(0); sfx.click(); }}
@@ -708,7 +705,7 @@ function Battle({ g, save }: { g: GambleStore; save: (p: Partial<GambleStore>) =
                 style={{ fontSize: 14 }}
                 sound="coin"
               >
-                {live.win ? "ЗАБРАТЬ ВСЁ" : "ЕЩЁ РАЗ"}
+                {live.win ? "ЗАБРАТЬ ВСЁ" : tr("ЕЩЁ РАЗ")}
               </Tap>
             </motion.div>
           )}
@@ -756,10 +753,8 @@ function Upgrade({ g, save }: { g: GambleStore; save: (p: Partial<GambleStore>) 
     return (
       <Panel r="lg" style={{ padding: 22, textAlign: "center" }}>
         <Icon name="case" size={30} />
-        <div className="t-title-sm" style={{ marginTop: 10 }}>Нечего апгрейдить</div>
-        <div className="t-caption" style={{ marginTop: 6 }}>
-          Открой кейс — появятся предметы.
-        </div>
+        <div className="t-title-sm" style={{ marginTop: 10 }}>{tr("Нечего апгрейдить")}</div>
+        <div className="t-caption" style={{ marginTop: 6 }}>{tr("Открой кейс — появятся предметы.")}</div>
       </Panel>
     );
   }
@@ -767,7 +762,7 @@ function Upgrade({ g, save }: { g: GambleStore; save: (p: Partial<GambleStore>) 
   return (
     <>
       <Panel r="lg" style={{ padding: 15, marginBottom: 12 }}>
-        <div className="t-label" style={{ marginBottom: 9 }}>Что ставим</div>
+        <div className="t-label" style={{ marginBottom: 9 }}>{tr("Что ставим")}</div>
         <div className="flex flex-wrap" style={{ gap: 6, marginBottom: 16 }}>
           {owned.map(([id, n]) => {
             const it = itemById(id);
@@ -795,7 +790,7 @@ function Upgrade({ g, save }: { g: GambleStore; save: (p: Partial<GambleStore>) 
 
         {from && (
           <>
-            <div className="t-label" style={{ marginBottom: 9 }}>Во что</div>
+            <div className="t-label" style={{ marginBottom: 9 }}>{tr("Во что")}</div>
             <div className="flex flex-wrap" style={{ gap: 6 }}>
               {targets.slice(0, 8).map((it) => {
                 const on = toId === it.id;
@@ -857,7 +852,7 @@ function Upgrade({ g, save }: { g: GambleStore; save: (p: Partial<GambleStore>) 
                 color: res ? "#59FF9E" : "#FF6B8A",
               }}
             >
-              {res ? "ПОДНЯЛ" : "СГОРЕЛО"}
+              {res ? "ПОДНЯЛ" : tr("СГОРЕЛО")}
             </motion.div>
           )}
 
@@ -868,7 +863,7 @@ function Upgrade({ g, save }: { g: GambleStore; save: (p: Partial<GambleStore>) 
             style={{ fontSize: 14, opacity: rolling ? 0.5 : 1 }}
             sound="power"
           >
-            {rolling ? "КРУТИМ…" : "АПГРЕЙД"}
+            {rolling ? "КРУТИМ…" : tr("АПГРЕЙД")}
           </Tap>
         </Panel>
       )}
@@ -907,10 +902,8 @@ function Stuff({ g, save }: { g: GambleStore; save: (p: Partial<GambleStore>) =>
     return (
       <Panel r="lg" style={{ padding: 22, textAlign: "center" }}>
         <Icon name="case" size={30} />
-        <div className="t-title-sm" style={{ marginTop: 10 }}>Пусто</div>
-        <div className="t-caption" style={{ marginTop: 6 }}>
-          Открывай кейсы и собирай украшения.
-        </div>
+        <div className="t-title-sm" style={{ marginTop: 10 }}>{tr("Пусто")}</div>
+        <div className="t-caption" style={{ marginTop: 6 }}>{tr("Открывай кейсы и собирай украшения.")}</div>
       </Panel>
     );
   }
@@ -962,7 +955,7 @@ function Stuff({ g, save }: { g: GambleStore; save: (p: Partial<GambleStore>) =>
                   border: `1px solid ${on ? "var(--acc)" : "var(--btn-brd)"}`,
                 }}
               >
-                {on ? "СНЯТЬ" : "НАДЕТЬ"}
+                {on ? "СНЯТЬ" : tr("НАДЕТЬ")}
               </button>
               <button
                 type="button"
@@ -980,9 +973,7 @@ function Stuff({ g, save }: { g: GambleStore; save: (p: Partial<GambleStore>) =>
           </Panel>
         );
       })}
-      <div className="t-caption" style={{ marginTop: 10, lineHeight: 1.5, textAlign: "center" }}>
-        Продажа даёт 60% ценности.
-      </div>
+      <div className="t-caption" style={{ marginTop: 10, lineHeight: 1.5, textAlign: "center" }}>{tr("Продажа даёт 60% ценности.")}</div>
     </>
   );
 }

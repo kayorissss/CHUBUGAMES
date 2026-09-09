@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { tr } from "../core/i18n";
 import { AnimatePresence, motion } from "framer-motion";
 import { useGame } from "../core/store";
 import { GAME_META } from "../core/content";
@@ -13,7 +14,17 @@ import AdModal from "../ui/AdModal";
 import { bonusesLeft, hasAds, noteBonus } from "../core/ads";
 import ModesPanel from "../ui/ModesPanel";
 import type { SubPage } from "../App";
-import { bossOfHour, canFight, readBosses, windowLeft } from "../core/bosses";
+import {
+  BOSS_EVERY_MS, BOSS_WINDOW_MS,
+  bossActive, bossOfHour, canFight, nextBossIn, readBosses, windowLeft,
+} from "../core/bosses";
+
+/** «5 мин» / «42 сек» — коротко, чтобы влезало в строку */
+function fmtLeft(ms: number): string {
+  const sec = Math.max(0, Math.ceil(ms / 1000));
+  if (sec < 60) return `${sec} ${tr("сек")}`;
+  return `${Math.ceil(sec / 60)} ${tr("мин")}`;
+}
 
 export default function Home({
   onPlay, onOpenProfile, onOpen,
@@ -31,10 +42,11 @@ export default function Home({
   const boss = bossOfHour();
   const bossOn = canFight(readBosses());
   useEffect(() => {
-    const iv = setInterval(() => setBossTick((n) => n + 1), 5000);
+    const iv = setInterval(() => setBossTick((n) => n + 1), 1000);
     return () => clearInterval(iv);
   }, []);
   void bossTick;
+  const bossLive = bossActive();
   // награда — как 3 минуты автодохода, но не меньше осмысленной суммы
   const adReward = Math.max(500, Math.floor(rate * 180) + s.level * 250);
   const featured = GAME_META.filter((g) => s.unlockedGames.includes(g.id)).sort(
@@ -116,6 +128,72 @@ export default function Home({
         </div>
       </Tap>
 
+      {/* Босс-воспитатель: карточка видна всегда, наверху */}
+      {onOpen && (
+        <Tap
+          onClick={() => onOpen("boss")}
+          r="lg"
+          className="w-full overflow-hidden relative"
+          style={{
+            padding: 0, marginBottom: 18, display: "block",
+            border: bossOn
+              ? "1.5px solid rgba(255,90,60,0.55)"
+              : "1px solid var(--surface-brd)",
+            background: bossOn ? "rgba(255,90,60,0.09)" : "var(--surface)",
+          }}
+          sound={bossOn ? "power" : "click"}
+        >
+          {bossOn && (
+            <motion.div
+              className="absolute pointer-events-none"
+              animate={{ opacity: [0.16, 0.34, 0.16] }}
+              transition={{ duration: 2.6, repeat: Infinity, ease: "easeInOut" }}
+              style={{
+                inset: 0,
+                background:
+                  "radial-gradient(circle at 18% 50%, rgba(255,90,60,0.5), transparent 62%)",
+              }}
+            />
+          )}
+          <div className="relative" style={{ padding: 14 }}>
+            <div className="flex items-center" style={{ gap: 12 }}>
+              <span className="shrink-0" style={{ opacity: bossOn ? 1 : 0.5 }}>
+                <HeadView friend={{ look: boss.look } as never} size={44} />
+              </span>
+              <span className="flex-1 min-w-0">
+                <span
+                  className="t-label block"
+                  style={{ fontSize: 9, color: bossOn ? "#FF6B4D" : undefined }}
+                >
+                  {bossOn
+                    ? tr("БОСС НА СМЕНЕ")
+                    : bossLive ? tr("СМЕНА ЗАКРЫТА") : tr("СЛЕДУЮЩИЙ БОСС")}
+                </span>
+                <span className="t-title-sm block clip1" style={{ marginTop: 3 }}>
+                  {boss.name}
+                </span>
+                <span className="t-caption block clip1" style={{ marginTop: 2 }}>
+                  {bossOn
+                    ? `${tr("осталось")} ${fmtLeft(windowLeft())}`
+                    : `${tr("через")} ${fmtLeft(nextBossIn())}`}
+                </span>
+              </span>
+              <Icon name="chevron" size={16} />
+            </div>
+            <div style={{ marginTop: 11 }}>
+              <Bar
+                pct={
+                  bossOn
+                    ? windowLeft() / BOSS_WINDOW_MS
+                    : 1 - nextBossIn() / BOSS_EVERY_MS
+                }
+                h={5}
+              />
+            </div>
+          </div>
+        </Tap>
+      )}
+
       {/* Продолжить */}
       {featured && (
         <div style={{ marginBottom: 22 }}>
@@ -132,7 +210,7 @@ export default function Home({
               <GameIcon id={featured.id} size={104} />
             </div>
             <div style={{ padding: 18, position: "relative" }}>
-              <div className="t-label acc-text">Продолжить</div>
+              <div className="t-label acc-text">{tr("Продолжить")}</div>
               <div
                 className="t-display-sm"
                 style={{ fontSize: 24, marginTop: 6, maxWidth: "72%" }}
@@ -151,43 +229,17 @@ export default function Home({
                     fontSize: 13, fontWeight: 800, lineHeight: 1,
                   }}
                 >
-                  ▶ Играть
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                    <path d="M8 5v14l11-7z" />
+                  </svg>
+                  {tr("Играть")}
                 </span>
-                <span className="t-caption">
-                  рекорд <span className="t-num" style={{ color: "var(--text-dim)" }}>{fmt(s.games[featured.id].best)}</span>
+                <span className="t-caption">{tr("рекорд")}<span className="t-num" style={{ color: "var(--text-dim)" }}>{fmt(s.games[featured.id].best)}</span>
                 </span>
               </div>
             </div>
           </Tap>
         </div>
-      )}
-
-      {/* Босс на смене */}
-      {onOpen && bossOn && (
-        <Tap
-          onClick={() => onOpen("boss")}
-          r="lg"
-          className="w-full"
-          style={{
-            padding: 14, marginBottom: 10,
-            border: "1.5px solid rgba(255,90,60,0.5)",
-            background: "rgba(255,90,60,0.08)",
-          }}
-          sound="power"
-        >
-          <div className="flex items-center" style={{ gap: 12 }}>
-            <span className="shrink-0">
-              <HeadView friend={{ look: boss.look } as never} size={40} />
-            </span>
-            <span className="flex-1 min-w-0">
-              <span className="t-title-sm block clip1">{boss.name} на смене</span>
-              <span className="t-caption block" style={{ marginTop: 2 }}>
-                осталось {Math.ceil(windowLeft() / 60000)} мин — успей подраться
-              </span>
-            </span>
-            <Icon name="chevron" size={16} />
-          </div>
-        </Tap>
       )}
 
       {/* Режимы: марафон и испытание дня */}
@@ -217,10 +269,8 @@ export default function Home({
               <Icon name="dice" size={19} />
             </span>
             <span className="flex-1 min-w-0">
-              <span className="t-title-sm block">Казино</span>
-              <span className="t-caption block" style={{ marginTop: 2 }}>
-                Слоты, кейсы, батлы и апгрейд — на жетоны
-              </span>
+              <span className="t-title-sm block">{tr("Казино")}</span>
+              <span className="t-caption block" style={{ marginTop: 2 }}>{tr("Слоты, кейсы, батлы и апгрейд — на жетоны")}</span>
             </span>
             <Icon name="chevron" size={16} />
           </div>
@@ -251,7 +301,7 @@ export default function Home({
               <Icon name="play" size={19} />
             </span>
             <span className="flex-1 min-w-0">
-              <span className="t-title-sm block">Бонус за ролик</span>
+              <span className="t-title-sm block">{tr("Бонус за ролик")}</span>
               <span className="t-caption block" style={{ marginTop: 2 }}>
                 10 секунд — и {fmt(adReward)} монет
               </span>
@@ -271,7 +321,7 @@ export default function Home({
               addCoins(adReward);
               noteBonus();
               setAdLeft(bonusesLeft());
-              toast({ title: "Награда получена", sub: `+${fmt(adReward)}`, icon: "coin", tone: "gold" });
+              toast({ title: tr("Награда получена"), sub: `+${fmt(adReward)}`, icon: "coin", tone: "gold" });
             }}
             onClose={() => setShowAd(false)}
           />
@@ -279,9 +329,7 @@ export default function Home({
       </AnimatePresence>
 
       {/* Сетка игр */}
-      <SectionTitle right={<span className="t-num" style={{ fontSize: 11, color: "var(--text-mute)" }}>{s.unlockedGames.length}/{GAME_META.length}</span>}>
-        Все игры
-      </SectionTitle>
+      <SectionTitle right={<span className="t-num" style={{ fontSize: 11, color: "var(--text-mute)" }}>{s.unlockedGames.length}/{GAME_META.length}</span>}>{tr("Все игры")}</SectionTitle>
 
       <div className="grid grid-cols-2" style={{ gap: 12, marginBottom: 22 }}>
         {GAME_META.map((g, i) => {
@@ -355,11 +403,11 @@ export default function Home({
       </div>
 
       {/* Сводка */}
-      <SectionTitle>Сводка</SectionTitle>
+      <SectionTitle>{tr("Сводка")}</SectionTitle>
       <div className="grid grid-cols-3" style={{ gap: 10 }}>
-        <Stat v={fmt(s.stats.burgersDodged)} l="уклонов" />
-        <Stat v={fmt(s.stats.tapsTotal)} l="тапов" />
-        <Stat v={fmt(s.totalCoinsEver)} l="монет всего" />
+        <Stat v={fmt(s.stats.burgersDodged)} l={tr("уклонов")} />
+        <Stat v={fmt(s.stats.tapsTotal)} l={tr("тапов")} />
+        <Stat v={fmt(s.totalCoinsEver)} l={tr("монет всего")} />
       </div>
 
       {/* Поддержать проект */}
@@ -386,10 +434,8 @@ export default function Home({
               <Icon name="heart" size={19} />
             </span>
             <span className="flex-1 min-w-0">
-              <span className="t-title-sm block">Поддержите проект</span>
-              <span className="t-caption block" style={{ marginTop: 2 }}>
-                Игра бесплатная — развивается на энтузиазме
-              </span>
+              <span className="t-title-sm block">{tr("Поддержите проект")}</span>
+              <span className="t-caption block" style={{ marginTop: 2 }}>{tr("Игра бесплатная — развивается на энтузиазме")}</span>
             </span>
             <Icon name="chevron" size={16} />
           </div>

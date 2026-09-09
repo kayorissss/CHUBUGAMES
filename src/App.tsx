@@ -5,7 +5,7 @@ import { Aurora } from "./ui/Glass";
 import Nav, { type Tab } from "./components/Nav";
 
 /** Подстраницы поверх вкладок */
-export type SubPage = "network" | "ai" | "casino" | "donate" | "boss";
+export type SubPage = "network" | "casino" | "donate" | "boss";
 import { Toasts, OfflineModal } from "./components/Overlays";
 import UpdateBanner from "./ui/UpdateBanner";
 import WhatsNew from "./ui/WhatsNew";
@@ -21,7 +21,6 @@ import Shop from "./pages/Shop";
 import Friends from "./pages/Friends";
 import Settings from "./pages/Settings";
 import Network from "./pages/Network";
-import AiPage from "./pages/AiPage";
 import BurgerRain from "./games/BurgerRain";
 import Clicker from "./games/Clicker";
 import MergeHeads from "./games/MergeHeads";
@@ -160,7 +159,11 @@ function Shell() {
   };
 
   return (
-    <ModesProvider onSwitchGame={(g) => setGame(g)} currentGame={game}>
+    <ModesProvider
+      onSwitchGame={(g) => setGame(g)}
+      currentGame={game}
+      bestOf={(g) => s.games[g]?.best ?? 0}
+    >
     <div className="h-full w-full relative overflow-hidden" style={{ background: "var(--bg)" }}>
       {s.settings.fx && <Aurora />}
 
@@ -192,7 +195,6 @@ function Shell() {
             style={{ zIndex: 40, background: "var(--bg)" }}
           >
             {sub === "network" && <Network onBack={() => setSub(null)} />}
-            {sub === "ai" && <AiPage onBack={() => setSub(null)} />}
             {sub === "casino" && <Casino onBack={() => setSub(null)} />}
             {sub === "donate" && <Donate onBack={() => setSub(null)} />}
             {sub === "boss" && <BossFight onBack={() => setSub(null)} />}

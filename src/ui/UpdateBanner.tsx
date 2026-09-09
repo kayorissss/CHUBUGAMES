@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { tr } from "../core/i18n";
 import { AnimatePresence, motion } from "framer-motion";
 import { Button } from "./Glass";
 import Icon from "./Icon";
@@ -87,7 +88,7 @@ function ProgressRing({ pct, size = 148 }: { pct: number; size?: number }) {
         <span className="t-num" style={{ fontSize: 34, lineHeight: 1 }}>
           {Math.round(pct * 100)}
         </span>
-        <span className="t-label" style={{ fontSize: 9 }}>ПРОЦЕНТОВ</span>
+        <span className="t-label" style={{ fontSize: 9 }}>{tr("ПРОЦЕНТОВ")}</span>
       </div>
     </div>
   );
@@ -149,10 +150,10 @@ export default function UpdateBanner() {
         },
         ac.signal,
       );
-      toast({ title: "Открываю установщик", sub: "Разреши установку", icon: "download", tone: "gold" });
+      toast({ title: tr("Открываю установщик"), sub: tr("Разреши установку"), icon: "download", tone: "gold" });
       setInfo(null);
     } catch (e: any) {
-      if (e?.name !== "AbortError") setErr(e?.message || "Не удалось скачать");
+      if (e?.name !== "AbortError") setErr(e?.message || tr("Не удалось скачать"));
     } finally {
       setBusy(false);
       abort.current = null;
@@ -218,9 +219,7 @@ export default function UpdateBanner() {
               >
                 <Icon name="download" size={30} />
               </motion.div>
-              <div className="t-label" style={{ marginTop: 16, fontSize: 9.5 }}>
-                ДОСТУПНО ОБНОВЛЕНИЕ
-              </div>
+              <div className="t-label" style={{ marginTop: 16, fontSize: 9.5 }}>{tr("ДОСТУПНО ОБНОВЛЕНИЕ")}</div>
               <div className="t-display" style={{ fontSize: 40, lineHeight: 1.05, marginTop: 6 }}>
                 {info.version}
               </div>
@@ -242,7 +241,7 @@ export default function UpdateBanner() {
                   {fmtBytes(loaded)}{total ? ` из ${fmtBytes(total)}` : ""}
                 </div>
                 <div className="t-caption" style={{ marginTop: 5, textAlign: "center" }}>
-                  {speed > 0 ? `${fmtBytes(speed)}/с` : "соединяюсь"}
+                  {speed > 0 ? `${fmtBytes(speed)}/с` : tr("соединяюсь")}
                   {eta > 0 ? ` · осталось ${eta < 60 ? `${eta} с` : `${Math.ceil(eta / 60)} мин`}` : ""}
                 </div>
                 <div className="t-caption" style={{ marginTop: 14, textAlign: "center", maxWidth: 280 }}>
@@ -259,9 +258,7 @@ export default function UpdateBanner() {
                 style={{ marginTop: 26, flex: 1 }}
               >
                 {sections.length > 0 && (
-                  <div className="t-label" style={{ fontSize: 9.5, marginBottom: 12 }}>
-                    ЧТО НОВОГО
-                  </div>
+                  <div className="t-label" style={{ fontSize: 9.5, marginBottom: 12 }}>{tr("ЧТО НОВОГО")}</div>
                 )}
                 <div className="flex flex-col" style={{ gap: 14 }}>
                   {sections.map((sec, i) => (
@@ -330,11 +327,11 @@ export default function UpdateBanner() {
                   onClick={install}
                   disabled={!isNative()}
                 >
-                  {isNative() ? "Обновить сейчас" : "Только в приложении"}
+                  {isNative() ? "Обновить сейчас" : tr("Только в приложении")}
                 </Button>
               )}
               <Button variant="secondary" full onClick={later} sound="none">
-                {busy ? "Отменить загрузку" : "Позже"}
+                {busy ? "Отменить загрузку" : tr("Позже")}
               </Button>
             </div>
           </div>

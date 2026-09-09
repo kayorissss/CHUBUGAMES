@@ -1,4 +1,5 @@
 import { AnimatePresence, motion } from "framer-motion";
+import { tr } from "../core/i18n";
 import { useGame } from "../core/store";
 import { Panel, Tap } from "../ui/Glass";
 import { fmt, fmtTime } from "../core/format";
@@ -82,7 +83,7 @@ export function OfflineModal() {
           >
             <Panel r="xl" strong className="p-6 text-center">
               <div style={{ color: "var(--acc)" }}><Icon name="snow" size={42} /></div>
-              <div className="t-display mt-2" style={{ fontSize: 22 }}>ПОКА ТЕБЯ НЕ БЫЛО</div>
+              <div className="t-display mt-2" style={{ fontSize: 22 }}>{tr("ПОКА ТЕБЯ НЕ БЫЛО")}</div>
               <div style={{ fontSize: 11.5, color: "var(--text-mute)", marginTop: 6, lineHeight: 1.5 }}>
                 {mainFriend.name} жрал {fmtTime(offlineReport.hours * 3600000)} и накопил
               </div>
@@ -90,12 +91,8 @@ export function OfflineModal() {
                 +{fmt(offlineReport.coins)}
               </div>
               <div className="t-label" style={{ marginTop: -8, marginBottom: 16 }}>CHUBCOINS</div>
-              <Tap onClick={clearOffline} accent r="md" className="w-full py-3.5 t-title" style={{ fontSize: 14 }} sound="coin">
-                ЗАБРАТЬ
-              </Tap>
-              <div className="t-label mt-3" style={{ fontSize: 8, lineHeight: 1.5 }}>
-                Качай «Холодильник» в CHUBCLICKER, чтобы копить дольше
-              </div>
+              <Tap onClick={clearOffline} accent r="md" className="w-full py-3.5 t-title" style={{ fontSize: 14 }} sound="coin">{tr("ЗАБРАТЬ")}</Tap>
+              <div className="t-label mt-3" style={{ fontSize: 8, lineHeight: 1.5 }}>{tr("Качай «Холодильник» в CHUBCLICKER, чтобы копить дольше")}</div>
             </Panel>
           </motion.div>
         </motion.div>

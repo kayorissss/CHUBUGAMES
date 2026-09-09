@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { tr } from "../core/i18n";
 import { AnimatePresence, motion } from "framer-motion";
 import { Panel, Screen, Tap } from "../ui/Glass";
 import Icon from "../ui/Icon";
@@ -108,7 +109,7 @@ export default function BossFight({ onBack }: { onBack: () => void }) {
         sfx.legend?.();
         haptic("success");
         toast({
-          title: "Босс повержен",
+          title: tr("Босс повержен"),
           sub: `+${fmt(boss.reward.coins)} и ${boss.reward.chips} жетонов`,
           icon: "trophy",
           tone: "gold",
@@ -151,14 +152,14 @@ export default function BossFight({ onBack }: { onBack: () => void }) {
       // Данил пускает газы — экран мутнеет, часть ударов мимо
       gimTimer.current = window.setInterval(() => {
         setFog(true);
-        say("Ой… это не я.");
+        say(tr("Ой… это не я."));
         window.setTimeout(() => setFog(false), 2600);
       }, 7000);
     } else if (boss.gimmick === "sleep") {
       // Т-34 иногда «залипает» — окно бесплатного урона
       gimTimer.current = window.setInterval(() => {
         setFog(false);
-        say("…я на секунду прикрою глаза.");
+        say(tr("…я на секунду прикрою глаза."));
       }, 8000);
     }
   };
@@ -195,8 +196,8 @@ export default function BossFight({ onBack }: { onBack: () => void }) {
 
   return (
     <Screen
-      title="БОССЫ"
-      sub="Воспитатели общаги"
+      title={tr("БОССЫ")}
+      sub={tr("Воспитатели общаги")}
       right={
         <button
           type="button"
@@ -228,7 +229,7 @@ export default function BossFight({ onBack }: { onBack: () => void }) {
             }}
           >
             <div className="t-label" style={{ marginBottom: 12 }}>
-              {cleared ? "СМЕНА ЗАКРЫТА" : active ? "СЕЙЧАС ДЕЖУРИТ" : "ПЕРЕРЫВ"}
+              {cleared ? "СМЕНА ЗАКРЫТА" : active ? "СЕЙЧАС ДЕЖУРИТ" : tr("ПЕРЕРЫВ")}
             </div>
 
             <motion.div
@@ -253,15 +254,15 @@ export default function BossFight({ onBack }: { onBack: () => void }) {
             <div className="flex" style={{ gap: 8, marginTop: 16 }}>
               <Panel r="md" className="flex-1" style={{ padding: "9px 4px" }}>
                 <div className="t-num" style={{ fontSize: 15 }}>{fmt(boss.reward.coins)}</div>
-                <div className="t-label" style={{ fontSize: 8.5 }}>монет</div>
+                <div className="t-label" style={{ fontSize: 8.5 }}>{tr("монет")}</div>
               </Panel>
               <Panel r="md" className="flex-1" style={{ padding: "9px 4px" }}>
                 <div className="t-num" style={{ fontSize: 15 }}>{boss.reward.chips}</div>
-                <div className="t-label" style={{ fontSize: 8.5 }}>жетонов</div>
+                <div className="t-label" style={{ fontSize: 8.5 }}>{tr("жетонов")}</div>
               </Panel>
               <Panel r="md" className="flex-1" style={{ padding: "9px 4px" }}>
                 <div className="t-num" style={{ fontSize: 15 }}>{boss.reward.xp}</div>
-                <div className="t-label" style={{ fontSize: 8.5 }}>опыта</div>
+                <div className="t-label" style={{ fontSize: 8.5 }}>{tr("опыта")}</div>
               </Panel>
             </div>
 
@@ -278,9 +279,7 @@ export default function BossFight({ onBack }: { onBack: () => void }) {
                     className="w-full py-3.5 t-title"
                     style={{ fontSize: 14 }}
                     sound="power"
-                  >
-                    В БОЙ
-                  </Tap>
+                  >{tr("В БОЙ")}</Tap>
                   <div className="t-caption" style={{ marginTop: 9 }}>
                     смена заканчивается через {mmss(wLeft)}
                   </div>
@@ -294,7 +293,7 @@ export default function BossFight({ onBack }: { onBack: () => void }) {
           </Panel>
 
           {/* Расписание */}
-          <div className="t-label" style={{ marginBottom: 9 }}>Все воспитатели</div>
+          <div className="t-label" style={{ marginBottom: 9 }}>{tr("Все воспитатели")}</div>
           {BOSSES.map((b) => (
             <Panel key={b.id} r="lg" style={{ padding: 11, marginBottom: 8 }}>
               <div className="flex items-center" style={{ gap: 11 }}>
@@ -392,7 +391,7 @@ export default function BossFight({ onBack }: { onBack: () => void }) {
           {/* Здоровье игрока */}
           <Panel r="lg" style={{ padding: 13, marginBottom: 12 }}>
             <div className="flex items-center" style={{ gap: 9, marginBottom: 8 }}>
-              <span className="t-title-sm flex-1">Ты</span>
+              <span className="t-title-sm flex-1">{tr("Ты")}</span>
               <span className="t-num" style={{ fontSize: 12 }}>{Math.max(0, myHp)} / 100</span>
             </div>
             <HpBar v={myHp} max={100} color="#59FF9E" />
@@ -406,8 +405,7 @@ export default function BossFight({ onBack }: { onBack: () => void }) {
             sound="hit"
           >
             <span className="inline-flex items-center" style={{ gap: 9 }}>
-              <Icon name="fist" size={19} /> БИТЬ
-            </span>
+              <Icon name="fist" size={19} />{tr("БИТЬ")}</span>
           </Tap>
           <div className="t-caption" style={{ marginTop: 9, textAlign: "center" }}>
             {fog ? "Ничего не видно — половина ударов мимо" : `ударов: ${hits}`}
@@ -426,7 +424,7 @@ export default function BossFight({ onBack }: { onBack: () => void }) {
               className="t-display"
               style={{ fontSize: 30, color: phase === "win" ? "#59FF9E" : "#FF6B8A" }}
             >
-              {phase === "win" ? "ПОБЕДА" : "ОТЧИСЛЕН"}
+              {phase === "win" ? "ПОБЕДА" : tr("ОТЧИСЛЕН")}
             </div>
             <div className="t-caption" style={{ marginTop: 8, lineHeight: 1.5 }}>
               {phase === "win"
@@ -438,11 +436,11 @@ export default function BossFight({ onBack }: { onBack: () => void }) {
               <div className="flex" style={{ gap: 8, marginTop: 16 }}>
                 <Panel r="md" className="flex-1" style={{ padding: "10px 4px" }}>
                   <div className="t-num" style={{ fontSize: 15 }}>+{fmt(boss.reward.coins)}</div>
-                  <div className="t-label" style={{ fontSize: 8.5 }}>монет</div>
+                  <div className="t-label" style={{ fontSize: 8.5 }}>{tr("монет")}</div>
                 </Panel>
                 <Panel r="md" className="flex-1" style={{ padding: "10px 4px" }}>
                   <div className="t-num" style={{ fontSize: 15 }}>+{boss.reward.chips}</div>
-                  <div className="t-label" style={{ fontSize: 8.5 }}>жетонов</div>
+                  <div className="t-label" style={{ fontSize: 8.5 }}>{tr("жетонов")}</div>
                 </Panel>
               </div>
             )}
@@ -453,9 +451,7 @@ export default function BossFight({ onBack }: { onBack: () => void }) {
               className="w-full py-3.5 t-title"
               style={{ fontSize: 14, marginTop: 18 }}
               sound="swoosh"
-            >
-              ПОНЯТНО
-            </Tap>
+            >{tr("ПОНЯТНО")}</Tap>
           </Panel>
         </motion.div>
       )}

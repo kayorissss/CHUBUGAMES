@@ -39,12 +39,17 @@ addEventListener('checkUpdate', function (resolve, reject, args) {
   try {
     var installed = '0.0.0';
     var notified = '';
+    var enabled = '';
     try {
       installed = CapacitorKV.get('installedVersion').value || '0.0.0';
       notified = CapacitorKV.get('notifiedVersion').value || '';
+      enabled = CapacitorKV.get('notifyEnabled').value || '';
     } catch (e) {
       // ключей ещё нет — приложение не успело их записать
     }
+
+    // Человек выключил напоминания в настройках — молчим
+    if (enabled !== '1') { resolve(); return; }
 
     // Приложение ни разу не запускалось после установки плагина — молчим
     if (installed === '0.0.0') { resolve(); return; }
@@ -97,6 +102,16 @@ addEventListener('setVersion', function (resolve, reject, args) {
       try { was = CapacitorKV.get('notifiedVersion').value || ''; } catch (e) {}
       if (was && was !== v) CapacitorKV.set('notifiedVersion', '');
     }
+    resolve();
+  } catch (err) {
+    reject(err);
+  }
+});
+
+/** Приложение включило или выключило напоминания */
+addEventListener('setEnabled', function (resolve, reject, args) {
+  try {
+    CapacitorKV.set('notifyEnabled', (args && args.enabled) ? '1' : '0');
     resolve();
   } catch (err) {
     reject(err);

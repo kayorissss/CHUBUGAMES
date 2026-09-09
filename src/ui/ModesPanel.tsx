@@ -1,4 +1,5 @@
 import { motion } from "framer-motion";
+import { tr } from "../core/i18n";
 import { useGame } from "../core/store";
 import { useModes, MARATHON_ROUNDS } from "../core/modes";
 import { GAME_META } from "../core/content";
@@ -31,9 +32,7 @@ export default function ModesPanel() {
             </span>
           ) : undefined
         }
-      >
-        Режимы
-      </SectionTitle>
+      >{tr("Режимы")}</SectionTitle>
 
       <div style={{ marginBottom: 22 }}>
         {/* ── Марафон ── */}
@@ -62,11 +61,89 @@ export default function ModesPanel() {
               <Icon name="run" size={20} />
             </span>
             <span className="flex-1 min-w-0">
-              <span className="t-title-sm block">Марафон</span>
+              <span className="t-title-sm block">{tr("Марафон")}</span>
               <span className="t-caption block" style={{ marginTop: 2 }}>
                 {MARATHON_ROUNDS} случайных игр подряд, очки суммируются
               </span>
             </span>
+            <Icon name="chevron" size={16} />
+          </div>
+        </Tap>
+
+        {/* ── Выживание ── */}
+        <Tap
+          onClick={() => modes.startSurvival()}
+          r="lg"
+          className="w-full"
+          style={{
+            padding: 14,
+            marginBottom: 10,
+            border: "1.5px solid rgba(255,90,60,0.35)",
+          }}
+          sound="power"
+        >
+          <div className="flex items-center" style={{ gap: 12 }}>
+            <span
+              className="shrink-0 flex items-center justify-center"
+              style={{
+                width: 42, height: 42, borderRadius: "var(--r-sm)",
+                background: "rgba(255,90,60,0.16)", color: "#FF6B4D",
+              }}
+            >
+              <Icon name="shield" size={20} />
+            </span>
+            <span className="flex-1 min-w-0">
+              <span className="t-title-sm block">{tr("Выживание")}</span>
+              <span className="t-caption block" style={{ marginTop: 2 }}>
+                {tr("Игры подряд без провала. Забрать можно в любой момент")}
+              </span>
+            </span>
+            {store.survivalBest > 0 && (
+              <span className="t-num shrink-0" style={{ fontSize: 11, color: "var(--text-mute)" }}>
+                {store.survivalBest}
+              </span>
+            )}
+            <Icon name="chevron" size={16} />
+          </div>
+        </Tap>
+
+        {/* ── Спринт ── */}
+        <Tap
+          onClick={() => {
+            const pool = GAME_META.filter((g) => s.unlockedGames.includes(g.id));
+            const pick = pool[Math.floor(Math.random() * pool.length)];
+            modes.startSprint(pick.id);
+          }}
+          r="lg"
+          className="w-full"
+          style={{
+            padding: 14,
+            marginBottom: 10,
+            border: "1.5px solid rgba(95,168,255,0.35)",
+          }}
+          sound="power"
+        >
+          <div className="flex items-center" style={{ gap: 12 }}>
+            <span
+              className="shrink-0 flex items-center justify-center"
+              style={{
+                width: 42, height: 42, borderRadius: "var(--r-sm)",
+                background: "rgba(95,168,255,0.16)", color: "#5FA8FF",
+              }}
+            >
+              <Icon name="bolt" size={20} />
+            </span>
+            <span className="flex-1 min-w-0">
+              <span className="t-title-sm block">{tr("Спринт")}</span>
+              <span className="t-caption block" style={{ marginTop: 2 }}>
+                {tr("Две минуты в одной игре — выбей максимум")}
+              </span>
+            </span>
+            {store.sprintBest > 0 && (
+              <span className="t-num shrink-0" style={{ fontSize: 11, color: "var(--text-mute)" }}>
+                {fmt(store.sprintBest)}
+              </span>
+            )}
             <Icon name="chevron" size={16} />
           </div>
         </Tap>
@@ -95,7 +172,7 @@ export default function ModesPanel() {
               {meta ? <GameIcon id={challenge.game} size={22} /> : <Icon name="target" size={20} />}
             </span>
             <span className="flex-1 min-w-0">
-              <span className="t-title-sm block">Испытание дня</span>
+              <span className="t-title-sm block">{tr("Испытание дня")}</span>
               <span className="t-caption block" style={{ marginTop: 2 }}>
                 {meta?.name ?? challenge.game} — {fmt(challenge.target)} очков
               </span>
@@ -146,8 +223,7 @@ export default function ModesPanel() {
                 className="t-label inline-flex items-center shrink-0"
                 style={{ gap: 6, fontSize: 10, color: "#59FF9E" }}
               >
-                <Icon name="check" size={13} /> ЗАБРАНО
-              </span>
+                <Icon name="check" size={13} />{tr("ЗАБРАНО")}</span>
             ) : challengeDone ? (
               <Tap
                 onClick={() => {
@@ -155,7 +231,7 @@ export default function ModesPanel() {
                   addCoins(challenge.reward);
                   set((d) => { d.gems += challenge.gems; });
                   toast({
-                    title: "Испытание пройдено",
+                    title: tr("Испытание пройдено"),
                     sub: `+${fmt(challenge.reward)}`,
                     icon: "trophy",
                     tone: "gold",
@@ -167,9 +243,7 @@ export default function ModesPanel() {
                 className="shrink-0 t-title"
                 style={{ fontSize: 12, padding: "9px 18px" }}
                 sound="coin"
-              >
-                ЗАБРАТЬ
-              </Tap>
+              >{tr("ЗАБРАТЬ")}</Tap>
             ) : (
               <span
                 className="t-label shrink-0"

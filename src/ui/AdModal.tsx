@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { tr } from "../core/i18n";
 import { motion } from "framer-motion";
 import Icon from "./Icon";
 import { sfx, haptic } from "../core/fx";
@@ -134,7 +135,7 @@ export default function AdModal({
         }}
       >
         <span className="t-label" style={{ fontSize: 9, opacity: 0.7 }}>
-          {clip?.label || "РЕКЛАМА"}
+          {clip?.label || tr("РЕКЛАМА")}
         </span>
         <span className="t-caption flex-1 clip1">{reason}</span>
 
@@ -157,7 +158,7 @@ export default function AdModal({
             }}
           >
             {canSkip ? (
-              <>ПРОПУСТИТЬ <Icon name="chevron" size={13} /></>
+              <>{tr("ПРОПУСТИТЬ")}<Icon name="chevron" size={13} /></>
             ) : (
               <>ПРОПУСК ЧЕРЕЗ {left}</>
             )}
@@ -185,12 +186,8 @@ export default function AdModal({
         {failed ? (
           <div className="text-center" style={{ padding: 24 }}>
             <Icon name="warn" size={34} />
-            <div className="t-title-sm" style={{ marginTop: 12 }}>
-              Ролик не загрузился
-            </div>
-            <div className="t-caption" style={{ marginTop: 6, lineHeight: 1.5 }}>
-              Награду всё равно засчитали — это не твоя вина.
-            </div>
+            <div className="t-title-sm" style={{ marginTop: 12 }}>{tr("Ролик не загрузился")}</div>
+            <div className="t-caption" style={{ marginTop: 6, lineHeight: 1.5 }}>{tr("Награду всё равно засчитали — это не твоя вина.")}</div>
           </div>
         ) : (
           <div className="relative w-full flex items-center justify-center">
@@ -220,7 +217,7 @@ export default function AdModal({
           <button
             type="button"
             onClick={toggleMute}
-            aria-label={muted ? "Включить звук" : "Выключить звук"}
+            aria-label={muted ? "Включить звук" : tr("Выключить звук")}
             className="absolute flex items-center justify-center"
             style={{
               right: 12,
@@ -251,9 +248,7 @@ export default function AdModal({
                 backdropFilter: "blur(8px)",
                 fontSize: 10,
               }}
-            >
-              БЕЗ ЗВУКА
-            </div>
+            >{tr("БЕЗ ЗВУКА")}</div>
           )}
           </div>
         )}
@@ -281,8 +276,7 @@ export default function AdModal({
             className="t-body flex items-center justify-center"
             style={{ gap: 8, marginTop: 12, color: "#59FF9E" }}
           >
-            <Icon name="check" size={15} /> Награда засчитана — закрой крестиком
-          </div>
+            <Icon name="check" size={15} />{tr("Награда засчитана — закрой крестиком")}</div>
         ) : (
           <div
             className="t-caption text-center"
@@ -290,7 +284,7 @@ export default function AdModal({
           >
             {clip?.link
               ? "Нажми на ролик, чтобы перейти к рекламодателю"
-              : "Досмотри до конца, чтобы получить награду"}
+              : tr("Досмотри до конца, чтобы получить награду")}
           </div>
         )}
       </div>

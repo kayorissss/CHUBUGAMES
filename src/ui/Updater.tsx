@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import { tr } from "../core/i18n";
 import { AnimatePresence, motion } from "framer-motion";
 import { Card, Button, Bar } from "./Glass";
 import { useGame } from "../core/store";
@@ -42,11 +43,11 @@ export default function Updater() {
       } else {
         setPhase("fresh");
         sfx.click();
-        toast({ title: "У тебя последняя версия", icon: "check" });
+        toast({ title: tr("У тебя последняя версия"), icon: "check" });
       }
     } catch (e: any) {
       setPhase("idle");
-      setErr(e?.message || "Не получилось проверить");
+      setErr(e?.message || tr("Не получилось проверить"));
       sfx.error?.();
     }
   };
@@ -67,11 +68,11 @@ export default function Updater() {
       );
       setPhase("installing");
       haptic("success");
-      toast({ title: "Открываю установщик", sub: "Разреши установку", icon: "case", tone: "gold" });
+      toast({ title: tr("Открываю установщик"), sub: tr("Разреши установку"), icon: "case", tone: "gold" });
     } catch (e: any) {
       if (e?.name === "AbortError") { setPhase("found"); return; }
       setPhase("found");
-      setErr(e?.message || "Загрузка не удалась");
+      setErr(e?.message || tr("Загрузка не удалась"));
       sfx.error?.();
     } finally {
       abortRef.current = null;
@@ -91,10 +92,10 @@ export default function Updater() {
     try {
       setPhase("installing");
       await installFromFile(f);
-      toast({ title: "Открываю установщик", sub: f.name, icon: "case", tone: "gold" });
+      toast({ title: tr("Открываю установщик"), sub: f.name, icon: "case", tone: "gold" });
     } catch (e2: any) {
       setPhase("idle");
-      setErr(e2?.message || "Не удалось открыть файл");
+      setErr(e2?.message || tr("Не удалось открыть файл"));
       sfx.error?.();
     }
   };
@@ -124,7 +125,7 @@ export default function Updater() {
               ? `Доступна ${info.version}`
               : phase === "fresh"
                 ? "Обновлений нет"
-                : "Проверь наличие новой сборки"}
+                : tr("Проверь наличие новой сборки")}
           </div>
         </div>
         {phase === "found" ? (
@@ -134,9 +135,7 @@ export default function Updater() {
               padding: "5px 10px", borderRadius: 999,
               background: "var(--acc)", color: "var(--acc-ink)", fontSize: 9,
             }}
-          >
-            Новое
-          </span>
+          >{tr("Новое")}</span>
         ) : null}
       </div>
 
@@ -157,7 +156,7 @@ export default function Updater() {
                 whiteSpace: "pre-line", maxHeight: 132, overflowY: "auto",
               }}
             >
-              {info.notes || "Улучшения и исправления."}
+              {info.notes || tr("Улучшения и исправления.")}
             </div>
             <div className="t-caption" style={{ marginTop: 8 }}>
               Размер загрузки — {fmtBytes(info.size)}
@@ -180,7 +179,7 @@ export default function Updater() {
                 className="flex items-baseline justify-between"
                 style={{ gap: 8, marginBottom: 7 }}
               >
-                <span className="t-label">Скачивание</span>
+                <span className="t-label">{tr("Скачивание")}</span>
                 <span className="t-num" style={{ fontSize: 12 }}>
                   {total ? `${Math.round(pct * 100)}%` : fmtBytes(loaded)}
                 </span>
@@ -215,20 +214,17 @@ export default function Updater() {
               width: "fit-content", color: "var(--text)",
             }}
           >
-            <Icon name="download" size={12} /> Скачать вручную
-          </a>
+            <Icon name="download" size={12} />{tr("Скачать вручную")}</a>
         </div>
       )}
 
       {/* Кнопки */}
       <div className="flex" style={{ gap: 8, marginTop: 14 }}>
         {phase === "downloading" ? (
-          <Button variant="secondary" full onClick={cancel} sound="none">
-            Отменить
-          </Button>
+          <Button variant="secondary" full onClick={cancel} sound="none">{tr("Отменить")}</Button>
         ) : phase === "found" ? (
           <Button variant="primary" full onClick={download} sound="power">
-            <span className="inline-flex items-center" style={{ gap: 8 }}><Icon name="download" size={15} /> Скачать и установить</span>
+            <span className="inline-flex items-center" style={{ gap: 8 }}><Icon name="download" size={15} />{tr("Скачать и установить")}</span>
           </Button>
         ) : (
           <Button
@@ -238,7 +234,7 @@ export default function Updater() {
             onClick={check}
             sound="click"
           >
-            {phase === "checking" ? "Проверяю…" : "Проверить обновление"}
+            {phase === "checking" ? "Проверяю…" : tr("Проверить обновление")}
           </Button>
         )}
       </div>
@@ -251,7 +247,7 @@ export default function Updater() {
           sound="none"
           onClick={() => fileRef.current?.click()}
         >
-          <span className="inline-flex items-center" style={{ gap: 8 }}><Icon name="case" size={15} /> Обновить из файла</span>
+          <span className="inline-flex items-center" style={{ gap: 8 }}><Icon name="case" size={15} />{tr("Обновить из файла")}</span>
         </Button>
         <input
           ref={fileRef}
@@ -265,7 +261,7 @@ export default function Updater() {
       <div className="t-caption" style={{ marginTop: 10, lineHeight: 1.5 }}>
         {isNative()
           ? "Интернет нужен только на время загрузки обновления. Сами игры работают офлайн."
-          : "Установка APK доступна только в приложении на Android."}
+          : tr("Установка APK доступна только в приложении на Android.")}
       </div>
     </Card>
   );

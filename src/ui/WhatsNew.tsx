@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { tr } from "../core/i18n";
 import { AnimatePresence, motion } from "framer-motion";
 import { Button } from "./Glass";
 import Icon from "./Icon";
@@ -94,15 +95,11 @@ export default function WhatsNew() {
               >
                 <Icon name="sparkle" size={32} />
               </motion.div>
-              <div className="t-label" style={{ marginTop: 16, fontSize: 9.5 }}>
-                ОБНОВЛЕНИЕ УСТАНОВЛЕНО
-              </div>
+              <div className="t-label" style={{ marginTop: 16, fontSize: 9.5 }}>{tr("ОБНОВЛЕНИЕ УСТАНОВЛЕНО")}</div>
               <div className="t-display" style={{ fontSize: 42, lineHeight: 1.05, marginTop: 6 }}>
                 {APP_VERSION}
               </div>
-              <div className="t-caption" style={{ marginTop: 7, maxWidth: 300 }}>
-                Вот что изменилось с прошлой версии
-              </div>
+              <div className="t-caption" style={{ marginTop: 7, maxWidth: 300 }}>{tr("Вот что изменилось с прошлой версии")}</div>
             </motion.div>
 
             <div className="flex flex-col" style={{ gap: 10, marginTop: 26, flex: 1 }}>
@@ -145,9 +142,7 @@ export default function WhatsNew() {
               transition={{ delay: 0.35 + items.length * 0.05 }}
               style={{ marginTop: 22 }}
             >
-              <Button variant="primary" full size="lg" sound="power" onClick={close}>
-                Погнали играть
-              </Button>
+              <Button variant="primary" full size="lg" sound="power" onClick={close}>{tr("Погнали играть")}</Button>
             </motion.div>
           </div>
         </motion.div>

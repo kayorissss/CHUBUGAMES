@@ -13,7 +13,7 @@ import {
 import { today, daysBetween } from "./format";
 import { sfx, haptic, setSound, setHaptics } from "./fx";
 import { pickQuests } from "./save";
-import { makeT } from "./i18n";
+import { makeT, setLang } from "./i18n";
 import type { IconName } from "../ui/Icon";
 
 export interface Toast {
@@ -320,6 +320,9 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
     [s.friends, s.mainFriendId],
   );
 
+  // Выставляем язык до отрисовки детей, чтобы tr() внутри них уже вернул
+  // строки на нужном языке в этом же кадре, а не на следующем.
+  setLang(s.settings.lang || "ru");
   const t = useMemo(() => makeT(s.settings.lang || "ru"), [s.settings.lang]);
 
   const accentHex = useMemo(

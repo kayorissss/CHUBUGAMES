@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { tr } from "../core/i18n";
 import { motion } from "framer-motion";
 import { useGame } from "../core/store";
 import {
@@ -18,16 +19,16 @@ type Tab = "daily" | "season" | "skills" | "ach" | "stats";
 export default function ProgressPage() {
   const [tab, setTab] = useState<Tab>("daily");
   return (
-    <Screen title="ПРОГРЕСС">
+    <Screen title={tr("ПРОГРЕСС")}>
       <div
         className="flex overflow-x-auto scroll"
         style={{ gap: 8, marginBottom: 18, paddingBottom: 2 }}
       >
-        <Chip active={tab === "daily"} onClick={() => setTab("daily")}>Ежедневки</Chip>
-        <Chip active={tab === "season"} onClick={() => setTab("season")}>Сезон</Chip>
-        <Chip active={tab === "skills"} onClick={() => setTab("skills")}>Навыки</Chip>
-        <Chip active={tab === "ach"} onClick={() => setTab("ach")}>Ачивки</Chip>
-        <Chip active={tab === "stats"} onClick={() => setTab("stats")}>Статистика</Chip>
+        <Chip active={tab === "daily"} onClick={() => setTab("daily")}>{tr("Ежедневки")}</Chip>
+        <Chip active={tab === "season"} onClick={() => setTab("season")}>{tr("Сезон")}</Chip>
+        <Chip active={tab === "skills"} onClick={() => setTab("skills")}>{tr("Навыки")}</Chip>
+        <Chip active={tab === "ach"} onClick={() => setTab("ach")}>{tr("Ачивки")}</Chip>
+        <Chip active={tab === "stats"} onClick={() => setTab("stats")}>{tr("Статистика")}</Chip>
       </div>
       {tab === "daily" && <Daily />}
       {tab === "season" && <Season />}
@@ -79,16 +80,14 @@ function Daily() {
       d.xp += 80;
       d.season.xp += 80;
     });
-    toast({ title: "Награда получена", sub: `+${def.reward.toLocaleString("ru-RU")} монет`, icon: "check" });
+    toast({ title: tr("Награда получена"), sub: `+${def.reward.toLocaleString("ru-RU")} монет`, icon: "check" });
   };
 
   return (
     <>
       <SectionTitle right={<span className="t-label acc-text flex items-center" style={{ gap: 5 }}>
             <Icon name="fire" size={13} /> {s.daily.streak} дней
-          </span>}>
-        Ежедневный вход
-      </SectionTitle>
+          </span>}>{tr("Ежедневный вход")}</SectionTitle>
       <Card r="lg" style={{ padding: 14, marginBottom: 22 }}>
         <div className="grid grid-cols-7" style={{ gap: 6, marginBottom: 14 }}>
           {DAILY_LADDER.map((r, i) => {
@@ -125,11 +124,11 @@ function Daily() {
         >
           {canClaim
             ? `Забрать ${DAILY_LADDER[streakIdx].coins.toLocaleString("ru-RU")} монет`
-            : "Уже забрал · заходи завтра"}
+            : tr("Уже забрал · заходи завтра")}
         </Button>
       </Card>
 
-      <SectionTitle>Задания дня</SectionTitle>
+      <SectionTitle>{tr("Задания дня")}</SectionTitle>
       {s.daily.quests.map((q) => {
         const def = QUEST_POOL.find((x) => x.id === q.id);
         if (!def) return null;
@@ -151,18 +150,15 @@ function Daily() {
                 {Math.floor(q.progress).toLocaleString("ru-RU")} / {def.target.toLocaleString("ru-RU")}
               </span>
               {q.done && !q.claimed && (
-                <Button variant="primary" size="sm" sound="none" onClick={() => claimQuest(q.id)}>
-                  Забрать
-                </Button>
+                <Button variant="primary" size="sm" sound="none" onClick={() => claimQuest(q.id)}>{tr("Забрать")}</Button>
               )}
               {q.claimed && <span className="t-label flex items-center" style={{ fontSize: 9, gap: 4 }}>
-                    <Icon name="check" size={10} /> получено
-                  </span>}
+                    <Icon name="check" size={10} />{tr("получено")}</span>}
             </div>
           </Card>
         );
       })}
-      <div className="t-caption text-center" style={{ marginTop: 18 }}>Задания обновляются каждый день</div>
+      <div className="t-caption text-center" style={{ marginTop: 18 }}>{tr("Задания обновляются каждый день")}</div>
     </>
   );
 }
@@ -194,7 +190,7 @@ function Season() {
       d.season = { id: d.season.id + 1, xp: 0, claimed: [], startedAt: Date.now() };
       d.gems += 15;
     });
-    toast({ title: "НОВЫЙ СЕЗОН", sub: "+15 кристаллов за завершение", icon: "flag", tone: "gold" });
+    toast({ title: tr("НОВЫЙ СЕЗОН"), sub: tr("+15 кристаллов за завершение"), icon: "flag", tone: "gold" });
   };
 
   return (
@@ -207,15 +203,13 @@ function Season() {
           </div>
           <div className="text-right shrink-0">
             <div className="t-num acc-text" style={{ fontSize: 17 }}>{fmt(s.season.xp)}</div>
-            <div className="t-label" style={{ fontSize: 8.5, marginTop: 2 }}>сезонный XP</div>
+            <div className="t-label" style={{ fontSize: 8.5, marginTop: 2 }}>{tr("сезонный XP")}</div>
           </div>
         </div>
         <Bar pct={inTier} h={8} />
         {tier >= SEASON_TIERS && (
           <div style={{ marginTop: 14 }}>
-            <Button variant="primary" size="lg" full sound="none" onClick={restart}>
-              Завершить сезон · +15 кристаллов
-            </Button>
+            <Button variant="primary" size="lg" full sound="none" onClick={restart}>{tr("Завершить сезон · +15 кристаллов")}</Button>
           </div>
         )}
       </Card>
@@ -254,9 +248,7 @@ function Season() {
               {claimed ? (
                 <span className="shrink-0"><Icon name="check" size={12} /></span>
               ) : unlocked ? (
-                <Button variant="primary" size="sm" sound="none" onClick={() => claim(i)}>
-                  Взять
-                </Button>
+                <Button variant="primary" size="sm" sound="none" onClick={() => claim(i)}>{tr("Взять")}</Button>
               ) : (
                 <span className="shrink-0" style={{ opacity: 0.5 }}><Icon name="lock" size={12} /></span>
               )}
@@ -309,9 +301,9 @@ function Skills() {
   };
 
   const branches: { k: "coin" | "power" | "luck"; name: string; icon: IconName }[] = [
-    { k: "coin", name: "ЖАДНОСТЬ", icon: "coin" as const },
-    { k: "power", name: "СИЛА", icon: "fist" as const },
-    { k: "luck", name: "УДАЧА", icon: "clover" as const },
+    { k: "coin", name: tr("ЖАДНОСТЬ"), icon: "coin" as const },
+    { k: "power", name: tr("СИЛА"), icon: "fist" as const },
+    { k: "luck", name: tr("УДАЧА"), icon: "clover" as const },
   ];
 
   return (
@@ -319,19 +311,17 @@ function Skills() {
       <Card r="lg" style={{ padding: 15, marginBottom: 22 }}>
         <div className="flex items-start justify-between" style={{ gap: 12 }}>
           <div className="min-w-0">
-            <div className="t-label">Перерождение</div>
+            <div className="t-label">{tr("Перерождение")}</div>
             <div className="t-display-sm flex items-center justify-center" style={{ marginTop: 4, gap: 6 }}>
               <Icon name="star" size={17} accent /> {s.prestige}
             </div>
           </div>
           <div className="text-right shrink-0">
             <div className="t-num acc-text" style={{ fontSize: 22 }}>{freePoints}</div>
-            <div className="t-label" style={{ fontSize: 8.5, marginTop: 2 }}>свободных очков</div>
+            <div className="t-label" style={{ fontSize: 8.5, marginTop: 2 }}>{tr("свободных очков")}</div>
           </div>
         </div>
-        <div className="t-body" style={{ margin: "14px 0" }}>
-          Сбрасывает монеты и апгрейды кликера, но даёт очки навыков навсегда и
-          <span className="acc-text"> +12% ко всем монетам</span> за каждое перерождение.
+        <div className="t-body" style={{ margin: "14px 0" }}>{tr("Сбрасывает монеты и апгрейды кликера, но даёт очки навыков навсегда и")}<span className="acc-text">{tr("+12% ко всем монетам")}</span> за каждое перерождение.
           Уровень, ачивки, друзья и скины сохраняются.
         </div>
         {!confirm ? (
@@ -346,8 +336,8 @@ function Skills() {
           </Button>
         ) : (
           <div className="flex" style={{ gap: 8 }}>
-            <Button variant="secondary" full onClick={() => setConfirm(false)}>Отмена</Button>
-            <Button variant="primary" full sound="none" onClick={doPrestige}>Точно!</Button>
+            <Button variant="secondary" full onClick={() => setConfirm(false)}>{tr("Отмена")}</Button>
+            <Button variant="primary" full sound="none" onClick={doPrestige}>{tr("Точно!")}</Button>
           </div>
         )}
       </Card>
@@ -418,15 +408,15 @@ function Achievements() {
     <>
       <Card r="lg" style={{ padding: 14, marginBottom: 14 }}>
         <div className="flex items-baseline justify-between" style={{ gap: 10, marginBottom: 11 }}>
-          <div className="t-title-sm">Достижения</div>
+          <div className="t-title-sm">{tr("Достижения")}</div>
           <div className="t-num acc-text" style={{ fontSize: 15 }}>{doneCount} / {ACHIEVEMENTS.length}</div>
         </div>
         <Bar pct={doneCount / ACHIEVEMENTS.length} h={7} />
       </Card>
       <div className="flex" style={{ gap: 8, marginBottom: 14 }}>
-        <Chip active={filter === "all"} onClick={() => setFilter("all")}>Все</Chip>
-        <Chip active={filter === "todo"} onClick={() => setFilter("todo")}>Не получены</Chip>
-        <Chip active={filter === "done"} onClick={() => setFilter("done")}>Получены</Chip>
+        <Chip active={filter === "all"} onClick={() => setFilter("all")}>{tr("Все")}</Chip>
+        <Chip active={filter === "todo"} onClick={() => setFilter("todo")}>{tr("Не получены")}</Chip>
+        <Chip active={filter === "done"} onClick={() => setFilter("done")}>{tr("Получены")}</Chip>
       </div>
       {list.map((a, i) => {
         const done = !!s.achievements[a.id];
@@ -476,24 +466,24 @@ function Achievements() {
 function Stats() {
   const { s } = useGame();
   const rows: [string, string][] = [
-    ["Уровень", `${s.level} (${fmt(s.xp)}/${fmt(xpForLevel(s.level))} XP)`],
-    ["Перерождений", `${s.prestige}`],
-    ["Очков навыков", `${s.prestigePoints} (потрачено ${spentSkillPoints(s)})`],
-    ["Монет сейчас", fmt(s.coins)],
-    ["Монет за всё время", fmt(s.totalCoinsEver)],
-    ["Алмазов", String(s.gems)],
-    ["Тапов", fmt(s.stats.tapsTotal)],
-    ["Уклонов от снарядов", fmt(s.stats.burgersDodged)],
-    ["Слияний", fmt(s.stats.merges)],
-    ["Прибито голов", fmt(s.stats.whacks)],
-    ["Кейсов открыто", String(s.stats.casesOpened)],
-    ["Друзей", String(s.friends.length)],
-    ["Запусков приложения", String(s.stats.sessions)],
-    ["Играешь с", new Date(s.createdAt).toLocaleDateString("ru-RU")],
+    [tr("Уровень"), `${s.level} (${fmt(s.xp)}/${fmt(xpForLevel(s.level))} XP)`],
+    [tr("Перерождений"), `${s.prestige}`],
+    [tr("Очков навыков"), `${s.prestigePoints} (потрачено ${spentSkillPoints(s)})`],
+    [tr("Монет сейчас"), fmt(s.coins)],
+    [tr("Монет за всё время"), fmt(s.totalCoinsEver)],
+    [tr("Алмазов"), String(s.gems)],
+    [tr("Тапов"), fmt(s.stats.tapsTotal)],
+    [tr("Уклонов от снарядов"), fmt(s.stats.burgersDodged)],
+    [tr("Слияний"), fmt(s.stats.merges)],
+    [tr("Прибито голов"), fmt(s.stats.whacks)],
+    [tr("Кейсов открыто"), String(s.stats.casesOpened)],
+    [tr("Друзей"), String(s.friends.length)],
+    [tr("Запусков приложения"), String(s.stats.sessions)],
+    [tr("Играешь с"), new Date(s.createdAt).toLocaleDateString("ru-RU")],
   ];
   return (
     <>
-      <SectionTitle>По играм</SectionTitle>
+      <SectionTitle>{tr("По играм")}</SectionTitle>
       {GAME_META.map((g) => {
         const st = s.games[g.id];
         return (
@@ -503,16 +493,16 @@ function Stats() {
               <span className="t-title-sm clip1">{g.name}</span>
             </div>
             <div className="grid grid-cols-4 text-center" style={{ gap: 8 }}>
-              <Mini v={fmt(st.best)} l="рекорд" acc />
-              <Mini v={String(st.plays)} l="игр" />
-              <Mini v={fmt(st.totalScore)} l="всего" />
-              <Mini v={fmtTime(st.timeMs)} l="время" />
+              <Mini v={fmt(st.best)} l={tr("рекорд")} acc />
+              <Mini v={String(st.plays)} l={tr("игр")} />
+              <Mini v={fmt(st.totalScore)} l={tr("всего")} />
+              <Mini v={fmtTime(st.timeMs)} l={tr("время")} />
             </div>
           </Card>
         );
       })}
       <div style={{ marginTop: 22 }}>
-        <SectionTitle>Общее</SectionTitle>
+        <SectionTitle>{tr("Общее")}</SectionTitle>
       </div>
       <Card r="lg" style={{ overflow: "hidden" }}>
         {rows.map(([k, v], i) => (

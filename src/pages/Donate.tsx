@@ -1,4 +1,5 @@
 import { motion } from "framer-motion";
+import { tr } from "../core/i18n";
 import { Panel, Screen, Tap } from "../ui/Glass";
 import Icon from "../ui/Icon";
 import { sfx, haptic } from "../core/fx";
@@ -8,10 +9,10 @@ export const DONATE_URL = "https://pay.cloudtips.ru/p/cab48a6e";
 export const AUTHOR_URL = "https://t.me/kayorisan";
 
 const PERKS = [
-  { icon: "bolt",    title: "Новые игры",      desc: "Каждое обновление — ещё режимы и механики" },
-  { icon: "users",   title: "Больше друзей",   desc: "Новые персонажи и боссы в общаге" },
-  { icon: "sparkle", title: "Оформление",      desc: "Анимации, скины, украшения" },
-  { icon: "shield",  title: "Без рекламы",     desc: "Ролики только по желанию, за награду" },
+  { icon: "bolt",    title: tr("Новые игры"),      desc: tr("Каждое обновление — ещё режимы и механики") },
+  { icon: "users",   title: tr("Больше друзей"),   desc: tr("Новые персонажи и боссы в общаге") },
+  { icon: "sparkle", title: tr("Оформление"),      desc: tr("Анимации, скины, украшения") },
+  { icon: "shield",  title: tr("Без рекламы"),     desc: tr("Ролики только по желанию, за награду") },
 ] as const;
 
 export default function Donate({ onBack }: { onBack: () => void }) {
@@ -23,8 +24,8 @@ export default function Donate({ onBack }: { onBack: () => void }) {
 
   return (
     <Screen
-      title="ПОДДЕРЖКА"
-      sub="Проект делается для своих"
+      title={tr("ПОДДЕРЖКА")}
+      sub={tr("Проект делается для своих")}
       right={
         <button
           type="button"
@@ -72,9 +73,7 @@ export default function Donate({ onBack }: { onBack: () => void }) {
             <Icon name="heart" size={34} />
           </motion.span>
 
-          <div className="t-display" style={{ fontSize: 26, marginBottom: 8 }}>
-            СПАСИБО
-          </div>
+          <div className="t-display" style={{ fontSize: 26, marginBottom: 8 }}>{tr("СПАСИБО")}</div>
           <div
             className="t-body"
             style={{ color: "var(--text-mute)", lineHeight: 1.6, marginBottom: 20 }}
@@ -94,18 +93,15 @@ export default function Donate({ onBack }: { onBack: () => void }) {
             sound="coin"
           >
             <span className="inline-flex items-center" style={{ gap: 9 }}>
-              <Icon name="gift" size={17} /> ПОДДЕРЖАТЬ ПРОЕКТ
-            </span>
+              <Icon name="gift" size={17} />{tr("ПОДДЕРЖАТЬ ПРОЕКТ")}</span>
           </Tap>
 
-          <div className="t-caption" style={{ marginTop: 11 }}>
-            Откроется CloudTips — карта, СБП
-          </div>
+          <div className="t-caption" style={{ marginTop: 11 }}>{tr("Откроется CloudTips — карта, СБП")}</div>
         </Panel>
       </motion.div>
 
       {/* На что идёт */}
-      <div className="t-label" style={{ marginBottom: 9 }}>Куда пойдут деньги</div>
+      <div className="t-label" style={{ marginBottom: 9 }}>{tr("Куда пойдут деньги")}</div>
       {PERKS.map((p, i) => (
         <motion.div
           key={p.title}
@@ -151,10 +147,8 @@ export default function Donate({ onBack }: { onBack: () => void }) {
             <Icon name="user" size={18} />
           </span>
           <span className="flex-1 min-w-0 text-left">
-            <span className="t-title-sm block">Написать автору</span>
-            <span className="t-caption block" style={{ marginTop: 2 }}>
-              идеи, баги, предложения
-            </span>
+            <span className="t-title-sm block">{tr("Написать автору")}</span>
+            <span className="t-caption block" style={{ marginTop: 2 }}>{tr("идеи, баги, предложения")}</span>
           </span>
           <Icon name="chevron" size={16} />
         </button>

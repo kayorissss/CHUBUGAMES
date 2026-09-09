@@ -123,10 +123,48 @@ const EN: Dict = {
 
 const DICTS: Record<Lang, Dict> = { ru: RU, en: EN };
 
+/**
+ * Второй словарь: ключ — сам русский текст.
+ *
+ * Так переводится интерфейс, который писался сразу по-русски: в разметке
+ * достаточно обернуть строку в t(), не выдумывая ключ. Если перевода нет,
+ * вернётся русский оригинал — интерфейс не сломается и не покажет «ключ.без.перевода».
+ */
+import { EN_TEXT } from "./i18n-en";
+
 /** Возвращает функцию перевода для выбранного языка */
 export function makeT(lang: Lang) {
   const d = DICTS[lang] || RU;
-  return (key: string): string => d[key] ?? RU[key] ?? key;
+  const byText = lang === "en" ? EN_TEXT : null;
+  return (key: string): string => {
+    const viaKey = d[key] ?? RU[key];
+    if (viaKey !== undefined) return viaKey;
+    if (byText) {
+      const hit = byText[key];
+      if (hit !== undefined) return hit;
+    }
+    return key;
+  };
+}
+
+/**
+ * Текущий язык в виде модульной переменной.
+ *
+ * Зачем: интерфейс писался сразу по-русски, и обернуть 350 строк в хук
+ * означало бы протащить t() через все компоненты, включая те, где нет
+ * доступа к состоянию. Функция tr() работает откуда угодно, а перерисовка
+ * происходит сама: язык лежит в сохранении, его смена дёргает провайдер
+ * и всё дерево перерисовывается.
+ */
+let CURRENT: Lang = "ru";
+
+export function setLang(l: Lang) { CURRENT = l; }
+
+/** Перевести строку. Ключ — сам русский текст. */
+export function tr(text: string): string {
+  if (CURRENT === "ru") return text;
+  const hit = EN_TEXT[text];
+  return hit !== undefined ? hit : text;
 }
 
 export const LANGS: { id: Lang; label: string }[] = [

@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import { tr } from "../core/i18n";
 import { AnimatePresence, motion } from "framer-motion";
 import { useGame } from "../core/store";
 import { bossStats } from "../core/save";
@@ -13,12 +14,12 @@ const SKINS = ["#f6d3b0", "#eec9a8", "#e8b48c", "#d9a074", "#c98a5e", "#a9714a",
 const HAIRS = ["#1a1a1e", "#2b2118", "#4a3520", "#7a4a22", "#a8672c", "#c0392b", "#d8c48a", "#e8e8f0", "#5a5a68", "#3b6ea5", "#7a3ba5", "#2fa86b"];
 const EYES = ["#3a2c1e", "#2f5d3a", "#3b6ea5", "#4a4a55", "#6b3f1d", "#2a1c12"];
 const SHIRT_COLORS = ["#2a3140", "#3d4756", "#c86a9a", "#c0392b", "#2f6f4f", "#6b5230", "#1f1f26", "#8f63bd"];
-const HAIR_NAMES = ["Лысый", "Короткие", "Шапка", "Ирокез", "Кудри", "Кепка", "Ёжик", "Длинные", "Штрихкод", "Под машинку"];
-const BROW_NAMES = ["Обычные", "Злые", "Домиком"];
-const FACIAL_NAMES = ["Гладко", "Щетина", "Борода", "Усы", "Козья"];
-const GLASS_NAMES = ["Нет", "Круглые", "Прямые"];
-const SHIRT_NAMES = ["Обычная", "Сетка", "Костюм", "Худи"];
-const PROP_NAMES = ["Нет", "Пиво", "Планшет"];
+const HAIR_NAMES = [tr("Лысый"), tr("Короткие"), tr("Шапка"), tr("Ирокез"), tr("Кудри"), tr("Кепка"), tr("Ёжик"), tr("Длинные"), tr("Штрихкод"), tr("Под машинку")];
+const BROW_NAMES = [tr("Обычные"), tr("Злые"), tr("Домиком")];
+const FACIAL_NAMES = [tr("Гладко"), tr("Щетина"), tr("Борода"), tr("Усы"), tr("Козья")];
+const GLASS_NAMES = [tr("Нет"), tr("Круглые"), tr("Прямые")];
+const SHIRT_NAMES = [tr("Обычная"), tr("Сетка"), tr("Костюм"), tr("Худи")];
+const PROP_NAMES = [tr("Нет"), tr("Пиво"), tr("Планшет")];
 const SHIRT_KEYS = ["plain", "mesh", "suit", "hoodie"] as const;
 const PROP_KEYS = ["none", "beer", "clipboard"] as const;
 
@@ -30,10 +31,10 @@ export default function Friends() {
 
   const newFriend = (): Friend => ({
     id: `f${Date.now().toString(36)}`,
-    name: "НОВЫЙ",
-    nick: "Прозвище",
+    name: tr("НОВЫЙ"),
+    nick: tr("Прозвище"),
     rarity: "common",
-    quote: "Привет.",
+    quote: tr("Привет."),
     look: {
       skin: SKINS[Math.floor(Math.random() * SKINS.length)],
       hair: HAIRS[Math.floor(Math.random() * HAIRS.length)],
@@ -57,12 +58,12 @@ export default function Friends() {
     sfx.power();
     haptic("success");
     const f = s.friends.find((x) => x.id === id);
-    toast({ title: "Главный босс сменён", sub: f?.name, icon: "crown" });
+    toast({ title: tr("Главный босс сменён"), sub: f?.name, icon: "crown" });
   };
 
   return (
     <Screen
-      title="ДРУЗЬЯ"
+      title={tr("ДРУЗЬЯ")}
       sub={`${s.friends.length} персонажей`}
       right={
         <Button
@@ -71,12 +72,10 @@ export default function Friends() {
           onClick={() => { setEditing(newFriend()); setCreating(true); }}
           sound="power"
           icon={<Icon name="plus" size={13} />}
-        >
-          СВОЙ
-        </Button>
+        >{tr("СВОЙ")}</Button>
       }
     >
-        <SectionTitle>Главный босс</SectionTitle>
+        <SectionTitle>{tr("Главный босс")}</SectionTitle>
         <Card r="xl" className="relative overflow-hidden" style={{ padding: 16, marginBottom: 22 }}>
           <div className="flex items-center" style={{ gap: 15 }}>
             <motion.div
@@ -118,22 +117,22 @@ export default function Friends() {
             style={{ columnGap: 18, rowGap: 12, marginTop: 16 }}
           >
             <StatBar
-              l="Меткость"
+              l={tr("Меткость")}
               v={mainFriend.stats.spit}
               effect={`+${(bonus.critBonus * 100).toFixed(1)}% к криту в кликере`}
             />
             <StatBar
-              l="Выносливость"
+              l={tr("Выносливость")}
               v={mainFriend.stats.chub}
               effect={`+${Math.round(bonus.offlineBonus * 100)}% офлайн-дохода`}
             />
             <StatBar
-              l="Безбашенность"
+              l={tr("Безбашенность")}
               v={mainFriend.stats.chaos}
               effect={`+${Math.round(bonus.coinBonus * 100)}% монет везде`}
             />
             <StatBar
-              l="Удача"
+              l={tr("Удача")}
               v={mainFriend.stats.luck}
               effect={`+${Math.round(bonus.luckBonus * 100)}% к редким дропам`}
             />
@@ -148,7 +147,7 @@ export default function Friends() {
           </div>
         </Card>
 
-        <SectionTitle>Все друзья</SectionTitle>
+        <SectionTitle>{tr("Все друзья")}</SectionTitle>
         <div className="grid grid-cols-2" style={{ gap: 12 }}>
           {s.friends.map((f) => {
             const isMain = f.id === s.mainFriendId;
@@ -185,7 +184,7 @@ export default function Friends() {
                     sound="none"
                     style={{ flex: 1, minWidth: 0 }}
                   >
-                    {isMain ? "Босс" : "Выбрать"}
+                    {isMain ? "Босс" : tr("Выбрать")}
                   </Button>
                   {!f.builtin && (
                     <Button
@@ -269,13 +268,13 @@ function Editor({ friend, isNew, onClose }: { friend: Friend; isNew: boolean; on
     });
     sfx.legend();
     haptic("success");
-    toast({ title: isNew ? "Друг добавлен" : "Сохранено", sub: f.name, icon: "users" });
+    toast({ title: isNew ? "Друг добавлен" : tr("Сохранено"), sub: f.name, icon: "users" });
     onClose();
   };
 
   const del = () => {
-    if (f.builtin) { sfx.error(); toast({ title: "Базового друга нельзя удалить", tone: "bad" }); return; }
-    if (s.friends.length <= 2) { sfx.error(); toast({ title: "Должно остаться минимум 2", tone: "bad" }); return; }
+    if (f.builtin) { sfx.error(); toast({ title: tr("Базового друга нельзя удалить"), tone: "bad" }); return; }
+    if (s.friends.length <= 2) { sfx.error(); toast({ title: tr("Должно остаться минимум 2"), tone: "bad" }); return; }
     set((d) => {
       d.friends = d.friends.filter((x) => x.id !== f.id);
       if (d.mainFriendId === f.id) d.mainFriendId = d.friends[0].id;
@@ -373,7 +372,7 @@ function Editor({ friend, isNew, onClose }: { friend: Friend; isNew: boolean; on
                 <input
                   value={f.name}
                   onChange={(e) => setF({ ...f, name: e.target.value.slice(0, 14).toUpperCase() })}
-                  placeholder="ИМЯ"
+                  placeholder={tr("ИМЯ")}
                   className="t-display"
                   style={{
                     background: "rgba(255,255,255,0.06)", border: "1px solid var(--glass-brd)",
@@ -383,7 +382,7 @@ function Editor({ friend, isNew, onClose }: { friend: Friend; isNew: boolean; on
                 <input
                   value={f.nick}
                   onChange={(e) => setF({ ...f, nick: e.target.value.slice(0, 26) })}
-                  placeholder="Прозвище"
+                  placeholder={tr("Прозвище")}
                   style={{
                     background: "rgba(255,255,255,0.06)", border: "1px solid var(--glass-brd)",
                     borderRadius: 10, padding: "7px 12px", fontSize: 12, color: "var(--text-dim)", width: "100%",
@@ -395,7 +394,7 @@ function Editor({ friend, isNew, onClose }: { friend: Friend; isNew: boolean; on
             <input
               value={f.quote}
               onChange={(e) => setF({ ...f, quote: e.target.value.slice(0, 60) })}
-              placeholder="Коронная фраза"
+              placeholder={tr("Коронная фраза")}
               style={{
                 background: "rgba(255,255,255,0.06)", border: "1px solid var(--glass-brd)",
                 borderRadius: 10, padding: "9px 12px", fontSize: 12, color: "var(--text)",
@@ -406,38 +405,36 @@ function Editor({ friend, isNew, onClose }: { friend: Friend; isNew: boolean; on
             <div className="flex gap-2 mb-4">
               <Tap onClick={() => fileRef.current?.click()} r="md" className="flex-1 py-2.5 t-title" style={{ fontSize: 11 }} sound="none">
                 <span className="inline-flex items-center justify-center" style={{ gap: 6 }}>
-                  <Icon name="eye" size={13} /> ФОТО
-                </span>
+                  <Icon name="eye" size={13} />{tr("ФОТО")}</span>
               </Tap>
               <Tap onClick={randomize} r="md" className="flex-1 py-2.5 t-title" style={{ fontSize: 11 }} sound="none">
                 <span className="inline-flex items-center justify-center" style={{ gap: 6 }}>
-                  <Icon name="dice" size={13} /> СЛУЧАЙНО
-                </span>
+                  <Icon name="dice" size={13} />{tr("СЛУЧАЙНО")}</span>
               </Tap>
               <input ref={fileRef} type="file" accept="image/*" hidden onChange={pickPhoto} />
             </div>
 
             {!f.photo && (
               <>
-                <Row label="Кожа">
+                <Row label={tr("Кожа")}>
                   <Swatches list={SKINS} val={f.look.skin} onPick={(v) => updLook("skin", v)} />
                 </Row>
-                <Row label="Волосы">
+                <Row label={tr("Волосы")}>
                   <Swatches list={HAIRS} val={f.look.hair} onPick={(v) => updLook("hair", v)} />
                 </Row>
-                <Row label="Причёска">
+                <Row label={tr("Причёска")}>
                   <Opts list={HAIR_NAMES} val={f.look.hairStyle} onPick={(i) => updLook("hairStyle", i)} />
                 </Row>
-                <Row label="Глаза">
+                <Row label={tr("Глаза")}>
                   <Swatches list={EYES} val={f.look.eyes} onPick={(v) => updLook("eyes", v)} />
                 </Row>
-                <Row label="Брови">
+                <Row label={tr("Брови")}>
                   <Opts list={BROW_NAMES} val={f.look.brow} onPick={(i) => updLook("brow", i)} />
                 </Row>
-                <Row label="Борода">
+                <Row label={tr("Борода")}>
                   <Opts list={FACIAL_NAMES} val={f.look.facial} onPick={(i) => updLook("facial", i)} />
                 </Row>
-                <Row label="Очки">
+                <Row label={tr("Очки")}>
                   <Opts list={GLASS_NAMES} val={f.look.glasses} onPick={(i) => updLook("glasses", i)} />
                 </Row>
                 <Row label={`Ширина лица · ${(f.look.wide * 100).toFixed(0)}%`}>
@@ -447,30 +444,30 @@ function Editor({ friend, isNew, onClose }: { friend: Friend; isNew: boolean; on
                     style={{ width: "100%", accentColor: "var(--acc)" }}
                   />
                 </Row>
-                <Row label="Одежда">
+                <Row label={tr("Одежда")}>
                   <Opts
                     list={SHIRT_NAMES}
                     val={Math.max(0, SHIRT_KEYS.indexOf((f.look.shirt || "plain") as any))}
                     onPick={(i) => updLook("shirt", SHIRT_KEYS[i])}
                   />
                 </Row>
-                <Row label="Цвет одежды">
+                <Row label={tr("Цвет одежды")}>
                   <Swatches
                     list={SHIRT_COLORS}
                     val={f.look.shirtColor || SHIRT_COLORS[0]}
                     onPick={(v) => updLook("shirtColor", v)}
                   />
                 </Row>
-                <Row label="В руках">
+                <Row label={tr("В руках")}>
                   <Opts
                     list={PROP_NAMES}
                     val={Math.max(0, PROP_KEYS.indexOf((f.look.prop || "none") as any))}
                     onPick={(i) => updLook("prop", PROP_KEYS[i])}
                   />
                 </Row>
-                <Row label="Зубы">
+                <Row label={tr("Зубы")}>
                   <Opts
-                    list={["Обычные", "Брекеты"]}
+                    list={[tr("Обычные"), tr("Брекеты")]}
                     val={f.look.braces ? 1 : 0}
                     onPick={(i) => updLook("braces", i === 1)}
                   />
@@ -478,7 +475,7 @@ function Editor({ friend, isNew, onClose }: { friend: Friend; isNew: boolean; on
               </>
             )}
 
-            <Row label="Редкость">
+            <Row label={tr("Редкость")}>
               <div className="flex gap-1.5">
                 {(["common", "rare", "epic", "legend"] as Rarity[]).map((r) => (
                   <button
@@ -498,8 +495,8 @@ function Editor({ friend, isNew, onClose }: { friend: Friend; isNew: boolean; on
               </div>
             </Row>
 
-            <Row label="Характеристики">
-              {([["spit", "МЕТКОСТЬ"], ["chub", "ВЫНОСЛИВОСТЬ"], ["chaos", "БЕЗБАШЕННОСТЬ"], ["luck", "УДАЧА"]] as const).map(([k, l]) => (
+            <Row label={tr("Характеристики")}>
+              {([["spit", tr("МЕТКОСТЬ")], ["chub", tr("ВЫНОСЛИВОСТЬ")], ["chaos", tr("БЕЗБАШЕННОСТЬ")], ["luck", tr("УДАЧА")]] as const).map(([k, l]) => (
                 <div key={k} className="mb-2">
                   <div className="flex justify-between">
                     <span className="t-label" style={{ fontSize: 7 }}>{l}</span>
@@ -520,12 +517,8 @@ function Editor({ friend, isNew, onClose }: { friend: Friend; isNew: boolean; on
                   <Icon name="trash" size={15} />
                 </Tap>
               )}
-              <Tap onClick={onClose} r="md" className="px-5 py-3.5 t-title" style={{ fontSize: 12 }}>
-                Отмена
-              </Tap>
-              <Tap onClick={save} accent r="md" className="flex-1 py-3.5 t-title" style={{ fontSize: 13 }} sound="none">
-                СОХРАНИТЬ
-              </Tap>
+              <Tap onClick={onClose} r="md" className="px-5 py-3.5 t-title" style={{ fontSize: 12 }}>{tr("Отмена")}</Tap>
+              <Tap onClick={save} accent r="md" className="flex-1 py-3.5 t-title" style={{ fontSize: 13 }} sound="none">{tr("СОХРАНИТЬ")}</Tap>
             </div>
           </div>
         </div>

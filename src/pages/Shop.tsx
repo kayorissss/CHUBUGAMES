@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { tr } from "../core/i18n";
 import { AnimatePresence, motion } from "framer-motion";
 import { useGame } from "../core/store";
 import {
@@ -18,7 +19,7 @@ export default function Shop() {
   const { s } = useGame();
   return (
     <Screen
-      title="МАГАЗИН"
+      title={tr("МАГАЗИН")}
       right={
         <Card r="md" className="shrink-0" style={{ padding: "8px 12px" }}>
           <div className="flex items-center" style={{ gap: 10 }}>
@@ -33,9 +34,9 @@ export default function Shop() {
       }
     >
       <div className="flex" style={{ gap: 8, marginBottom: 18 }}>
-        <Chip active={tab === "cases"} onClick={() => setTab("cases")}>Кейсы</Chip>
-        <Chip active={tab === "skins"} onClick={() => setTab("skins")}>Скины</Chip>
-        <Chip active={tab === "themes"} onClick={() => setTab("themes")}>Темы</Chip>
+        <Chip active={tab === "cases"} onClick={() => setTab("cases")}>{tr("Кейсы")}</Chip>
+        <Chip active={tab === "skins"} onClick={() => setTab("skins")}>{tr("Скины")}</Chip>
+        <Chip active={tab === "themes"} onClick={() => setTab("themes")}>{tr("Темы")}</Chip>
       </div>
       {tab === "cases" && <Cases />}
       {tab === "skins" && <Skins />}
@@ -50,6 +51,10 @@ function Cases() {
   const [rolling, setRolling] = useState<null | { friend: Friend; rarity: Rarity; dupe: boolean }>(null);
   const [spinning, setSpinning] = useState(false);
   const [reel, setReel] = useState<Friend[]>([]);
+  /** Что выпадет — знаем заранее, чтобы подсветить финал и добавить напряжения */
+  const [pending, setPending] = useState<Rarity>("common");
+  /** «почти доехали» — на этой фазе лента ползёт и экран дрожит */
+  const [nearEnd, setNearEnd] = useState(false);
 
   const open = (caseId: string) => {
     const c = CASES.find((x) => x.id === caseId)!;
@@ -80,6 +85,15 @@ function Cases() {
     for (let i = 0; i < 26; i++) strip.push(s.friends[Math.floor(Math.random() * s.friends.length)]);
     strip[22] = picked;
     setReel(strip);
+    setPending(rarity);
+    setNearEnd(false);
+    // За 900 мс до остановки включаем «замедление»: барабан почти встал,
+    // экран мелко дрожит — именно здесь и рождается ожидание.
+    const nearT = setTimeout(() => {
+      setNearEnd(true);
+      haptic("light");
+    }, 2100);
+    void nearT;
 
     setTimeout(() => {
       const dupe = (s.cards[picked.id] || 0) > 0;
@@ -91,19 +105,19 @@ function Cases() {
       });
       addXp(60);
       setSpinning(false);
+      setNearEnd(false);
       setRolling({ friend: picked, rarity, dupe });
       if (rarity === "legend") sfx.legend();
       else sfx.achieve();
       haptic("success");
-      if (dupe) toast({ title: "Дубликат", sub: `+${fmt(comp)} монет компенсации`, icon: "refresh" });
-    }, 2600);
+      if (dupe) toast({ title: tr("Дубликат"), sub: `+${fmt(comp)} монет компенсации`, icon: "refresh" });
+    }, 3000);
   };
 
   return (
     <>
-      <SectionTitle>Кейсы с карточками друзей</SectionTitle>
-      <div className="t-body" style={{ marginBottom: 14 }}>
-        Каждая карточка навсегда даёт <span className="acc-text">+0.4% ко всем монетам</span>.
+      <SectionTitle>{tr("Кейсы с карточками друзей")}</SectionTitle>
+      <div className="t-body" style={{ marginBottom: 14 }}>{tr("Каждая карточка навсегда даёт")}<span className="acc-text">{tr("+0.4% ко всем монетам")}</span>.
         Дубликаты возвращают 35% стоимости кейса.
       </div>
 
@@ -139,8 +153,7 @@ function Cases() {
             disabled={s.coins < c.price || spinning}
             onClick={() => open(c.id)}
           >
-            <span className="inline-flex items-center" style={{ gap: 6 }}>
-                    Открыть <Icon name="coin" size={13} /> {fmt(c.price)}
+            <span className="inline-flex items-center" style={{ gap: 6 }}>{tr("Открыть")}<Icon name="coin" size={13} /> {fmt(c.price)}
                   </span>
           </Button>
         </Card>
@@ -149,9 +162,7 @@ function Cases() {
       <div style={{ marginTop: 22 }}>
         <SectionTitle
           right={<span className="t-num" style={{ fontSize: 11, color: "var(--text-mute)" }}>{Object.keys(s.cards).length}/{s.friends.length}</span>}
-        >
-          Коллекция
-        </SectionTitle>
+        >{tr("Коллекция")}</SectionTitle>
       </div>
       <div className="grid grid-cols-4" style={{ gap: 9 }}>
         {s.friends.map((f) => {
@@ -196,65 +207,168 @@ function Cases() {
             onClick={() => !spinning && setRolling(null)}
           >
             {spinning ? (
-              <div className="w-full max-w-sm">
-                <div className="t-label text-center" style={{ marginBottom: 14 }}>Открываем…</div>
-                <Card r="lg" className="relative overflow-hidden" style={{ height: 120 }}>
+              <motion.div
+                className="w-full max-w-sm"
+                // на финише экран мелко дрожит — «вот-вот встанет»
+                animate={nearEnd ? { x: [0, -2.5, 2.5, -1.5, 1.5, 0] } : {}}
+                transition={nearEnd ? { duration: 0.28, repeat: Infinity } : {}}
+              >
+                <motion.div
+                  className="t-label text-center"
+                  style={{ marginBottom: 14 }}
+                  animate={nearEnd ? { opacity: [1, 0.45, 1] } : {}}
+                  transition={{ duration: 0.7, repeat: Infinity }}
+                >
+                  {nearEnd ? tr("Почти…") : tr("Открываем…")}
+                </motion.div>
+                <Card
+                  r="lg"
+                  className="relative overflow-hidden"
+                  style={{
+                    height: 120,
+                    // к концу рамка окрашивается в цвет выпавшей редкости
+                    borderColor: nearEnd ? `${RARITY_COLOR[pending]}88` : undefined,
+                    boxShadow: nearEnd ? `0 0 44px -10px ${RARITY_COLOR[pending]}` : undefined,
+                    transition: "border-color 0.5s, box-shadow 0.5s",
+                  }}
+                >
+                  {/* световой столб по центру — за ним и «останавливается» приз */}
+                  <motion.div
+                    className="absolute pointer-events-none"
+                    animate={{ opacity: nearEnd ? [0.25, 0.55, 0.25] : 0.18 }}
+                    transition={{ duration: 0.9, repeat: Infinity }}
+                    style={{
+                      left: "50%", top: 0, bottom: 0, width: 92, marginLeft: -46,
+                      background: `linear-gradient(90deg, transparent, ${RARITY_COLOR[pending]}, transparent)`,
+                    }}
+                  />
                   <motion.div
                     className="flex items-center gap-3 absolute"
                     style={{ top: 22, left: 0, padding: "0 40%" }}
                     initial={{ x: 0 }}
                     animate={{ x: -22 * 86 + 40 }}
-                    transition={{ duration: 2.5, ease: [0.16, 0.9, 0.25, 1] }}
+                    // Резкое торможение в самом конце: почти вся дистанция
+                    // пролетает быстро, последние головы ползут — так ожидание
+                    // приходится на момент, когда уже видно соседние карточки.
+                    transition={{ duration: 2.95, ease: [0.07, 0.85, 0.12, 1] }}
                   >
                     {reel.map((f, i) => (
-                      <div key={i} style={{ width: 74, flexShrink: 0 }}>
+                      <motion.div
+                        key={i}
+                        style={{ width: 74, flexShrink: 0 }}
+                        animate={
+                          nearEnd && i === 22
+                            ? { scale: [1, 1.14, 1], filter: "saturate(1.35)" }
+                            : {}
+                        }
+                        transition={{ duration: 0.8, repeat: Infinity }}
+                      >
                         <HeadView friend={f} size={74} />
-                      </div>
+                      </motion.div>
                     ))}
                   </motion.div>
                   <div
                     className="absolute"
                     style={{
                       left: "50%", top: 0, bottom: 0, width: 3, marginLeft: -1.5,
-                      background: "var(--acc)", boxShadow: "0 0 18px var(--acc-glow)",
+                      background: nearEnd ? RARITY_COLOR[pending] : "var(--acc)",
+                      boxShadow: `0 0 18px ${nearEnd ? RARITY_COLOR[pending] : "var(--acc-glow)"}`,
+                      transition: "background 0.4s",
                     }}
                   />
                 </Card>
-              </div>
+              </motion.div>
             ) : rolling ? (
               <motion.div
                 initial={{ scale: 0.6, opacity: 0, rotateY: 90 }}
                 animate={{ scale: 1, opacity: 1, rotateY: 0 }}
                 transition={{ type: "spring", stiffness: 240, damping: 20 }}
-                className="w-full max-w-xs"
+                className="w-full max-w-xs relative"
               >
+                {/* Расходящиеся лучи — только для редкого и выше, чтобы
+                    обычная карточка не выглядела как джекпот. */}
+                {rolling.rarity !== "common" && (
+                  <motion.div
+                    className="absolute pointer-events-none"
+                    initial={{ opacity: 0, scale: 0.4, rotate: 0 }}
+                    animate={{ opacity: 0.5, scale: 1, rotate: 360 }}
+                    transition={{
+                      opacity: { duration: 0.5 },
+                      scale: { duration: 0.6, ease: "backOut" },
+                      rotate: { duration: 26, repeat: Infinity, ease: "linear" },
+                    }}
+                    style={{
+                      inset: "-32%",
+                      background: `conic-gradient(from 0deg, transparent 0deg, ${RARITY_COLOR[rolling.rarity]}55 12deg, transparent 24deg, transparent 45deg, ${RARITY_COLOR[rolling.rarity]}55 57deg, transparent 69deg, transparent 90deg, ${RARITY_COLOR[rolling.rarity]}55 102deg, transparent 114deg, transparent 135deg, ${RARITY_COLOR[rolling.rarity]}55 147deg, transparent 159deg, transparent 180deg, ${RARITY_COLOR[rolling.rarity]}55 192deg, transparent 204deg, transparent 225deg, ${RARITY_COLOR[rolling.rarity]}55 237deg, transparent 249deg, transparent 270deg, ${RARITY_COLOR[rolling.rarity]}55 282deg, transparent 294deg, transparent 315deg, ${RARITY_COLOR[rolling.rarity]}55 327deg, transparent 339deg)`,
+                      filter: "blur(2px)",
+                    }}
+                  />
+                )}
+                {/* Искры вокруг легендарки */}
+                {rolling.rarity === "legend" &&
+                  Array.from({ length: 14 }).map((_, i) => {
+                    const a = (i / 14) * Math.PI * 2;
+                    return (
+                      <motion.span
+                        key={i}
+                        className="absolute pointer-events-none"
+                        initial={{ opacity: 0, x: 0, y: 0, scale: 0.4 }}
+                        animate={{
+                          opacity: [0, 1, 0],
+                          x: Math.cos(a) * 150,
+                          y: Math.sin(a) * 150,
+                          scale: [0.4, 1, 0.3],
+                        }}
+                        transition={{
+                          duration: 1.5,
+                          delay: 0.15 + (i % 5) * 0.07,
+                          repeat: Infinity,
+                          repeatDelay: 1.1,
+                        }}
+                        style={{
+                          left: "50%", top: "50%",
+                          width: 7, height: 7, borderRadius: 999,
+                          background: RARITY_COLOR.legend,
+                          boxShadow: `0 0 12px ${RARITY_COLOR.legend}`,
+                        }}
+                      />
+                    );
+                  })}
                 <Card
-                  r="xl" className="text-center"
+                  r="xl" className="text-center relative"
                   style={{
                     padding: 24,
                     boxShadow: `0 0 60px -14px ${RARITY_COLOR[rolling.rarity]}`,
                     borderColor: `${RARITY_COLOR[rolling.rarity]}66`,
                   }}
                 >
-                  <div className="t-label" style={{ fontSize: 9.5, color: RARITY_COLOR[rolling.rarity] }}>
-                    {RARITY_LABEL[rolling.rarity]}
-                  </div>
                   <motion.div
-                    animate={{ y: [0, -8, 0] }}
-                    transition={{ repeat: Infinity, duration: 2.4 }}
+                    className="t-label"
+                    initial={{ opacity: 0, y: -8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.3 }}
+                    style={{ fontSize: 9.5, color: RARITY_COLOR[rolling.rarity] }}
+                  >
+                    {RARITY_LABEL[rolling.rarity]}
+                  </motion.div>
+                  <motion.div
                     className="my-4"
+                    initial={{ scale: 0.55, y: 18 }}
+                    animate={{ scale: 1, y: [0, -8, 0] }}
+                    transition={{
+                      scale: { type: "spring", stiffness: 300, damping: 13, delay: 0.1 },
+                      y: { repeat: Infinity, duration: 2.4, delay: 0.5 },
+                    }}
                   >
                     <HeadView friend={rolling.friend} size={132} style={{ margin: "0 auto" }} />
                   </motion.div>
                   <div className="t-display-sm" style={{ marginTop: 4 }}>{rolling.friend.name}</div>
                   <div className="t-caption" style={{ marginTop: 4 }}>{rolling.friend.nick}</div>
                   {rolling.dupe && (
-                    <div className="t-label" style={{ marginTop: 10 }}>Дубликат · компенсация выдана</div>
+                    <div className="t-label" style={{ marginTop: 10 }}>{tr("Дубликат · компенсация выдана")}</div>
                   )}
                   <div style={{ marginTop: 20 }}>
-                    <Button variant="primary" size="lg" full onClick={() => setRolling(null)}>
-                      Забрать
-                    </Button>
+                    <Button variant="primary" size="lg" full onClick={() => setRolling(null)}>{tr("Забрать")}</Button>
                   </div>
                 </Card>
               </motion.div>
@@ -280,7 +394,7 @@ function Skins() {
     set((d) => { d.ownedSkins.push(id); d.heroSkin = id; });
     sfx.legend();
     haptic("success");
-    toast({ title: "Скин куплен", sub: name, icon: "user", tone: "gold" });
+    toast({ title: tr("Скин куплен"), sub: name, icon: "user", tone: "gold" });
   };
 
   return (
@@ -362,11 +476,11 @@ function Themes() {
     set((d) => { d.ownedThemes.push(id); d.settings.accent = id; });
     sfx.legend();
     haptic("success");
-    toast({ title: "Акцент куплен", sub: name, icon: "sparkle", tone: "gold" });
+    toast({ title: tr("Акцент куплен"), sub: name, icon: "sparkle", tone: "gold" });
   };
   return (
     <>
-      <SectionTitle>Акцентный цвет</SectionTitle>
+      <SectionTitle>{tr("Акцентный цвет")}</SectionTitle>
       <div className="grid grid-cols-2" style={{ gap: 12 }}>
         {ACCENTS.map((a) => {
           const owned = s.ownedThemes.includes(a.id);

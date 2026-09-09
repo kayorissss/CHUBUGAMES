@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import { tr } from "../core/i18n";
 import { AnimatePresence, motion } from "framer-motion";
 import { Card, Screen, Divider } from "../ui/Glass";
 import Icon from "../ui/Icon";
@@ -22,8 +23,8 @@ export default function Network({ onBack }: { onBack: () => void }) {
 
   return (
     <Screen
-      title="ИНТЕРНЕТ"
-      sub="Глушилки и скорость"
+      title={tr("ИНТЕРНЕТ")}
+      sub={tr("Глушилки и скорость")}
       right={
         <button
           type="button"
@@ -47,7 +48,7 @@ export default function Network({ onBack }: { onBack: () => void }) {
           borderRadius: "var(--r-md)",
         }}
       >
-        {([["block", "ГЛУШИЛКИ", "shield"], ["speed", "СКОРОСТЬ", "speed"]] as const).map(
+        {([["block", tr("ГЛУШИЛКИ"), "shield"], ["speed", tr("СКОРОСТЬ"), "speed"]] as const).map(
           ([id, label, icon]) => {
             const on = tab === id;
             return (
@@ -137,7 +138,7 @@ function BlockCheck() {
             fontWeight: 700, opacity: busy ? 0.6 : 1,
           }}
         >
-          {busy ? "ПРОВЕРЯЮ…" : v ? "ПРОВЕРИТЬ ЕЩЁ РАЗ" : "ПРОВЕРИТЬ"}
+          {busy ? "ПРОВЕРЯЮ…" : v ? "ПРОВЕРИТЬ ЕЩЁ РАЗ" : tr("ПРОВЕРИТЬ")}
         </button>
       </Card>
 
@@ -180,16 +181,16 @@ function BlockCheck() {
 
             {/* Группы */}
             <GroupCard
-              title="РОССИЙСКИЕ СЕРВИСЫ"
-              hint="Обычно доступны всегда"
+              title={tr("РОССИЙСКИЕ СЕРВИСЫ")}
+              hint={tr("Обычно доступны всегда")}
               probes={ru}
               ok={v.ruOk}
               total={v.ruTotal}
               avg={v.ruAvg}
             />
             <GroupCard
-              title="ЗАРУБЕЖНЫЕ СЕРВИСЫ"
-              hint="Первыми отваливаются при шейпинге"
+              title={tr("ЗАРУБЕЖНЫЕ СЕРВИСЫ")}
+              hint={tr("Первыми отваливаются при шейпинге")}
               probes={world}
               ok={v.worldOk}
               total={v.worldTotal}
@@ -213,8 +214,8 @@ function Pinging() {
         >
           <Icon name="wifi" size={38} />
         </motion.div>
-        <div className="t-title-sm" style={{ marginTop: 12 }}>Пингую хосты</div>
-        <div className="t-caption" style={{ marginTop: 4 }}>это займёт пару секунд</div>
+        <div className="t-title-sm" style={{ marginTop: 12 }}>{tr("Пингую хосты")}</div>
+        <div className="t-caption" style={{ marginTop: 4 }}>{tr("это займёт пару секунд")}</div>
       </div>
     </Card>
   );
@@ -239,7 +240,7 @@ function GroupCard({
         <div className="flex items-baseline justify-between" style={{ marginTop: 3, gap: 10 }}>
           <div className="t-caption">{hint}</div>
           <div className="t-caption shrink-0">
-            {avg !== null ? `в среднем ${avg} мс` : "нет ответа"}
+            {avg !== null ? `в среднем ${avg} мс` : tr("нет ответа")}
           </div>
         </div>
       </div>
@@ -263,7 +264,7 @@ function GroupCard({
                   </span>
                 </>
               ) : (
-                <span className="t-num" style={{ fontSize: 11.5, color: "#ff5a3c" }}>нет связи</span>
+                <span className="t-num" style={{ fontSize: 11.5, color: "#ff5a3c" }}>{tr("нет связи")}</span>
               )}
             </span>
           </motion.div>
@@ -321,7 +322,7 @@ function SpeedTest() {
       haptic("success");
       sfx.achieve?.();
     } else {
-      setErr("Не удалось замерить. Проверь, есть ли вообще интернет.");
+      setErr(tr("Не удалось замерить. Проверь, есть ли вообще интернет."));
       haptic("error");
     }
   };
@@ -372,7 +373,7 @@ function SpeedTest() {
           <div className="t-num" style={{ fontSize: 34, marginTop: 2, lineHeight: 1 }}>
             {shown > 0 ? shown.toFixed(1) : "—"}
           </div>
-          <div className="t-label" style={{ marginTop: 5 }}>МБИТ/С</div>
+          <div className="t-label" style={{ marginTop: 5 }}>{tr("МБИТ/С")}</div>
 
           {busy && (
             <div className="t-caption" style={{ marginTop: 9 }}>
@@ -408,7 +409,7 @@ function SpeedTest() {
               fontWeight: 700, opacity: busy ? 0.6 : 1,
             }}
           >
-            {busy ? "ИЗМЕРЯЮ…" : res ? "ЗАМЕРИТЬ СНОВА" : "ЗАМЕРИТЬ СКОРОСТЬ"}
+            {busy ? "ИЗМЕРЯЮ…" : res ? "ЗАМЕРИТЬ СНОВА" : tr("ЗАМЕРИТЬ СКОРОСТЬ")}
           </button>
         </div>
       </Card>
@@ -416,10 +417,10 @@ function SpeedTest() {
       {res && !busy && (
         <Card r="lg" style={{ padding: 0, overflow: "hidden" }}>
           {([
-            ["Скорость", `${res.mbps} Мбит/с`],
-            ["Скачано", fmtBytesShort(res.bytes)],
-            ["Время замера", `${(res.ms / 1000).toFixed(1)} с`],
-            ["Хватит на", res.mbps >= 20 ? "видео 1080p" : res.mbps >= 8 ? "видео 720p" : res.mbps >= 3 ? "музыку и соцсети" : "только текст"],
+            [tr("Скорость"), `${res.mbps} Мбит/с`],
+            [tr("Скачано"), fmtBytesShort(res.bytes)],
+            [tr("Время замера"), `${(res.ms / 1000).toFixed(1)} с`],
+            [tr("Хватит на"), res.mbps >= 20 ? "видео 1080p" : res.mbps >= 8 ? "видео 720p" : res.mbps >= 3 ? "музыку и соцсети" : tr("только текст")],
           ] as const).map(([k, val], i, arr) => (
             <div key={k}>
               <div className="flex items-center justify-between" style={{ padding: "12px 14px", gap: 10 }}>

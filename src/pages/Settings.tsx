@@ -1,13 +1,15 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { useGame } from "../core/store";
 import { Card, Button, SectionTitle, Screen, Divider } from "../ui/Glass";
 import Updater from "../ui/Updater";
 import {
   askNotifyPermission,
+  disableBackgroundCheck,
   enableBackgroundCheck,
-  notifyGranted,
+  isNativeApp,
 } from "../core/notify";
+import { tr } from "../core/i18n";
 import Icon, { type IconName } from "../ui/Icon";
 import { ACCENTS } from "../core/content";
 import { SAVE_KEY, migrate, persistNow } from "../core/save";
@@ -148,8 +150,7 @@ export default function Settings({
               );
             })}
           </div>
-          <div className="t-caption" style={{ marginTop: 9 }}>
-            Ещё цвета — в <span className="acc-text">Магазине → Темы</span>
+          <div className="t-caption" style={{ marginTop: 9 }}>{tr("Ещё цвета — в")}<span className="acc-text">{tr("Магазине → Темы")}</span>
           </div>
         </div>
       </Card>
@@ -185,20 +186,13 @@ export default function Settings({
         <NotifyToggle />
       </Card>
 
-      <SectionTitle>Инструменты</SectionTitle>
+      <SectionTitle>{tr("Инструменты")}</SectionTitle>
       <Card r="lg" style={{ padding: 0, marginBottom: 22, overflow: "hidden" }}>
         <NavRow
           icon="wifi"
           title="Проверка глушилок"
           sub="Пинг российских и зарубежных сервисов, скорость"
           onClick={() => onOpen?.("network")}
-        />
-        <Divider inset={14} />
-        <NavRow
-          icon="brain"
-          title="Спросить у ИИ"
-          sub="Чат с DeepSeek · бета"
-          onClick={() => onOpen?.("ai")}
         />
       </Card>
 
@@ -210,10 +204,10 @@ export default function Settings({
         </div>
         <div className="flex" style={{ gap: 8 }}>
           <Button variant="secondary" full onClick={exportSave} sound="none">
-            <span className="inline-flex items-center" style={{ gap: 7 }}><Icon name="download" size={14} /> Выгрузить</span>
+            <span className="inline-flex items-center" style={{ gap: 7 }}><Icon name="download" size={14} />{tr("Выгрузить")}</span>
           </Button>
           <Button variant="secondary" full onClick={() => fileRef.current?.click()} sound="none">
-            <span className="inline-flex items-center" style={{ gap: 7 }}><Icon name="upload" size={14} /> Загрузить</span>
+            <span className="inline-flex items-center" style={{ gap: 7 }}><Icon name="upload" size={14} />{tr("Загрузить")}</span>
           </Button>
           <input ref={fileRef} type="file" accept="application/json" hidden onChange={importSave} />
         </div>
@@ -227,9 +221,7 @@ export default function Settings({
             full
             onClick={() => { setConfirmReset(true); sfx.error(); }}
             sound="none"
-          >
-            Сбросить весь прогресс
-          </Button>
+          >{tr("Сбросить весь прогресс")}</Button>
         ) : (
           <>
             <div
@@ -239,18 +231,14 @@ export default function Settings({
               Удалятся уровень {s.level}, {fmt(s.coins)} монет, все ачивки и друзья. Точно?
             </div>
             <div className="flex" style={{ gap: 8 }}>
-              <Button variant="secondary" full onClick={() => setConfirmReset(false)}>
-                Нет
-              </Button>
+              <Button variant="secondary" full onClick={() => setConfirmReset(false)}>{tr("Нет")}</Button>
               <Button
                 variant="primary"
                 full
                 sound="none"
                 onClick={() => { hardReset(); setConfirmReset(false); }}
                 style={{ background: "var(--danger)", color: "#fff" }}
-              >
-                Удалить всё
-              </Button>
+              >{tr("Удалить всё")}</Button>
             </div>
           </>
         )}
@@ -292,9 +280,7 @@ export default function Settings({
             Telegram: @kayorisan
           </Button>
         </div>
-        <div className="t-caption" style={{ marginTop: 10, lineHeight: 1.5 }}>
-          Все друзья, шутки и головы — реальные. Претензии тоже принимаются в телеграм.
-        </div>
+        <div className="t-caption" style={{ marginTop: 10, lineHeight: 1.5 }}>{tr("Все друзья, шутки и головы — реальные. Претензии тоже принимаются в телеграм.")}</div>
       </Card>
 
       <div className="text-center" style={{ paddingBlock: 18 }}>
@@ -316,54 +302,75 @@ export default function Settings({
  * первом запуске, где человек не поймёт, о чём его просят.
  */
 function NotifyToggle() {
-  const { toast } = useGame();
-  const [on, setOn] = useState(false);
+  const { s, set, toast } = useGame();
   const [busy, setBusy] = useState(false);
-
-  useEffect(() => { void notifyGranted().then(setOn); }, []);
+  const on = s.settings.notifyUpdates;
 
   const toggle = async () => {
     if (busy) return;
+
+    // Выключение — наша настройка. Системное разрешение не трогаем:
+    // отозвать его из приложения нельзя, да и незачем.
     if (on) {
-      // Отозвать разрешение из приложения нельзя — это делается в системе
-      toast({
-        title: "Отключается в настройках телефона",
-        sub: "Приложения · ЧУБУГЕЙМ · Уведомления",
-        icon: "info",
-      });
+      set((d) => { d.settings.notifyUpdates = false; });
+      void disableBackgroundCheck();
+      toast({ title: tr("Больше не напоминаю"), icon: "check" });
       return;
     }
+
     setBusy(true);
-    const ok = await askNotifyPermission();
-    if (ok) {
+    try {
+      const okPerm = await askNotifyPermission();
+      if (!okPerm) {
+        toast({
+          title: tr("Нужно разрешить уведомления"),
+          sub: tr("Настройки телефона · Приложения · ЧУБУГЕЙМ"),
+          icon: "warn",
+          tone: "bad",
+        });
+        return;
+      }
       await enableBackgroundCheck();
-      setOn(true);
-      toast({ title: "Буду напоминать об обновлениях", icon: "check", tone: "gold" });
-    } else {
-      toast({ title: "Уведомления запрещены", sub: "Разреши их в настройках телефона", icon: "warn", tone: "bad" });
+      set((d) => { d.settings.notifyUpdates = true; });
+      toast({
+        title: tr("Напомню о новой версии"),
+        sub: tr("Проверяю примерно раз в час"),
+        icon: "check",
+        tone: "gold",
+      });
+    } finally {
+      setBusy(false);
     }
-    setBusy(false);
   };
 
   return (
     <Toggle
-      label="Уведомлять об обновлениях"
-      hint="Напомню о новой версии, даже когда игра закрыта"
+      label={tr("Уведомлять об обновлениях")}
+      hint={
+        isNativeApp()
+          ? tr("Напомню о новой версии, даже когда игра закрыта")
+          : tr("Работает только в приложении на телефоне")
+      }
       on={on}
+      disabled={busy || !isNativeApp()}
       onToggle={() => { void toggle(); }}
     />
   );
 }
 
 function Toggle({
-  label, hint, on, onToggle,
-}: { label: string; hint?: string; on: boolean; onToggle: () => void }) {
+  label, hint, on, onToggle, disabled,
+}: {
+  label: string; hint?: string; on: boolean; onToggle: () => void;
+  disabled?: boolean;
+}) {
   return (
     <button
       type="button"
+      disabled={disabled}
       onClick={() => { sfx.click(); haptic("light"); onToggle(); }}
       className="w-full flex items-center justify-between"
-      style={{ padding: "13px 14px", gap: 14 }}
+      style={{ padding: "13px 14px", gap: 14, opacity: disabled ? 0.5 : 1 }}
     >
       <div className="text-left min-w-0">
         <div className="t-title-sm" style={{ fontWeight: 600 }}>{label}</div>
@@ -482,9 +489,7 @@ const DIFFS: {
 function DiffPicker({ value, onPick }: { value: Diff; onPick: (v: Diff) => void }) {
   return (
     <div style={{ padding: "13px 14px" }}>
-      <div className="t-label" style={{ fontSize: 9.5, marginBottom: 11 }}>
-        СЛОЖНОСТЬ
-      </div>
+      <div className="t-label" style={{ fontSize: 9.5, marginBottom: 11 }}>{tr("СЛОЖНОСТЬ")}</div>
       <div className="flex" style={{ gap: 9 }}>
         {DIFFS.map((d) => {
           const on = value === d.id;

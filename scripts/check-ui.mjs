@@ -148,7 +148,7 @@ ok(fs.existsSync('src/ui/UpdateBanner.tsx')&&app.includes('<UpdateBanner'),'ав
 ok(fs.existsSync('src/ui/GameIcon.tsx'),'иконки игр векторные, без эмодзи');
 const home=fs.readFileSync('src/pages/Home.tsx','utf8');
 ok(home.includes('GameIcon')&&home.includes('onOpenProfile'),'уровень кликабельный, ведёт в статистику');
-ok(fs.existsSync('src/core/ai.ts')&&fs.existsSync('src/pages/AiPage.tsx'),'«Спросить у ИИ» — отдельная страница');
+ok(!fs.existsSync('src/pages/AiPage.tsx')&&!fs.existsSync('src/core/ai.ts'),'режим ИИ удалён по просьбе пользователя');
 const bite=fs.readFileSync('src/games/ArtyomBite.tsx','utf8');
 ok(bite.includes('"rules"'),'у «Зубов Артёма» есть экран правил');
 const run=fs.readFileSync('src/games/ShitovRun.tsx','utf8');
@@ -176,6 +176,33 @@ ok(gl.includes('minHeight: minH')&&gl.includes('Unbounded'),'кнопки с о�
 for (const [f,n] of [['BurgerStack','Башня Лёхи'],['Canteen','Столовка'],['WhoWasIt','Кто это был'],['RadomirFlight','Полёт Радомира'],['DormDefense','Оборона общаги']])
   ok(fs.existsSync(`src/games/${f}.tsx`)&&app.includes(`<${f}`),`новая игра «${n}» подключена`);
 ok(fs.readFileSync('src/core/types.ts','utf8').includes('"stack"'),'новые игры есть в GameId');
+
+
+console.log('\n[16] Язык, боссы, режимы, кейсы');
+const i18n=fs.readFileSync('src/core/i18n.ts','utf8');
+ok(i18n.includes('export function tr('),'есть глобальная функция перевода');
+const enTxt=fs.readFileSync('src/core/i18n-en.ts','utf8');
+const enKeys=(enTxt.match(/^\s{2}"(?:[^"\\]|\\.)+":/gm)||[]).length;
+ok(enKeys>300,`английский словарь заполнен (${enKeys} строк)`);
+const uiFiles=['src/pages/Home.tsx','src/pages/Progress.tsx','src/pages/Shop.tsx','src/pages/Friends.tsx','src/pages/Casino.tsx','src/pages/Settings.tsx','src/games/shell.tsx'];
+let wrapped=0;
+for(const f of uiFiles) wrapped+=(fs.readFileSync(f,'utf8').match(/tr\("/g)||[]).length;
+ok(wrapped>200,`интерфейс обёрнут в перевод (${wrapped} строк)`);
+const hm=fs.readFileSync('src/pages/Home.tsx','utf8');
+ok(hm.includes('СЛЕДУЮЩИЙ БОСС'),'карточка боссов видна всегда, с таймером до следующего');
+ok(!hm.includes('▶'),'эмодзи-стрелка заменена на SVG');
+const md=fs.readFileSync('src/core/modes.tsx','utf8');
+ok(md.includes('survivalMult')&&md.includes('SPRINT_MS'),'добавлены режимы «Выживание» и «Спринт»');
+ok(md.includes('Math.min(cleared, 12)'),'множитель выживания ограничен сверху');
+const mp=fs.readFileSync('src/ui/ModesPanel.tsx','utf8');
+ok(mp.includes('startSurvival')&&mp.includes('startSprint'),'новые режимы выведены на главную');
+const shp=fs.readFileSync('src/pages/Shop.tsx','utf8');
+ok(shp.includes('nearEnd'),'у кейсов есть фаза замедления перед открытием');
+ok(shp.includes('conic-gradient'),'редкий дроп подсвечивается лучами');
+const stg2=fs.readFileSync('src/pages/Settings.tsx','utf8');
+ok(stg2.includes('notifyUpdates'),'тумблер уведомлений хранит своё состояние');
+const ty=fs.readFileSync('src/core/types.ts','utf8');
+ok(ty.includes('notifyUpdates'),'настройка уведомлений есть в типах сохранения');
 
 console.log(fails===0?'\n✅ ВСЕ ПРОВЕРКИ ВЁРСТКИ ПРОЙДЕНЫ\n':`\n❌ ПРОВАЛЕНО: ${fails}\n`);
 process.exit(fails?1:0);

@@ -1,9 +1,10 @@
 import { useEffect, useRef } from "react";
+import { tr } from "../core/i18n";
 import { motion } from "framer-motion";
 import { Panel, Tap } from "../ui/Glass";
 import { fmt } from "../core/format";
 import Icon from "../ui/Icon";
-import { useModes, MARATHON_ROUNDS } from "../core/modes";
+import { useModes, MARATHON_ROUNDS, survivalMult } from "../core/modes";
 import { useGame } from "../core/store";
 
 export function useCanvas(
@@ -55,7 +56,7 @@ export function useCanvas(
 }
 
 export function GameHUD({
-  score, best, extra, onExit, label = "ОЧКИ",
+  score, best, extra, onExit, label = tr("ОЧКИ"),
 }: {
   score: number; best: number; extra?: React.ReactNode; onExit: () => void; label?: string;
 }) {
@@ -75,7 +76,7 @@ export function GameHUD({
           <div className="t-num" style={{ fontSize: 21, lineHeight: 1 }}>{fmt(score)}</div>
         </div>
         <div className="text-right">
-          <div className="t-label" style={{ fontSize: 9 }}>Рекорд</div>
+          <div className="t-label" style={{ fontSize: 9 }}>{tr("Рекорд")}</div>
           <div className="t-num acc-text" style={{ fontSize: 15, lineHeight: 1.2 }}>{fmt(best)}</div>
         </div>
       </Panel>
@@ -85,7 +86,7 @@ export function GameHUD({
 }
 
 export function GameOver({
-  score, best, coins, xp, onRetry, onExit, title = "ВСЁ", sub, onRevive,
+  score, best, coins, xp, onRetry, onExit, title = tr("ВСЁ"), sub, onRevive,
 }: {
   score: number; best: number; coins: number; xp: number;
   onRetry: () => void; onExit: () => void; title?: string; sub?: string;
@@ -95,6 +96,8 @@ export function GameOver({
   const isRecord = score >= best && score > 0;
   const modes = useModes();
   const run = modes?.run ?? null;
+  const surv = modes?.survival ?? null;
+  const spr = modes?.sprint ?? null;
   const { addCoins, toast } = useGame();
 
   // В марафоне свой экран итогов: очки складываются, «Ещё раз» не нужен
@@ -106,6 +109,24 @@ export function GameOver({
     }
   }, [run, score, modes]);
 
+  // Выживание: сообщаем результат раунда ровно один раз
+  const survReported = useRef(false);
+  useEffect(() => {
+    if (surv && !surv.pending && !surv.finished && !survReported.current) {
+      survReported.current = true;
+      modes?.reportSurvival(score);
+    }
+  }, [surv, score, modes]);
+
+  // Спринт: складываем очки и сразу перезапускаем, пока не вышло время
+  const sprReported = useRef(false);
+  useEffect(() => {
+    if (spr && !spr.finished && !sprReported.current) {
+      sprReported.current = true;
+      modes?.reportSprint(score);
+    }
+  }, [spr, score, modes]);
+
   // Испытание дня засчитывается из любой игры — проверяем один раз за заход
   const chDone = useRef(false);
   useEffect(() => {
@@ -114,14 +135,144 @@ export function GameOver({
     if (modes.reportChallenge(modes.currentGame, score)) {
       setTimeout(() => {
         toast({
-          title: "Испытание дня выполнено",
-          sub: "Забери награду на главной",
+          title: tr("Испытание дня выполнено"),
+          sub: tr("Забери награду на главной"),
           icon: "target",
           tone: "gold",
         });
       }, 900);
     }
   }, [modes, score, toast]);
+
+  /* ─── Выживание: одна ошибка — и всё ─── */
+  if (surv) {
+    const mult = survivalMult(surv.cleared);
+    const prize = Math.floor((2000 + surv.total * 2) * mult);
+    return (
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        className="absolute inset-0 z-40 flex items-center justify-center px-6"
+        style={{ background: "rgba(4,4,6,0.72)", backdropFilter: "blur(18px)" }}
+      >
+        <motion.div
+          initial={{ scale: 0.86, y: 30, opacity: 0 }}
+          animate={{ scale: 1, y: 0, opacity: 1 }}
+          transition={{ type: "spring", stiffness: 320, damping: 26 }}
+          className="w-full max-w-sm"
+        >
+          <Panel r="xl" strong className="p-6 text-center">
+            <div className="t-label" style={{ marginBottom: 6 }}>
+              {surv.failed ? tr("Серия оборвалась") : tr("Выживание")}
+            </div>
+            <div
+              className="t-display"
+              style={{ fontSize: 32, color: surv.failed ? "#FF6B4D" : undefined }}
+            >
+              {surv.failed ? tr("НЕ ХВАТИЛО") : tr("ДЕРЖИШЬСЯ")}
+            </div>
+
+            <div className="my-5">
+              <div className="t-label mb-1">{tr("Игр подряд")}</div>
+              <div className="t-num acc-text" style={{ fontSize: 50, lineHeight: 1 }}>
+                {surv.cleared}
+              </div>
+              <div className="text-xs mt-1" style={{ color: "var(--text-mute)" }}>
+                {tr("множитель награды")} x{mult.toFixed(2)}
+              </div>
+            </div>
+
+            {surv.finished ? (
+              <Tap
+                onClick={() => {
+                  addCoins(prize);
+                  toast({
+                    title: tr("Выживание"),
+                    sub: `+${fmt(prize)}`,
+                    icon: "shield",
+                    tone: "gold",
+                  });
+                  modes?.closeSurvival();
+                }}
+                accent r="md" center
+                className="w-full py-3.5 t-title"
+                style={{ fontSize: 14 }}
+                sound="coin"
+              >
+                {tr("ЗАБРАТЬ")} +{fmt(prize)}
+              </Tap>
+            ) : (
+              <div className="flex gap-2.5">
+                <Tap
+                  onClick={() => {
+                    addCoins(prize);
+                    toast({ title: tr("Забрал и вышел"), sub: `+${fmt(prize)}`, icon: "coin", tone: "gold" });
+                    modes?.closeSurvival();
+                  }}
+                  r="md" className="px-5 py-3.5 t-title"
+                  style={{ fontSize: 13 }} sound="coin"
+                >
+                  {tr("ЗАБРАТЬ")}
+                </Tap>
+                <Tap
+                  onClick={() => modes?.nextSurvival()}
+                  accent r="md" center
+                  className="flex-1 py-3.5 t-title"
+                  style={{ fontSize: 13 }} sound="power"
+                >
+                  {tr("РИСКНУТЬ ДАЛЬШЕ")}
+                </Tap>
+              </div>
+            )}
+          </Panel>
+        </motion.div>
+      </motion.div>
+    );
+  }
+
+  /* ─── Спринт: две минуты, экран показываем только в конце ─── */
+  if (spr?.finished) {
+    const prize = Math.floor(1500 + spr.score * 2.5);
+    return (
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        className="absolute inset-0 z-40 flex items-center justify-center px-6"
+        style={{ background: "rgba(4,4,6,0.72)", backdropFilter: "blur(18px)" }}
+      >
+        <motion.div
+          initial={{ scale: 0.86, y: 30, opacity: 0 }}
+          animate={{ scale: 1, y: 0, opacity: 1 }}
+          transition={{ type: "spring", stiffness: 320, damping: 26 }}
+          className="w-full max-w-sm"
+        >
+          <Panel r="xl" strong className="p-6 text-center">
+            <div className="t-label" style={{ marginBottom: 6 }}>{tr("Спринт окончен")}</div>
+            <div className="t-display" style={{ fontSize: 32 }}>{tr("ВРЕМЯ ВЫШЛО")}</div>
+            <div className="my-5">
+              <div className="t-label mb-1">{tr("Очков за две минуты")}</div>
+              <div className="t-num acc-text" style={{ fontSize: 50, lineHeight: 1 }}>
+                {fmt(spr.score)}
+              </div>
+            </div>
+            <Tap
+              onClick={() => {
+                addCoins(prize);
+                toast({ title: tr("Спринт"), sub: `+${fmt(prize)}`, icon: "bolt", tone: "gold" });
+                modes?.closeSprint();
+              }}
+              accent r="md" center
+              className="w-full py-3.5 t-title"
+              style={{ fontSize: 14 }}
+              sound="coin"
+            >
+              {tr("ЗАБРАТЬ")} +{fmt(prize)}
+            </Tap>
+          </Panel>
+        </motion.div>
+      </motion.div>
+    );
+  }
 
   if (run) {
     const total = run.scores.reduce((a, b) => a + b, 0);
@@ -148,7 +299,7 @@ export function GameOver({
             </div>
 
             <div className="my-5">
-              <div className="t-label mb-1">{run.finished ? "Всего очков" : "Сумма"}</div>
+              <div className="t-label mb-1">{run.finished ? "Всего очков" : tr("Сумма")}</div>
               <div className="t-num acc-text" style={{ fontSize: 50, lineHeight: 1 }}>
                 {fmt(total)}
               </div>
@@ -177,7 +328,7 @@ export function GameOver({
                   const bonus = 2500 + total * 3;
                   addCoins(bonus);
                   toast({
-                    title: "Марафон пройден",
+                    title: tr("Марафон пройден"),
                     sub: `+${fmt(bonus)} сверху`,
                     icon: "trophy",
                     tone: "gold",
@@ -197,16 +348,12 @@ export function GameOver({
                   onClick={() => modes?.closeMarathon()}
                   r="md" className="px-5 py-3.5 t-title"
                   style={{ fontSize: 13 }} sound="swoosh"
-                >
-                  Сдаться
-                </Tap>
+                >{tr("Сдаться")}</Tap>
                 <Tap
                   onClick={() => modes?.nextRound()}
                   accent r="md" className="flex-1 py-3.5 t-title"
                   style={{ fontSize: 14 }} sound="power"
-                >
-                  ДАЛЬШЕ
-                </Tap>
+                >{tr("ДАЛЬШЕ")}</Tap>
               </div>
             )}
           </Panel>
@@ -237,14 +384,14 @@ export function GameOver({
               className="inline-block px-3 py-1 rounded-full mb-3 t-label"
               style={{ background: "var(--acc)", color: "var(--acc-ink)", fontSize: 10 }}
             >
-              <span className="inline-flex items-center" style={{ gap: 7 }}><Icon name="medal" size={14} /> НОВЫЙ РЕКОРД</span>
+              <span className="inline-flex items-center" style={{ gap: 7 }}><Icon name="medal" size={14} />{tr("НОВЫЙ РЕКОРД")}</span>
             </motion.div>
           )}
           <div className="t-display" style={{ fontSize: 36 }}>{title}</div>
           {sub && <div className="text-sm mt-1" style={{ color: "var(--text-mute)" }}>{sub}</div>}
 
           <div className="my-5">
-            <div className="t-label mb-1">Результат</div>
+            <div className="t-label mb-1">{tr("Результат")}</div>
             <div className="t-num acc-text" style={{ fontSize: 52, lineHeight: 1 }}>{fmt(score)}</div>
             <div className="text-xs mt-1" style={{ color: "var(--text-mute)" }}>
               рекорд {fmt(Math.max(best, score))}
@@ -254,11 +401,11 @@ export function GameOver({
           <div className="flex gap-2 mb-5">
             <Panel r="md" className="flex-1 py-2.5">
               <div className="t-num" style={{ fontSize: 17 }}>+{fmt(coins)}</div>
-              <div className="t-label" style={{ fontSize: 9 }}>монет</div>
+              <div className="t-label" style={{ fontSize: 9 }}>{tr("монет")}</div>
             </Panel>
             <Panel r="md" className="flex-1 py-2.5">
               <div className="t-num" style={{ fontSize: 17 }}>+{fmt(xp)}</div>
-              <div className="t-label" style={{ fontSize: 9 }}>опыта</div>
+              <div className="t-label" style={{ fontSize: 9 }}>{tr("опыта")}</div>
             </Panel>
           </div>
 
@@ -277,18 +424,13 @@ export function GameOver({
               sound="power"
             >
               <span className="inline-flex items-center" style={{ gap: 8 }}>
-                <Icon name="play" size={15} /> ПРОДОЛЖИТЬ ЗА РЕКЛАМУ
-              </span>
+                <Icon name="play" size={15} />{tr("ПРОДОЛЖИТЬ ЗА РЕКЛАМУ")}</span>
             </Tap>
           )}
 
           <div className="flex gap-2.5">
-            <Tap onClick={onExit} r="md" className="px-5 py-3.5 t-title" style={{ fontSize: 13 }} sound="swoosh">
-              Выйти
-            </Tap>
-            <Tap onClick={onRetry} accent r="md" className="flex-1 py-3.5 t-title" style={{ fontSize: 14 }} sound="power">
-              ЕЩЁ РАЗ
-            </Tap>
+            <Tap onClick={onExit} r="md" className="px-5 py-3.5 t-title" style={{ fontSize: 13 }} sound="swoosh">{tr("Выйти")}</Tap>
+            <Tap onClick={onRetry} accent r="md" className="flex-1 py-3.5 t-title" style={{ fontSize: 14 }} sound="power">{tr("ЕЩЁ РАЗ")}</Tap>
           </div>
         </Panel>
       </motion.div>
