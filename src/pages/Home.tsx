@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useGame } from "../core/store";
 import { GAME_META } from "../core/content";
@@ -13,6 +13,7 @@ import AdModal from "../ui/AdModal";
 import { bonusesLeft, hasAds, noteBonus } from "../core/ads";
 import ModesPanel from "../ui/ModesPanel";
 import type { SubPage } from "../App";
+import { bossOfHour, canFight, readBosses, windowLeft } from "../core/bosses";
 
 export default function Home({
   onPlay, onOpenProfile, onOpen,
@@ -25,6 +26,15 @@ export default function Home({
   const rate = autoRate(s);
   const [showAd, setShowAd] = useState(false);
   const [adLeft, setAdLeft] = useState(() => bonusesLeft());
+  // босс-воспитатель этого часа
+  const [bossTick, setBossTick] = useState(0);
+  const boss = bossOfHour();
+  const bossOn = canFight(readBosses());
+  useEffect(() => {
+    const iv = setInterval(() => setBossTick((n) => n + 1), 5000);
+    return () => clearInterval(iv);
+  }, []);
+  void bossTick;
   // награда — как 3 минуты автодохода, но не меньше осмысленной суммы
   const adReward = Math.max(500, Math.floor(rate * 180) + s.level * 250);
   const featured = GAME_META.filter((g) => s.unlockedGames.includes(g.id)).sort(
@@ -150,6 +160,34 @@ export default function Home({
             </div>
           </Tap>
         </div>
+      )}
+
+      {/* Босс на смене */}
+      {onOpen && bossOn && (
+        <Tap
+          onClick={() => onOpen("boss")}
+          r="lg"
+          className="w-full"
+          style={{
+            padding: 14, marginBottom: 10,
+            border: "1.5px solid rgba(255,90,60,0.5)",
+            background: "rgba(255,90,60,0.08)",
+          }}
+          sound="power"
+        >
+          <div className="flex items-center" style={{ gap: 12 }}>
+            <span className="shrink-0">
+              <HeadView friend={{ look: boss.look } as never} size={40} />
+            </span>
+            <span className="flex-1 min-w-0">
+              <span className="t-title-sm block clip1">{boss.name} на смене</span>
+              <span className="t-caption block" style={{ marginTop: 2 }}>
+                осталось {Math.ceil(windowLeft() / 60000)} мин — успей подраться
+              </span>
+            </span>
+            <Icon name="chevron" size={16} />
+          </div>
+        </Tap>
       )}
 
       {/* Режимы: марафон и испытание дня */}

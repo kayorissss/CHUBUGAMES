@@ -5,7 +5,7 @@ import { Aurora } from "./ui/Glass";
 import Nav, { type Tab } from "./components/Nav";
 
 /** Подстраницы поверх вкладок */
-export type SubPage = "network" | "ai" | "casino" | "donate";
+export type SubPage = "network" | "ai" | "casino" | "donate" | "boss";
 import { Toasts, OfflineModal } from "./components/Overlays";
 import UpdateBanner from "./ui/UpdateBanner";
 import Icon from "./ui/Icon";
@@ -13,6 +13,7 @@ import Home from "./pages/Home";
 import { ModesProvider } from "./core/modes";
 import Casino from "./pages/Casino";
 import Donate from "./pages/Donate";
+import BossFight from "./pages/BossFight";
 import ProgressPage from "./pages/Progress";
 import Shop from "./pages/Shop";
 import Friends from "./pages/Friends";
@@ -188,6 +189,7 @@ function Shell() {
             {sub === "ai" && <AiPage onBack={() => setSub(null)} />}
             {sub === "casino" && <Casino onBack={() => setSub(null)} />}
             {sub === "donate" && <Donate onBack={() => setSub(null)} />}
+            {sub === "boss" && <BossFight onBack={() => setSub(null)} />}
           </motion.div>
         )}
       </AnimatePresence>

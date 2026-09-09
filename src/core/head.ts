@@ -156,6 +156,25 @@ export function drawHead(
     }
   });
 
+  // Мешки под глазами — «не спал», тёмные полукруги и складка
+  if (look.tired) {
+    ctx.save();
+    [-1, 1].forEach((s) => {
+      const ex = s * w * 0.38;
+      ctx.fillStyle = "rgba(90,60,80,0.30)";
+      ctx.beginPath();
+      ctx.ellipse(ex, eyeY + eyeR * 1.15, eyeR * 1.15, eyeR * 0.62, 0, 0, Math.PI);
+      ctx.fill();
+      ctx.strokeStyle = "rgba(70,45,60,0.5)";
+      ctx.lineWidth = Math.max(1, r * 0.022);
+      ctx.beginPath();
+      ctx.moveTo(ex - eyeR * 1.02, eyeY + eyeR * 0.82);
+      ctx.quadraticCurveTo(ex, eyeY + eyeR * 1.6, ex + eyeR * 1.02, eyeY + eyeR * 0.82);
+      ctx.stroke();
+    });
+    ctx.restore();
+  }
+
   // Очки
   if (look.glasses > 0) {
     ctx.strokeStyle = "rgba(26,26,32,0.92)";
@@ -274,16 +293,34 @@ function drawBody(
   const shirt = look.shirt || "plain";
   const col = look.shirtColor || "#3a3a46";
   const topY = h * 1.02;
-  const sw = w * 1.7;
+  // build меняет силуэт: wide — «танк» с широкими бёдрами, short — низкая пухлая
+  const build = look.build || "normal";
+  const sw = w * (build === "wide" ? 2.05 : build === "short" ? 1.9 : 1.7);
 
   ctx.save();
   // корпус
   ctx.fillStyle = col;
   ctx.beginPath();
-  ctx.moveTo(-sw, h * 2.2);
-  ctx.quadraticCurveTo(-sw * 0.94, topY, -w * 0.34, topY);
-  ctx.lineTo(w * 0.34, topY);
-  ctx.quadraticCurveTo(sw * 0.94, topY, sw, h * 2.2);
+  if (build === "wide") {
+    // «Танк»: узкие плечи, выраженная талия, широкие бёдра
+    ctx.moveTo(-sw, h * 2.2);
+    ctx.quadraticCurveTo(-sw * 0.52, h * 1.62, -sw * 0.66, h * 1.34);  // бедро → талия
+    ctx.quadraticCurveTo(-sw * 0.74, topY, -w * 0.34, topY);
+    ctx.lineTo(w * 0.34, topY);
+    ctx.quadraticCurveTo(sw * 0.74, topY, sw * 0.66, h * 1.34);
+    ctx.quadraticCurveTo(sw * 0.52, h * 1.62, sw, h * 2.2);
+  } else if (build === "short") {
+    // Низкая пухленькая: округлые плечи, мягкий силуэт
+    ctx.moveTo(-sw, h * 2.2);
+    ctx.quadraticCurveTo(-sw * 1.02, h * 1.28, -w * 0.44, topY + h * 0.06);
+    ctx.lineTo(w * 0.44, topY + h * 0.06);
+    ctx.quadraticCurveTo(sw * 1.02, h * 1.28, sw, h * 2.2);
+  } else {
+    ctx.moveTo(-sw, h * 2.2);
+    ctx.quadraticCurveTo(-sw * 0.94, topY, -w * 0.34, topY);
+    ctx.lineTo(w * 0.34, topY);
+    ctx.quadraticCurveTo(sw * 0.94, topY, sw, h * 2.2);
+  }
   ctx.closePath();
   ctx.fill();
 
@@ -720,6 +757,81 @@ function drawHair(ctx: CanvasRenderingContext2D, look: FriendLook, w: number, h:
         ctx.fill();
       });
       ctx.restore();
+      break;
+    }
+
+    case 10: {
+      // Круглый куст кудрей: почти идеальный шар из плотных завитков
+      const dark = shade(look.hair, -30);
+      const lite = shade(look.hair, 30);
+      const cx = 0;
+      // шар сидит НАД лбом: центр заметно выше головы, иначе кудри лезут на лицо
+      const cy = -h * 1.02;
+      const R = w * 1.12;
+
+      // силуэт-шар, обрезанный по линии лба
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(-w * 2, -h * 3, w * 4, h * 3 + -h * 0.42 + h * 3 - h * 3);
+      ctx.rect(-w * 2, -h * 3, w * 4, (-h * 0.42) - (-h * 3));
+      ctx.clip();
+      ctx.fillStyle = dark;
+      ctx.beginPath();
+      ctx.ellipse(cx, cy, R, R * 0.86, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+
+      // завитки по кругу — три кольца, чтобы читалось как куст
+      const rings = [
+        { rad: R * 0.92, n: 13, size: 0.21 },
+        { rad: R * 0.60, n: 9,  size: 0.20 },
+        { rad: R * 0.26, n: 5,  size: 0.19 },
+      ];
+      // Завитки рисуем только выше линии лба: всё, что ниже, налезало бы
+      // на глаза и читалось как пятна на лице.
+      const browLine = -h * 0.42;
+      rings.forEach((ring, ri) => {
+        for (let i = 0; i < ring.n; i++) {
+          const a = (i / ring.n) * Math.PI * 2 + ri * 0.4;
+          const px = cx + Math.cos(a) * ring.rad;
+          const py = cy + Math.sin(a) * ring.rad * 0.92;
+          if (py + R * ring.size > browLine) continue;
+          ctx.fillStyle = i % 2 === 0 ? look.hair : lite;
+          ctx.beginPath();
+          ctx.ellipse(px, py, R * ring.size, R * ring.size * 0.95, a, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      });
+
+      // прикрываем лоб, чтобы шар «сидел» на голове
+      ctx.fillStyle = look.hair;
+      ctx.beginPath();
+      ctx.ellipse(0, -h * 0.3, w * 1.0, h * 0.4, 0, Math.PI, 0);
+      ctx.fill();
+      break;
+    }
+
+    case 11: {
+      // Короткое каре: объём по бокам до середины щеки, ровная чёлка
+      ctx.beginPath();
+      ctx.moveTo(-w * 1.08, -h * 0.16);
+      ctx.quadraticCurveTo(-w * 1.14, -h * 0.98, 0, -h * 1.04);
+      ctx.quadraticCurveTo(w * 1.14, -h * 0.98, w * 1.08, -h * 0.16);
+      ctx.quadraticCurveTo(w * 1.06, h * 0.42, w * 0.82, h * 0.44);
+      ctx.quadraticCurveTo(w * 0.96, -h * 0.2, w * 0.86, -h * 0.4);
+      ctx.quadraticCurveTo(0, -h * 0.82, -w * 0.86, -h * 0.4);
+      ctx.quadraticCurveTo(-w * 0.96, -h * 0.2, -w * 0.82, h * 0.44);
+      ctx.quadraticCurveTo(-w * 1.06, h * 0.42, -w * 1.08, -h * 0.16);
+      ctx.closePath();
+      ctx.fill();
+      // чёлка
+      ctx.beginPath();
+      ctx.moveTo(-w * 1.0, -h * 0.34);
+      ctx.quadraticCurveTo(0, -h * 0.62, w * 1.0, -h * 0.34);
+      ctx.lineTo(w * 1.0, -h * 0.72);
+      ctx.lineTo(-w * 1.0, -h * 0.72);
+      ctx.closePath();
+      ctx.fill();
       break;
     }
   }

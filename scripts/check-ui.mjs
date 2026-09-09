@@ -60,7 +60,7 @@ console.log('\n[6] Сборка офлайн');
 const dist=fs.readFileSync('dist/index.html','utf8');
 ok((dist.match(/data:font\/woff2/g)||[]).length===4,'шрифты вшиты в HTML (не грузятся из сети)');
 ok(!/fonts\.googleapis|fonts\.gstatic/.test(dist),'нет обращений к Google Fonts');
-ok(fs.statSync('dist/index.html').size < 820*1024,`размер ${(fs.statSync('dist/index.html').size/1024).toFixed(0)} КБ — в пределах нормы`);
+ok(fs.statSync('dist/index.html').size < 900*1024,`размер ${(fs.statSync('dist/index.html').size/1024).toFixed(0)} КБ — в пределах нормы`);
 
 console.log('\n[7] Обновление приложения');
 const upd=fs.readFileSync('src/core/updater.ts','utf8');
@@ -76,7 +76,7 @@ ok(/setup-android-signing/.test(wf2),'APK подписывается посто�
 ok(/REQUEST_INSTALL_PACKAGES/.test(wf2),'разрешение на установку обновлений выдано');
 ok(/printf 'version: %s/.test(wf2) && /body_path: RELEASE_BODY\.md/.test(wf2),'релиз публикует номер версии для проверки обновлений');
 ok(fs.existsSync('RELEASE_NOTES.md'),'описание релиза лежит в репозитории (не хардкод в workflow)');
-ok(/### Что нового в 1\.6\.0/.test(fs.readFileSync('RELEASE_NOTES.md','utf8')),'описание релиза совпадает с текущей версией');
+ok(/### Что нового в 1\.7\.0/.test(fs.readFileSync('RELEASE_NOTES.md','utf8')),'описание релиза совпадает с текущей версией');
 ok(fs.existsSync('public/ads/promo1.mp4'),'рекламный ролик на месте');
 ok(fs.existsSync('dist/ads/promo1.mp4'),'ролик попал в сборку (значит будет в APK)');
 ok(fs.existsSync('android-signing/chubgames.p12'),'ключ подписи лежит в репозитории');

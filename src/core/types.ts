@@ -9,7 +9,7 @@ export type GameId =
  * 5 кепка, 6 ёжик-разнобой, 7 длинные, 8 штрихкод (прямые пряди),
  * 9 очень короткая стрижка (почти под машинку)
  */
-export type HairStyle = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
+export type HairStyle = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11;
 
 /** 0 нет / 1 щетина / 2 борода / 3 усы / 4 козлиная квадратная */
 export type Facial = 0 | 1 | 2 | 3 | 4;
@@ -33,6 +33,10 @@ export interface FriendLook {
   shirtColor?: string;
   /** аксессуар в руке/у лица */
   prop?: "none" | "beer" | "clipboard";
+  /** мешки под глазами — усталый вид */
+  tired?: boolean;
+  /** фигура: обычная, широкая-«танк», низкая-пухлая */
+  build?: "normal" | "wide" | "short";
 }
 
 export interface Friend {
