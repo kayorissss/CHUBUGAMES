@@ -15,22 +15,27 @@ export default function Home({ onPlay }: { onPlay: (g: GameId) => void }) {
   )[0];
 
   return (
-    <div className="scroll h-full px-4 pb-28" style={{ paddingTop: "calc(var(--sat) + 14px)" }}>
+    <div className="scroll h-full px-4" style={{ paddingTop: "calc(var(--sat) + 14px)", paddingBottom: "calc(var(--sab) + 116px)" }}>
       {/* Шапка */}
-      <div className="flex items-center justify-between mb-4">
-        <div>
+      <div className="flex items-center justify-between gap-3 mb-4">
+        <div className="min-w-0 flex-1">
           <div
             className="t-display"
-            style={{ fontSize: 30, background: "linear-gradient(96deg, var(--text), var(--acc))", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}
+            style={{
+              fontSize: 27,
+              background: "linear-gradient(96deg, var(--text), var(--acc))",
+              WebkitBackgroundClip: "text",
+              WebkitTextFillColor: "transparent",
+            }}
           >
             CHUBGAMES
           </div>
-          <div className="t-label" style={{ marginTop: 2 }}>
+          <div className="t-label clip1" style={{ marginTop: 3 }}>
             уровень {s.level} {s.prestige > 0 && `• ★${s.prestige}`}
           </div>
         </div>
-        <Panel r="md" className="px-3 py-2 text-right">
-          <div className="t-num acc-text" style={{ fontSize: 17, lineHeight: 1 }}>{fmt(s.coins)}</div>
+        <Panel r="md" className="px-3 py-2 text-right shrink-0">
+          <div className="t-num acc-text" style={{ fontSize: 16, lineHeight: 1.1 }}>{fmt(s.coins)}</div>
           <div className="t-label" style={{ fontSize: 8 }}>🪙 {rate > 0 ? `+${fmt(rate)}/с` : "монет"}</div>
         </Panel>
       </div>
@@ -67,19 +72,24 @@ export default function Home({ onPlay }: { onPlay: (g: GameId) => void }) {
       {lastPlayed && (
         <motion.div whileTap={{ scale: 0.98 }} className="mb-5">
           <Tap onClick={() => onPlay(lastPlayed.id)} r="xl" className="w-full overflow-hidden" sound="power">
-            <div className="relative p-5 text-left">
+            <div className="relative p-5 text-left overflow-hidden">
               <div
-                className="absolute"
+                className="absolute pointer-events-none"
                 style={{
-                  right: -18, top: -26, fontSize: 118, opacity: 0.13,
-                  transform: "rotate(-12deg)", filter: "blur(0.4px)",
+                  right: -22, top: -10, fontSize: 104, opacity: 0.1,
+                  transform: "rotate(-12deg)", lineHeight: 1,
                 }}
               >
                 {lastPlayed.icon}
               </div>
               <div className="t-label acc-text" style={{ fontSize: 9 }}>ПРОДОЛЖИТЬ</div>
-              <div className="t-display mt-1.5" style={{ fontSize: 27 }}>{lastPlayed.name}</div>
-              <div style={{ fontSize: 11, color: "var(--text-mute)", marginTop: 5, maxWidth: "78%" }}>
+              <div className="t-display mt-1" style={{ fontSize: 26, maxWidth: "76%" }}>
+                {lastPlayed.name}
+              </div>
+              <div
+                className="clip2"
+                style={{ fontSize: 11, color: "var(--text-mute)", marginTop: 6, maxWidth: "74%", lineHeight: 1.4 }}
+              >
                 {lastPlayed.desc}
               </div>
               <div className="flex items-center gap-2 mt-3.5">

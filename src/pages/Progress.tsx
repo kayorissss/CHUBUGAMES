@@ -18,16 +18,16 @@ export default function ProgressPage() {
   return (
     <div className="h-full flex flex-col" style={{ paddingTop: "calc(var(--sat) + 14px)" }}>
       <div className="px-4 mb-3">
-        <div className="t-display" style={{ fontSize: 26 }}>ПРОГРЕСС</div>
+        <div className="t-display" style={{ fontSize: 25 }}>ПРОГРЕСС</div>
       </div>
-      <div className="px-4 mb-3 flex gap-2 overflow-x-auto scroll">
+      <div className="mb-3 flex gap-2 overflow-x-auto scroll px-4" style={{ paddingBottom: 2 }}>
         <Chip active={tab === "daily"} onClick={() => setTab("daily")}>Ежедневки</Chip>
         <Chip active={tab === "season"} onClick={() => setTab("season")}>Сезон</Chip>
         <Chip active={tab === "skills"} onClick={() => setTab("skills")}>Навыки</Chip>
         <Chip active={tab === "ach"} onClick={() => setTab("ach")}>Ачивки</Chip>
         <Chip active={tab === "stats"} onClick={() => setTab("stats")}>Статистика</Chip>
       </div>
-      <div className="flex-1 scroll px-4 pb-28">
+      <div className="flex-1 scroll px-4" style={{ paddingBottom: "calc(var(--sab) + 116px)" }}>
         {tab === "daily" && <Daily />}
         {tab === "season" && <Season />}
         {tab === "skills" && <Skills />}
@@ -127,15 +127,15 @@ function Daily() {
         const pct = Math.min(1, q.progress / def.target);
         return (
           <Panel key={q.id} r="lg" className="p-3.5 mb-2.5">
-            <div className="flex items-center justify-between mb-2">
-              <div className="t-title" style={{ fontSize: 13 }}>
+            <div className="flex items-start justify-between gap-3 mb-2">
+              <div className="t-title clip2" style={{ fontSize: 13, flex: 1, minWidth: 0 }}>
                 {def.name.replace("{n}", def.target.toLocaleString("ru-RU"))}
               </div>
-              <div className="t-num acc-text" style={{ fontSize: 12 }}>+{fmt(def.reward)}</div>
+              <div className="t-num acc-text shrink-0" style={{ fontSize: 12 }}>+{fmt(def.reward)}</div>
             </div>
             <Bar pct={pct} h={6} />
-            <div className="flex items-center justify-between mt-2">
-              <span className="t-mono" style={{ fontSize: 10, color: "var(--text-mute)" }}>
+            <div className="flex items-center justify-between gap-2 mt-2" style={{ minHeight: 26 }}>
+              <span className="t-mono clip1" style={{ fontSize: 10, color: "var(--text-mute)" }}>
                 {Math.floor(q.progress).toLocaleString("ru-RU")} / {def.target.toLocaleString("ru-RU")}
               </span>
               {q.done && !q.claimed && (

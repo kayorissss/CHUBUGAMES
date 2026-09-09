@@ -17,9 +17,9 @@ export default function Shop() {
   const { s } = useGame();
   return (
     <div className="h-full flex flex-col" style={{ paddingTop: "calc(var(--sat) + 14px)" }}>
-      <div className="px-4 mb-3 flex items-end justify-between">
-        <div className="t-display" style={{ fontSize: 26 }}>МАГАЗИН</div>
-        <Panel r="md" className="px-3 py-1.5 flex items-center gap-2.5">
+      <div className="px-4 mb-3 flex items-center justify-between gap-3">
+        <div className="t-display shrink-0" style={{ fontSize: 25 }}>МАГАЗИН</div>
+        <Panel r="md" className="px-3 py-1.5 flex items-center gap-2.5 shrink-0">
           <span className="t-num acc-text" style={{ fontSize: 13 }}>🪙 {fmt(s.coins)}</span>
           <span className="t-num" style={{ fontSize: 13 }}>💎 {s.gems}</span>
         </Panel>
@@ -29,7 +29,7 @@ export default function Shop() {
         <Chip active={tab === "skins"} onClick={() => setTab("skins")}>Скины</Chip>
         <Chip active={tab === "themes"} onClick={() => setTab("themes")}>Темы</Chip>
       </div>
-      <div className="flex-1 scroll px-4 pb-28">
+      <div className="flex-1 scroll px-4" style={{ paddingBottom: "calc(var(--sab) + 116px)" }}>
         {tab === "cases" && <Cases />}
         {tab === "skins" && <Skins />}
         {tab === "themes" && <Themes />}
@@ -103,15 +103,20 @@ function Cases() {
 
       {CASES.map((c) => (
         <Panel key={c.id} r="lg" className="p-4 mb-3 relative overflow-hidden">
-          <div className="absolute" style={{ right: -12, top: -14, fontSize: 76, opacity: 0.1 }}>📦</div>
-          <div className="t-title" style={{ fontSize: 16 }}>{c.name}</div>
-          <div style={{ fontSize: 11, color: "var(--text-mute)", marginTop: 2 }}>{c.desc}</div>
-          <div className="flex gap-1.5 my-3">
+          <div className="absolute pointer-events-none" style={{ right: -10, top: -12, fontSize: 68, opacity: 0.09, lineHeight: 1 }}>📦</div>
+          <div className="t-title clip1" style={{ fontSize: 16, maxWidth: "80%" }}>{c.name}</div>
+          <div className="clip1" style={{ fontSize: 11, color: "var(--text-mute)", marginTop: 2, maxWidth: "80%" }}>
+            {c.desc}
+          </div>
+          <div className="flex gap-1.5 my-3 flex-wrap">
             {(Object.keys(c.odds) as Rarity[]).map((r) => (
               <div
                 key={r}
                 className="t-label px-2 py-1"
-                style={{ fontSize: 7, borderRadius: 6, background: `${RARITY_COLOR[r]}1e`, color: RARITY_COLOR[r] }}
+                style={{
+                  fontSize: 7, borderRadius: 6, whiteSpace: "nowrap",
+                  background: `${RARITY_COLOR[r]}1e`, color: RARITY_COLOR[r],
+                }}
               >
                 {RARITY_LABEL[r]} {(c.odds[r] * 100).toFixed(c.odds[r] < 0.02 ? 1 : 0)}%
               </div>

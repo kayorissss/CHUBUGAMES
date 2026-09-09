@@ -56,7 +56,7 @@ export default function Friends() {
     <div className="h-full flex flex-col" style={{ paddingTop: "calc(var(--sat) + 14px)" }}>
       <div className="px-4 mb-3 flex items-end justify-between">
         <div>
-          <div className="t-display" style={{ fontSize: 26 }}>ДРУЗЬЯ</div>
+          <div className="t-display" style={{ fontSize: 25 }}>ДРУЗЬЯ</div>
           <div className="t-label">{s.friends.length} персонажей</div>
         </div>
         <Tap
@@ -67,7 +67,7 @@ export default function Friends() {
         </Tap>
       </div>
 
-      <div className="flex-1 scroll px-4 pb-28">
+      <div className="flex-1 scroll px-4" style={{ paddingBottom: "calc(var(--sab) + 116px)" }}>
         <SectionTitle>Главный босс</SectionTitle>
         <Panel r="xl" className="p-4 mb-5 relative overflow-hidden">
           <div className="flex items-center gap-4">

@@ -71,6 +71,23 @@ jobs:
           sed -i 's|<string name="title_activity_main">.*</string>|<string name="title_activity_main">CHUBGAMES</string>|' android/app/src/main/res/values/strings.xml
           cat android/app/src/main/res/values/strings.xml
 
+      # Ставим иконку приложения. Готовые PNG лежат в репозитории (android-icons/),
+      # поэтому сборка не зависит от скачивания доп. пакетов.
+      - name: Install app icons
+        run: |
+          for d in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
+            cp -v android-icons/mipmap-$d/*.png android/app/src/main/res/mipmap-$d/
+          done
+          # фон adaptive-иконки: белый -> тёмный, под стиль приложения
+          printf '%s\n' \
+            '<?xml version="1.0" encoding="utf-8"?>' \
+            '<resources>' \
+            '    <color name="ic_launcher_background">#0D0D10</color>' \
+            '</resources>' \
+            > android/app/src/main/res/values/ic_launcher_background.xml
+          echo "--- итоговый фон иконки ---"
+          cat android/app/src/main/res/values/ic_launcher_background.xml
+
       - name: Sync Capacitor
         run: npx cap sync android
 

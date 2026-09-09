@@ -118,13 +118,40 @@ export default function BurgerRain({ onExit }: { onExit: () => void }) {
   }, []);
 
   const surfRef = useRef<HTMLDivElement>(null);
-  const onTouch = (e: React.PointerEvent) => {
+  const dragId = useRef<number | null>(null);
+
+  const track = (e: React.PointerEvent) => {
     const el = surfRef.current;
     if (!el) return;
     const r = el.getBoundingClientRect();
     inputRef.current.touchX = (e.clientX - r.left) / r.width;
   };
-  const endTouch = () => { inputRef.current.touchX = null; };
+
+  const onDown = (e: React.PointerEvent) => {
+    dragId.current = e.pointerId;
+    // Захватываем указатель: палец теперь ведёт героя непрерывно,
+    // даже если уехал за пределы элемента
+    try {
+      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    } catch { /* noop */ }
+    track(e);
+  };
+
+  const onMove = (e: React.PointerEvent) => {
+    if (dragId.current !== e.pointerId) return;
+    e.preventDefault();
+    track(e);
+  };
+
+  const endTouch = (e?: React.PointerEvent) => {
+    if (e && dragId.current !== null) {
+      try {
+        (e.currentTarget as HTMLElement).releasePointerCapture(dragId.current);
+      } catch { /* noop */ }
+    }
+    dragId.current = null;
+    inputRef.current.touchX = null;
+  };
 
   /* ---------- игровой цикл ---------- */
   const canvasRef = useCanvas((ctx, W, H, dt) => {
@@ -158,8 +185,10 @@ export default function BurgerRain({ onExit }: { onExit: () => void }) {
       else if (inp.right) target = Math.min(0.94, g.px + 0.05);
       g.ptx = Math.max(0.06, Math.min(0.94, target));
       const diffx = g.ptx - g.px;
-      g.pv += diffx * 0.028 * dt;
-      g.pv *= 0.82;
+      // Более резкий отклик: герой почти мгновенно идёт за пальцем,
+      // но сохраняет инерцию для наклона корпуса
+      g.pv += diffx * 0.055 * dt;
+      g.pv *= 0.74;
       g.px += g.pv;
       g.px = Math.max(0.05, Math.min(0.95, g.px));
 
@@ -440,11 +469,11 @@ export default function BurgerRain({ onExit }: { onExit: () => void }) {
       <div
         ref={surfRef}
         className="absolute inset-0 z-10"
-        onPointerDown={onTouch}
-        onPointerMove={(e) => { if (e.buttons || e.pointerType === "touch") onTouch(e); }}
+        style={{ touchAction: "none" }}
+        onPointerDown={onDown}
+        onPointerMove={onMove}
         onPointerUp={endTouch}
         onPointerCancel={endTouch}
-        onPointerLeave={endTouch}
       />
 
       <GameHUD

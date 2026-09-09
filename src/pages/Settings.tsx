@@ -47,9 +47,9 @@ export default function Settings() {
   return (
     <div className="h-full flex flex-col" style={{ paddingTop: "calc(var(--sat) + 14px)" }}>
       <div className="px-4 mb-3">
-        <div className="t-display" style={{ fontSize: 26 }}>НАСТРОЙКИ</div>
+        <div className="t-display" style={{ fontSize: 25 }}>НАСТРОЙКИ</div>
       </div>
-      <div className="flex-1 scroll px-4 pb-28">
+      <div className="flex-1 scroll px-4" style={{ paddingBottom: "calc(var(--sab) + 116px)" }}>
         <SectionTitle>Оформление</SectionTitle>
         <Panel r="lg" className="p-1 mb-4">
           <Seg

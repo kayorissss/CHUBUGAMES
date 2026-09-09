@@ -20,22 +20,34 @@ export function Toasts() {
             transition={{ type: "spring", stiffness: 420, damping: 30 }}
             className="w-full max-w-xs"
           >
-            <Panel
-              r="lg" strong
-              className="px-3.5 py-2.5 flex items-center gap-3"
+            <div
+              className="px-3.5 py-3 flex items-center gap-3"
               style={{
-                border: t.tone === "gold" ? "1px solid var(--acc)" : undefined,
-                boxShadow: t.tone === "gold" ? "0 10px 34px -12px var(--acc-glow)" : undefined,
+                borderRadius: "var(--r-lg)",
+                /* Плотный НЕпрозрачный фон — сквозь тост не должно просвечивать */
+                background: "var(--toast-bg)",
+                border: `1.5px solid ${t.tone === "gold" ? "var(--acc)" : "var(--toast-brd)"}`,
+                boxShadow:
+                  t.tone === "gold"
+                    ? "0 16px 40px -10px rgba(0,0,0,0.9), 0 0 26px -8px var(--acc-glow)"
+                    : "0 16px 40px -10px rgba(0,0,0,0.9)",
               }}
             >
-              {t.icon && <span style={{ fontSize: 20 }}>{t.icon}</span>}
+              {t.icon && <span style={{ fontSize: 22, lineHeight: 1 }}>{t.icon}</span>}
               <div className="flex-1 min-w-0">
-                <div className="t-title" style={{ fontSize: 13, color: t.tone === "bad" ? "#ff6a4d" : "var(--text)" }}>
+                <div
+                  className="t-title clip1"
+                  style={{ fontSize: 14, color: t.tone === "bad" ? "#ff7a5d" : "var(--text)" }}
+                >
                   {t.title}
                 </div>
-                {t.sub && <div style={{ fontSize: 10.5, color: "var(--text-mute)" }}>{t.sub}</div>}
+                {t.sub && (
+                  <div className="clip1" style={{ fontSize: 11.5, color: "var(--text-dim)", marginTop: 1 }}>
+                    {t.sub}
+                  </div>
+                )}
               </div>
-            </Panel>
+            </div>
           </motion.div>
         ))}
       </AnimatePresence>
