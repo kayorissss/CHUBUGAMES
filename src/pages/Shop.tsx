@@ -5,7 +5,7 @@ import {
   HERO_SKINS, ACCENTS, CASES, RARITY_COLOR, RARITY_LABEL,
 } from "../core/content";
 import { fmt } from "../core/format";
-import { Panel, Tap, Chip, SectionTitle } from "../ui/Glass";
+import { Card, Tap, Button, Chip, SectionTitle, Screen } from "../ui/Glass";
 import HeadView from "../ui/HeadView";
 import { sfx, haptic } from "../core/fx";
 import type { Friend, Rarity } from "../core/types";
@@ -16,25 +16,26 @@ export default function Shop() {
   const [tab, setTab] = useState<Tab>("cases");
   const { s } = useGame();
   return (
-    <div className="h-full flex flex-col" style={{ paddingTop: "calc(var(--sat) + 14px)" }}>
-      <div className="px-4 mb-3 flex items-center justify-between gap-3">
-        <div className="t-display shrink-0" style={{ fontSize: 25 }}>МАГАЗИН</div>
-        <Panel r="md" className="px-3 py-1.5 flex items-center gap-2.5 shrink-0">
-          <span className="t-num acc-text" style={{ fontSize: 13 }}>🪙 {fmt(s.coins)}</span>
-          <span className="t-num" style={{ fontSize: 13 }}>💎 {s.gems}</span>
-        </Panel>
-      </div>
-      <div className="px-4 mb-3 flex gap-2">
+    <Screen
+      title="МАГАЗИН"
+      right={
+        <Card r="md" className="shrink-0" style={{ padding: "8px 12px" }}>
+          <div className="flex items-center" style={{ gap: 10 }}>
+            <span className="t-num acc-text" style={{ fontSize: 14 }}>🪙 {fmt(s.coins)}</span>
+            <span className="t-num" style={{ fontSize: 14 }}>💎 {s.gems}</span>
+          </div>
+        </Card>
+      }
+    >
+      <div className="flex" style={{ gap: 8, marginBottom: 18 }}>
         <Chip active={tab === "cases"} onClick={() => setTab("cases")}>Кейсы</Chip>
         <Chip active={tab === "skins"} onClick={() => setTab("skins")}>Скины</Chip>
         <Chip active={tab === "themes"} onClick={() => setTab("themes")}>Темы</Chip>
       </div>
-      <div className="flex-1 scroll px-4" style={{ paddingBottom: "calc(var(--sab) + 116px)" }}>
-        {tab === "cases" && <Cases />}
-        {tab === "skins" && <Skins />}
-        {tab === "themes" && <Themes />}
-      </div>
-    </div>
+      {tab === "cases" && <Cases />}
+      {tab === "skins" && <Skins />}
+      {tab === "themes" && <Themes />}
+    </Screen>
   );
 }
 
@@ -96,25 +97,28 @@ function Cases() {
   return (
     <>
       <SectionTitle>Кейсы с карточками друзей</SectionTitle>
-      <div style={{ fontSize: 11, color: "var(--text-mute)", lineHeight: 1.5, marginBottom: 12, padding: "0 4px" }}>
+      <div className="t-body" style={{ marginBottom: 14 }}>
         Каждая карточка навсегда даёт <span className="acc-text">+0.4% ко всем монетам</span>.
         Дубликаты возвращают 35% стоимости кейса.
       </div>
 
       {CASES.map((c) => (
-        <Panel key={c.id} r="lg" className="p-4 mb-3 relative overflow-hidden">
-          <div className="absolute pointer-events-none" style={{ right: -10, top: -12, fontSize: 68, opacity: 0.09, lineHeight: 1 }}>📦</div>
-          <div className="t-title clip1" style={{ fontSize: 16, maxWidth: "80%" }}>{c.name}</div>
-          <div className="clip1" style={{ fontSize: 11, color: "var(--text-mute)", marginTop: 2, maxWidth: "80%" }}>
-            {c.desc}
+        <Card key={c.id} r="lg" className="relative overflow-hidden" style={{ padding: 15, marginBottom: 12 }}>
+          <div
+            className="absolute pointer-events-none"
+            style={{ right: -8, top: -14, fontSize: 72, opacity: 0.08, lineHeight: 1 }}
+          >
+            📦
           </div>
-          <div className="flex gap-1.5 my-3 flex-wrap">
+          <div className="t-title-sm clip1" style={{ maxWidth: "78%" }}>{c.name}</div>
+          <div className="t-caption clip1" style={{ marginTop: 3, maxWidth: "78%" }}>{c.desc}</div>
+          <div className="flex flex-wrap" style={{ gap: 6, marginTop: 12, marginBottom: 14 }}>
             {(Object.keys(c.odds) as Rarity[]).map((r) => (
               <div
                 key={r}
-                className="t-label px-2 py-1"
+                className="t-label"
                 style={{
-                  fontSize: 7, borderRadius: 6, whiteSpace: "nowrap",
+                  fontSize: 8.5, padding: "4px 8px", borderRadius: 999, whiteSpace: "nowrap",
                   background: `${RARITY_COLOR[r]}1e`, color: RARITY_COLOR[r],
                 }}
               >
@@ -122,41 +126,55 @@ function Cases() {
               </div>
             ))}
           </div>
-          <Tap
-            onClick={() => open(c.id)}
+          <Button
+            variant="primary"
+            full
+            size="lg"
+            sound="none"
             disabled={s.coins < c.price || spinning}
-            accent={s.coins >= c.price}
-            r="md" className="w-full py-3 t-num" style={{ fontSize: 14 }} sound="none"
+            onClick={() => open(c.id)}
           >
-            ОТКРЫТЬ · 🪙 {fmt(c.price)}
-          </Tap>
-        </Panel>
+            Открыть · 🪙 {fmt(c.price)}
+          </Button>
+        </Card>
       ))}
 
-      <SectionTitle right={<span className="t-label">{Object.keys(s.cards).length}/{s.friends.length}</span>}>
-        Коллекция
-      </SectionTitle>
-      <div className="grid grid-cols-4 gap-2.5">
+      <div style={{ marginTop: 22 }}>
+        <SectionTitle
+          right={<span className="t-num" style={{ fontSize: 11, color: "var(--text-mute)" }}>{Object.keys(s.cards).length}/{s.friends.length}</span>}
+        >
+          Коллекция
+        </SectionTitle>
+      </div>
+      <div className="grid grid-cols-4" style={{ gap: 9 }}>
         {s.friends.map((f) => {
           const n = s.cards[f.id] || 0;
           return (
-            <Panel key={f.id} r="md" className="p-2 text-center relative" style={{ opacity: n ? 1 : 0.32 }}>
+            <Card
+              key={f.id} r="md" tone={2} className="text-center relative"
+              style={{ padding: "9px 5px", opacity: n ? 1 : 0.3 }}
+            >
               <div style={{ filter: n ? "none" : "grayscale(1) brightness(0.5)" }}>
-                <HeadView friend={f} size={44} style={{ margin: "0 auto" }} />
+                <HeadView friend={f} size={42} style={{ margin: "0 auto" }} />
               </div>
-              <div className="t-label mt-1" style={{ fontSize: 7, color: RARITY_COLOR[f.rarity] }}>{f.name}</div>
+              <div
+                className="t-label clip1"
+                style={{ marginTop: 6, fontSize: 8, color: RARITY_COLOR[f.rarity] }}
+              >
+                {f.name}
+              </div>
               {n > 1 && (
                 <div
                   className="absolute t-num"
                   style={{
-                    top: 3, right: 4, fontSize: 9, padding: "1px 5px", borderRadius: 99,
+                    top: 4, right: 5, fontSize: 9, padding: "1px 5px", borderRadius: 999,
                     background: "var(--acc)", color: "var(--acc-ink)",
                   }}
                 >
                   ×{n}
                 </div>
               )}
-            </Panel>
+            </Card>
           );
         })}
       </div>
@@ -172,8 +190,8 @@ function Cases() {
           >
             {spinning ? (
               <div className="w-full max-w-sm">
-                <div className="t-label text-center mb-3">ОТКРЫВАЕМ...</div>
-                <Panel r="lg" className="relative overflow-hidden" style={{ height: 120 }}>
+                <div className="t-label text-center" style={{ marginBottom: 14 }}>Открываем…</div>
+                <Card r="lg" className="relative overflow-hidden" style={{ height: 120 }}>
                   <motion.div
                     className="flex items-center gap-3 absolute"
                     style={{ top: 22, left: 0, padding: "0 40%" }}
@@ -194,7 +212,7 @@ function Cases() {
                       background: "var(--acc)", boxShadow: "0 0 18px var(--acc-glow)",
                     }}
                   />
-                </Panel>
+                </Card>
               </div>
             ) : rolling ? (
               <motion.div
@@ -203,11 +221,15 @@ function Cases() {
                 transition={{ type: "spring", stiffness: 240, damping: 20 }}
                 className="w-full max-w-xs"
               >
-                <Panel
-                  r="xl" strong className="p-6 text-center"
-                  style={{ boxShadow: `0 0 60px -10px ${RARITY_COLOR[rolling.rarity]}` }}
+                <Card
+                  r="xl" className="text-center"
+                  style={{
+                    padding: 24,
+                    boxShadow: `0 0 60px -14px ${RARITY_COLOR[rolling.rarity]}`,
+                    borderColor: `${RARITY_COLOR[rolling.rarity]}66`,
+                  }}
                 >
-                  <div className="t-label" style={{ fontSize: 10, color: RARITY_COLOR[rolling.rarity] }}>
+                  <div className="t-label" style={{ fontSize: 9.5, color: RARITY_COLOR[rolling.rarity] }}>
                     {RARITY_LABEL[rolling.rarity]}
                   </div>
                   <motion.div
@@ -217,16 +239,17 @@ function Cases() {
                   >
                     <HeadView friend={rolling.friend} size={132} style={{ margin: "0 auto" }} />
                   </motion.div>
-                  <div className="t-display" style={{ fontSize: 26 }}>{rolling.friend.name}</div>
-                  <div style={{ fontSize: 11, color: "var(--text-mute)", marginTop: 3 }}>{rolling.friend.nick}</div>
-                  {rolling.dupe && <div className="t-label mt-2">ДУБЛИКАТ · КОМПЕНСАЦИЯ ВЫДАНА</div>}
-                  <Tap
-                    onClick={() => setRolling(null)} accent r="md"
-                    className="w-full py-3 mt-5 t-title" style={{ fontSize: 13 }}
-                  >
-                    ЗАБРАТЬ
-                  </Tap>
-                </Panel>
+                  <div className="t-display-sm" style={{ marginTop: 4 }}>{rolling.friend.name}</div>
+                  <div className="t-caption" style={{ marginTop: 4 }}>{rolling.friend.nick}</div>
+                  {rolling.dupe && (
+                    <div className="t-label" style={{ marginTop: 10 }}>Дубликат · компенсация выдана</div>
+                  )}
+                  <div style={{ marginTop: 20 }}>
+                    <Button variant="primary" size="lg" full onClick={() => setRolling(null)}>
+                      Забрать
+                    </Button>
+                  </div>
+                </Card>
               </motion.div>
             ) : null}
           </motion.div>
@@ -254,7 +277,7 @@ function Skins() {
   };
 
   return (
-    <div className="grid grid-cols-2 gap-3">
+    <div className="grid grid-cols-2" style={{ gap: 12 }}>
       {HERO_SKINS.map((sk) => {
         const owned = s.ownedSkins.includes(sk.id);
         const active = s.heroSkin === sk.id;
@@ -263,28 +286,31 @@ function Skins() {
             key={sk.id}
             onClick={() => buy(sk.id, sk.price, sk.name)}
             disabled={!owned && s.coins < sk.price}
-            r="lg" className="p-3 text-left" sound="none"
+            solid r="lg" className="text-left w-full" sound="none"
             style={{
-              border: active ? "1.5px solid var(--acc)" : undefined,
-              boxShadow: active ? "0 0 24px -8px var(--acc-glow)" : undefined,
+              padding: 13,
+              ...(active
+                ? { borderColor: "var(--acc)", boxShadow: "0 0 0 1px var(--acc) inset" }
+                : null),
             }}
           >
-            <div className="flex justify-center mb-2" style={{ height: 62 }}>
+            <div className="flex justify-center" style={{ height: 62, marginBottom: 10 }}>
               <HeroPreview skin={sk} />
             </div>
-            <div className="t-title" style={{ fontSize: 12 }}>{sk.name}</div>
-            <div style={{ fontSize: 9, color: "var(--text-mute)", lineHeight: 1.3, minHeight: 24, marginTop: 2 }}>
+            <div className="t-title-sm clip1">{sk.name}</div>
+            <div className="t-caption clip2" style={{ marginTop: 3, minHeight: 28 }}>
               {sk.desc}
             </div>
             <div
-              className="t-num mt-2 py-1.5 text-center"
+              className="t-num text-center"
               style={{
-                fontSize: 11, borderRadius: 8,
-                background: active ? "var(--acc)" : owned ? "rgba(255,255,255,0.09)" : `${RARITY_COLOR[sk.rarity]}1e`,
+                marginTop: 11, padding: "8px 4px", fontSize: 11.5,
+                borderRadius: "var(--r-sm)",
+                background: active ? "var(--acc)" : owned ? "var(--btn-bg)" : `${RARITY_COLOR[sk.rarity]}1e`,
                 color: active ? "var(--acc-ink)" : owned ? "var(--text-dim)" : RARITY_COLOR[sk.rarity],
               }}
             >
-              {active ? "НАДЕТ" : owned ? "НАДЕТЬ" : `🪙 ${fmt(sk.price)}`}
+              {active ? "Надет" : owned ? "Надеть" : `🪙 ${fmt(sk.price)}`}
             </div>
           </Tap>
         );
@@ -330,26 +356,32 @@ function Themes() {
   return (
     <>
       <SectionTitle>Акцентный цвет</SectionTitle>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-2" style={{ gap: 12 }}>
         {ACCENTS.map((a) => {
           const owned = s.ownedThemes.includes(a.id);
           const active = s.settings.accent === a.id;
           return (
             <Tap
               key={a.id} onClick={() => pick(a.id, a.price, a.name)}
-              disabled={!owned && s.coins < a.price} r="lg" className="p-3.5" sound="none"
-              style={{ border: active ? `1.5px solid ${a.hex}` : undefined }}
+              disabled={!owned && s.coins < a.price}
+              solid r="lg" className="w-full" sound="none"
+              style={{
+                padding: 13,
+                ...(active ? { borderColor: a.hex, boxShadow: `0 0 0 1px ${a.hex} inset` } : null),
+              }}
             >
               <div
                 style={{
-                  height: 42, borderRadius: 12, marginBottom: 9,
-                  background: `linear-gradient(135deg, ${a.hex}, ${a.hex}44)`,
-                  boxShadow: `0 6px 22px -8px ${a.hex}`,
+                  height: 44, borderRadius: "var(--r-sm)", marginBottom: 11,
+                  background: `linear-gradient(135deg, ${a.hex}, ${a.hex}3d)`,
                 }}
               />
-              <div className="t-title" style={{ fontSize: 12 }}>{a.name}</div>
-              <div className="t-num" style={{ fontSize: 10, color: active ? a.hex : "var(--text-mute)", marginTop: 2 }}>
-                {active ? "АКТИВЕН" : owned ? "ВЫБРАТЬ" : `🪙 ${fmt(a.price)}`}
+              <div className="t-title-sm clip1">{a.name}</div>
+              <div
+                className="t-num"
+                style={{ fontSize: 11, marginTop: 4, color: active ? a.hex : "var(--text-mute)" }}
+              >
+                {active ? "Активен" : owned ? "Выбрать" : `🪙 ${fmt(a.price)}`}
               </div>
             </Tap>
           );

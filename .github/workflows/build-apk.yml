@@ -60,10 +60,19 @@ jobs:
           sed -i 's|<activity|<activity android:screenOrientation="portrait"|' $MANIFEST
           # Вибрация для хаптики
           sed -i '/<application/i\    <uses-permission android:name="android.permission.VIBRATE" />' $MANIFEST
-          # Приложение полностью автономно — интернет не нужен
-          sed -i '/android.permission.INTERNET/d' $MANIFEST
+          # Установка обновлений прямо из приложения
+          sed -i '/<application/i\    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />' $MANIFEST
+          # Интернет нужен ТОЛЬКО для скачивания обновления; сами игры работают офлайн
+          grep -q 'android.permission.INTERNET' $MANIFEST || \
+            sed -i '/<application/i\    <uses-permission android:name="android.permission.INTERNET" />' $MANIFEST
           echo "--- AndroidManifest.xml ---"
           cat $MANIFEST
+
+      - name: Read app version
+        run: |
+          VER=$(node -p "require('fs').readFileSync('src/core/version.ts','utf8').match(/APP_VERSION\s*=\s*\"([0-9.]+)\"/)[1]")
+          echo "APP_VER=$VER" >> $GITHUB_ENV
+          echo "Версия приложения: $VER (сборка ${{ github.run_number }})"
 
       - name: Set app label
         run: |
@@ -88,19 +97,25 @@ jobs:
           echo "--- итоговый фон иконки ---"
           cat android/app/src/main/res/values/ic_launcher_background.xml
 
+      # Постоянный ключ подписи и номер версии. Без постоянного ключа каждая
+      # сборка подписывалась бы новым debug-ключом, и Android отказывался бы
+      # ставить обновление поверх с ошибкой «конфликт пакетов».
+      - name: Configure signing and version
+        run: node scripts/setup-android-signing.mjs "$APP_VER" "${{ github.run_number }}"
+
       - name: Sync Capacitor
         run: npx cap sync android
 
       - name: Make gradlew executable
         run: chmod +x android/gradlew
 
-      - name: Build Debug APK
+      - name: Build Release APK
         run: |
           cd android
-          ./gradlew assembleDebug --no-daemon --stacktrace
+          ./gradlew assembleRelease --no-daemon --stacktrace
 
       - name: Rename APK
-        run: mv android/app/build/outputs/apk/debug/app-debug.apk CHUBGAMES.apk
+        run: mv android/app/build/outputs/apk/release/app-release.apk CHUBGAMES.apk
 
       - name: Upload APK (артефакт сборки)
         uses: actions/upload-artifact@v4
@@ -117,6 +132,8 @@ jobs:
           tag_name: latest
           name: CHUBGAMES — последняя сборка
           body: |
+            version: ${{ env.APP_VER }}
+
             ## 🍔 CHUBGAMES
 
             Оффлайн-приложение с мини-играми про друзей. Интернет не нужен.
@@ -128,6 +145,10 @@ jobs:
 
             Если Android ругается «Play Защита» — жми «Всё равно установить».
             Это нормально для APK, собранных не через Google Play.
+
+            ### Обновления
+            Дальше обновляться можно прямо в приложении:
+            **Настройки → Обновление → Проверить обновление**.
 
             ---
             Собрано автоматически из ветки `${{ github.ref_name }}`

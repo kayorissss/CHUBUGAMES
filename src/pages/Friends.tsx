@@ -2,7 +2,7 @@ import { useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useGame } from "../core/store";
 import { RARITY_COLOR, RARITY_LABEL } from "../core/content";
-import { Panel, Tap, Bar, SectionTitle } from "../ui/Glass";
+import { Card, Tap, Button, Bar, SectionTitle, Screen } from "../ui/Glass";
 import HeadView from "../ui/HeadView";
 import { sfx, haptic } from "../core/fx";
 import type { Friend, FriendLook, Rarity } from "../core/types";
@@ -53,96 +53,127 @@ export default function Friends() {
   };
 
   return (
-    <div className="h-full flex flex-col" style={{ paddingTop: "calc(var(--sat) + 14px)" }}>
-      <div className="px-4 mb-3 flex items-end justify-between">
-        <div>
-          <div className="t-display" style={{ fontSize: 25 }}>ДРУЗЬЯ</div>
-          <div className="t-label">{s.friends.length} персонажей</div>
-        </div>
-        <Tap
+    <Screen
+      title="ДРУЗЬЯ"
+      sub={`${s.friends.length} персонажей`}
+      right={
+        <Button
+          variant="primary"
           onClick={() => { setEditing(newFriend()); setCreating(true); }}
-          accent r="md" className="px-4 py-2.5 t-title" style={{ fontSize: 12 }} sound="power"
+          sound="power"
         >
-          + ДОБАВИТЬ
-        </Tap>
-      </div>
-
-      <div className="flex-1 scroll px-4" style={{ paddingBottom: "calc(var(--sab) + 116px)" }}>
+          + Добавить
+        </Button>
+      }
+    >
         <SectionTitle>Главный босс</SectionTitle>
-        <Panel r="xl" className="p-4 mb-5 relative overflow-hidden">
-          <div className="flex items-center gap-4">
-            <motion.div animate={{ y: [0, -5, 0] }} transition={{ repeat: Infinity, duration: 3 }}>
-              <HeadView friend={mainFriend} size={84} />
+        <Card r="xl" className="relative overflow-hidden" style={{ padding: 16, marginBottom: 22 }}>
+          <div className="flex items-center" style={{ gap: 15 }}>
+            <motion.div
+              animate={{ y: [0, -5, 0] }}
+              transition={{ repeat: Infinity, duration: 3.2, ease: "easeInOut" }}
+              className="shrink-0"
+            >
+              <HeadView friend={mainFriend} size={76} />
             </motion.div>
             <div className="flex-1 min-w-0">
-              <div className="t-display" style={{ fontSize: 22 }}>{mainFriend.name}</div>
-              <div style={{ fontSize: 11, color: "var(--text-mute)" }}>{mainFriend.nick}</div>
+              <div className="t-display-sm clip1">{mainFriend.name}</div>
+              <div className="t-caption clip1" style={{ marginTop: 2 }}>{mainFriend.nick}</div>
               <div
-                className="t-label mt-1.5 inline-block px-2 py-0.5"
-                style={{ fontSize: 7, borderRadius: 6, background: `${RARITY_COLOR[mainFriend.rarity]}22`, color: RARITY_COLOR[mainFriend.rarity] }}
+                className="t-label"
+                style={{
+                  marginTop: 8, display: "inline-block", padding: "3px 8px",
+                  fontSize: 8.5, borderRadius: 999,
+                  background: `${RARITY_COLOR[mainFriend.rarity]}1f`,
+                  color: RARITY_COLOR[mainFriend.rarity],
+                }}
               >
                 {RARITY_LABEL[mainFriend.rarity]}
               </div>
             </div>
           </div>
-          <div className="mt-3.5" style={{ fontSize: 12, fontStyle: "italic", color: "var(--text-dim)" }}>
+
+          <div
+            className="t-body"
+            style={{
+              marginTop: 15, padding: "10px 13px", borderRadius: "var(--r-md)",
+              background: "var(--btn-bg)", fontStyle: "italic",
+            }}
+          >
             «{mainFriend.quote}»
           </div>
-          <div className="grid grid-cols-2 gap-x-4 gap-y-2 mt-3.5">
-            <StatBar l="СИЛА ПЛЕВКА" v={mainFriend.stats.spit} />
-            <StatBar l="ЧАБНОСТЬ" v={mainFriend.stats.chub} />
-            <StatBar l="ХАОС" v={mainFriend.stats.chaos} />
-            <StatBar l="УДАЧА" v={mainFriend.stats.luck} />
+
+          <div
+            className="grid grid-cols-2"
+            style={{ columnGap: 18, rowGap: 12, marginTop: 16 }}
+          >
+            <StatBar l="Сила плевка" v={mainFriend.stats.spit} />
+            <StatBar l="Чабность" v={mainFriend.stats.chub} />
+            <StatBar l="Хаос" v={mainFriend.stats.chaos} />
+            <StatBar l="Удача" v={mainFriend.stats.luck} />
           </div>
-        </Panel>
+        </Card>
 
         <SectionTitle>Все друзья</SectionTitle>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-2" style={{ gap: 12 }}>
           {s.friends.map((f) => {
             const isMain = f.id === s.mainFriendId;
+            const cards = s.cards[f.id] || 0;
             return (
-              <Panel
-                key={f.id} r="lg" className="p-3 relative"
-                style={{ border: isMain ? "1.5px solid var(--acc)" : undefined }}
-              >
-                <div className="flex justify-center mb-2">
-                  <HeadView friend={f} size={62} />
-                </div>
-                <div className="t-title text-center" style={{ fontSize: 13 }}>{f.name}</div>
-                <div className="text-center" style={{ fontSize: 9, color: "var(--text-mute)", minHeight: 22, lineHeight: 1.3, marginTop: 2 }}>
-                  {f.nick}
-                </div>
-                <div className="flex gap-1.5 mt-2">
-                  <Tap
-                    onClick={() => setMain(f.id)} disabled={isMain} accent={!isMain} r="sm"
-                    className="flex-1 py-1.5 t-title" style={{ fontSize: 9 }} sound="none"
-                  >
-                    {isMain ? "БОСС" : "СДЕЛАТЬ"}
-                  </Tap>
-                  <Tap
-                    onClick={() => { setEditing({ ...f, look: { ...f.look }, stats: { ...f.stats } }); setCreating(false); }}
-                    r="sm" className="px-2.5 py-1.5" style={{ fontSize: 11 }} sound="none"
-                  >
-                    ✏️
-                  </Tap>
-                </div>
-                {(s.cards[f.id] || 0) > 0 && (
+              <Card key={f.id} r="lg" active={isMain} className="relative" style={{ padding: 13 }}>
+                {cards > 0 && (
                   <div
-                    className="absolute t-num"
-                    style={{ top: 6, right: 8, fontSize: 9, color: RARITY_COLOR[f.rarity] }}
+                    className="t-num absolute"
+                    style={{
+                      top: 9, right: 10, fontSize: 10,
+                      color: RARITY_COLOR[f.rarity],
+                    }}
                   >
-                    ×{s.cards[f.id]}
+                    ×{cards}
                   </div>
                 )}
-              </Panel>
+                <div className="flex justify-center" style={{ marginBottom: 10 }}>
+                  <HeadView friend={f} size={58} />
+                </div>
+                <div className="t-title-sm text-center clip1">{f.name}</div>
+                <div
+                  className="t-caption text-center clip1"
+                  style={{ marginTop: 3, marginBottom: 12 }}
+                >
+                  {f.nick}
+                </div>
+                <div className="flex" style={{ gap: 7 }}>
+                  <Button
+                    variant={isMain ? "secondary" : "primary"}
+                    size="sm"
+                    disabled={isMain}
+                    onClick={() => setMain(f.id)}
+                    sound="none"
+                    style={{ flex: 1, minWidth: 0 }}
+                  >
+                    {isMain ? "Босс" : "Выбрать"}
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    sound="none"
+                    onClick={() => { setEditing({ ...f, look: { ...f.look }, stats: { ...f.stats } }); setCreating(false); }}
+                    style={{ padding: "8px 10px" }}
+                  >
+                    ✏️
+                  </Button>
+                </div>
+              </Card>
             );
           })}
         </div>
-        <div className="t-label text-center mt-5 px-6" style={{ lineHeight: 1.6 }}>
+        <div
+          className="t-caption text-center"
+          style={{ marginTop: 20, paddingInline: 12, lineHeight: 1.55 }}
+        >
           Загрузи настоящее фото друга — оно станет головой-боссом в играх.
           Всё хранится только на твоём телефоне.
         </div>
-      </div>
 
       <AnimatePresence>
         {editing && (
@@ -154,18 +185,18 @@ export default function Friends() {
           />
         )}
       </AnimatePresence>
-    </div>
+    </Screen>
   );
 }
 
 function StatBar({ l, v }: { l: string; v: number }) {
   return (
-    <div>
-      <div className="flex justify-between items-baseline mb-1">
-        <span className="t-label" style={{ fontSize: 7 }}>{l}</span>
-        <span className="t-num" style={{ fontSize: 10 }}>{v}</span>
+    <div style={{ minWidth: 0 }}>
+      <div className="flex justify-between items-baseline" style={{ gap: 6, marginBottom: 6 }}>
+        <span className="t-label clip1" style={{ fontSize: 8.5 }}>{l}</span>
+        <span className="t-num shrink-0" style={{ fontSize: 11 }}>{v}</span>
       </div>
-      <Bar pct={v / 100} h={4} />
+      <Bar pct={v / 100} h={5} />
     </div>
   );
 }
@@ -266,9 +297,17 @@ function Editor({ friend, isNew, onClose }: { friend: Friend; isNew: boolean; on
         style={{ maxHeight: "92%" }}
         onClick={(e) => e.stopPropagation()}
       >
-        <Panel r="xl" strong className="flex flex-col" style={{ borderRadius: "26px 26px 0 0", maxHeight: "92vh" }}>
-          <div className="flex justify-center pt-2.5 pb-1">
-            <div style={{ width: 38, height: 4, borderRadius: 99, background: "var(--glass-brd)" }} />
+        <div
+          className="flex flex-col"
+          style={{
+            background: "var(--surface)",
+            borderTop: "1px solid var(--surface-brd)",
+            borderRadius: "20px 20px 0 0",
+            maxHeight: "92vh",
+          }}
+        >
+          <div className="flex justify-center" style={{ paddingTop: 10, paddingBottom: 4 }}>
+            <div style={{ width: 40, height: 4, borderRadius: 999, background: "var(--btn-brd)" }} />
           </div>
 
           <div className="scroll px-4 pb-4" style={{ paddingBottom: "calc(var(--sab) + 16px)" }}>
@@ -415,7 +454,7 @@ function Editor({ friend, isNew, onClose }: { friend: Friend; isNew: boolean; on
               </Tap>
             </div>
           </div>
-        </Panel>
+        </div>
       </motion.div>
     </motion.div>
   );

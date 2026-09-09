@@ -7,7 +7,7 @@ import {
 } from "../core/content";
 import { fmt, fmtTime, today, daysBetween } from "../core/format";
 import { spentSkillPoints, xpForLevel } from "../core/save";
-import { Panel, Tap, Bar, Chip, SectionTitle } from "../ui/Glass";
+import { Card, Button, Bar, Chip, SectionTitle, Screen, Divider } from "../ui/Glass";
 import { sfx, haptic } from "../core/fx";
 import { freshSave } from "../core/save";
 
@@ -16,25 +16,23 @@ type Tab = "daily" | "season" | "skills" | "ach" | "stats";
 export default function ProgressPage() {
   const [tab, setTab] = useState<Tab>("daily");
   return (
-    <div className="h-full flex flex-col" style={{ paddingTop: "calc(var(--sat) + 14px)" }}>
-      <div className="px-4 mb-3">
-        <div className="t-display" style={{ fontSize: 25 }}>ПРОГРЕСС</div>
-      </div>
-      <div className="mb-3 flex gap-2 overflow-x-auto scroll px-4" style={{ paddingBottom: 2 }}>
+    <Screen title="ПРОГРЕСС">
+      <div
+        className="flex overflow-x-auto scroll"
+        style={{ gap: 8, marginBottom: 18, paddingBottom: 2 }}
+      >
         <Chip active={tab === "daily"} onClick={() => setTab("daily")}>Ежедневки</Chip>
         <Chip active={tab === "season"} onClick={() => setTab("season")}>Сезон</Chip>
         <Chip active={tab === "skills"} onClick={() => setTab("skills")}>Навыки</Chip>
         <Chip active={tab === "ach"} onClick={() => setTab("ach")}>Ачивки</Chip>
         <Chip active={tab === "stats"} onClick={() => setTab("stats")}>Статистика</Chip>
       </div>
-      <div className="flex-1 scroll px-4" style={{ paddingBottom: "calc(var(--sab) + 116px)" }}>
-        {tab === "daily" && <Daily />}
-        {tab === "season" && <Season />}
-        {tab === "skills" && <Skills />}
-        {tab === "ach" && <Achievements />}
-        {tab === "stats" && <Stats />}
-      </div>
-    </div>
+      {tab === "daily" && <Daily />}
+      {tab === "season" && <Season />}
+      {tab === "skills" && <Skills />}
+      {tab === "ach" && <Achievements />}
+      {tab === "stats" && <Stats />}
+    </Screen>
   );
 }
 
@@ -87,38 +85,43 @@ function Daily() {
       <SectionTitle right={<span className="t-label acc-text">🔥 {s.daily.streak} дней</span>}>
         Ежедневный вход
       </SectionTitle>
-      <Panel r="lg" className="p-3.5 mb-4">
-        <div className="grid grid-cols-7 gap-1.5 mb-3">
+      <Card r="lg" style={{ padding: 14, marginBottom: 22 }}>
+        <div className="grid grid-cols-7" style={{ gap: 6, marginBottom: 14 }}>
           {DAILY_LADDER.map((r, i) => {
             const claimed = i < streakIdx || (!canClaim && i <= streakIdx);
             const isNext = canClaim && i === streakIdx;
             return (
               <div
                 key={i}
-                className="flex flex-col items-center justify-center py-2 relative"
+                className="flex flex-col items-center justify-center relative"
                 style={{
-                  borderRadius: 12,
-                  background: isNext ? "var(--acc)" : claimed ? "rgba(255,255,255,0.1)" : "rgba(255,255,255,0.04)",
-                  border: `1px solid ${isNext ? "transparent" : "var(--glass-brd)"}`,
-                  opacity: claimed ? 0.55 : 1,
+                  padding: "8px 2px",
+                  borderRadius: "var(--r-sm)",
+                  background: isNext ? "var(--acc)" : "var(--btn-bg)",
+                  border: `1px solid ${isNext ? "transparent" : "var(--btn-brd)"}`,
+                  opacity: claimed ? 0.5 : 1,
                 }}
               >
-                <div style={{ fontSize: 9, fontWeight: 800, color: isNext ? "var(--acc-ink)" : "var(--text-mute)" }}>
+                <div
+                  className="t-label"
+                  style={{ fontSize: 8, color: isNext ? "var(--acc-ink)" : "var(--text-mute)" }}
+                >
                   Д{i + 1}
                 </div>
-                <div style={{ fontSize: 13, marginTop: 1 }}>{r.gems ? "💎" : "🪙"}</div>
-                {claimed && <div className="absolute" style={{ fontSize: 12 }}>✓</div>}
+                <div style={{ fontSize: 13, marginTop: 3 }}>{claimed ? "✓" : r.gems ? "💎" : "🪙"}</div>
               </div>
             );
           })}
         </div>
-        <Tap
-          onClick={claim} disabled={!canClaim} accent={canClaim} r="md"
-          className="w-full py-3 t-title" style={{ fontSize: 13 }} sound="none"
+        <Button
+          variant="primary" size="lg" full sound="none"
+          onClick={claim} disabled={!canClaim}
         >
-          {canClaim ? `ЗАБРАТЬ ${DAILY_LADDER[streakIdx].coins.toLocaleString("ru-RU")} 🪙` : "УЖЕ ЗАБРАЛ · ЗАХОДИ ЗАВТРА"}
-        </Tap>
-      </Panel>
+          {canClaim
+            ? `Забрать ${DAILY_LADDER[streakIdx].coins.toLocaleString("ru-RU")} 🪙`
+            : "Уже забрал · заходи завтра"}
+        </Button>
+      </Card>
 
       <SectionTitle>Задания дня</SectionTitle>
       {s.daily.quests.map((q) => {
@@ -126,29 +129,32 @@ function Daily() {
         if (!def) return null;
         const pct = Math.min(1, q.progress / def.target);
         return (
-          <Panel key={q.id} r="lg" className="p-3.5 mb-2.5">
-            <div className="flex items-start justify-between gap-3 mb-2">
-              <div className="t-title clip2" style={{ fontSize: 13, flex: 1, minWidth: 0 }}>
+          <Card key={q.id} r="lg" style={{ padding: 14, marginBottom: 10 }}>
+            <div className="flex items-start justify-between" style={{ gap: 12, marginBottom: 11 }}>
+              <div className="t-title-sm clip2" style={{ flex: 1, minWidth: 0 }}>
                 {def.name.replace("{n}", def.target.toLocaleString("ru-RU"))}
               </div>
-              <div className="t-num acc-text shrink-0" style={{ fontSize: 12 }}>+{fmt(def.reward)}</div>
+              <div className="t-num acc-text shrink-0" style={{ fontSize: 12.5 }}>+{fmt(def.reward)}</div>
             </div>
             <Bar pct={pct} h={6} />
-            <div className="flex items-center justify-between gap-2 mt-2" style={{ minHeight: 26 }}>
-              <span className="t-mono clip1" style={{ fontSize: 10, color: "var(--text-mute)" }}>
+            <div
+              className="flex items-center justify-between"
+              style={{ gap: 10, marginTop: 11, minHeight: 30 }}
+            >
+              <span className="t-num clip1" style={{ fontSize: 11, color: "var(--text-mute)" }}>
                 {Math.floor(q.progress).toLocaleString("ru-RU")} / {def.target.toLocaleString("ru-RU")}
               </span>
               {q.done && !q.claimed && (
-                <Tap onClick={() => claimQuest(q.id)} accent r="sm" className="px-3 py-1.5 t-title" style={{ fontSize: 11 }} sound="none">
-                  ЗАБРАТЬ
-                </Tap>
+                <Button variant="primary" size="sm" sound="none" onClick={() => claimQuest(q.id)}>
+                  Забрать
+                </Button>
               )}
               {q.claimed && <span className="t-label" style={{ fontSize: 9 }}>✓ получено</span>}
             </div>
-          </Panel>
+          </Card>
         );
       })}
-      <div className="t-label text-center mt-4">Задания обновляются каждый день</div>
+      <div className="t-caption text-center" style={{ marginTop: 18 }}>Задания обновляются каждый день</div>
     </>
   );
 }
@@ -185,41 +191,43 @@ function Season() {
 
   return (
     <>
-      <Panel r="lg" className="p-4 mb-4">
-        <div className="flex items-baseline justify-between mb-2">
-          <div>
-            <div className="t-label">СЕЗОН {s.season.id}</div>
-            <div className="t-display" style={{ fontSize: 26 }}>УРОВЕНЬ {tier}</div>
+      <Card r="lg" style={{ padding: 15, marginBottom: 20 }}>
+        <div className="flex items-start justify-between" style={{ gap: 12, marginBottom: 14 }}>
+          <div className="min-w-0">
+            <div className="t-label">Сезон {s.season.id}</div>
+            <div className="t-display-sm" style={{ marginTop: 4 }}>Уровень {tier}</div>
           </div>
-          <div className="text-right">
-            <div className="t-num acc-text" style={{ fontSize: 16 }}>{fmt(s.season.xp)}</div>
-            <div className="t-label" style={{ fontSize: 8 }}>сезонный XP</div>
+          <div className="text-right shrink-0">
+            <div className="t-num acc-text" style={{ fontSize: 17 }}>{fmt(s.season.xp)}</div>
+            <div className="t-label" style={{ fontSize: 8.5, marginTop: 2 }}>сезонный XP</div>
           </div>
         </div>
         <Bar pct={inTier} h={8} />
         {tier >= SEASON_TIERS && (
-          <Tap onClick={restart} accent r="md" className="w-full py-3 mt-3 t-title" style={{ fontSize: 13 }} sound="none">
-            ЗАВЕРШИТЬ СЕЗОН · +15 💎
-          </Tap>
+          <div style={{ marginTop: 14 }}>
+            <Button variant="primary" size="lg" full sound="none" onClick={restart}>
+              Завершить сезон · +15 💎
+            </Button>
+          </div>
         )}
-      </Panel>
+      </Card>
 
-      <div className="grid grid-cols-1 gap-2">
+      <div className="flex flex-col" style={{ gap: 8 }}>
         {Array.from({ length: SEASON_TIERS }).map((_, i) => {
           const rw = seasonReward(i);
           const unlocked = i < tier;
           const claimed = s.season.claimed.includes(i);
           return (
-            <Panel
-              key={i} r="md"
-              className="px-3.5 py-2.5 flex items-center gap-3"
-              style={{ opacity: unlocked ? 1 : 0.44 }}
+            <Card
+              key={i} r="md" tone={2}
+              className="flex items-center"
+              style={{ padding: "11px 13px", gap: 12, opacity: unlocked ? 1 : 0.42 }}
             >
               <div
                 className="t-num shrink-0 flex items-center justify-center"
                 style={{
-                  width: 32, height: 32, borderRadius: 10, fontSize: 12,
-                  background: rw.label ? "var(--acc)" : "rgba(255,255,255,0.08)",
+                  width: 32, height: 32, borderRadius: "var(--r-sm)", fontSize: 12,
+                  background: rw.label ? "var(--acc)" : "var(--btn-bg)",
                   color: rw.label ? "var(--acc-ink)" : "var(--text-dim)",
                 }}
               >
@@ -229,18 +237,22 @@ function Season() {
                 <div className="t-num" style={{ fontSize: 13 }}>
                   {fmt(rw.coins)} 🪙 {rw.gems > 0 && `· ${rw.gems} 💎`}
                 </div>
-                {rw.label && <div className="t-label acc-text" style={{ fontSize: 8 }}>{rw.label} НАГРАДА</div>}
+                {rw.label && (
+                  <div className="t-label acc-text" style={{ fontSize: 8.5, marginTop: 2 }}>
+                    {rw.label} награда
+                  </div>
+                )}
               </div>
               {claimed ? (
-                <span className="t-label" style={{ fontSize: 9 }}>✓</span>
+                <span className="t-label shrink-0" style={{ fontSize: 10 }}>✓</span>
               ) : unlocked ? (
-                <Tap onClick={() => claim(i)} accent r="sm" className="px-3 py-1.5 t-title" style={{ fontSize: 10 }} sound="none">
-                  ВЗЯТЬ
-                </Tap>
+                <Button variant="primary" size="sm" sound="none" onClick={() => claim(i)}>
+                  Взять
+                </Button>
               ) : (
-                <span style={{ fontSize: 12, opacity: 0.5 }}>🔒</span>
+                <span className="shrink-0" style={{ fontSize: 12, opacity: 0.5 }}>🔒</span>
               )}
-            </Panel>
+            </Card>
           );
         })}
       </div>
@@ -296,47 +308,42 @@ function Skills() {
 
   return (
     <>
-      <Panel r="lg" className="p-4 mb-4">
-        <div className="flex items-center justify-between mb-1">
-          <div>
-            <div className="t-label">ПЕРЕРОЖДЕНИЕ</div>
-            <div className="t-display" style={{ fontSize: 25 }}>★ {s.prestige}</div>
+      <Card r="lg" style={{ padding: 15, marginBottom: 22 }}>
+        <div className="flex items-start justify-between" style={{ gap: 12 }}>
+          <div className="min-w-0">
+            <div className="t-label">Перерождение</div>
+            <div className="t-display-sm" style={{ marginTop: 4 }}>★ {s.prestige}</div>
           </div>
-          <div className="text-right">
+          <div className="text-right shrink-0">
             <div className="t-num acc-text" style={{ fontSize: 22 }}>{freePoints}</div>
-            <div className="t-label" style={{ fontSize: 8 }}>свободных очков</div>
+            <div className="t-label" style={{ fontSize: 8.5, marginTop: 2 }}>свободных очков</div>
           </div>
         </div>
-        <div style={{ fontSize: 11, color: "var(--text-mute)", lineHeight: 1.5, margin: "8px 0 10px" }}>
+        <div className="t-body" style={{ margin: "14px 0" }}>
           Сбрасывает монеты и апгрейды кликера, но даёт очки навыков навсегда и
           <span className="acc-text"> +12% ко всем монетам</span> за каждое перерождение.
           Уровень, ачивки, друзья и скины сохраняются.
         </div>
         {!confirm ? (
-          <Tap
-            onClick={() => (prestigeAvailable > 0 ? setConfirm(true) : sfx.error())}
+          <Button
+            variant="primary" size="lg" full sound="none"
             disabled={prestigeAvailable <= 0}
-            accent={prestigeAvailable > 0}
-            r="md" className="w-full py-3 t-title" style={{ fontSize: 13 }} sound="none"
+            onClick={() => (prestigeAvailable > 0 ? setConfirm(true) : sfx.error())}
           >
             {prestigeAvailable > 0
-              ? `ПЕРЕРОДИТЬСЯ · +${prestigeAvailable} ОЧКОВ`
-              : `Нужно ${fmt(2.5e6)} монет всего (${fmt(s.totalCoinsEver)})`}
-          </Tap>
+              ? `Переродиться · +${prestigeAvailable} очков`
+              : `Нужно ${fmt(2.5e6)} монет всего`}
+          </Button>
         ) : (
-          <div className="flex gap-2">
-            <Tap onClick={() => setConfirm(false)} r="md" className="flex-1 py-3 t-title" style={{ fontSize: 12 }}>
-              Отмена
-            </Tap>
-            <Tap onClick={doPrestige} accent r="md" className="flex-1 py-3 t-title" style={{ fontSize: 12 }} sound="none">
-              ТОЧНО!
-            </Tap>
+          <div className="flex" style={{ gap: 8 }}>
+            <Button variant="secondary" full onClick={() => setConfirm(false)}>Отмена</Button>
+            <Button variant="primary" full sound="none" onClick={doPrestige}>Точно!</Button>
           </div>
         )}
-      </Panel>
+      </Card>
 
       {branches.map((b) => (
-        <div key={b.k} className="mb-4">
+        <div key={b.k} style={{ marginBottom: 22 }}>
           <SectionTitle>{b.icon} {b.name}</SectionTitle>
           {SKILLS.filter((n) => n.branch === b.k).map((node) => {
             const lvl = s.skills[node.id] || 0;
@@ -345,23 +352,30 @@ function Skills() {
             const locked = node.req ? (s.skills[node.req] || 0) < 1 : false;
             const can = !maxed && !locked && freePoints >= cost;
             return (
-              <Panel key={node.id} r="md" className="p-3 mb-2 flex items-center gap-3" style={{ opacity: locked ? 0.45 : 1 }}>
-                <div style={{ fontSize: 22 }}>{locked ? "🔒" : node.icon}</div>
+              <Card
+                key={node.id} r="md" tone={2}
+                className="flex items-center"
+                style={{ padding: 12, gap: 12, marginBottom: 8, opacity: locked ? 0.42 : 1 }}
+              >
+                <div className="shrink-0" style={{ fontSize: 22 }}>{locked ? "🔒" : node.icon}</div>
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-baseline gap-2">
-                    <span className="t-title" style={{ fontSize: 13 }}>{node.name}</span>
-                    <span className="t-num" style={{ fontSize: 10, color: "var(--text-mute)" }}>{lvl}/{node.max}</span>
+                  <div className="flex items-baseline" style={{ gap: 7 }}>
+                    <span className="t-title-sm clip1">{node.name}</span>
+                    <span className="t-num shrink-0" style={{ fontSize: 10.5, color: "var(--text-mute)" }}>
+                      {lvl}/{node.max}
+                    </span>
                   </div>
-                  <div style={{ fontSize: 10, color: "var(--text-mute)" }}>{node.desc}</div>
-                  <div className="mt-1.5"><Bar pct={lvl / node.max} h={4} /></div>
+                  <div className="t-caption clip1" style={{ marginTop: 3 }}>{node.desc}</div>
+                  <div style={{ marginTop: 8 }}><Bar pct={lvl / node.max} h={4} /></div>
                 </div>
-                <Tap
-                  onClick={() => upgrade(node.id)} disabled={!can} accent={can} r="sm"
-                  className="px-3 py-2 t-num shrink-0" style={{ fontSize: 11 }} sound="none"
+                <Button
+                  variant={can ? "primary" : "secondary"} size="sm" sound="none"
+                  disabled={!can} onClick={() => upgrade(node.id)}
+                  className="shrink-0"
                 >
                   {maxed ? "MAX" : `★${cost}`}
-                </Tap>
-              </Panel>
+                </Button>
+              </Card>
             );
           })}
         </div>
@@ -382,14 +396,14 @@ function Achievements() {
 
   return (
     <>
-      <Panel r="lg" className="p-3.5 mb-3">
-        <div className="flex items-baseline justify-between mb-2">
-          <div className="t-title" style={{ fontSize: 14 }}>Достижения</div>
+      <Card r="lg" style={{ padding: 14, marginBottom: 14 }}>
+        <div className="flex items-baseline justify-between" style={{ gap: 10, marginBottom: 11 }}>
+          <div className="t-title-sm">Достижения</div>
           <div className="t-num acc-text" style={{ fontSize: 15 }}>{doneCount} / {ACHIEVEMENTS.length}</div>
         </div>
         <Bar pct={doneCount / ACHIEVEMENTS.length} h={7} />
-      </Panel>
-      <div className="flex gap-2 mb-3">
+      </Card>
+      <div className="flex" style={{ gap: 8, marginBottom: 14 }}>
         <Chip active={filter === "all"} onClick={() => setFilter("all")}>Все</Chip>
         <Chip active={filter === "todo"} onClick={() => setFilter("todo")}>Не получены</Chip>
         <Chip active={filter === "done"} onClick={() => setFilter("done")}>Получены</Chip>
@@ -398,30 +412,39 @@ function Achievements() {
         const done = !!s.achievements[a.id];
         return (
           <motion.div key={a.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: Math.min(0.3, i * 0.02) }}>
-            <Panel r="md" className="p-3 mb-2 flex items-center gap-3" style={{ opacity: done ? 1 : 0.62 }}>
+            <Card
+              r="md" tone={2} className="flex items-center"
+              style={{ padding: 12, gap: 12, marginBottom: 8, opacity: done ? 1 : 0.58 }}
+            >
               <div
                 className="shrink-0 flex items-center justify-center"
                 style={{
-                  width: 40, height: 40, borderRadius: 12, fontSize: 19,
-                  background: done ? `${RARITY_COLOR[a.rarity]}22` : "rgba(255,255,255,0.05)",
-                  border: `1px solid ${done ? RARITY_COLOR[a.rarity] : "var(--glass-brd)"}`,
+                  width: 40, height: 40, borderRadius: "var(--r-sm)", fontSize: 19,
+                  background: done ? `${RARITY_COLOR[a.rarity]}1f` : "var(--btn-bg)",
+                  border: `1px solid ${done ? `${RARITY_COLOR[a.rarity]}66` : "var(--btn-brd)"}`,
                 }}
               >
                 {done ? "🏆" : "🔒"}
               </div>
               <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-1.5">
-                  <span className="t-title" style={{ fontSize: 13 }}>{a.name}</span>
-                  <span className="t-label" style={{ fontSize: 7, color: RARITY_COLOR[a.rarity] }}>
+                <div className="flex items-baseline" style={{ gap: 7 }}>
+                  <span className="t-title-sm clip1">{a.name}</span>
+                  <span
+                    className="t-label shrink-0"
+                    style={{ fontSize: 8, color: RARITY_COLOR[a.rarity] }}
+                  >
                     {RARITY_LABEL[a.rarity]}
                   </span>
                 </div>
-                <div style={{ fontSize: 10, color: "var(--text-mute)" }}>{a.desc}</div>
+                <div className="t-caption clip2" style={{ marginTop: 3 }}>{a.desc}</div>
               </div>
-              <div className="t-num shrink-0" style={{ fontSize: 11, color: done ? "var(--acc)" : "var(--text-mute)" }}>
+              <div
+                className="t-num shrink-0"
+                style={{ fontSize: 11.5, color: done ? "var(--acc)" : "var(--text-mute)" }}
+              >
                 {fmt(a.reward)}🪙
               </div>
-            </Panel>
+            </Card>
           </motion.div>
         );
       })}
@@ -454,32 +477,37 @@ function Stats() {
       {GAME_META.map((g) => {
         const st = s.games[g.id];
         return (
-          <Panel key={g.id} r="md" className="p-3 mb-2">
-            <div className="flex items-center gap-2.5 mb-2">
+          <Card key={g.id} r="md" tone={2} style={{ padding: 13, marginBottom: 8 }}>
+            <div className="flex items-center" style={{ gap: 9, marginBottom: 12 }}>
               <span style={{ fontSize: 18 }}>{g.icon}</span>
-              <span className="t-title" style={{ fontSize: 13 }}>{g.name}</span>
+              <span className="t-title-sm clip1">{g.name}</span>
             </div>
-            <div className="grid grid-cols-4 gap-2 text-center">
+            <div className="grid grid-cols-4 text-center" style={{ gap: 8 }}>
               <Mini v={fmt(st.best)} l="рекорд" acc />
               <Mini v={String(st.plays)} l="игр" />
               <Mini v={fmt(st.totalScore)} l="всего" />
               <Mini v={fmtTime(st.timeMs)} l="время" />
             </div>
-          </Panel>
+          </Card>
         );
       })}
-      <SectionTitle>Общее</SectionTitle>
-      <Panel r="lg" className="p-1">
+      <div style={{ marginTop: 22 }}>
+        <SectionTitle>Общее</SectionTitle>
+      </div>
+      <Card r="lg" style={{ overflow: "hidden" }}>
         {rows.map(([k, v], i) => (
           <div key={k}>
-            <div className="flex items-center justify-between px-3 py-2.5">
-              <span style={{ fontSize: 12, color: "var(--text-dim)" }}>{k}</span>
-              <span className="t-num" style={{ fontSize: 12 }}>{v}</span>
+            <div
+              className="flex items-center justify-between"
+              style={{ padding: "11px 14px", gap: 12 }}
+            >
+              <span className="t-body clip1">{k}</span>
+              <span className="t-num shrink-0" style={{ fontSize: 12.5 }}>{v}</span>
             </div>
-            {i < rows.length - 1 && <div className="divider" />}
+            {i < rows.length - 1 && <Divider inset={14} />}
           </div>
         ))}
-      </Panel>
+      </Card>
     </>
   );
 }
@@ -488,7 +516,7 @@ function Mini({ v, l, acc }: { v: string; l: string; acc?: boolean }) {
   return (
     <div>
       <div className="t-num" style={{ fontSize: 13, color: acc ? "var(--acc)" : "var(--text)" }}>{v}</div>
-      <div className="t-label" style={{ fontSize: 7 }}>{l}</div>
+      <div className="t-label" style={{ fontSize: 8, marginTop: 3 }}>{l}</div>
     </div>
   );
 }

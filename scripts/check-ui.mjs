@@ -7,9 +7,11 @@ const css=fs.readFileSync('src/index.css','utf8');
 console.log('\n[1] Защита вёрстки от системных настроек');
 ok(/text-size-adjust:\s*100%/.test(css),'text-size-adjust зафиксирован (Android не раздует шрифт)');
 ok(/font-family:\s*\n?\s*"Inter Variable"/.test(css),'подключён Inter Variable');
-ok((css.match(/@font-face/g)||[]).length===2,'ровно 2 @font-face (латиница+кириллица)');
+ok((css.match(/@font-face/g)||[]).length===4,'4 @font-face: Inter + Unbounded, латиница и кириллица');
+ok(/font-family:\s*"Unbounded"/.test(css),'подключён Unbounded для заголовков');
+ok(/\.t-display[\s\S]{0,200}Unbounded/.test(css),'заголовки используют Unbounded');
 ok(/U\+0400-045F/.test(css),'кириллица покрыта unicode-range');
-ok(/\.t-display[\s\S]*?line-height:\s*1\.08/.test(css),'у заголовков line-height не режет буквы');
+ok(/\.t-display\s*\{[\s\S]*?line-height:\s*1\.1[0-9]?/.test(css),'у заголовков line-height не режет буквы');
 ok(/\.clip1/.test(css)&&/\.clip2/.test(css),'есть утилиты обрезки текста');
 
 console.log('\n[2] Тосты читаемы (непрозрачный фон)');
@@ -27,11 +29,21 @@ ok(/e\.preventDefault\(\)/.test(br),'скролл не мешает движен
 ok(/0\.055/.test(br),'отклик героя ускорен');
 
 console.log('\n[4] Контент не уезжает под навбар');
+const glass=fs.readFileSync('src/ui/Glass.tsx','utf8');
+ok(/paddingBottom:\s*"calc\(var\(--sab\) \+ 104px\)"/.test(glass),'Screen резервирует место под навбар');
+ok(/padding:\s*"0 16px"/.test(glass),'Screen задаёт единые боковые поля');
 for(const f of ['Home','Progress','Shop','Friends','Settings']){
   const t=fs.readFileSync(`src/pages/${f}.tsx`,'utf8');
-  ok(/paddingBottom:\s*"calc\(var\(--sab\) \+ 116px\)"/.test(t),`${f}: нижний отступ учитывает навбар`);
-  ok(!/pb-28/.test(t),`${f}: старый жёсткий отступ убран`);
+  ok(/<Screen/.test(t),`${f}: использует единый каркас Screen`);
+  ok(!/pb-28/.test(t)&&!/\+ 116px/.test(t),`${f}: старый жёсткий отступ убран`);
+  ok(!/<Panel/.test(t),`${f}: непрозрачные карточки вместо стекла в списках`);
 }
+
+console.log('\n[4b] Оформление кнопок и скруглений');
+ok(/--r-lg:\s*14px/.test(css)&&/--r-xl:\s*18px/.test(css),'радиусы уменьшены, без «пузырей»');
+ok(/--btn-bg/.test(css)&&/--btn-brd/.test(css),'у кнопок есть свой фон и рамка (не сливаются)');
+ok(/export function Button/.test(glass),'есть единый компонент Button');
+ok(/whiteSpace:\s*"nowrap"/.test(glass),'текст кнопок не переносится и не ломает ряд');
 
 console.log('\n[5] Иконки приложения');
 ok(fs.existsSync('assets/icon.png'),'assets/icon.png существует');
@@ -46,9 +58,24 @@ ok(dens.every(d=>fs.existsSync(`android-icons/mipmap-${d}/ic_launcher_round.png`
 
 console.log('\n[6] Сборка офлайн');
 const dist=fs.readFileSync('dist/index.html','utf8');
-ok((dist.match(/data:font\/woff2/g)||[]).length===2,'шрифты вшиты в HTML (не грузятся из сети)');
+ok((dist.match(/data:font\/woff2/g)||[]).length===4,'шрифты вшиты в HTML (не грузятся из сети)');
 ok(!/fonts\.googleapis|fonts\.gstatic/.test(dist),'нет обращений к Google Fonts');
-ok(fs.statSync('dist/index.html').size < 700*1024,`размер ${(fs.statSync('dist/index.html').size/1024).toFixed(0)} КБ — в пределах нормы`);
+ok(fs.statSync('dist/index.html').size < 760*1024,`размер ${(fs.statSync('dist/index.html').size/1024).toFixed(0)} КБ — в пределах нормы`);
+
+console.log('\n[7] Обновление приложения');
+const upd=fs.readFileSync('src/core/updater.ts','utf8');
+ok(/getReader\(\)/.test(upd),'загрузка идёт потоком — можно показать прогресс');
+ok(/checkForUpdate/.test(upd)&&/isNewer/.test(upd),'версия сравнивается по числам, а не строкой');
+ok(/installFromFile/.test(upd),'есть установка из скачанного файла');
+const updui=fs.readFileSync('src/ui/Updater.tsx','utf8');
+ok(/<Bar\s+pct=\{total \? pct : 0\.06\}/.test(updui),'прогресс-бар загрузки выводится');
+ok(/Отменить/.test(updui),'загрузку можно отменить');
+const wf2=fs.readFileSync('.github/workflows/build-apk.yml','utf8');
+ok(/assembleRelease/.test(wf2),'CI собирает release-APK');
+ok(/setup-android-signing/.test(wf2),'APK подписывается постоянным ключом (нет «конфликта пакетов»)');
+ok(/REQUEST_INSTALL_PACKAGES/.test(wf2),'разрешение на установку обновлений выдано');
+ok(/version: \$\{\{ env\.APP_VER \}\}/.test(wf2),'релиз публикует номер версии для проверки обновлений');
+ok(fs.existsSync('android-signing/chubgames.p12'),'ключ подписи лежит в репозитории');
 
 console.log(fails===0?'\n✅ ВСЕ ПРОВЕРКИ ВЁРСТКИ ПРОЙДЕНЫ\n':`\n❌ ПРОВАЛЕНО: ${fails}\n`);
 process.exit(fails?1:0);

@@ -3,157 +3,184 @@ import { useGame } from "../core/store";
 import { GAME_META } from "../core/content";
 import { fmt } from "../core/format";
 import { xpForLevel, autoRate } from "../core/save";
-import { Panel, Tap, Bar, SectionTitle } from "../ui/Glass";
+import { Card, Tap, Bar, SectionTitle, Screen } from "../ui/Glass";
 import HeadView from "../ui/HeadView";
 import type { GameId } from "../core/types";
 
 export default function Home({ onPlay }: { onPlay: (g: GameId) => void }) {
   const { s, mainFriend, levelPct } = useGame();
   const rate = autoRate(s);
-  const lastPlayed = GAME_META.filter((g) => s.unlockedGames.includes(g.id)).sort(
+  const featured = GAME_META.filter((g) => s.unlockedGames.includes(g.id)).sort(
     (a, b) => s.games[b.id].plays - s.games[a.id].plays,
   )[0];
 
   return (
-    <div className="scroll h-full px-4" style={{ paddingTop: "calc(var(--sat) + 14px)", paddingBottom: "calc(var(--sab) + 116px)" }}>
+    <Screen>
       {/* Шапка */}
-      <div className="flex items-center justify-between gap-3 mb-4">
-        <div className="min-w-0 flex-1">
-          <div
+      <div
+        className="flex items-center justify-between gap-3"
+        style={{ paddingTop: "calc(var(--sat) + 14px)", marginBottom: 16 }}
+      >
+        <div className="min-w-0">
+          <h1
             className="t-display"
             style={{
-              fontSize: 27,
-              background: "linear-gradient(96deg, var(--text), var(--acc))",
+              backgroundImage: "linear-gradient(94deg, var(--text) 30%, var(--acc))",
               WebkitBackgroundClip: "text",
-              WebkitTextFillColor: "transparent",
+              backgroundClip: "text",
+              color: "transparent",
             }}
           >
             CHUBGAMES
-          </div>
-          <div className="t-label clip1" style={{ marginTop: 3 }}>
-            уровень {s.level} {s.prestige > 0 && `• ★${s.prestige}`}
-          </div>
+          </h1>
         </div>
-        <Panel r="md" className="px-3 py-2 text-right shrink-0">
-          <div className="t-num acc-text" style={{ fontSize: 16, lineHeight: 1.1 }}>{fmt(s.coins)}</div>
-          <div className="t-label" style={{ fontSize: 8 }}>🪙 {rate > 0 ? `+${fmt(rate)}/с` : "монет"}</div>
-        </Panel>
+        <Card r="md" className="shrink-0" style={{ padding: "8px 12px" }}>
+          <div className="flex items-center gap-1.5">
+            <span style={{ fontSize: 13 }}>🪙</span>
+            <span className="t-num acc-text" style={{ fontSize: 15 }}>{fmt(s.coins)}</span>
+          </div>
+          {rate > 0 && (
+            <div className="t-caption" style={{ fontSize: 10, marginTop: 1 }}>
+              +{fmt(rate)}/сек
+            </div>
+          )}
+        </Card>
       </div>
 
-      {/* Полоса уровня */}
-      <Panel r="lg" className="p-3.5 mb-4">
-        <div className="flex items-center gap-3">
+      {/* Профиль */}
+      <Card r="lg" style={{ padding: 14, marginBottom: 18 }}>
+        <div className="flex items-center" style={{ gap: 13 }}>
           <div className="relative shrink-0">
-            <HeadView friend={mainFriend} size={48} />
+            <HeadView friend={mainFriend} size={46} />
             <div
-              className="absolute t-num flex items-center justify-center"
+              className="t-num absolute flex items-center justify-center"
               style={{
-                bottom: -3, right: -5, width: 22, height: 22, borderRadius: 99,
-                background: "var(--acc)", color: "var(--acc-ink)", fontSize: 10,
-                border: "2px solid var(--bg)",
+                bottom: -4, right: -6, minWidth: 21, height: 21, padding: "0 5px",
+                borderRadius: 999, background: "var(--acc)", color: "var(--acc-ink)",
+                fontSize: 10.5, border: "2.5px solid var(--surface)",
               }}
             >
               {s.level}
             </div>
           </div>
           <div className="flex-1 min-w-0">
-            <div className="flex justify-between items-baseline mb-1.5">
-              <div className="t-title" style={{ fontSize: 13 }}>{mainFriend.name}</div>
-              <div className="t-mono" style={{ fontSize: 10, color: "var(--text-mute)" }}>
-                {fmt(s.xp)} / {fmt(xpForLevel(s.level))}
-              </div>
+            <div className="flex items-baseline justify-between gap-2" style={{ marginBottom: 7 }}>
+              <span className="t-title-sm clip1">{mainFriend.name}</span>
+              <span className="t-num shrink-0" style={{ fontSize: 11, color: "var(--text-mute)" }}>
+                {fmt(s.xp)}/{fmt(xpForLevel(s.level))}
+              </span>
             </div>
-            <Bar pct={levelPct} h={7} />
+            <Bar pct={levelPct} h={6} />
           </div>
         </div>
-      </Panel>
+      </Card>
 
       {/* Продолжить */}
-      {lastPlayed && (
-        <motion.div whileTap={{ scale: 0.98 }} className="mb-5">
-          <Tap onClick={() => onPlay(lastPlayed.id)} r="xl" className="w-full overflow-hidden" sound="power">
-            <div className="relative p-5 text-left overflow-hidden">
+      {featured && (
+        <div style={{ marginBottom: 22 }}>
+          <Tap
+            onClick={() => onPlay(featured.id)}
+            r="xl"
+            className="w-full overflow-hidden relative"
+            sound="power"
+          >
+            <div
+              className="absolute pointer-events-none"
+              style={{
+                right: -6, bottom: -14, fontSize: 96, opacity: 0.12, lineHeight: 1,
+              }}
+            >
+              {featured.icon}
+            </div>
+            <div style={{ padding: 18, position: "relative" }}>
+              <div className="t-label acc-text">Продолжить</div>
               <div
-                className="absolute pointer-events-none"
-                style={{
-                  right: -22, top: -10, fontSize: 104, opacity: 0.1,
-                  transform: "rotate(-12deg)", lineHeight: 1,
-                }}
+                className="t-display-sm"
+                style={{ fontSize: 24, marginTop: 6, maxWidth: "72%" }}
               >
-                {lastPlayed.icon}
+                {featured.name}
               </div>
-              <div className="t-label acc-text" style={{ fontSize: 9 }}>ПРОДОЛЖИТЬ</div>
-              <div className="t-display mt-1" style={{ fontSize: 26, maxWidth: "76%" }}>
-                {lastPlayed.name}
+              <div className="t-body clip2" style={{ marginTop: 7, maxWidth: "70%" }}>
+                {featured.desc}
               </div>
-              <div
-                className="clip2"
-                style={{ fontSize: 11, color: "var(--text-mute)", marginTop: 6, maxWidth: "74%", lineHeight: 1.4 }}
-              >
-                {lastPlayed.desc}
-              </div>
-              <div className="flex items-center gap-2 mt-3.5">
-                <div
-                  className="px-3.5 py-2 t-title flex items-center gap-1.5"
-                  style={{ background: "var(--acc)", color: "var(--acc-ink)", borderRadius: 99, fontSize: 12 }}
+              <div className="flex items-center" style={{ gap: 12, marginTop: 16 }}>
+                <span
+                  className="inline-flex items-center"
+                  style={{
+                    gap: 6, padding: "10px 18px", borderRadius: 999,
+                    background: "var(--acc)", color: "var(--acc-ink)",
+                    fontSize: 13, fontWeight: 800, lineHeight: 1,
+                  }}
                 >
-                  ▶ ИГРАТЬ
-                </div>
-                <div className="t-num" style={{ fontSize: 11, color: "var(--text-mute)" }}>
-                  рекорд {fmt(s.games[lastPlayed.id].best)}
-                </div>
+                  ▶ Играть
+                </span>
+                <span className="t-caption">
+                  рекорд <span className="t-num" style={{ color: "var(--text-dim)" }}>{fmt(s.games[featured.id].best)}</span>
+                </span>
               </div>
             </div>
           </Tap>
-        </motion.div>
+        </div>
       )}
 
-      <SectionTitle right={<span className="t-label">{s.unlockedGames.length}/{GAME_META.length}</span>}>
+      {/* Сетка игр */}
+      <SectionTitle right={<span className="t-num" style={{ fontSize: 11, color: "var(--text-mute)" }}>{s.unlockedGames.length}/{GAME_META.length}</span>}>
         Все игры
       </SectionTitle>
 
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-2" style={{ gap: 12, marginBottom: 22 }}>
         {GAME_META.map((g, i) => {
           const unlocked = s.unlockedGames.includes(g.id);
           const st = s.games[g.id];
           return (
             <motion.div
               key={g.id}
-              initial={{ opacity: 0, y: 18 }}
+              initial={{ opacity: 0, y: 14 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: i * 0.05 }}
+              transition={{ delay: i * 0.04, duration: 0.26 }}
             >
               <Tap
                 onClick={() => unlocked && onPlay(g.id)}
                 disabled={!unlocked}
+                solid
                 r="lg"
-                className="w-full text-left overflow-hidden relative"
+                className="w-full h-full"
                 sound="power"
-                style={{ minHeight: 148 }}
+                style={{ display: "block" }}
               >
-                <div className="p-3.5 h-full flex flex-col">
-                  <div className="flex items-start justify-between">
-                    <div style={{ fontSize: 30, lineHeight: 1 }}>{unlocked ? g.icon : "🔒"}</div>
-                    <div
-                      className="t-label px-2 py-0.5"
+                <div
+                  className="flex flex-col h-full"
+                  style={{ padding: 13, minHeight: 152 }}
+                >
+                  <div className="flex items-start justify-between" style={{ marginBottom: 10 }}>
+                    <span style={{ fontSize: 26, lineHeight: 1 }}>{unlocked ? g.icon : "🔒"}</span>
+                    <span
+                      className="t-label"
                       style={{
-                        fontSize: 8, borderRadius: 99,
-                        background: "rgba(255,255,255,0.07)", color: "var(--text-mute)",
+                        fontSize: 8.5, padding: "3px 7px", borderRadius: 999,
+                        background: "var(--btn-bg)", letterSpacing: "0.07em",
                       }}
                     >
                       {g.tag}
-                    </div>
+                    </span>
                   </div>
-                  <div className="t-title mt-2.5" style={{ fontSize: 14, lineHeight: 1.15 }}>
-                    {unlocked ? g.name : "?????"}
-                  </div>
-                  <div style={{ fontSize: 10, color: "var(--text-mute)", marginTop: 4, lineHeight: 1.35, flex: 1 }}>
-                    {unlocked ? g.desc : `Откроется на ${g.unlockLvl} уровне`}
+                  <div className="t-title-sm clip1">{unlocked ? g.name : "?????"}</div>
+                  <div
+                    className="t-caption clip2"
+                    style={{ marginTop: 4, flex: 1 }}
+                  >
+                    {unlocked ? g.desc : `Уровень ${g.unlockLvl}`}
                   </div>
                   {unlocked && (
-                    <div className="flex items-center justify-between mt-2 pt-2" style={{ borderTop: "1px solid var(--glass-brd)" }}>
-                      <span className="t-num acc-text" style={{ fontSize: 12 }}>{fmt(st.best)}</span>
-                      <span className="t-label" style={{ fontSize: 8 }}>{st.plays} игр</span>
+                    <div
+                      className="flex items-center justify-between"
+                      style={{
+                        marginTop: 10, paddingTop: 9,
+                        borderTop: "1px solid var(--surface-brd)",
+                      }}
+                    >
+                      <span className="t-num acc-text" style={{ fontSize: 12.5 }}>{fmt(st.best)}</span>
+                      <span className="t-caption" style={{ fontSize: 10 }}>{st.plays} игр</span>
                     </div>
                   )}
                 </div>
@@ -163,22 +190,22 @@ export default function Home({ onPlay }: { onPlay: (g: GameId) => void }) {
         })}
       </div>
 
-      {/* Быстрая статистика */}
+      {/* Сводка */}
       <SectionTitle>Сводка</SectionTitle>
-      <div className="grid grid-cols-3 gap-2.5">
-        <StatMini v={fmt(s.stats.burgersDodged)} l="уклонов" />
-        <StatMini v={fmt(s.stats.tapsTotal)} l="тапов" />
-        <StatMini v={fmt(s.totalCoinsEver)} l="монет всего" />
+      <div className="grid grid-cols-3" style={{ gap: 10 }}>
+        <Stat v={fmt(s.stats.burgersDodged)} l="уклонов" />
+        <Stat v={fmt(s.stats.tapsTotal)} l="тапов" />
+        <Stat v={fmt(s.totalCoinsEver)} l="монет всего" />
       </div>
-    </div>
+    </Screen>
   );
 }
 
-function StatMini({ v, l }: { v: string; l: string }) {
+function Stat({ v, l }: { v: string; l: string }) {
   return (
-    <Panel r="md" className="py-3 text-center">
+    <Card r="md" className="text-center" style={{ padding: "13px 8px" }}>
       <div className="t-num" style={{ fontSize: 16 }}>{v}</div>
-      <div className="t-label" style={{ fontSize: 8, marginTop: 2 }}>{l}</div>
-    </Panel>
+      <div className="t-label" style={{ fontSize: 8.5, marginTop: 3 }}>{l}</div>
+    </Card>
   );
 }

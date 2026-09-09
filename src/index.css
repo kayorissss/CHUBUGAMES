@@ -24,6 +24,28 @@
   unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
 }
 
+/* Unbounded — только для крупных заголовков, задаёт характер бренда */
+@font-face {
+  font-family: "Unbounded";
+  font-style: normal;
+  font-display: block;
+  font-weight: 800;
+  src: url("@fontsource/unbounded/files/unbounded-latin-800-normal.woff2")
+    format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA,
+    U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193,
+    U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "Unbounded";
+  font-style: normal;
+  font-display: block;
+  font-weight: 800;
+  src: url("@fontsource/unbounded/files/unbounded-cyrillic-800-normal.woff2")
+    format("woff2");
+  unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+}
+
 /* ============================================================
    CHUBGAMES — Liquid Glass 2026 design system
    Палитра: чёрный / тёмно-серый / серый / белый + один акцент
@@ -62,13 +84,25 @@
   --acc-glow: rgba(255, 176, 32, 0.42);
   --acc-ink: #100c02;
 
-  --toast-bg: #17171c;
+  --surface: #131317;
+  --surface-2: #191920;
+  --surface-brd: rgba(255, 255, 255, 0.075);
+  --btn-bg: rgba(255, 255, 255, 0.07);
+  --btn-brd: rgba(255, 255, 255, 0.1);
+  --track: rgba(255, 255, 255, 0.09);
+  --danger: #ff6a4d;
+  --danger-brd: rgba(255, 106, 77, 0.34);
+  --toast-bg: #1b1b22;
   --toast-brd: rgba(255,255,255,0.16);
 
-  --r-sm: 12px;
-  --r-md: 18px;
-  --r-lg: 26px;
-  --r-xl: 34px;
+  /* Сдержанные радиусы: карточки — прямоугольные с лёгким скруглением,
+     капсулы остаются ТОЛЬКО у чипов, таб-бара и полос прогресса */
+  --r-xs: 6px;
+  --r-sm: 8px;
+  --r-md: 10px;
+  --r-lg: 14px;
+  --r-xl: 18px;
+  --r-pill: 999px;
 
   --sat: env(safe-area-inset-top, 0px);
   --sab: env(safe-area-inset-bottom, 0px);
@@ -100,17 +134,31 @@ html.light {
   --glass-brd: rgba(255, 255, 255, 0.75);
   --glass-hi: rgba(255, 255, 255, 0.95);
   --glass-shadow: 0 12px 34px -14px rgba(20, 20, 30, 0.4);
+  --surface: #ffffff;
+  --surface-2: #f7f7f9;
+  --surface-brd: rgba(0, 0, 0, 0.09);
+  --btn-bg: rgba(0, 0, 0, 0.05);
+  --btn-brd: rgba(0, 0, 0, 0.1);
+  --track: rgba(0, 0, 0, 0.09);
+  --danger: #d9342b;
+  --danger-brd: rgba(217, 52, 43, 0.3);
   --toast-bg: #ffffff;
   --toast-brd: rgba(0,0,0,0.14);
   color-scheme: light;
 }
 
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-  -webkit-tap-highlight-color: transparent;
-  -webkit-touch-callout: none;
+/* ВАЖНО: ресет обязан жить в слое base.
+   Без @layer он перебивает утилиты Tailwind (unlayered CSS всегда
+   выигрывает у layered) и обнуляет ВСЕ padding/margin в приложении. */
+@layer base {
+  * {
+    box-sizing: border-box;
+    -webkit-tap-highlight-color: transparent;
+    -webkit-touch-callout: none;
+  }
+  h1, h2, h3, h4, p, figure, blockquote, dl, dd {
+    margin: 0;
+  }
 }
 
 html {
@@ -142,26 +190,65 @@ body {
   touch-action: manipulation;
 }
 
-/* ---------- Типографика ---------- */
+/* ---------- Типографическая шкала ----------
+   Единые роли вместо произвольных размеров в каждом файле. */
+
+/* Крупные заголовки экранов — Unbounded */
 .t-display {
-  font-weight: 900;
-  letter-spacing: -0.035em;
-  /* было 0.92 — верхушки букв обрезались */
-  line-height: 1.08;
-  padding-block: 0.06em;
-}
-.t-title {
+  font-family: "Unbounded", "Inter Variable", system-ui, sans-serif;
   font-weight: 800;
-  letter-spacing: -0.02em;
-  line-height: 1.25;
+  font-size: 1.5rem;
+  line-height: 1.16;
+  letter-spacing: -0.01em;
 }
-.t-label {
+.t-display-sm {
+  font-family: "Unbounded", "Inter Variable", system-ui, sans-serif;
+  font-weight: 800;
+  font-size: 1.125rem;
+  line-height: 1.2;
+  letter-spacing: -0.005em;
+}
+/* Заголовки карточек */
+.t-title {
   font-weight: 700;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  font-size: 0.62rem;
+  font-size: 0.9375rem;
+  line-height: 1.3;
+  letter-spacing: -0.01em;
+}
+.t-title-sm {
+  font-weight: 700;
+  font-size: 0.8125rem;
+  line-height: 1.32;
+  letter-spacing: -0.005em;
+}
+/* Основной текст */
+.t-body {
+  font-weight: 450;
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  color: var(--text-dim);
+}
+.t-caption {
+  font-weight: 500;
+  font-size: 0.6875rem;
   line-height: 1.4;
   color: var(--text-mute);
+}
+/* Мелкие подписи-рубрики */
+.t-label {
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  font-size: 0.625rem;
+  line-height: 1.35;
+  color: var(--text-mute);
+}
+/* Цифры */
+.t-num {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  font-feature-settings: "tnum";
 }
 /* Однострочные подписи не должны разъезжать вёрстку */
 .clip1 {
@@ -177,11 +264,6 @@ body {
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
-.t-num {
-  font-variant-numeric: tabular-nums;
-  font-weight: 800;
-  letter-spacing: -0.02em;
-}
 .t-mono {
   font-family: ui-monospace, "SF Mono", "JetBrains Mono", "Roboto Mono", monospace;
   font-variant-numeric: tabular-nums;
@@ -191,11 +273,20 @@ body {
 .glass {
   position: relative;
   background: var(--glass-bg);
-  backdrop-filter: blur(var(--glass-blur)) saturate(180%);
-  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(180%);
+  backdrop-filter: blur(var(--glass-blur)) saturate(170%);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(170%);
   border: 1px solid var(--glass-brd);
   box-shadow: var(--glass-shadow);
   isolation: isolate;
+}
+/* Сплошная карточка — для плотных списков, где стекло только мешает читать */
+.solid {
+  position: relative;
+  background: var(--surface);
+  border: 1px solid var(--surface-brd);
+}
+.solid-2 {
+  background: var(--surface-2);
 }
 .glass::before {
   /* specular highlight — блик стекла сверху */
