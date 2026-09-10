@@ -2,147 +2,215 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence } from "framer-motion";
 import { useGame } from "../core/store";
 import { sfx, haptic } from "../core/fx";
-import { useCanvas, GameHUD, GameOver, Countdown } from "./shell";
+import { useCanvas, GameHUD, GameOver } from "./shell";
 import { tr } from "../core/i18n";
+import { isLowFx } from "../core/perf";
+import {
+  judge, legalBalls, lowestOnTable, pickShot, rackNumbers, BLACK,
+  type BallInfo, type Group, type PoolMode, type ShotResult, type Side,
+} from "../core/pool";
 
 /**
- * БИЛЬЯРД В ПОДВАЛЕ — забей все шары за отведённые удары.
+ * БИЛЬЯРД В ПОДВАЛЕ — по официальным правилам.
  *
- * Тянешь от битка назад — прицел с силой, отпускаешь. Шары честно
- * сталкиваются (упругое столкновение равных масс) и трутся о сукно.
- * Забил — очки и +1 удар в запас. Загнал биток — минус удар.
+ * Три режима:
+ *   - один: тренировка, забивай на время без соперника;
+ *   - против бота: он реально целится и бьёт;
+ *   - с другом: по очереди на одном телефоне.
  *
- * Когда стол пуст, собирается следующая партия: шаров больше, ударов
- * столько же. Так игра растёт в сложности, а не просто повторяется.
+ * Два свода правил: американка (9 шаров) и восьмёрка (8 ball). Правила
+ * вынесены в src/core/pool.ts и покрыты тестами — фолы, назначение
+ * групп, победа и поражение на чёрном.
+ *
+ * Управление: тянешь от битка назад, показывается линия прицела с
+ * отражением от борта и точкой контакта. Отпустил — удар.
  */
 
-const R = 11;                 // радиус шара
-/**
- * Трение подобрано расчётом, а не на глаз. При прежних 0.9915 биток
- * проезжал всего ~180-230 px, тогда как пирамида стоит примерно в 400 px:
- * до шаров было физически не докатиться даже на максимальной силе.
- * При 0.9985 полный удар проносит шар ~1000-1260 px — хватает и на
- * пирамиду, и на отскок от борта.
- */
+const R = 11;
 const FRICTION = 0.9985;
 const STOP_V = 0.02;
 const POCKET_R = 20;
-const SHOTS_START = 8;
+const SOLO_SHOTS = 14;
+
+type Mode = "solo" | "bot" | "duo";
 
 interface Ball {
-  x: number; y: number; vx: number; vy: number;
-  col: string; cue?: boolean; in?: boolean;
+  num: number;
+  x: number; y: number;
+  vx: number; vy: number;
+  in?: boolean;
 }
 
-const COLS = ["#ffb020", "#3fa9ff", "#59FF9E", "#FF6B4D", "#C89BFF", "#FFD86B", "#7be0d0"];
+/** Цвета шаров как в настоящем наборе */
+const BALL_COLOR: Record<number, string> = {
+  1: "#ffd23f", 2: "#2f6fd0", 3: "#e03a3a", 4: "#7d4fc4", 5: "#ef8c2a",
+  6: "#2f9e5e", 7: "#8d3b30", 8: "#1a1a1e", 9: "#ffd23f", 10: "#2f6fd0",
+  11: "#e03a3a", 12: "#7d4fc4", 13: "#ef8c2a", 14: "#2f9e5e", 15: "#8d3b30",
+};
 
 export default function Pool({ onExit }: { onExit: () => void }) {
   const { s, addCoins, addXp, finishGame, questProgress } = useGame();
-  const [phase, setPhase] = useState<"count" | "play" | "over">("count");
-  const [cd, setCd] = useState(3);
+  const [phase, setPhase] = useState<"menu" | "play" | "over">("menu");
+  const [mode, setMode] = useState<Mode>("bot");
+  const [rules, setRules] = useState<PoolMode>("nine");
+  const [showRules, setShowRules] = useState(false);
+
   const [score, setScore] = useState(0);
-  const [shots, setShots] = useState(SHOTS_START);
-  const [rack, setRack] = useState(1);
+  const [shots, setShots] = useState(SOLO_SHOTS);
+  const [turn, setTurn] = useState<Side>("me");
+  const [myGroup, setMyGroup] = useState<Group>(null);
+  const [, setFoeGroup] = useState<Group>(null);
+  const [msg, setMsg] = useState("");
   const [result, setResult] = useState({ score: 0, coins: 0, xp: 0 });
+  const [title, setTitle] = useState("");
+  const [sub, setSub] = useState("");
+  const [thinking, setThinking] = useState(false);
 
   const best = s.games.pool?.best || 0;
+  const low = isLowFx();
 
   const G = useRef({
     balls: [] as Ball[],
     running: false,
-    score: 0,
-    shots: SHOTS_START,
-    rack: 1,
     moving: false,
     aiming: false,
     ax: 0, ay: 0,
+    score: 0,
+    shots: SOLO_SHOTS,
+    turn: "me" as Side,
+    myGroup: null as Group,
+    foeGroup: null as Group,
     startT: 0,
     pops: [] as { x: number; y: number; t: number; txt: string; col: string }[],
     shake: 0,
     w: 0, h: 0,
     pad: 0, top: 0, bot: 0,
+    // что произошло за текущий удар
+    firstHit: 0,
+    potted: [] as number[],
+    cuePotted: false,
+    railHit: false,
+    ballInHand: false,
+    botTimer: 0,
   });
 
-  /** Расставить новую партию */
-  const setupRack = useCallback((w: number, h: number, n: number) => {
+  const cueBall = () => G.current.balls.find((b) => b.num === 0);
+
+  /** Расставить шары: треугольник для восьмёрки, ромб для американки */
+  const setupRack = useCallback((w: number, h: number, m: PoolMode) => {
     const g = G.current;
-    const pad = 18;
-    g.pad = pad;
+    g.pad = 18;
     g.top = h * 0.16;
     g.bot = h - 96;
-    const balls: Ball[] = [];
-    // биток снизу по центру
-    balls.push({ x: w / 2, y: g.bot - 70, vx: 0, vy: 0, col: "#ffffff", cue: true });
-    // пирамида сверху
-    let placed = 0, row = 0;
-    const cy = g.top + 70;
-    while (placed < n) {
-      const cnt = row + 1;
-      for (let i = 0; i < cnt && placed < n; i++) {
+    const nums = rackNumbers(m);
+    const balls: Ball[] = [{ num: 0, x: w / 2, y: g.bot - 70, vx: 0, vy: 0 }];
+    const cy = g.top + 78;
+
+    if (m === "nine") {
+      // ромб: 1 сверху, 9 в центре
+      const order = [1, 2, 3, 4, 9, 5, 6, 7, 8];
+      const spots: [number, number][] = [
+        [0, -2], [-1, -1], [1, -1], [-2, 0], [0, 0], [2, 0], [-1, 1], [1, 1], [0, 2],
+      ];
+      order.forEach((n, i) => {
+        const [sx, sy] = spots[i];
         balls.push({
-          x: w / 2 + (i - row / 2) * (R * 2.2),
-          y: cy + row * (R * 1.95),
-          vx: 0, vy: 0,
-          col: COLS[placed % COLS.length],
+          num: n, vx: 0, vy: 0,
+          x: w / 2 + sx * (R * 1.06), y: cy + sy * (R * 1.86),
         });
-        placed++;
+      });
+    } else {
+      // треугольник, восьмёрка в середине
+      const rest = nums.filter((n) => n !== BLACK);
+      // перемешиваем, но чёрный ставим в центр (позиция 4)
+      const shuffled = rest.slice().sort(() => Math.random() - 0.5);
+      const seq: number[] = [];
+      let k = 0;
+      for (let i = 0; i < 15; i++) seq.push(i === 4 ? BLACK : shuffled[k++]);
+      let idx = 0;
+      for (let row = 0; row < 5; row++) {
+        for (let i = 0; i <= row; i++) {
+          balls.push({
+            num: seq[idx++], vx: 0, vy: 0,
+            x: w / 2 + (i - row / 2) * (R * 2.08),
+            y: cy + row * (R * 1.84),
+          });
+        }
       }
-      row++;
     }
     g.balls = balls;
   }, []);
 
-  const reset = useCallback((w: number, h: number) => {
+  const start = useCallback((m: Mode, rl: PoolMode) => {
     const g = G.current;
-    g.w = w; g.h = h;
-    g.score = 0; g.shots = SHOTS_START; g.rack = 1;
+    setMode(m); setRules(rl);
+    g.score = 0; g.shots = SOLO_SHOTS; g.turn = "me";
+    g.myGroup = null; g.foeGroup = null;
     g.pops = []; g.shake = 0; g.moving = false; g.aiming = false;
+    g.ballInHand = false;
     g.startT = Date.now();
-    setupRack(w, h, 6);
-    setScore(0); setShots(SHOTS_START); setRack(1);
+    g.running = true;
+    setScore(0); setShots(SOLO_SHOTS); setTurn("me");
+    setMyGroup(null); setFoeGroup(null); setMsg("");
+    setPhase("play");
+    if (g.w) setupRack(g.w, g.h, rl);
+    sfx.power?.();
   }, [setupRack]);
 
-  const restart = useCallback(() => {
-    G.current.running = false;
-    setPhase("count");
-    setCd(3);
-  }, []);
-
-  useEffect(() => {
-    if (phase !== "count") return;
-    if (cd < 0) { G.current.running = true; setPhase("play"); return; }
-    sfx.click();
-    const t = setTimeout(() => setCd((c) => c - 1), 700);
-    return () => clearTimeout(t);
-  }, [phase, cd]);
-
-  const end = useCallback(() => {
+  const end = useCallback((won: boolean | null, why: string) => {
     const g = G.current;
     if (!g.running) return;
     g.running = false;
-    const sc = Math.floor(g.score);
+    const sc = Math.floor(g.score + (won ? 400 : 0));
     const coins = Math.floor(sc * 5.2 * (1 + s.prestige * 0.12));
     const xp = Math.floor(sc * 1.1 + 20);
     setResult({ score: sc, coins, xp });
+    setTitle(won === null ? tr("КИЙ В УГОЛ") : won ? tr("ПАРТИЯ ТВОЯ") : tr("ТЫ ПРОИГРАЛ"));
+    setSub(why);
     setPhase("over");
-    sfx.gameOver();
-    haptic("error");
-    addCoins(coins);
-    addXp(xp);
+    if (won) { sfx.legend?.(); haptic("success"); }
+    else { sfx.gameOver(); haptic("error"); }
+    addCoins(coins); addXp(xp);
     finishGame("pool", sc, Date.now() - g.startT);
     questProgress("plays", 1);
   }, [addCoins, addXp, finishGame, questProgress, s.prestige]);
 
-  const cue = () => G.current.balls.find((b) => b.cue && !b.in);
+  /* ─────────── удар ─────────── */
+
+  const strike = useCallback((vx: number, vy: number) => {
+    const g = G.current;
+    const c = cueBall();
+    if (!c) return;
+    c.vx = vx; c.vy = vy;
+    g.moving = true;
+    g.firstHit = 0; g.potted = []; g.cuePotted = false; g.railHit = false;
+    if (mode === "solo") { g.shots -= 1; setShots(g.shots); }
+    sfx.hit();
+    haptic("medium");
+  }, [mode]);
 
   const onDown = useCallback((e: React.PointerEvent) => {
     const g = G.current;
-    if (!g.running || g.moving) return;
+    if (!g.running || g.moving || (mode === "bot" && g.turn === "foe")) return;
     const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    const px = e.clientX - r.left, py = e.clientY - r.top;
+
+    // биток в руках после фола — ставим его пальцем
+    if (g.ballInHand) {
+      const c = cueBall();
+      if (c) {
+        c.x = Math.max(g.pad + R, Math.min(g.w - g.pad - R, px));
+        c.y = Math.max(g.top + R, Math.min(g.bot - R, py));
+        c.in = false; c.vx = 0; c.vy = 0;
+        g.ballInHand = false;
+        setMsg("");
+        sfx.tap();
+      }
+      return;
+    }
     g.aiming = true;
-    g.ax = e.clientX - r.left;
-    g.ay = e.clientY - r.top;
-  }, []);
+    g.ax = px; g.ay = py;
+  }, [mode]);
 
   const onMove = useCallback((e: React.PointerEvent) => {
     const g = G.current;
@@ -154,38 +222,165 @@ export default function Pool({ onExit }: { onExit: () => void }) {
 
   const onUp = useCallback(() => {
     const g = G.current;
-    const c = cue();
+    const c = cueBall();
     if (!g.aiming || !c || g.moving) return;
     g.aiming = false;
-    const dx = c.x - g.ax;
-    const dy = c.y - g.ay;
+    const dx = c.x - g.ax, dy = c.y - g.ay;
     const len = Math.hypot(dx, dy);
     if (len < 14) return;
     const power = Math.min(len, 190) / 190;
     const sp = 0.42 + power * 1.5;
-    c.vx = (dx / len) * sp;
-    c.vy = (dy / len) * sp;
-    g.moving = true;
-    g.shots -= 1;
-    setShots(g.shots);
-    sfx.hit();
-    haptic("medium");
-  }, []);
+    strike((dx / len) * sp, (dy / len) * sp);
+  }, [strike]);
+
+  /* ─────────── разбор удара по правилам ─────────── */
+
+  const settle = useCallback(() => {
+    const g = G.current;
+    const info: BallInfo[] = g.balls
+      .filter((b) => b.num > 0)
+      .map((b) => ({ num: b.num, potted: !!b.in }));
+
+    const shot: ShotResult = {
+      firstHit: g.firstHit,
+      potted: g.potted.slice(),
+      cuePotted: g.cuePotted,
+      railAfterContact: g.railHit,
+    };
+
+    // одиночная тренировка: без фолов, просто считаем очки
+    if (mode === "solo") {
+      if (g.cuePotted) {
+        const c = cueBall();
+        if (c) { c.in = false; c.x = g.w / 2; c.y = g.bot - 70; c.vx = 0; c.vy = 0; }
+      }
+      const left = g.balls.filter((b) => b.num > 0 && !b.in).length;
+      if (left === 0) { end(true, tr("Стол чист")); return; }
+      if (g.shots <= 0) { end(null, tr("Удары кончились")); return; }
+      return;
+    }
+
+    const who = g.turn;
+    const grp = who === "me" ? g.myGroup : g.foeGroup;
+    const v = judge(rules, info, shot, grp, who);
+
+    // вернуть на стол шары, которые правило отыграло назад (девятка при фоле)
+    for (const b of g.balls) {
+      if (b.num > 0 && b.in) {
+        const still = info.find((x) => x.num === b.num);
+        if (still && !still.potted) {
+          b.in = false;
+          b.x = g.w / 2; b.y = g.top + 78; b.vx = 0; b.vy = 0;
+        }
+      }
+    }
+
+    if (rules === "eight" && v.group) {
+      if (who === "me") { g.myGroup = v.group; setMyGroup(v.group); g.foeGroup = v.group === "solid" ? "stripe" : "solid"; setFoeGroup(g.foeGroup); }
+      else { g.foeGroup = v.group; setFoeGroup(v.group); g.myGroup = v.group === "solid" ? "stripe" : "solid"; setMyGroup(g.myGroup); }
+    }
+
+    // очки за свои забитые
+    const mineIn = shot.potted.filter((n) => n !== BLACK).length;
+    if (who === "me" && mineIn > 0 && !v.foul) {
+      g.score += 60 * mineIn;
+      setScore(g.score);
+    }
+
+    if (v.gameOver) {
+      end(v.winner === "me", v.winner === "me" ? tr("Чёрный на месте") : v.reason || tr("Соперник дожал"));
+      return;
+    }
+
+    if (v.foul) {
+      setMsg(tr(v.reason));
+      g.pops.push({ x: g.w / 2, y: g.h * 0.42, t: 1, txt: tr("ФОЛ"), col: "#FF6B4D" });
+      sfx.error(); haptic("error");
+      // биток в руки соперника
+      const c = cueBall();
+      if (c) { c.in = false; c.vx = 0; c.vy = 0; }
+      g.ballInHand = true;
+    } else {
+      setMsg("");
+      const c = cueBall();
+      if (c && c.in) { c.in = false; c.x = g.w / 2; c.y = g.bot - 70; c.vx = 0; c.vy = 0; }
+    }
+
+    if (v.turnOver) {
+      g.turn = who === "me" ? "foe" : "me";
+      setTurn(g.turn);
+      if (mode === "duo") {
+        g.pops.push({
+          x: g.w / 2, y: g.h * 0.5, t: 1,
+          txt: g.turn === "me" ? tr("ХОД ПЕРВОГО") : tr("ХОД ВТОРОГО"),
+          col: "#FFD86B",
+        });
+      }
+    }
+  }, [mode, rules, end]);
+
+  /* ─────────── ход бота ─────────── */
+
+  useEffect(() => {
+    if (phase !== "play" || mode !== "bot" || turn !== "foe") return;
+    const g = G.current;
+    if (g.moving) return;
+    setThinking(true);
+    const t = setTimeout(() => {
+      setThinking(false);
+      const c = cueBall();
+      if (!c || !g.running) return;
+
+      // биток в руках — ставим его в удобное место
+      if (g.ballInHand) {
+        c.x = g.w / 2; c.y = g.bot - 70; c.in = false; c.vx = 0; c.vy = 0;
+        g.ballInHand = false;
+      }
+
+      const info: BallInfo[] = g.balls.filter((b) => b.num > 0).map((b) => ({ num: b.num, potted: !!b.in }));
+      const legal = legalBalls(rules, info, g.foeGroup);
+      const pockets = pocketList(g);
+      const positions = g.balls.map((b) => ({ num: b.num, x: b.x, y: b.y, potted: !!b.in }));
+      const target = pickShot(positions, { num: 0, x: c.x, y: c.y, potted: false }, pockets, legal, R);
+
+      if (target) {
+        const dx = target.aimX - c.x, dy = target.aimY - c.y;
+        // бот не идеален: чем ниже качество, тем больше разброс
+        const err = (1 - target.quality) * 0.16 + 0.02;
+        const a = Math.atan2(dy, dx) + (Math.random() * 2 - 1) * err;
+        const sp = 1.0 + Math.random() * 0.5;
+        strike(Math.cos(a) * sp, Math.sin(a) * sp);
+      } else {
+        // нечего бить — катим в сторону законного шара, лишь бы не фол
+        const info2 = legal[0];
+        const tb = g.balls.find((b) => b.num === info2 && !b.in);
+        const ang = tb ? Math.atan2(tb.y - c.y, tb.x - c.x) : -Math.PI / 2;
+        strike(Math.cos(ang) * 0.9, Math.sin(ang) * 0.9);
+      }
+    }, 900);
+    return () => clearTimeout(t);
+  }, [phase, mode, turn, rules, strike]);
+
+  const pocketList = (g: typeof G.current) => {
+    const L = g.pad, Rt = g.w - g.pad, T = g.top, B = g.bot;
+    return [
+      { x: L, y: T }, { x: g.w / 2, y: T }, { x: Rt, y: T },
+      { x: L, y: B }, { x: g.w / 2, y: B }, { x: Rt, y: B },
+    ];
+  };
+
+  /* ─────────── отрисовка и физика ─────────── */
 
   const canvasRef = useCanvas((ctx, w, h, dt) => {
     const g = G.current;
-    if (!g.balls.length) reset(w, h);
+    if (!g.balls.length) { g.w = w; g.h = h; setupRack(w, h, rules); }
     g.w = w; g.h = h;
 
     const L = g.pad, Rt = w - g.pad, T = g.top, B = g.bot;
-    const pockets = [
-      { x: L, y: T }, { x: w / 2, y: T }, { x: Rt, y: T },
-      { x: L, y: B }, { x: w / 2, y: B }, { x: Rt, y: B },
-    ];
+    const pockets = pocketList(g);
 
-    /* ---------- физика ---------- */
     if (g.running && g.moving) {
-      const steps = 3;                 // подшаги — чтобы не проскакивали
+      const steps = low ? 2 : 3;
       const sdt = dt / steps;
       for (let st = 0; st < steps; st++) {
         for (const b of g.balls) {
@@ -196,14 +391,14 @@ export default function Pool({ onExit }: { onExit: () => void }) {
           b.vx *= f; b.vy *= f;
           if (Math.hypot(b.vx, b.vy) < STOP_V) { b.vx = 0; b.vy = 0; }
 
-          // борта
-          if (b.x < L + R) { b.x = L + R; b.vx = Math.abs(b.vx) * 0.86; }
-          if (b.x > Rt - R) { b.x = Rt - R; b.vx = -Math.abs(b.vx) * 0.86; }
-          if (b.y < T + R) { b.y = T + R; b.vy = Math.abs(b.vy) * 0.86; }
-          if (b.y > B - R) { b.y = B - R; b.vy = -Math.abs(b.vy) * 0.86; }
+          let railed = false;
+          if (b.x < L + R) { b.x = L + R; b.vx = Math.abs(b.vx) * 0.86; railed = true; }
+          if (b.x > Rt - R) { b.x = Rt - R; b.vx = -Math.abs(b.vx) * 0.86; railed = true; }
+          if (b.y < T + R) { b.y = T + R; b.vy = Math.abs(b.vy) * 0.86; railed = true; }
+          if (b.y > B - R) { b.y = B - R; b.vy = -Math.abs(b.vy) * 0.86; railed = true; }
+          if (railed && g.firstHit) g.railHit = true;
         }
 
-        // столкновения
         for (let i = 0; i < g.balls.length; i++) {
           const a = g.balls[i];
           if (a.in) continue;
@@ -214,38 +409,36 @@ export default function Pool({ onExit }: { onExit: () => void }) {
             const d = Math.hypot(dx, dy);
             if (d === 0 || d >= R * 2) continue;
             const nx = dx / d, ny = dy / d;
-            // раздвигаем
             const ov = (R * 2 - d) / 2;
             a.x -= nx * ov; a.y -= ny * ov;
             b.x += nx * ov; b.y += ny * ov;
-            // обмен нормальными компонентами (равные массы)
             const av = a.vx * nx + a.vy * ny;
             const bv = b.vx * nx + b.vy * ny;
             const diff = bv - av;
             a.vx += nx * diff * 0.96; a.vy += ny * diff * 0.96;
             b.vx -= nx * diff * 0.96; b.vy -= ny * diff * 0.96;
+            // фиксируем первый контакт битка — по нему судят фол
+            if (!g.firstHit && (a.num === 0 || b.num === 0)) {
+              g.firstHit = a.num === 0 ? b.num : a.num;
+            }
             if (Math.abs(diff) > 0.25) sfx.tap();
           }
         }
 
-        // лузы
         for (const b of g.balls) {
           if (b.in) continue;
           for (const p of pockets) {
             if (Math.hypot(b.x - p.x, b.y - p.y) < POCKET_R) {
               b.in = true;
-              if (b.cue) {
-                g.shots -= 1;
-                setShots(g.shots);
+              b.vx = 0; b.vy = 0;
+              if (b.num === 0) {
+                g.cuePotted = true;
                 g.pops.push({ x: p.x, y: p.y - 20, t: 1, txt: tr("БИТОК"), col: "#FF6B4D" });
                 sfx.error();
-                haptic("error");
               } else {
-                g.score += 10 + g.rack * 5;
-                setScore(g.score);
-                g.shots += 1;
-                setShots(g.shots);
-                g.pops.push({ x: p.x, y: p.y - 20, t: 1, txt: `+${10 + g.rack * 5}`, col: "#59FF9E" });
+                g.potted.push(b.num);
+                g.railHit = true;
+                g.pops.push({ x: p.x, y: p.y - 20, t: 1, txt: `${b.num}`, col: "#59FF9E" });
                 sfx.coin();
                 haptic("success");
               }
@@ -256,27 +449,10 @@ export default function Pool({ onExit }: { onExit: () => void }) {
         }
       }
 
-      // всё встало?
       const still = g.balls.every((b) => b.in || (b.vx === 0 && b.vy === 0));
       if (still) {
         g.moving = false;
-        // биток вернуть на стол
-        const c = g.balls.find((b) => b.cue);
-        if (c && c.in) {
-          c.in = false;
-          c.x = w / 2; c.y = B - 70; c.vx = 0; c.vy = 0;
-        }
-        // стол пуст — новая партия
-        const left = g.balls.filter((b) => !b.cue && !b.in).length;
-        if (left === 0) {
-          g.rack += 1;
-          setRack(g.rack);
-          g.pops.push({ x: w / 2, y: h * 0.45, t: 1, txt: tr("ПАРТИЯ ВЗЯТА"), col: "#FFD86B" });
-          sfx.achieve?.();
-          haptic("success");
-          setupRack(w, h, Math.min(15, 6 + g.rack));
-        }
-        if (g.shots <= 0) { end(); return; }
+        settle();
       }
     }
 
@@ -284,130 +460,283 @@ export default function Pool({ onExit }: { onExit: () => void }) {
     g.pops = g.pops.filter((p) => p.t > 0);
     if (g.shake > 0) g.shake = Math.max(0, g.shake - dt * 0.03);
 
-    /* ---------- отрисовка ---------- */
+    /* ---------- рисуем ---------- */
     ctx.fillStyle = "#0a0d10";
     ctx.fillRect(0, 0, w, h);
 
     ctx.save();
     if (g.shake > 0) ctx.translate((Math.random() - 0.5) * g.shake, (Math.random() - 0.5) * g.shake);
 
-    // борт стола
     ctx.fillStyle = "#3a2416";
     ctx.beginPath();
     ctx.roundRect(L - 12, T - 12, Rt - L + 24, B - T + 24, 14);
     ctx.fill();
-    // сукно
-    const felt = ctx.createLinearGradient(0, T, 0, B);
-    felt.addColorStop(0, "#17492f");
-    felt.addColorStop(1, "#0f3521");
-    ctx.fillStyle = felt;
-    ctx.beginPath();
-    ctx.roundRect(L, T, Rt - L, B - T, 6);
-    ctx.fill();
 
-    // лузы
+    const felt = ctx.createLinearGradient(0, T, 0, B);
+    felt.addColorStop(0, "#1d6b45");
+    felt.addColorStop(1, "#155034");
+    ctx.fillStyle = felt;
+    ctx.fillRect(L, T, Rt - L, B - T);
+
     for (const p of pockets) {
-      ctx.fillStyle = "#05070a";
+      ctx.fillStyle = "#080a0c";
       ctx.beginPath();
-      ctx.arc(p.x, p.y, POCKET_R * 0.8, 0, Math.PI * 2);
+      ctx.arc(p.x, p.y, POCKET_R * 0.82, 0, Math.PI * 2);
       ctx.fill();
-      ctx.strokeStyle = "rgba(0,0,0,0.7)";
-      ctx.lineWidth = 3;
-      ctx.stroke();
+    }
+
+    // линия прицела с точкой контакта
+    const c = cueBall();
+    if (g.aiming && c && !c.in) {
+      const dx = c.x - g.ax, dy = c.y - g.ay;
+      const len = Math.hypot(dx, dy);
+      if (len > 6) {
+        const ux = dx / len, uy = dy / len;
+        const trace = traceShot(g.balls, c, ux, uy, L, Rt, T, B);
+
+        ctx.setLineDash([7, 6]);
+        ctx.strokeStyle = "rgba(255,255,255,0.72)";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(c.x, c.y);
+        for (const pt of trace.path) ctx.lineTo(pt.x, pt.y);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // призрачный шар в точке контакта
+        if (trace.hit) {
+          const e = trace.path[trace.path.length - 1];
+          ctx.strokeStyle = "rgba(255,255,255,0.9)";
+          ctx.lineWidth = 1.6;
+          ctx.beginPath();
+          ctx.arc(e.x, e.y, R, 0, Math.PI * 2);
+          ctx.stroke();
+          // куда пойдёт прицельный шар
+          ctx.strokeStyle = "rgba(255,216,107,0.85)";
+          ctx.beginPath();
+          ctx.moveTo(trace.hit.x, trace.hit.y);
+          ctx.lineTo(trace.hit.x + trace.hit.dx * 62, trace.hit.y + trace.hit.dy * 62);
+          ctx.stroke();
+        }
+
+        // индикатор силы
+        const power = Math.min(len, 190) / 190;
+        ctx.fillStyle = "rgba(0,0,0,0.5)";
+        ctx.fillRect(L + 6, B - 22, 96, 9);
+        ctx.fillStyle = power > 0.8 ? "#FF6B4D" : "#FFD86B";
+        ctx.fillRect(L + 6, B - 22, 96 * power, 9);
+      }
     }
 
     // шары
     for (const b of g.balls) {
       if (b.in) continue;
+      const col = b.num === 0 ? "#ffffff" : BALL_COLOR[b.num] || "#ccc";
       ctx.fillStyle = "rgba(0,0,0,0.35)";
       ctx.beginPath();
-      ctx.ellipse(b.x + 2, b.y + 3, R, R * 0.9, 0, 0, Math.PI * 2);
+      ctx.arc(b.x + 1.5, b.y + 2.5, R, 0, Math.PI * 2);
       ctx.fill();
-      const bg = ctx.createRadialGradient(b.x - R * 0.35, b.y - R * 0.4, 1, b.x, b.y, R);
-      bg.addColorStop(0, "#ffffff");
-      bg.addColorStop(0.25, b.col);
-      bg.addColorStop(1, "rgba(0,0,0,0.55)");
-      ctx.fillStyle = bg;
-      ctx.beginPath(); ctx.arc(b.x, b.y, R, 0, Math.PI * 2); ctx.fill();
-      if (!b.cue) {
-        ctx.fillStyle = "rgba(255,255,255,0.9)";
-        ctx.beginPath(); ctx.arc(b.x, b.y, R * 0.36, 0, Math.PI * 2); ctx.fill();
+
+      ctx.fillStyle = col;
+      ctx.beginPath();
+      ctx.arc(b.x, b.y, R, 0, Math.PI * 2);
+      ctx.fill();
+
+      // полоса у полосатых
+      if (b.num > 8) {
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(b.x, b.y, R, 0, Math.PI * 2);
+        ctx.clip();
+        ctx.fillStyle = "#f4f4f6";
+        ctx.fillRect(b.x - R, b.y - R, R * 2, R * 0.62);
+        ctx.fillRect(b.x - R, b.y + R * 0.38, R * 2, R * 0.62);
+        ctx.restore();
+      }
+      // белый кружок с номером
+      if (b.num > 0) {
+        ctx.fillStyle = "#fff";
+        ctx.beginPath();
+        ctx.arc(b.x, b.y, R * 0.52, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = "#111";
+        ctx.font = "700 9px Inter, system-ui, sans-serif";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(String(b.num), b.x, b.y + 0.5);
+      }
+      // блик
+      if (!low) {
+        ctx.fillStyle = "rgba(255,255,255,0.35)";
+        ctx.beginPath();
+        ctx.arc(b.x - R * 0.32, b.y - R * 0.36, R * 0.22, 0, Math.PI * 2);
+        ctx.fill();
       }
     }
 
-    // прицел
-    const c = cue();
-    if (g.aiming && c && !g.moving) {
-      const dx = c.x - g.ax, dy = c.y - g.ay;
-      const len = Math.hypot(dx, dy);
-      if (len > 8) {
-        const nx = dx / len, ny = dy / len;
-        const power = Math.min(len, 190) / 190;
-        // луч до первого препятствия
-        let dist = 620;
-        for (const b of g.balls) {
-          if (b.in || b === c) continue;
-          const rx = b.x - c.x, ry = b.y - c.y;
-          const proj = rx * nx + ry * ny;
-          if (proj <= 0) continue;
-          const perp = Math.abs(rx * ny - ry * nx);
-          if (perp < R * 2) dist = Math.min(dist, proj - Math.sqrt(Math.max(0, (R * 2) ** 2 - perp ** 2)));
-        }
-        ctx.strokeStyle = "rgba(255,255,255,0.55)";
-        ctx.setLineDash([7, 7]);
+    // подсказка: какой шар обязателен
+    if (rules === "nine" && g.running) {
+      const info: BallInfo[] = g.balls.filter((b) => b.num > 0).map((b) => ({ num: b.num, potted: !!b.in }));
+      const need = lowestOnTable(info);
+      const tb = g.balls.find((b) => b.num === need && !b.in);
+      if (tb) {
+        ctx.strokeStyle = "rgba(255,216,107,0.9)";
         ctx.lineWidth = 2;
+        ctx.setLineDash([4, 4]);
         ctx.beginPath();
-        ctx.moveTo(c.x, c.y);
-        ctx.lineTo(c.x + nx * dist, c.y + ny * dist);
+        ctx.arc(tb.x, tb.y, R + 6, 0, Math.PI * 2);
         ctx.stroke();
         ctx.setLineDash([]);
-        // призрак касания
-        ctx.strokeStyle = "rgba(255,255,255,0.4)";
-        ctx.beginPath();
-        ctx.arc(c.x + nx * dist, c.y + ny * dist, R, 0, Math.PI * 2);
-        ctx.stroke();
-        // кий сзади
-        ctx.strokeStyle = "#c89b62";
-        ctx.lineWidth = 5;
-        ctx.beginPath();
-        ctx.moveTo(c.x - nx * (16 + power * 40), c.y - ny * (16 + power * 40));
-        ctx.lineTo(c.x - nx * (110 + power * 40), c.y - ny * (110 + power * 40));
-        ctx.stroke();
-        // сила
-        ctx.fillStyle = power > 0.9 ? "#FF6B4D" : "#ffb020";
-        ctx.fillRect(w - 26, B - 10 - power * 110, 10, power * 110);
-        ctx.strokeStyle = "rgba(255,255,255,0.25)";
-        ctx.lineWidth = 1;
-        ctx.strokeRect(w - 26, B - 120, 10, 110);
       }
+    }
+
+    for (const p of g.pops) {
+      ctx.globalAlpha = Math.max(0, p.t);
+      ctx.fillStyle = p.col;
+      ctx.font = "800 17px Inter, system-ui, sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText(p.txt, p.x, p.y - (1 - p.t) * 24);
+      ctx.globalAlpha = 1;
+    }
+
+    if (g.ballInHand) {
+      ctx.fillStyle = "rgba(255,255,255,0.75)";
+      ctx.font = "600 13px Inter, system-ui, sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText(tr("Тапни по столу — поставь биток"), w / 2, T + 26);
     }
 
     ctx.restore();
-
-    ctx.textAlign = "center";
-    for (const p of g.pops) {
-      ctx.globalAlpha = Math.min(1, p.t * 1.6);
-      ctx.fillStyle = p.col;
-      ctx.font = "800 18px Unbounded, Inter, system-ui, sans-serif";
-      ctx.fillText(p.txt, p.x, p.y - (1 - p.t) * 28);
-    }
-    ctx.globalAlpha = 1;
-
-    if (g.running && g.shots === SHOTS_START && !g.moving) {
-      ctx.fillStyle = "rgba(255,255,255,0.45)";
-      ctx.font = "600 13px Inter, system-ui, sans-serif";
-      ctx.fillText(tr("Тяни от битка назад и отпусти"), w / 2, h - 24);
-    }
-  }, [phase]);
+  }, [phase, rules, mode, low, settle, setupRack]);
 
   useEffect(() => {
     if (phase === "play") {
       const c = document.querySelector<HTMLCanvasElement>("[data-pool-canvas]");
       const r = c?.getBoundingClientRect();
-      reset(r?.width || 360, r?.height || 640);
-      G.current.running = true;
+      const g = G.current;
+      g.w = r?.width || 360; g.h = r?.height || 640;
+      setupRack(g.w, g.h, rules);
+      g.running = true;
     }
-  }, [phase, reset]);
+  }, [phase, rules, setupRack]);
+
+  /* ─────────── меню ─────────── */
+
+  if (phase === "menu") {
+    return (
+      <div className="absolute inset-0 flex flex-col" style={{ background: "var(--bg)" }}>
+        <GameHUD score={0} best={best} onExit={onExit} label={tr("ОЧКИ")} />
+        <div
+          className="flex-1 flex flex-col justify-center overflow-y-auto"
+          style={{ padding: "calc(var(--sat) + 74px) 20px calc(var(--sab) + 26px)" }}
+        >
+          <div className="t-display" style={{ fontSize: 25, marginBottom: 4, textAlign: "center" }}>
+            {tr("БИЛЬЯРД В ПОДВАЛЕ")}
+          </div>
+          <div className="t-body" style={{ fontSize: 12, opacity: 0.6, marginBottom: 18, textAlign: "center", lineHeight: 1.5 }}>
+            {tr("По официальным правилам. Фолы, группы, чёрный шар — всё как надо.")}
+          </div>
+
+          <div className="t-label" style={{ fontSize: 10, marginBottom: 8 }}>{tr("РЕЖИМ")}</div>
+          {([
+            ["solo", "ОДИН", "Тренировка без соперника"],
+            ["bot", "ПРОТИВ БОТА", "Он целится и бьёт по-настоящему"],
+            ["duo", "С ДРУГОМ", "По очереди на одном телефоне"],
+          ] as [Mode, string, string][]).map(([id, nm, ds]) => (
+            <button
+              key={id}
+              onClick={() => { setMode(id); sfx.click(); }}
+              style={{
+                width: "100%", textAlign: "left", marginBottom: 8,
+                padding: "12px 14px", borderRadius: "var(--r-md)",
+                background: mode === id ? "var(--acc-soft)" : "var(--surface)",
+                border: `1px solid ${mode === id ? "var(--acc)" : "var(--surface-brd)"}`,
+                color: "var(--fg)",
+              }}
+            >
+              <div className="t-label" style={{ fontSize: 11.5, color: mode === id ? "var(--acc)" : undefined }}>{tr(nm)}</div>
+              <div className="t-body" style={{ fontSize: 10.5, opacity: 0.6, marginTop: 2 }}>{tr(ds)}</div>
+            </button>
+          ))}
+
+          <div className="t-label" style={{ fontSize: 10, margin: "12px 0 8px" }}>{tr("ПРАВИЛА")}</div>
+          <div className="flex" style={{ gap: 8, marginBottom: 14 }}>
+            {([["nine", "9 ШАРОВ"], ["eight", "ВОСЬМЁРКА"]] as [PoolMode, string][]).map(([id, nm]) => (
+              <button
+                key={id}
+                onClick={() => { setRules(id); sfx.click(); }}
+                style={{
+                  flex: 1, padding: "11px 0", borderRadius: "var(--r-md)",
+                  background: rules === id ? "var(--acc)" : "var(--btn-bg)",
+                  color: rules === id ? "var(--acc-ink)" : "var(--text-mute)",
+                  border: `1px solid ${rules === id ? "var(--acc)" : "var(--btn-brd)"}`,
+                }}
+              >
+                <span className="t-label" style={{ fontSize: 10.5 }}>{tr(nm)}</span>
+              </button>
+            ))}
+          </div>
+
+          <button
+            onClick={() => { setShowRules((v) => !v); sfx.click(); }}
+            className="t-label"
+            style={{
+              width: "100%", padding: "10px 0", marginBottom: 10,
+              borderRadius: "var(--r-md)", background: "var(--btn-bg)",
+              border: "1px solid var(--btn-brd)", color: "var(--text-mute)", fontSize: 10,
+            }}
+          >
+            {showRules ? tr("СКРЫТЬ ПРАВИЛА") : tr("ПОКАЗАТЬ ПРАВИЛА")}
+          </button>
+
+          {showRules && (
+            <div
+              style={{
+                padding: "12px 14px", borderRadius: "var(--r-md)",
+                background: "var(--surface)", border: "1px solid var(--surface-brd)",
+                marginBottom: 14,
+              }}
+            >
+              {(rules === "nine"
+                ? [
+                  "На столе биток и шары с 1 по 9",
+                  "Первым касанием бей в САМЫЙ МЛАДШИЙ шар",
+                  "Забил девятку чисто — сразу выиграл",
+                  "Забил любой шар — бьёшь ещё раз",
+                  "Фол: биток в лузу, не тот шар, никто не дошёл до борта",
+                ]
+                : [
+                  "Шары 1-7 сплошные, 9-15 полосатые, 8 чёрный",
+                  "Пока никто не забил, группы не закреплены",
+                  "Забил свой — группа твоя, бьёшь дальше",
+                  "Выбей всю группу, потом клади чёрный",
+                  "Чёрный раньше времени или с фолом — поражение",
+                ]
+              ).map((line) => (
+                <div key={line} className="t-body" style={{ fontSize: 11, opacity: 0.7, lineHeight: 1.65 }}>
+                  — {tr(line)}
+                </div>
+              ))}
+            </div>
+          )}
+
+          <button
+            onClick={() => start(mode, rules)}
+            className="btn-acc t-label"
+            style={{ width: "100%", padding: "15px 0", borderRadius: "var(--r-md)", fontSize: 13 }}
+          >
+            {tr("НАЧАТЬ ПАРТИЮ")}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  const turnLabel = mode === "solo"
+    ? `${tr("УДАРОВ")} ${shots}`
+    : turn === "me"
+      ? (mode === "duo" ? tr("ПЕРВЫЙ") : tr("ТВОЙ ХОД"))
+      : (mode === "duo" ? tr("ВТОРОЙ") : thinking ? tr("ДУМАЕТ") : tr("СОПЕРНИК"));
 
   return (
     <div className="absolute inset-0" style={{ background: "var(--bg)" }}>
@@ -432,41 +761,127 @@ export default function Pool({ onExit }: { onExit: () => void }) {
               className="t-label shrink-0"
               style={{
                 padding: "8px 10px", borderRadius: "var(--r-md)",
-                background: "var(--btn-bg)", border: "1px solid rgba(255,255,255,0.16)",
-                color: "#fff", fontSize: 9.5,
-              }}
-            >
-              {tr("ПАРТИЯ")} {rack}
-            </div>
-            <div
-              className="t-num shrink-0"
-              style={{
-                padding: "8px 11px", borderRadius: "var(--r-md)",
                 background: "var(--btn-bg)",
-                border: `1px solid ${shots <= 2 ? "#FF6B4D" : "rgba(255,255,255,0.16)"}`,
-                color: shots <= 2 ? "#FF6B4D" : "#fff", fontSize: 14,
+                border: `1px solid ${turn === "me" ? "var(--acc)" : "rgba(255,255,255,0.16)"}`,
+                color: turn === "me" ? "var(--acc)" : "#fff", fontSize: 9,
+                maxWidth: 96, textAlign: "center",
               }}
             >
-              {shots}
+              {turnLabel}
             </div>
           </div>
         }
       />
 
-      <AnimatePresence>{phase === "count" && <Countdown n={cd} />}</AnimatePresence>
-
-      {phase === "over" && (
-        <GameOver
-          score={result.score}
-          best={best}
-          coins={result.coins}
-          xp={result.xp}
-          onRetry={restart}
-          onExit={onExit}
-          title={tr("КИЙ В УГОЛ")}
-          sub={tr("Удары кончились")}
-        />
+      {/* группа игрока в восьмёрке */}
+      {rules === "eight" && myGroup && phase === "play" && (
+        <div
+          className="absolute left-0 right-0 flex justify-center"
+          style={{ top: "calc(var(--sat) + 76px)", pointerEvents: "none" }}
+        >
+          <div
+            className="t-label"
+            style={{
+              padding: "6px 12px", borderRadius: "var(--r-sm)",
+              background: "var(--toast-bg)", border: "1px solid var(--toast-brd)",
+              fontSize: 9.5,
+            }}
+          >
+            {tr("ТВОЯ ГРУППА")}: {myGroup === "solid" ? tr("СПЛОШНЫЕ") : tr("ПОЛОСАТЫЕ")}
+          </div>
+        </div>
       )}
+
+      {msg && phase === "play" && (
+        <div
+          className="absolute left-0 right-0 flex justify-center px-6"
+          style={{ bottom: "calc(var(--sab) + 74px)", pointerEvents: "none" }}
+        >
+          <div
+            className="t-body"
+            style={{
+              padding: "8px 14px", borderRadius: "var(--r-sm)",
+              background: "var(--toast-bg)", border: "1px solid #FF6B4D",
+              color: "#FF6B4D", fontSize: 11.5, textAlign: "center",
+            }}
+          >
+            {msg}
+          </div>
+        </div>
+      )}
+
+      <AnimatePresence>
+        {phase === "over" && (
+          <GameOver
+            score={result.score}
+            best={best}
+            coins={result.coins}
+            xp={result.xp}
+            onRetry={() => setPhase("menu")}
+            onExit={onExit}
+            title={title}
+            sub={sub}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
+}
+
+/**
+ * Трассировка удара для линии прицела.
+ *
+ * Идём от битка вперёд, пока не упрёмся в шар или борт. Возвращаем
+ * ломаную пути и, если попали в шар, направление его отлёта — игроку
+ * важно видеть не только куда полетит биток, но и куда пойдёт цель.
+ */
+function traceShot(
+  balls: Ball[], cue: Ball, ux: number, uy: number,
+  L: number, Rt: number, T: number, B: number,
+) {
+  const path: { x: number; y: number }[] = [];
+  let x = cue.x, y = cue.y;
+  let dx = ux, dy = uy;
+  let hit: { x: number; y: number; dx: number; dy: number } | null = null;
+
+  for (let bounce = 0; bounce < 3; bounce++) {
+    // ближайший шар по лучу
+    let bestT = Infinity;
+    let target: Ball | null = null;
+    for (const b of balls) {
+      if (b.in || b === cue) continue;
+      const ox = b.x - x, oy = b.y - y;
+      const proj = ox * dx + oy * dy;
+      if (proj <= 0) continue;
+      const perp2 = ox * ox + oy * oy - proj * proj;
+      const rr = (R * 2) * (R * 2);
+      if (perp2 > rr) continue;
+      const t = proj - Math.sqrt(rr - perp2);
+      if (t > 0 && t < bestT) { bestT = t; target = b; }
+    }
+
+    // расстояние до бортов
+    let wallT = Infinity;
+    let axis: "x" | "y" = "x";
+    if (dx > 0) { const t = (Rt - R - x) / dx; if (t > 0 && t < wallT) { wallT = t; axis = "x"; } }
+    if (dx < 0) { const t = (L + R - x) / dx; if (t > 0 && t < wallT) { wallT = t; axis = "x"; } }
+    if (dy > 0) { const t = (B - R - y) / dy; if (t > 0 && t < wallT) { wallT = t; axis = "y"; } }
+    if (dy < 0) { const t = (T + R - y) / dy; if (t > 0 && t < wallT) { wallT = t; axis = "y"; } }
+
+    if (target && bestT < wallT) {
+      x += dx * bestT; y += dy * bestT;
+      path.push({ x, y });
+      const nx = (target.x - x), ny = (target.y - y);
+      const nl = Math.hypot(nx, ny) || 1;
+      hit = { x: target.x, y: target.y, dx: nx / nl, dy: ny / nl };
+      break;
+    }
+
+    if (!isFinite(wallT)) break;
+    x += dx * wallT; y += dy * wallT;
+    path.push({ x, y });
+    if (axis === "x") dx = -dx; else dy = -dy;
+  }
+
+  return { path, hit };
 }

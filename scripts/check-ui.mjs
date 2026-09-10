@@ -378,5 +378,46 @@ for (const key of ['ШАХМАТЫ С ШИТОВЫМ', 'ШАШКИ У СТАСА
   ok(en20.includes(`"${key}":`), `перевод есть: ${key}`);
 }
 
+
+console.log('\n[21] Бильярд по правилам, казино и фриз уведомлений');
+const pool21 = fs.readFileSync('src/games/Pool.tsx', 'utf8');
+const prul21 = fs.readFileSync('src/core/pool.ts', 'utf8');
+ok(fs.existsSync('src/core/pool.ts'), 'правила бильярда вынесены в отдельный модуль');
+for (const m of ['solo', 'bot', 'duo']) ok(pool21.includes(`"${m}"`), `бильярд: режим ${m}`);
+ok(prul21.includes('lowestOnTable'), 'американка: удар по младшему шару');
+ok(prul21.includes('BLACK'), 'восьмёрка: чёрный шар');
+ok(prul21.includes('groupCleared'), 'восьмёрка: группы шаров');
+ok(prul21.includes('pickShot'), 'бот умеет выбирать удар');
+ok(pool21.includes('traceShot'), 'показывается траектория удара');
+ok(pool21.includes('ПОКАЗАТЬ ПРАВИЛА'), 'бильярд: правила доступны игроку');
+
+// Колесо апгрейда
+const wheel21 = fs.readFileSync('src/core/wheel.ts', 'utf8');
+ok(fs.existsSync('src/ui/Wheel.tsx'), 'колесо апгрейда есть');
+ok(wheel21.includes('WHEEL_RTP'), 'возврат колеса задан явно');
+ok(/burn/.test(wheel21) && /win/.test(wheel21), 'у колеса есть выигрышные и сгорающие секторы');
+const cas21 = fs.readFileSync('src/pages/Casino.tsx', 'utf8');
+ok(cas21.includes('ChipFarm'), 'в казино есть заработок жетонов');
+ok(cas21.includes('БЫСТРЫЙ АПГРЕЙД'), 'есть быстрый режим прокрутки');
+const fx21 = fs.readFileSync('src/core/fx.ts', 'utf8');
+ok(fx21.includes('wheelTick'), 'у колеса есть звук вращения');
+
+// Фриз от уведомлений
+const st21 = fs.readFileSync('src/core/store.tsx', 'utf8');
+ok(st21.includes('const value: Ctx = useMemo'), 'контекст игры мемоизирован');
+ok(st21.includes('useToasts'), 'тосты живут в отдельном контексте');
+ok(!/toasts, toast, mainFriend/.test(st21), 'список тостов убран из общего контекста');
+
+// Кнопки не съезжают
+const shell21 = fs.readFileSync('src/games/shell.tsx', 'utf8');
+ok(/onRetry[\s\S]{0,120}center/.test(shell21), 'кнопка «Ещё раз» центрирована');
+
+// Волейбол и вратарь
+const vol21 = fs.readFileSync('src/games/Volley.tsx', 'utf8');
+ok(vol21.includes('NET_CLEAR'), 'волейбол: удар считается через баллистику');
+ok(vol21.includes('aiMiss'), 'волейбол: у соперника есть ошибка прицела');
+const pen21 = fs.readFileSync('src/games/Penalty.tsx', 'utf8');
+ok(pen21.includes('SHOULDER_Y'), 'вратарь: руки крепятся к плечам');
+
 console.log(fails===0?'\n✅ ВСЕ ПРОВЕРКИ ВЁРСТКИ ПРОЙДЕНЫ\n':`\n❌ ПРОВАЛЕНО: ${fails}\n`);
 process.exit(fails?1:0);
