@@ -40,12 +40,23 @@ const GOAL = 50;          // литров надо залить
 const SCOUT_COST = 120;
 const DISTRICT_INCOME = 800;   // подработка при переезде в новый район
 
+/**
+ * Шанс, что заправка окажется сухой, на данном круге.
+ *
+ * Вынесен отдельно, потому что теперь это число показывается игроку:
+ * раньше дефицит был скрыт, и решение «ехать или разведать» принималось
+ * вслепую — понять систему было невозможно.
+ */
+export function dryChance(round: number): number {
+  return 0.52 + Math.min(0.34, round * 0.06);
+}
+
 function makeStations(round: number): Station[] {
   const n = 5;
   const out: Station[] = [];
   const names = [...BRANDS].sort(() => Math.random() - 0.5);
   // Дефицит растёт с каждым кругом — иначе игра не кончается
-  const dry = 0.52 + Math.min(0.34, round * 0.06);
+  const dry = dryChance(round);
   for (let i = 0; i < n; i++) {
     const empty = Math.random() < dry;
     out.push({
@@ -70,6 +81,8 @@ export default function FuelHunt({ onExit }: { onExit: () => void }) {
   const [money, setMoney] = useState(START_MONEY);
   const [got, setGot] = useState(0);
   const [round, setRound] = useState(0);
+  /** Куда едем прямо сейчас — для полоски дороги */
+  const [trip, setTrip] = useState<{ name: string; dist: number } | null>(null);
   const [stations, setStations] = useState<Station[]>(() => makeStations(0));
   const [log, setLog] = useState<{ txt: string; ok: boolean }[]>([]);
   const [score, setScore] = useState(0);
@@ -125,6 +138,7 @@ export default function FuelHunt({ onExit }: { onExit: () => void }) {
   /** Поехать на заправку */
   const drive = (st: Station) => {
     if (phase !== "play" || driving || st.visited) return;
+    setTrip({ name: st.name, dist: st.dist });   // для анимации дороги
     setDriving(true);
     sfx.click();
 
@@ -136,6 +150,7 @@ export default function FuelHunt({ onExit }: { onExit: () => void }) {
       if (nf <= 0) {
         say(tr("Встал посреди дороги"), false);
         setDriving(false);
+        setTrip(null);
         end(false, scoreRef.current);
         return;
       }
@@ -147,6 +162,7 @@ export default function FuelHunt({ onExit }: { onExit: () => void }) {
         sfx.error();
         haptic("error");
         setDriving(false);
+        setTrip(null);
         checkStuck(nf);
         return;
       }
@@ -160,6 +176,7 @@ export default function FuelHunt({ onExit }: { onExit: () => void }) {
         say(tr("Денег не хватило даже на литр"), false);
         sfx.error();
         setDriving(false);
+        setTrip(null);
         checkStuck(nf);
         return;
       }
@@ -186,6 +203,7 @@ export default function FuelHunt({ onExit }: { onExit: () => void }) {
       sfx.coin();
       haptic("success");
       setDriving(false);
+      setTrip(null);
       checkStuck(nf + liters);
     }, 620);
   };
@@ -217,10 +235,11 @@ export default function FuelHunt({ onExit }: { onExit: () => void }) {
     ended.current = false;
     setFuel(START_FUEL); setMoney(START_MONEY); setGot(0); setRound(0);
     setStations(makeStations(0)); setLog([]); setScore(0); setWon(false);
-    setDriving(false); setCd(3); setPhase("count");
+    setDriving(false); setTrip(null); setCd(3); setPhase("count");
   };
 
   const goalPct = Math.min(100, (got / GOAL) * 100);
+  const dryPct = Math.round(dryChance(round) * 100);
 
   return (
     <div className="absolute inset-0 flex flex-col" style={{ background: "var(--bg)" }}>
@@ -275,6 +294,76 @@ export default function FuelHunt({ onExit }: { onExit: () => void }) {
             />
           </div>
         </div>
+
+        {/*
+          Обстановка по стране: показываем реальный шанс, что заправка
+          окажется сухой, и на сколько километров хватит бака. Раньше
+          дефицит был скрыт и решения принимались вслепую.
+        */}
+        <div
+          style={{
+            padding: "12px 14px", borderRadius: "var(--r-md)",
+            background: "var(--surface)", border: "1px solid var(--surface-brd)",
+            marginBottom: 12,
+          }}
+        >
+          <div className="flex items-center" style={{ gap: 8, marginBottom: 9 }}>
+            <span className="t-label flex-1" style={{ fontSize: 9 }}>{tr("ОБСТАНОВКА С БЕНЗИНОМ")}</span>
+            <span
+              className="t-num"
+              style={{ fontSize: 12, color: dryPct > 70 ? "#FF6B4D" : dryPct > 55 ? "#FFB020" : "#59FF9E" }}
+            >
+              {dryPct}% {tr("сухо")}
+            </span>
+          </div>
+          <div style={{ height: 6, borderRadius: 999, background: "rgba(89,255,158,0.25)", overflow: "hidden" }}>
+            <motion.div
+              animate={{ width: `${dryPct}%` }}
+              transition={{ duration: 0.3 }}
+              style={{ height: "100%", background: dryPct > 70 ? "#FF6B4D" : "#FFB020" }}
+            />
+          </div>
+          <div className="t-caption" style={{ fontSize: 10.5, marginTop: 7, opacity: 0.7 }}>
+            {tr("Круг")} {round + 1} · {tr("хватит на")} {Math.floor(fuel)} {tr("л пути")}
+          </div>
+        </div>
+
+        {/* Дорога: видно, куда едем и сколько топлива останется */}
+        {driving && trip && (
+          <motion.div
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            style={{
+              padding: "12px 14px", borderRadius: "var(--r-md)",
+              background: "var(--surface-2)", border: "1px solid var(--acc)",
+              marginBottom: 12,
+            }}
+          >
+            <div className="t-label" style={{ fontSize: 9, marginBottom: 8 }}>
+              {tr("В ПУТИ")}: {trip.name}
+            </div>
+            <div style={{ position: "relative", height: 26 }}>
+              <div
+                style={{
+                  position: "absolute", left: 0, right: 0, top: 12,
+                  height: 3, borderRadius: 2,
+                  background: "repeating-linear-gradient(90deg, rgba(255,255,255,0.35) 0 8px, transparent 8px 16px)",
+                }}
+              />
+              <motion.div
+                initial={{ left: "0%" }}
+                animate={{ left: "88%" }}
+                transition={{ duration: 1.1, ease: "linear" }}
+                style={{ position: "absolute", top: 0 }}
+              >
+                <Icon name="speed" size={22} />
+              </motion.div>
+            </div>
+            <div className="t-caption" style={{ fontSize: 10.5, marginTop: 4, opacity: 0.72 }}>
+              −{trip.dist} {tr("л")} · {tr("останется")} {Math.max(0, Math.floor(fuel - trip.dist))} {tr("л")}
+            </div>
+          </motion.div>
+        )}
 
         {/* заправки */}
         <div className="flex flex-col" style={{ gap: 9 }}>

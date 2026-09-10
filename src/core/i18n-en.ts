@@ -931,4 +931,10 @@ export const EN_TEXT: Record<string, string> = {
   "Где выход, узнаешь только из объявления на остановке": "You only learn where the exit is from the announcement",
   "Двери бывают сзади, спереди, слева и справа": "Doors can be at the back, front, left or right",
   "Бабка с красным кольцом бежит за тобой требовать место": "The granny with a red ring is chasing you for your seat",
+  "ОБСТАНОВКА С БЕНЗИНОМ": "FUEL SITUATION",
+  "Круг": "Round",
+  "хватит на": "enough for",
+  "л пути": "l of driving",
+  "В ПУТИ": "ON THE ROAD",
+  "останется": "will remain",
 };

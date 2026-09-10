@@ -52,6 +52,7 @@ export default function MaksBeard({ onExit }: { onExit: () => void }) {
   const G = useRef({
     hairs: [] as Hair[],
     grabbed: -1,
+    hover: false,   // палец на экране — показываем лупу
     px: 0, py: 0,
     running: false,
     zone: 0,
@@ -107,7 +108,7 @@ export default function MaksBeard({ onExit }: { onExit: () => void }) {
     const g = G.current;
     g.w = w; g.h = h;
     g.zone = 0; g.rage = 0; g.score = 0;
-    g.grabbed = -1; g.shake = 0; g.pops = [];
+    g.grabbed = -1; g.shake = 0; g.pops = []; g.hover = false;
     g.lastPull = 0;
     g.startT = Date.now();
     spawnZone(w, h, 0);
@@ -150,6 +151,7 @@ export default function MaksBeard({ onExit }: { onExit: () => void }) {
     const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
     const x = e.clientX - r.left, y = e.clientY - r.top;
     g.px = x; g.py = y;
+    g.hover = true;              // палец на экране — показываем лупу
     // берём ближайший волосок в радиусе пальца
     let bi = -1, bd = 30;
     g.hairs.forEach((hr, i) => {
@@ -163,16 +165,20 @@ export default function MaksBeard({ onExit }: { onExit: () => void }) {
 
   const onMove = useCallback((e: React.PointerEvent) => {
     const g = G.current;
-    if (g.grabbed < 0) return;
     const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
     g.px = e.clientX - r.left;
     g.py = e.clientY - r.top;
+    // лупа едет за пальцем даже когда волосок ещё не схвачен —
+    // так ей можно прицеливаться
+    g.hover = true;
+    if (g.grabbed < 0) return;
     const hr = g.hairs[g.grabbed];
     hr.pulled = Math.hypot(g.px - hr.x, g.py - hr.y);
   }, []);
 
   const onUp = useCallback(() => {
     const g = G.current;
+    g.hover = false;
     if (g.grabbed < 0) return;
     const hr = g.hairs[g.grabbed];
     const need = hr.tough ? PULL_TOUGH : PULL_OK;
@@ -267,15 +273,90 @@ export default function MaksBeard({ onExit }: { onExit: () => void }) {
     ctx.beginPath();
     ctx.roundRect(cx - 86, faceY + 42, 172, h * 0.5, 26);
     ctx.fill();
-    // руки
-    ctx.fillStyle = "#d9a87f";
-    ctx.beginPath(); ctx.roundRect(cx - 132, faceY + 62, 44, h * 0.38, 20); ctx.fill();
-    ctx.beginPath(); ctx.roundRect(cx + 88, faceY + 62, 44, h * 0.38, 20); ctx.fill();
-    // майка
+    /*
+     * Тело Макса.
+     *
+     * Раньше это были три скруглённых прямоугольника: две «палки» рук и
+     * плита майки — пропорции не читались. Теперь торс рисуется одним
+     * контуром с плечами, талией и грудью, руки идут от плеч с локтем
+     * и кистью, а майка надета поверх торса, а не заменяет его.
+     */
+    const SKIN = "#d9a87f";
+    const SKIN_DARK = "#c2916a";
+    const shY = faceY + 62;              // линия плеч
+    const shX = 82;                      // полуширина плеч
+    const hipY = faceY + 150 + h * 0.5 - 108;
+
+    // торс: плечи -> талия -> бёдра
+    ctx.fillStyle = SKIN;
+    ctx.beginPath();
+    ctx.moveTo(cx - shX, shY + 16);
+    ctx.quadraticCurveTo(cx - shX - 6, shY, cx - shX * 0.62, shY - 8);
+    ctx.quadraticCurveTo(cx, shY - 20, cx + shX * 0.62, shY - 8);
+    ctx.quadraticCurveTo(cx + shX + 6, shY, cx + shX, shY + 16);
+    ctx.quadraticCurveTo(cx + shX - 4, faceY + 150, cx + shX * 0.82, hipY);
+    ctx.lineTo(cx - shX * 0.82, hipY);
+    ctx.quadraticCurveTo(cx - shX + 4, faceY + 150, cx - shX, shY + 16);
+    ctx.closePath();
+    ctx.fill();
+
+    // грудные мышцы — намёк линией, чтобы читался объём
+    ctx.strokeStyle = SKIN_DARK;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(cx, shY + 24);
+    ctx.lineTo(cx, shY + 74);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(cx - 34, shY + 46, 30, -0.5, 1.1);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(cx + 34, shY + 46, 30, 2.0, 3.6);
+    ctx.stroke();
+
+    // руки: плечо -> локоть -> кисть
+    for (const sx of [-1, 1]) {
+      const p0 = { x: cx + sx * (shX - 6), y: shY + 6 };
+      const p1 = { x: cx + sx * (shX + 26), y: shY + 96 };
+      const p2 = { x: cx + sx * (shX + 18), y: shY + 186 };
+      ctx.strokeStyle = SKIN;
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+      ctx.lineWidth = 34;
+      ctx.beginPath();
+      ctx.moveTo(p0.x, p0.y); ctx.lineTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y);
+      ctx.stroke();
+      // кисть
+      ctx.fillStyle = SKIN;
+      ctx.beginPath(); ctx.arc(p2.x, p2.y + 12, 19, 0, Math.PI * 2); ctx.fill();
+      // пальцы намёком
+      ctx.strokeStyle = SKIN_DARK;
+      ctx.lineWidth = 2;
+      for (let f = -1; f <= 1; f++) {
+        ctx.beginPath();
+        ctx.moveTo(p2.x + f * 7, p2.y + 20);
+        ctx.lineTo(p2.x + f * 8, p2.y + 30);
+        ctx.stroke();
+      }
+    }
+
+    // майка поверх торса
     ctx.fillStyle = "#33404e";
     ctx.beginPath();
-    ctx.roundRect(cx - 86, faceY + 150, 172, h * 0.5 - 108, 18);
+    ctx.moveTo(cx - shX + 2, shY + 96);
+    ctx.lineTo(cx + shX - 2, shY + 96);
+    ctx.quadraticCurveTo(cx + shX - 4, faceY + 150, cx + shX * 0.82, hipY);
+    ctx.lineTo(cx - shX * 0.82, hipY);
+    ctx.quadraticCurveTo(cx - shX + 4, faceY + 150, cx - shX + 2, shY + 96);
+    ctx.closePath();
     ctx.fill();
+    // лямки
+    ctx.strokeStyle = "#33404e";
+    ctx.lineWidth = 15;
+    ctx.beginPath();
+    ctx.moveTo(cx - 40, shY + 96); ctx.lineTo(cx - 30, shY + 8);
+    ctx.moveTo(cx + 40, shY + 96); ctx.lineTo(cx + 30, shY + 8);
+    ctx.stroke();
 
     // голова Макса
     const angry = g.rage / RAGE_MAX;
@@ -286,7 +367,8 @@ export default function MaksBeard({ onExit }: { onExit: () => void }) {
       squish: g.shake > 0 ? 0.25 : 0,
     });
 
-    // волоски
+    // волоски (та же процедура переиспользуется внутри лупы)
+    const drawHairs = () => {
     for (let i = 0; i < g.hairs.length; i++) {
       const hr = g.hairs[i];
       if (hr.gone) continue;
@@ -313,6 +395,49 @@ export default function MaksBeard({ onExit }: { onExit: () => void }) {
       // корень
       ctx.fillStyle = hr.tough ? "#a04a34" : "#4a3628";
       ctx.beginPath(); ctx.arc(hr.x, hr.y, hr.tough ? 3 : 2.2, 0, Math.PI * 2); ctx.fill();
+    }
+    };
+    drawHairs();
+
+    /*
+     * ЛУПА.
+     *
+     * Волоски мелкие, и попасть по нужному пальцем было тяжело —
+     * пользователь просил «типа лупа преувеличила». Круг под пальцем
+     * показывает ту же сцену в увеличении: отсекаем область кругом,
+     * масштабируем систему координат вокруг точки касания и повторно
+     * рисуем волоски. Никакого второго канваса не нужно.
+     */
+    if (g.grabbed >= 0 || g.hover) {
+      const lx = g.px, ly = g.py;
+      const LR = 62;          // радиус лупы
+      const ZOOM = 2.1;
+      if (lx > 0 && ly > 0) {
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(lx, ly - LR - 34, LR, 0, Math.PI * 2);
+        ctx.clip();
+        // фон лупы, чтобы не просвечивало
+        ctx.fillStyle = "#e8c9a8";
+        ctx.fillRect(lx - LR, ly - LR * 2 - 34, LR * 2, LR * 2);
+        // увеличиваем область вокруг пальца и показываем её выше пальца
+        ctx.translate(lx, ly - LR - 34);
+        ctx.scale(ZOOM, ZOOM);
+        ctx.translate(-lx, -ly);
+        drawHairs();
+        ctx.restore();
+        // оправа
+        ctx.strokeStyle = "rgba(255,255,255,0.85)";
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(lx, ly - LR - 34, LR, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.strokeStyle = "rgba(0,0,0,0.35)";
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.arc(lx, ly - LR - 34, LR - 2, 0, Math.PI * 2);
+        ctx.stroke();
+      }
     }
 
     ctx.restore();
