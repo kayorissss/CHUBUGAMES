@@ -118,7 +118,7 @@ export default function BoardMenu({
                   padding: "12px 14px", borderRadius: "var(--r-md)",
                   background: on ? "var(--acc-soft)" : "var(--surface)",
                   border: `1px solid ${on ? "var(--acc)" : "var(--surface-brd)"}`,
-                  color: "var(--fg)",
+                  color: "var(--text)",
                 }}
               >
                 {/* индикатор силы: три полоски */}

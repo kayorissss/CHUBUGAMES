@@ -447,5 +447,92 @@ for (const key of ['КАК ИГРАТЬ', 'ЦЕЛЬ', 'УПРАВЛЕНИЕ', '�
   ok(en22.includes(`"${key}":`), `переведено: ${key}`);
 }
 
+console.log('\n[23] Цвета, контраст и читаемость');
+const css23 = fs.readFileSync('src/index.css', 'utf8');
+// --- честный расчёт контраста, как при подборе палитры ---
+const hex23 = (h) => { h = h.replace('#',''); return [0,2,4].map(i=>parseInt(h.slice(i,i+2),16)); };
+const lin23 = (c) => { c/=255; return c<=0.03928 ? c/12.92 : Math.pow((c+0.055)/1.055,2.4); };
+const Y23 = (h) => { const [r,g,b]=hex23(h); return 0.2126*lin23(r)+0.7152*lin23(g)+0.0722*lin23(b); };
+const R23 = (a,b) => { const l1=Math.max(Y23(a),Y23(b)), l2=Math.min(Y23(a),Y23(b)); return (l1+0.05)/(l2+0.05); };
+// L* — им меряем различимость соседних тёмных поверхностей
+const Lstar23 = (h) => { const y=Y23(h); return y<=216/24389 ? y*24389/27 : Math.cbrt(y)*116-16; };
+const dL23 = (a,b) => Math.abs(Lstar23(a)-Lstar23(b));
+const varOf = (name) => (css23.match(new RegExp('\\'+name+':\\s*(#[0-9a-fA-F]{6})'))||[])[1];
+const N = {};
+for (const step of ['000','100','200','300','400','600','700','900'])
+  N[step] = varOf('--n-'+step);
+ok(Object.values(N).every(Boolean), 'нейтральная шкала объявлена целиком');
+if (Object.values(N).every(Boolean)) {
+  ok(dL23(N['000'],N['100']) >= 3.5, `карточка видна на фоне (dL* ${dL23(N['000'],N['100']).toFixed(1)})`);
+  ok(dL23(N['100'],N['200']) >= 3.5, `вложенный блок виден в карточке (dL* ${dL23(N['100'],N['200']).toFixed(1)})`);
+  ok(dL23(N['200'],N['300']) >= 3.5, `третья ступень отличается (dL* ${dL23(N['200'],N['300']).toFixed(1)})`);
+  ok(R23(N['400'],N['000']) >= 1.5, 'граница кнопки видна на фоне экрана');
+  for (const [name, bg] of [['фоне',N['000']],['карточке',N['100']],['блоке',N['200']]]) {
+    ok(R23(N['900'], bg) >= 4.5, `основной текст читается на ${name} (${R23(N['900'],bg).toFixed(1)})`);
+    ok(R23(N['700'], bg) >= 4.5, `вторичный текст читается на ${name} (${R23(N['700'],bg).toFixed(1)})`);
+    ok(R23(N['600'], bg) >= 3.0, `подписи читаются на ${name} (${R23(N['600'],bg).toFixed(1)})`);
+  }
+}
+// Класс кнопки обязан существовать: он уже терялся один раз
+for (const cls of ['btn-acc','btn-flat','tag','ico-box'])
+  ok(new RegExp('\\.'+cls+'[ ,{:]').test(css23), `класс .${cls} описан в стилях`);
+const usedCls = [];
+for (const dir of ['src/ui','src/pages','src/games','src/components']) {
+  for (const f of fs.readdirSync(dir)) {
+    if (!f.endsWith('.tsx')) continue;
+    const t = fs.readFileSync(dir+'/'+f,'utf8');
+    for (const m of t.matchAll(/className="([^"]*)"/g)) usedCls.push(...m[1].split(/\s+/));
+  }
+}
+for (const cls of ['btn-acc','btn-flat'])
+  if (usedCls.includes(cls)) ok(new RegExp('\\.'+cls+'[ ,{:]').test(css23), `используемый .${cls} не потерян`);
+// Ни одна переменная не должна быть использована без объявления
+const declared = new Set([...css23.matchAll(/(--[a-z0-9-]+)\s*:/gi)].map(m=>m[1]).concat(['--acc','--acc-soft','--acc-glow','--acc-ink']));
+const usedVars = new Set();
+const walk23 = (dir) => {
+  for (const f of fs.readdirSync(dir, { withFileTypes: true })) {
+    const full = dir+'/'+f.name;
+    if (f.isDirectory()) walk23(full);
+    else if (/\.(tsx|ts)$/.test(f.name))
+      for (const m of fs.readFileSync(full,'utf8').matchAll(/var\((--[a-z0-9-]{2,})/gi)) usedVars.add(m[1]);
+  }
+};
+walk23('src');
+// `var(--r-${r})` в Glass.tsx — шаблонная строка, а не имя переменной
+const undef23 = [...usedVars].filter(v => !declared.has(v) && v !== '--r-');
+ok(undef23.length === 0, `нет ссылок на несуществующие цвета${undef23.length?': '+undef23.join(', '):''}`);
+
+console.log('\n[24] Босс дежурит целый час');
+const bos24 = fs.readFileSync('src/core/bosses.ts', 'utf8');
+ok(/BOSS_WINDOW_MS = BOSS_EVERY_MS/.test(bos24), 'окно боя равно целому часу');
+ok(/upcomingBosses/.test(bos24), 'расписание боссов считается наперёд — для уведомлений');
+
+console.log('\n[25] Уведомления по каналам Android');
+const nt25 = fs.readFileSync('src/core/notify.ts', 'utf8');
+for (const id of ['chub-updates','chub-boss','chub-news'])
+  ok(nt25.includes(id), `канал ${id} объявлен`);
+ok(/createChannel/.test(nt25), 'каналы реально создаются в Android');
+ok(/openSystemNotificationSettings/.test(nt25), 'есть переход в системные настройки уведомлений');
+ok(/scheduleBossNotifications/.test(nt25), 'напоминания о боссах планируются локально (без интернета)');
+const run25 = fs.readFileSync('public/runners/update-check.js', 'utf8');
+ok(/channelId: 'chub-updates'/.test(run25), 'фоновая проверка шлёт уведомление в свой канал');
+const set25 = fs.readFileSync('src/pages/Settings.tsx', 'utf8');
+ok(/NotifyBlock/.test(set25), 'в настройках отдельные тумблеры уведомлений');
+
+console.log('\n[26] Список изменений внутри приложения');
+ok(fs.existsSync('src/ui/ChangelogView.tsx'), 'экран истории версий есть');
+const ucr26 = fs.readFileSync('src/ui/UpdateCheckRow.tsx', 'utf8');
+ok(/ChangelogView/.test(ucr26), 'история открывается из настроек');
+const chg26 = fs.readFileSync('src/core/changelog.ts', 'utf8');
+ok(chg26.includes(`"${VER}"`), 'в истории есть текущая версия');
+
+console.log('\n[27] Отсчёт и плашка итогов');
+const sh27 = fs.readFileSync('src/games/shell.tsx', 'utf8');
+const cd27 = sh27.slice(sh27.indexOf('export function Countdown'));
+ok(!/borderRadius: "50%"/.test(cd27) && !/border: "2px solid var\(--acc\)"/.test(cd27),
+  'вокруг цифр отсчёта нет колец');
+ok(/var\(--surface\)/.test(sh27), 'плашка итогов непрозрачная');
+ok(/var\(--surface-2\)/.test(sh27), 'шапка игры непрозрачная');
+
 console.log(fails===0?'\n✅ ВСЕ ПРОВЕРКИ ВЁРСТКИ ПРОЙДЕНЫ\n':`\n❌ ПРОВАЛЕНО: ${fails}\n`);
 process.exit(fails?1:0);
