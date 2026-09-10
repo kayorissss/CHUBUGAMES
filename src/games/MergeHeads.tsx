@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useGame } from "../core/store";
+import { tr } from "../core/i18n";
 import { drawHead } from "../core/head";
 import { fmt } from "../core/format";
 import { sfx, haptic } from "../core/fx";
@@ -10,12 +11,14 @@ import { Panel, Tap } from "../ui/Glass";
 import type { Friend } from "../core/types";
 
 const N = 4;
+/** Цена отката хода в монетах */
+const UNDO_COST = 2000;
 interface Cell { v: number; id: number; x: number; y: number; nx: number; ny: number; merged?: boolean; born?: boolean }
 
 let uid = 1;
 
 export default function MergeHeads({ onExit }: { onExit: () => void }) {
-  const { s, addCoins, addXp, bump, finishGame, questProgress } = useGame();
+  const { s, set, addCoins, addXp, bump, finishGame, questProgress } = useGame();
   const [cells, setCells] = useState<Cell[]>([]);
   const [score, setScore] = useState(0);
   const [over, setOver] = useState(false);
@@ -185,8 +188,10 @@ export default function MergeHeads({ onExit }: { onExit: () => void }) {
   }, [move]);
 
   const doUndo = () => {
-    if (!undoState || s.coins < 2000) { sfx.error(); haptic("error"); return; }
+    if (!undoState || s.coins < UNDO_COST) { sfx.error(); haptic("error"); return; }
     sfx.buy();
+    // Отмена платная — раньше цена показывалась, но монеты не списывались
+    set((d) => { d.coins -= UNDO_COST; });
     setCells(undoState.cells);
     setScore(undoState.score);
     setUndoState(null);
@@ -197,18 +202,33 @@ export default function MergeHeads({ onExit }: { onExit: () => void }) {
       <GameHUD score={score} best={s.games.merge.best} onExit={onExit} />
 
       <div className="flex-1 flex flex-col items-center justify-center px-4" style={{ paddingTop: 70 }}>
-        <div className="w-full max-w-sm mb-3 flex items-center justify-between px-1">
-          <div className="t-label">свайпай в любую сторону</div>
-          <Tap
-            onClick={doUndo}
-            disabled={!undoState || s.coins < 2000}
-            r="sm"
-            className="px-3 py-1.5"
-            style={{ fontSize: 11, fontWeight: 700 }}
-            sound="none"
-          >
-            <span className="inline-flex items-center" style={{ gap: 6 }}><Icon name="refresh" size={12} /> Отмена · 2K</span>
-          </Tap>
+        {/* Кнопка отмены была серой плашкой 11-м кеглем — её не замечали.
+            Теперь она акцентная, когда доступна, и явно гаснет, когда нет. */}
+        <div className="w-full max-w-sm mb-3 flex items-center justify-between" style={{ gap: 10 }}>
+          <div className="t-caption clip1">{tr("Свайпай в любую сторону")}</div>
+          {(() => {
+            const canUndo = !!undoState && s.coins >= UNDO_COST;
+            return (
+              <button
+                type="button"
+                onClick={() => { if (canUndo) doUndo(); else { sfx.error(); haptic("error"); } }}
+                disabled={!undoState}
+                className="shrink-0 inline-flex items-center"
+                style={{
+                  gap: 6, padding: "9px 13px", borderRadius: "var(--r-md)",
+                  background: canUndo ? "var(--acc)" : "var(--surface-2)",
+                  color: canUndo ? "var(--acc-ink)" : "var(--text-mute)",
+                  border: `1px solid ${canUndo ? "var(--acc)" : "var(--btn-brd)"}`,
+                  fontSize: 11.5, fontWeight: 700,
+                  opacity: undoState ? 1 : 0.5,
+                  transition: "background .16s, color .16s",
+                }}
+              >
+                <Icon name="refresh" size={13} />
+                {tr("ОТМЕНА")} · {fmt(UNDO_COST)}
+              </button>
+            );
+          })()}
         </div>
 
         <Panel r="xl" className="p-2.5 w-full max-w-sm" strong>
@@ -240,7 +260,9 @@ export default function MergeHeads({ onExit }: { onExit: () => void }) {
                     scale: 1, opacity: 1,
                   }}
                   exit={{ opacity: 0, scale: 0.6 }}
-                  transition={{ type: "spring", stiffness: 520, damping: 34 }}
+                  /* Помягче, чем было (520/34): при жёсткой пружине плитка
+                     «телепортировалась» и путь свайпа не читался. */
+                  transition={{ type: "spring", stiffness: 340, damping: 30, mass: 0.7 }}
                   style={{
                     width: `${100 / N}%`, height: `${100 / N}%`,
                     padding: 5, boxSizing: "border-box",
@@ -313,8 +335,13 @@ function Tile({ v, friends, pop }: { v: number; friends: Friend[]; pop: boolean 
 
   return (
     <motion.div
-      animate={pop ? { scale: [1, 1.16, 1] } : {}}
-      transition={{ duration: 0.28 }}
+      /* Слияние должно быть видно: плитка подскакивает сильнее и коротко
+         вспыхивает акцентом. Пользователь просил, чтобы было понятно,
+         «куда ты и во что объединил». */
+      animate={pop
+        ? { scale: [1, 1.24, 0.96, 1], rotate: [0, -2.5, 1.5, 0] }
+        : { scale: 1, rotate: 0 }}
+      transition={{ duration: 0.36, ease: [0.22, 1, 0.36, 1] }}
       className="w-full h-full flex flex-col items-center justify-center relative overflow-hidden"
       style={{
         borderRadius: 12,
@@ -326,6 +353,23 @@ function Tile({ v, friends, pop }: { v: number; friends: Friend[]; pop: boolean 
         boxShadow: isBig ? "0 0 20px -8px var(--acc-glow)" : "none",
       }}
     >
+      {/* вспышка в момент слияния */}
+      <AnimatePresence>
+        {pop && (
+          <motion.span
+            initial={{ opacity: 0.85, scale: 0.7 }}
+            animate={{ opacity: 0, scale: 1.5 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.45, ease: "easeOut" }}
+            style={{
+              position: "absolute", inset: 0, borderRadius: 12,
+              background: "radial-gradient(circle, var(--acc-glow), transparent 70%)",
+              pointerEvents: "none",
+            }}
+          />
+        )}
+      </AnimatePresence>
+
       {f?.photo ? (
         <img src={f.photo} alt="" style={{ width: "62%", height: "62%", borderRadius: "50%", objectFit: "cover" }} />
       ) : (

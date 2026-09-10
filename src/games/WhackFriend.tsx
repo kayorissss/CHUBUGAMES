@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useGame } from "../core/store";
+import { tr } from "../core/i18n";
 import { drawHead } from "../core/head";
 import { sfx, haptic } from "../core/fx";
 import Icon from "../ui/Icon";
@@ -185,7 +186,37 @@ export default function WhackFriend({ onExit }: { onExit: () => void }) {
         lives={{ value: lives, max: 3 }}
       />
 
-      <div className="flex-1 flex flex-col items-center justify-center px-4" style={{ paddingTop: 70 }}>
+      <div
+        className="flex-1 flex flex-col items-center justify-center px-4"
+        style={{ paddingTop: "calc(var(--sat) + 62px)" }}
+      >
+        {/* Таймер — крупной полосой НАД полем, а не мелкой цифрой в углу
+            рядом с жизнями. Пользователь просил именно так. */}
+        <div className="w-full max-w-sm" style={{ marginBottom: 12 }}>
+          <div className="flex items-baseline justify-between" style={{ marginBottom: 6 }}>
+            <span className="t-label" style={{ fontSize: 9 }}>{tr("ОСТАЛОСЬ")}</span>
+            <span
+              className="t-num"
+              style={{
+                fontSize: 26, lineHeight: 1,
+                color: timeLeft < 10000 ? "var(--danger)" : "var(--text)",
+              }}
+            >
+              {Math.ceil(timeLeft / 1000)}<span className="t-label" style={{ fontSize: 10, marginLeft: 3 }}>{tr("СЕК")}</span>
+            </span>
+          </div>
+          <div style={{ height: 7, borderRadius: 999, background: "var(--n-300)", overflow: "hidden", border: "1px solid var(--n-400)" }}>
+            <div
+              style={{
+                width: `${Math.max(0, Math.min(100, (timeLeft / ROUND_MS) * 100))}%`,
+                height: "100%",
+                background: timeLeft < 10000 ? "var(--danger)" : "var(--acc)",
+                transition: "width .2s linear, background .3s",
+              }}
+            />
+          </div>
+        </div>
+
         <AnimatePresence>
           {combo >= 3 && (
             <motion.div
@@ -193,10 +224,10 @@ export default function WhackFriend({ onExit }: { onExit: () => void }) {
               initial={{ opacity: 0, scale: 0.8 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0 }}
-              className="t-display acc-text mb-2"
-              style={{ fontSize: 26 }}
+              className="t-display acc-text"
+              style={{ fontSize: 24, marginBottom: 8 }}
             >
-              КОМБО ×{combo}
+              {tr("КОМБО")} ×{combo}
             </motion.div>
           )}
         </AnimatePresence>

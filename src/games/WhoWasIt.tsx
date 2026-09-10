@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useGame } from "../core/store";
+import { tr } from "../core/i18n";
 import { sfx, haptic } from "../core/fx";
 import { GameOver, GameHUD } from "./shell";
 import HeadView from "../ui/HeadView";
@@ -28,8 +29,18 @@ export default function WhoWasIt({ onExit }: { onExit: () => void }) {
   const startT = useRef(Date.now());
   const timers = useRef<number[]>([]);
 
-  // берём шесть друзей на поле
-  const pool: Friend[] = s.friends.slice(0, 6);
+  /**
+   * Поле растёт вместе с прогрессом.
+   *
+   * Пользователь: «с продолжением будет усложняться и добавляться ряды
+   * с персонажами». Было жёстко шесть голов навсегда — после десятого
+   * раунда игра переставала усложняться по существу, только по длине
+   * цепочки. Теперь каждые 4 пройденных раунда добавляется ряд из трёх
+   * друзей: 6 → 9 → 12 (насколько хватает списка друзей).
+   */
+  const rows = Math.min(4, 2 + Math.floor(round / 4));
+  const poolSize = Math.min(s.friends.length, rows * 3);
+  const pool: Friend[] = s.friends.slice(0, poolSize);
 
   const showMs =
     s.settings.difficulty === "insane" ? 380 : s.settings.difficulty === "chill" ? 700 : 520;
@@ -142,29 +153,59 @@ export default function WhoWasIt({ onExit }: { onExit: () => void }) {
   };
 
   const hint =
-    phase === "show" ? "Смотри и запоминай" :
-    phase === "input" ? `Повтори · ${step}/${seq.length}` :
-    "Готовься";
+    phase === "show" ? tr("СМОТРИ И ЗАПОМИНАЙ") :
+      phase === "input" ? tr("ТВОЙ ХОД — ПОВТОРИ") :
+        tr("ГОТОВЬСЯ");
 
   return (
     <div className="absolute inset-0" style={{ background: "var(--bg)" }}>
-      <GameHUD score={round} best={best} onExit={onExit} label="РАУНД" />
+      <GameHUD score={round} best={best} onExit={onExit} label={tr("РАУНД")} />
 
       <div
         className="absolute inset-0 flex flex-col items-center justify-center"
         style={{ paddingTop: "calc(var(--sat) + 70px)", paddingInline: 18 }}
       >
+        {/* Подсказка: непрозрачная плашка + прогресс цепочки точками.
+            Раньше это была строка серым по тёмному — «нифига не видно
+            и что делать и когда начать». */}
         <motion.div
           key={hint}
           initial={{ opacity: 0, y: -6 }}
           animate={{ opacity: 1, y: 0 }}
-          className="t-title-sm"
-          style={{ marginBottom: 20, color: phase === "input" ? "var(--acc)" : "var(--text-mute)" }}
+          className="flex flex-col items-center"
+          style={{
+            marginBottom: 18, padding: "11px 18px",
+            borderRadius: "var(--r-md)",
+            background: phase === "input" ? "var(--acc)" : "var(--surface-2)",
+            border: `1px solid ${phase === "input" ? "var(--acc)" : "var(--btn-brd)"}`,
+            color: phase === "input" ? "var(--acc-ink)" : "var(--text)",
+            minWidth: 220,
+          }}
         >
-          {hint}
+          <span className="t-title-sm" style={{ fontSize: 12.5, letterSpacing: "0.04em" }}>
+            {hint}
+          </span>
+          {seq.length > 0 && (
+            <span className="flex items-center" style={{ gap: 4, marginTop: 7 }}>
+              {seq.map((_, i) => (
+                <span
+                  key={i}
+                  style={{
+                    width: 7, height: 7, borderRadius: 999, display: "block",
+                    background: phase === "input"
+                      ? (i < step ? "var(--acc-ink)" : "color-mix(in srgb, var(--acc-ink) 28%, transparent)")
+                      : "var(--n-500)",
+                  }}
+                />
+              ))}
+            </span>
+          )}
         </motion.div>
 
-        <div className="grid grid-cols-3" style={{ gap: 12, width: "100%", maxWidth: 340 }}>
+        <div
+          className="grid grid-cols-3"
+          style={{ gap: poolSize > 9 ? 9 : 12, width: "100%", maxWidth: 340 }}
+        >
           {pool.map((f, i) => {
             const on = lit === i;
             const bad = wrong === i;
@@ -200,8 +241,8 @@ export default function WhoWasIt({ onExit }: { onExit: () => void }) {
           })}
         </div>
 
-        <div className="t-caption text-center" style={{ marginTop: 22, lineHeight: 1.5 }}>
-          Цепочка растёт каждый раунд. Ошибся — всё сначала.
+        <div className="t-caption text-center" style={{ marginTop: 20, lineHeight: 1.5 }}>
+          {tr("Цепочка растёт каждый раунд, а поле — каждые четыре. Ошибся — всё сначала.")}
         </div>
       </div>
 
@@ -214,8 +255,8 @@ export default function WhoWasIt({ onExit }: { onExit: () => void }) {
             xp={result.xp}
             onRetry={() => { setPhase("idle"); setWrong(null); }}
             onExit={onExit}
-            title="ЗАБЫЛ"
-            sub={`Цепочка из ${result.score} голов`}
+            title={tr("ЗАБЫЛ")}
+            sub={`${tr("Цепочка из")} ${result.score} ${tr("голов")}`}
           />
         )}
       </AnimatePresence>
