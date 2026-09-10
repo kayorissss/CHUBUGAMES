@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useGame } from "../core/store";
+import { tr } from "../core/i18n";
 import { sfx, haptic } from "../core/fx";
 import { GameHUD, GameOver, Countdown } from "./shell";
 import { Panel } from "../ui/Glass";
@@ -239,31 +240,90 @@ export default function Canteen({ onExit }: { onExit: () => void }) {
         score={score}
         best={best}
         onExit={onExit}
-        label="ОЧКИ"
-        lives={{ value: lives, max: 3 }}
+        label={tr("ОЧКИ")}
       />
 
-      {/* полоса времени */}
+      {/* Верхняя панель.
+          Было: голая полоска 4 px без цифр («таймер непонятен») и никакого
+          указания, что вообще делать. Стало: секунды крупно, полоса толще,
+          рядом текущее задание словами и счётчик оставшихся ошибок —
+          он же объясняет сердечки в HUD. */}
       <div
         className="absolute left-0 right-0"
-        style={{ top: "calc(var(--sat) + 68px)", padding: "0 12px", zIndex: 20 }}
+        style={{ top: "calc(var(--sat) + 62px)", padding: "0 12px", zIndex: 20 }}
       >
-        <div style={{ height: 4, borderRadius: 999, background: "var(--track)", overflow: "hidden" }}>
-          <motion.div
-            animate={{ width: `${timePct * 100}%` }}
-            transition={{ duration: 0.1 }}
+        <div
+          style={{
+            padding: "10px 12px 11px",
+            borderRadius: "var(--r-md)",
+            background: "var(--surface)",
+            border: "1px solid var(--surface-brd)",
+          }}
+        >
+          <div className="flex items-center" style={{ gap: 10 }}>
+            <span className="shrink-0">
+              <span className="t-label block" style={{ fontSize: 8.5 }}>{tr("СМЕНА")}</span>
+              <span
+                className="t-num block"
+                style={{
+                  fontSize: 21, lineHeight: 1.05,
+                  color: timePct < 0.2 ? "var(--danger)" : "var(--text)",
+                }}
+              >
+                {Math.ceil(timeLeft / 1000)}
+                <span className="t-label" style={{ fontSize: 9, marginLeft: 2 }}>{tr("СЕК")}</span>
+              </span>
+            </span>
+
+            <span className="flex-1 min-w-0">
+              <span className="t-label block" style={{ fontSize: 8.5 }}>{tr("ЗАДАНИЕ")}</span>
+              <span className="t-body block clip1" style={{ marginTop: 2, fontSize: 12.5 }}>
+                {/* Первые три подноса подсказываем, куда нести, потом
+                    только блюдо: смысл игры в том, чтобы соображать самому. */}
+                {tray
+                  ? served < 3
+                    ? `${tray.dish} → «${tr(SLOT_NAMES[tray.kind])}»`
+                    : `${tr("Отнеси")}: ${tray.dish}`
+                  : tr("Ждём следующий поднос")}
+              </span>
+            </span>
+
+            {/* Сердечки = сколько ошибок ещё можно допустить.
+                Подпись обязательна: без неё «сердечки непонятны». */}
+            <span className="shrink-0 text-center">
+              <span className="t-label block" style={{ fontSize: 8.5 }}>{tr("ОШИБКИ")}</span>
+              <span className="flex items-center" style={{ gap: 3, marginTop: 3 }}>
+                {[0, 1, 2].map((i) => (
+                  <span key={i} style={{ color: i < lives ? "var(--danger)" : "var(--n-400)", lineHeight: 0 }}>
+                    <Icon name="heart" size={13} />
+                  </span>
+                ))}
+              </span>
+            </span>
+          </div>
+
+          <div
             style={{
-              height: "100%",
-              background: timePct < 0.2 ? "#FF4D4D" : "var(--acc)",
+              height: 6, borderRadius: 999, marginTop: 9,
+              background: "var(--n-300)", overflow: "hidden",
             }}
-          />
+          >
+            <motion.div
+              animate={{ width: `${timePct * 100}%` }}
+              transition={{ duration: 0.1 }}
+              style={{
+                height: "100%",
+                background: timePct < 0.2 ? "var(--danger)" : "var(--acc)",
+              }}
+            />
+          </div>
         </div>
       </div>
 
       <div
         ref={wrapRef}
         className="absolute inset-0"
-        style={{ touchAction: "none", paddingTop: "calc(var(--sat) + 86px)" }}
+        style={{ touchAction: "none", paddingTop: "calc(var(--sat) + 168px)" }}
         onPointerDown={onDown}
         onPointerMove={onMove}
         onPointerUp={onUp}
@@ -324,9 +384,8 @@ export default function Canteen({ onExit }: { onExit: () => void }) {
           })}
         </div>
 
-        {/* подсказка */}
-        <div className="t-caption text-center" style={{ marginTop: 14, opacity: 0.75 }}>
-          Тяни поднос пальцем в нужное окно
+        <div className="t-caption text-center" style={{ marginTop: 12 }}>
+          {tr("Тяни поднос пальцем в нужное окно")}
         </div>
 
         {/* поднос */}
@@ -382,13 +441,36 @@ export default function Canteen({ onExit }: { onExit: () => void }) {
           </AnimatePresence>
         </div>
 
-        {/* счётчик выданных */}
+        {/* Низ в том же оформлении, что и верхняя панель: раньше тут был
+            голый серый текст, и экран выглядел собранным из двух разных игр. */}
         <div
-          className="absolute t-caption"
-          style={{ bottom: "5%", left: 0, right: 0, textAlign: "center" }}
+          className="absolute flex justify-center"
+          style={{ bottom: "calc(var(--sab) + 16px)", left: 0, right: 0, padding: "0 12px" }}
         >
-          выдано {served}
-          {combo > 2 && <span className="acc-text"> · серия {combo}</span>}
+          <div
+            className="flex items-center"
+            style={{
+              gap: 14, padding: "9px 16px",
+              borderRadius: "var(--r-md)",
+              background: "var(--surface)",
+              border: "1px solid var(--surface-brd)",
+            }}
+          >
+            <span className="text-center">
+              <span className="t-label block" style={{ fontSize: 8.5 }}>{tr("ВЫДАНО")}</span>
+              <span className="t-num block" style={{ fontSize: 15, marginTop: 1 }}>{served}</span>
+            </span>
+            <span style={{ width: 1, alignSelf: "stretch", background: "var(--surface-brd)" }} />
+            <span className="text-center">
+              <span className="t-label block" style={{ fontSize: 8.5 }}>{tr("СЕРИЯ")}</span>
+              <span
+                className="t-num block"
+                style={{ fontSize: 15, marginTop: 1, color: combo > 2 ? "var(--acc)" : "var(--text)" }}
+              >
+                {combo}
+              </span>
+            </span>
+          </div>
         </div>
       </div>
 
@@ -404,8 +486,8 @@ export default function Canteen({ onExit }: { onExit: () => void }) {
           xp={result.xp}
           onRetry={restart}
           onExit={onExit}
-          title="ПЕРЕМЕНА"
-          sub={lives <= 0 ? "Очередь тебя сожрала" : "Смена окончена"}
+          title={tr("ПЕРЕМЕНА")}
+          sub={lives <= 0 ? tr("Очередь тебя сожрала") : tr("Смена окончена")}
         />
       )}
     </div>
