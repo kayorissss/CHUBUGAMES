@@ -424,4 +424,8 @@ export const GAME_META = [
   { id: "memory" as const, name: "КТО ЭТО БЫЛ", tag: "Память", desc: "Головы мигают по очереди. Повтори порядок.", unlockLvl: 0, icon: "brain" as IconName },
   { id: "flap" as const, name: "ПОЛЁТ РАДОМИРА", tag: "Нервы", desc: "Тапай, чтобы не упасть. Пролетай между партами.", unlockLvl: 0, icon: "rocket" as IconName },
   { id: "defend" as const, name: "ОБОРОНА ОБЩАГИ", tag: "Защита", desc: "Тапай по врагам, пока они не дошли до двери.", unlockLvl: 0, icon: "shield" as IconName },
+  { id: "basket" as const, name: "ЧУБУ-БАСКЕТ", tag: "Спорт", desc: "Свайп — бросок. Кольцо ездит, попал чисто — комбо растёт.", unlockLvl: 0, icon: "target" as IconName },
+  { id: "volley" as const, name: "ВОЛЕЙБОЛ НА ПАРЕ", tag: "Спорт", desc: "Веди пальцем и отбивай головой. Уронил трижды — конец.", unlockLvl: 0, icon: "medal" as IconName },
+  { id: "penalty" as const, name: "ПЕНАЛЬТИ ЗА ГАРАЖАМИ", tag: "Спорт", desc: "Бей свайпом мимо вратаря. Девятка — двойные очки.", unlockLvl: 0, icon: "flag" as IconName },
+  { id: "pool" as const, name: "БИЛЬЯРД В ПОДВАЛЕ", tag: "Спорт", desc: "Тяни кий и забивай. Каждый шар возвращает удар.", unlockLvl: 0, icon: "dice" as IconName },
 ];

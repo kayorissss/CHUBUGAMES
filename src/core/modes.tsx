@@ -75,6 +75,7 @@ export type Challenge = {
 const CHALLENGE_TARGET: Record<GameId, number> = {
   burger: 40, clicker: 900, bite: 18, dino: 550, radomir: 320, merge: 700,
   whack: 26, stack: 14, sort: 30, memory: 9, flap: 12, defend: 24,
+  basket: 22, volley: 5, penalty: 6, pool: 90,
 };
 
 function hash(seed: string) {

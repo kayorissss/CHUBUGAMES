@@ -470,7 +470,20 @@ function Cases() {
                       rotate: { duration: 26, repeat: Infinity, ease: "linear" },
                     }}
                     style={{
-                      inset: "-32%",
+                      // Круг, а не квадрат: у прямоугольного блока при вращении
+                      // видно углы — «крутится квадрат». Плюс край растворяем
+                      // маской, чтобы лучи гасли, а не обрывались границей.
+                      left: "50%",
+                      top: "50%",
+                      width: "190%",
+                      aspectRatio: "1",
+                      marginLeft: "-95%",
+                      marginTop: "-95%",
+                      borderRadius: "50%",
+                      WebkitMaskImage:
+                        "radial-gradient(closest-side, #000 34%, rgba(0,0,0,0.55) 62%, transparent 80%)",
+                      maskImage:
+                        "radial-gradient(closest-side, #000 34%, rgba(0,0,0,0.55) 62%, transparent 80%)",
                       background: `conic-gradient(from 0deg, transparent 0deg, ${RARITY_COLOR[rolling.rarity]}55 12deg, transparent 24deg, transparent 45deg, ${RARITY_COLOR[rolling.rarity]}55 57deg, transparent 69deg, transparent 90deg, ${RARITY_COLOR[rolling.rarity]}55 102deg, transparent 114deg, transparent 135deg, ${RARITY_COLOR[rolling.rarity]}55 147deg, transparent 159deg, transparent 180deg, ${RARITY_COLOR[rolling.rarity]}55 192deg, transparent 204deg, transparent 225deg, ${RARITY_COLOR[rolling.rarity]}55 237deg, transparent 249deg, transparent 270deg, ${RARITY_COLOR[rolling.rarity]}55 282deg, transparent 294deg, transparent 315deg, ${RARITY_COLOR[rolling.rarity]}55 327deg, transparent 339deg)`,
                       filter: "blur(2px)",
                     }}

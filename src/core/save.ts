@@ -28,6 +28,7 @@ export function pickQuests(seed: string) {
 export const ALL_GAMES: GameId[] = [
   "burger", "clicker", "bite", "dino", "radomir", "merge", "whack",
   "stack", "sort", "memory", "flap", "defend",
+  "basket", "volley", "penalty", "pool",
 ];
 
 export function freshSave(): SaveState {
@@ -50,6 +51,8 @@ export function freshSave(): SaveState {
       dino: emptyGame(), radomir: emptyGame(), merge: emptyGame(), whack: emptyGame(),
       stack: emptyGame(), sort: emptyGame(), memory: emptyGame(),
       flap: emptyGame(), defend: emptyGame(),
+      basket: emptyGame(), volley: emptyGame(),
+      penalty: emptyGame(), pool: emptyGame(),
     },
     friends: DEFAULT_FRIENDS.map((f) => ({ ...f, look: { ...f.look }, stats: { ...f.stats } })),
     mainFriendId: "lyoha",

@@ -87,7 +87,7 @@ console.log('\n[8] Контент про друзей');
 const cnt=fs.readFileSync('src/core/content.ts','utf8');
 for(const id of ['lyoha','vanya','maks','seryoga','artyom','radomir','kudrya','shitov'])
   ok(cnt.includes(`id: "${id}"`),`друг ${id} есть в игре`);
-ok((cnt.match(/unlockLvl: 0/g)||[]).length===12,'все 12 мини-игр открыты сразу');
+ok((cnt.match(/unlockLvl: 0/g)||[]).length===16,'все 16 мини-игр открыты сразу');
 const sav=fs.readFileSync('src/core/save.ts','utf8');
 ok(/unlockedGames = ALL_GAMES\.slice\(\)/.test(sav)&&/ALL_GAMES: GameId\[\]/.test(sav),'старые сохранения тоже получают все игры');
 ok(sav.includes('if (!have.has(f.id))'),'новые друзья досыпаются в старые сохранения');
@@ -203,6 +203,27 @@ ok(shp.includes('SHOP_TABS'),'вкладки магазина крупные, с
 ok(shp.includes('activeTab.title'),'видно, в каком разделе магазина находишься');
 ok(shp.includes('CASE_SKIN'),'кейсы различаются по виду');
 ok(shp.includes('setFlash'),'в момент вскрытия кейса срабатывает вспышка');
+
+/* ── [17] Спорт-игры ── */
+console.log('\n[17] Спорт-игры');
+for (const [file, label] of [
+  ['src/games/Basket.tsx', 'баскетбол'],
+  ['src/games/Volley.tsx', 'волейбол'],
+  ['src/games/Penalty.tsx', 'пенальти'],
+  ['src/games/Pool.tsx', 'бильярд'],
+]) {
+  const src = fs.readFileSync(file,'utf8');
+  ok(src.length > 2000, `${label}: игра написана`);
+  ok(src.includes('onPointerMove'), `${label}: управление ведением пальца`);
+  ok(src.includes('GameOver'), `${label}: есть экран итогов`);
+}
+const sv17 = fs.readFileSync('src/core/save.ts','utf8');
+for (const g of ['basket', 'volley', 'penalty', 'pool']) {
+  ok(sv17.includes(`"${g}"`), `${g} попал в ALL_GAMES — откроется и в старых сохранениях`);
+}
+const bsk = fs.readFileSync('src/games/Basket.tsx','utf8');
+ok(bsk.includes('0.28 + power * 1.67'), 'сила броска совпадает с линией прицела');
+ok(!/[\u{1F300}-\u{1FAFF}]/u.test(bsk + fs.readFileSync('src/games/Pool.tsx','utf8')), 'в спорт-играх нет эмодзи');
 
 const stg2=fs.readFileSync('src/pages/Settings.tsx','utf8');
 ok(stg2.includes('notifyUpdates'),'тумблер уведомлений хранит своё состояние');

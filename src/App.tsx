@@ -29,6 +29,10 @@ import ArtyomBite from "./games/ArtyomBite";
 import ShitovRun from "./games/ShitovRun";
 import RadomirBeat from "./games/RadomirBeat";
 import BurgerStack from "./games/BurgerStack";
+import Basket from "./games/Basket";
+import Volley from "./games/Volley";
+import Penalty from "./games/Penalty";
+import Pool from "./games/Pool";
 import Canteen from "./games/Canteen";
 import WhoWasIt from "./games/WhoWasIt";
 import RadomirFlight from "./games/RadomirFlight";
@@ -226,6 +230,10 @@ function Shell() {
             {game === "memory" && <WhoWasIt onExit={() => setGame(null)} />}
             {game === "flap" && <RadomirFlight onExit={() => setGame(null)} />}
             {game === "defend" && <DormDefense onExit={() => setGame(null)} />}
+            {game === "basket" && <Basket onExit={() => setGame(null)} />}
+            {game === "volley" && <Volley onExit={() => setGame(null)} />}
+            {game === "penalty" && <Penalty onExit={() => setGame(null)} />}
+            {game === "pool" && <Pool onExit={() => setGame(null)} />}
           </motion.div>
         )}
       </AnimatePresence>

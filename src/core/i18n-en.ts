@@ -47,6 +47,45 @@ export const EN_TEXT: Record<string, string> = {
   "Дубликаты возвращают 35% стоимости.": "Duplicates refund 35% of the price.",
   "Не хватает": "Not enough",
 
+  /* --- спорт-игры --- */
+  "ЧУБУ-БАСКЕТ": "CHUB HOOPS",
+  "ВОЛЕЙБОЛ НА ПАРЕ": "CLASSROOM VOLLEY",
+  "ПЕНАЛЬТИ ЗА ГАРАЖАМИ": "PENALTY BEHIND GARAGES",
+  "БИЛЬЯРД В ПОДВАЛЕ": "BASEMENT POOL",
+  "Спорт": "Sport",
+  "Свайп — бросок. Кольцо ездит, попал чисто — комбо растёт.":
+    "Swipe to shoot. The hoop slides; a clean swish builds your combo.",
+  "Веди пальцем и отбивай головой. Уронил трижды — конец.":
+    "Drag your finger and head the ball. Drop it three times and it's over.",
+  "Бей свайпом мимо вратаря. Девятка — двойные очки.":
+    "Swipe past the keeper. Top corner scores double.",
+  "Тяни кий и забивай. Каждый шар возвращает удар.":
+    "Pull the cue and pot. Every ball pots back a shot.",
+  "Тяни от мяча назад и отпусти": "Pull back from the ball and release",
+  "Тяни от битка назад и отпусти": "Pull back from the cue ball and release",
+  "Веди пальцем — игрок бежит за ним": "Drag your finger — your player follows",
+  "Свайп вверх — удар. Куда ведёшь, туда летит":
+    "Swipe up to shoot. It flies where you aim",
+  "ЧИСТЯК": "SWISH",
+  "МИМО": "MISS",
+  "ОЧКО": "POINT",
+  "ПРОПУСТИЛ": "CONCEDED",
+  "ГОЛ": "GOAL",
+  "ДЕВЯТКА": "TOP CORNER",
+  "ВЗЯЛ": "SAVED",
+  "БИТОК": "SCRATCH",
+  "ПАРТИЯ ВЗЯТА": "RACK CLEARED",
+  "ПАРТИЯ": "RACK",
+  "ГОЛЫ": "GOALS",
+  "СВИСТОК": "FULL TIME",
+  "Время вышло": "Time is up",
+  "МАТЧ ОКОНЧЕН": "MATCH OVER",
+  "Мяч на полу трижды": "Ball hit the floor three times",
+  "ПРОМАЗАЛ": "MISSED",
+  "Три осечки подряд": "Three failures",
+  "КИЙ В УГОЛ": "CUE DOWN",
+  "Удары кончились": "Out of shots",
+
   /* --- навигация и общее --- */
   "Игры": "Games",
   "Прогресс": "Progress",
