@@ -6,6 +6,8 @@ import { GameHUD, GameOver } from "./shell";
 import { tr } from "../core/i18n";
 import { ChessPiece } from "../ui/BoardPiece";
 import { isLowFx } from "../core/perf";
+import BoardMenu from "../ui/BoardMenu";
+import { EASE } from "../core/motion";
 import * as CH from "../core/chess";
 import type { Move, PieceKind, Position } from "../core/chess";
 
@@ -21,6 +23,8 @@ import type { Move, PieceKind, Position } from "../core/chess";
  * Панель управления вынесена НАД нижним краем, чтобы до неё дотягивался
  * большой палец и её не перекрывал жест «домой».
  */
+
+type VsMode = "bot" | "duo";
 
 const LEVELS = [
   { id: 1 as const, name: "НОВИЧОК", sub: "Шитов после пары" },
@@ -48,6 +52,7 @@ function scoreFor(pos: Position, res: CH.Outcome, human: "w" | "b", level: numbe
 export default function Chess({ onExit }: { onExit: () => void }) {
   const { s, addCoins, addXp, finishGame, questProgress } = useGame();
   const [level, setLevel] = useState<1 | 2 | 3>(2);
+  const [vs, setVs] = useState<VsMode>("bot");
   const [phase, setPhase] = useState<"menu" | "play" | "over">("menu");
   const [pos, setPos] = useState<Position>(() => CH.initialPosition());
   const [sel, setSel] = useState<number | null>(null);
@@ -67,7 +72,12 @@ export default function Chess({ onExit }: { onExit: () => void }) {
   const startT = useRef(Date.now());
   const ended = useRef(false);
   const nMoves = useRef(0);
-  const human: "w" | "b" = "w";
+  /**
+   * В игре с другом ходят оба цвета живыми людьми, поэтому «человеком»
+   * считается тот, чей сейчас ход — иначе доска заблокируется на
+   * чёрных, ожидая бота, которого нет.
+   */
+  const human: "w" | "b" = vs === "duo" ? pos.turn : "w";
   const lowFx = isLowFx();
 
   const best = s.games.chess?.best || 0;
@@ -90,10 +100,16 @@ export default function Chess({ onExit }: { onExit: () => void }) {
     const xp = Math.floor(sc * 0.4 + 20);
     setResult({ score: sc, coins, xp });
 
-    const win = res === "checkmate" && p.turn !== human;
+    const win = res === "checkmate" && p.turn !== "w";
     if (res === "checkmate") {
-      setTitle(win ? tr("МАТ! ШИТОВ ПОВЕРЖЕН") : tr("МАТ. ШИТОВ СИЛЬНЕЕ"));
-      setSub(win ? tr("Он молча собрал фигуры") : tr("Он даже не снял очки"));
+      if (vs === "duo") {
+        // с другом победил тот, кто НЕ должен ходить
+        setTitle(p.turn === "b" ? tr("ПОБЕДА БЕЛЫХ") : tr("ПОБЕДА ЧЁРНЫХ"));
+        setSub(tr("Мат на доске"));
+      } else {
+        setTitle(win ? tr("МАТ! ШИТОВ ПОВЕРЖЕН") : tr("МАТ. ШИТОВ СИЛЬНЕЕ"));
+        setSub(win ? tr("Он молча собрал фигуры") : tr("Он даже не снял очки"));
+      }
     } else if (res === "stalemate") {
       setTitle(tr("ПАТ")); setSub(tr("Ходить некуда, но шаха нет"));
     } else if (res === "draw50") {
@@ -107,7 +123,7 @@ export default function Chess({ onExit }: { onExit: () => void }) {
     finishGame("chess", sc, Date.now() - startT.current);
     questProgress("plays", 1);
     setPhase("over");
-  }, [addCoins, addXp, finishGame, questProgress, s.prestige, level]);
+  }, [addCoins, addXp, finishGame, questProgress, s.prestige, level, vs]);
 
   /** Применяем ход человека или бота, обновляем всё вокруг */
   const doMove = useCallback((p: Position, m: Move) => {
@@ -134,6 +150,7 @@ export default function Chess({ onExit }: { onExit: () => void }) {
 
   // Ход компьютера — с паузой, чтобы игрок успел увидеть свой ход
   useEffect(() => {
+    if (vs === "duo") return;                       // с другом бот молчит
     if (phase !== "play" || pos.turn === human || ended.current) return;
     const res = CH.outcome(pos);
     if (res !== "playing") { finish(pos, res); return; }
@@ -150,14 +167,15 @@ export default function Chess({ onExit }: { onExit: () => void }) {
       if (r2 !== "playing") finish(next, r2);
     }, 420);
     return () => clearTimeout(t);
-  }, [phase, pos, level, doMove, finish]);
+  }, [phase, pos, level, doMove, finish, vs, human]);
 
   // Проверяем конец партии после хода человека
   useEffect(() => {
-    if (phase !== "play" || pos.turn !== human || ended.current) return;
+    if (phase !== "play" || ended.current) return;
+    if (vs === "bot" && pos.turn !== human) return;
     const res = CH.outcome(pos);
     if (res !== "playing") finish(pos, res);
-  }, [phase, pos, finish]);
+  }, [phase, pos, finish, vs, human]);
 
   const pickSquare = useCallback((i: number) => {
     if (pos.turn !== human || thinking || ended.current) return;
@@ -244,48 +262,27 @@ export default function Chess({ onExit }: { onExit: () => void }) {
   if (phase === "menu") {
     return (
       <div className="absolute inset-0 flex flex-col" style={{ background: "var(--bg)" }}>
-        <GameHUD score={0} best={best} onExit={onExit} label={tr("ОЧКИ")} />
-        <div
-          className="flex-1 flex flex-col justify-center"
-          style={{ padding: "calc(var(--sat) + 74px) 20px calc(var(--sab) + 26px)" }}
-        >
-          <div className="t-display" style={{ fontSize: 26, marginBottom: 6, textAlign: "center" }}>
-            {tr("ШАХМАТЫ С ШИТОВЫМ")}
-          </div>
-          <div
-            className="t-body"
-            style={{ fontSize: 12.5, opacity: 0.62, marginBottom: 22, textAlign: "center", lineHeight: 1.5 }}
-          >
-            {tr("Он ведёт шахматный кружок. Выбери, насколько тебе не жалко себя.")}
-          </div>
-
-          {LEVELS.map((l) => (
-            <button
-              key={l.id}
-              onClick={() => { setLevel(l.id); sfx.click(); }}
-              style={{
-                width: "100%", textAlign: "left", marginBottom: 10,
-                padding: "13px 15px", borderRadius: "var(--r-md)",
-                background: level === l.id ? "var(--acc-soft)" : "var(--surface)",
-                border: `1px solid ${level === l.id ? "var(--acc)" : "var(--surface-brd)"}`,
-                color: "var(--fg)",
-              }}
-            >
-              <div className="t-label" style={{ fontSize: 12, color: level === l.id ? "var(--acc)" : undefined }}>
-                {tr(l.name)}
-              </div>
-              <div className="t-body" style={{ fontSize: 11, opacity: 0.6, marginTop: 2 }}>{tr(l.sub)}</div>
-            </button>
-          ))}
-
-          <button
-            onClick={start}
-            className="btn-acc t-label"
-            style={{ width: "100%", marginTop: 14, padding: "15px 0", borderRadius: "var(--r-md)", fontSize: 13 }}
-          >
-            {tr("НАЧАТЬ ПАРТИЮ")}
-          </button>
-        </div>
+        <GameHUD score={0} best={best} onExit={onExit} label={tr("ОЧКИ")} rulesId="chess" />
+        <BoardMenu
+          title={tr("ШАХМАТЫ С ШИТОВЫМ")}
+          subtitle={tr("Он ведёт шахматный кружок. Выбери, насколько тебе не жалко себя.")}
+          icon="brain"
+          vs={vs}
+          onVs={setVs}
+          level={level}
+          onLevel={setLevel}
+          levels={LEVELS}
+          onStart={start}
+          accentPieces={
+            <div className="flex items-center justify-center" style={{ gap: 6 }}>
+              {(["k", "q", "r", "b", "n", "p"] as PieceKind[]).map((k) => (
+                <span key={k} style={{ opacity: 0.9 }}>
+                  <ChessPiece kind={k} color="w" size={26} />
+                </span>
+              ))}
+            </div>
+          }
+        />
       </div>
     );
   }
@@ -306,7 +303,9 @@ export default function Chess({ onExit }: { onExit: () => void }) {
               color: thinking ? "var(--acc)" : "#fff", fontSize: 9.5, minWidth: 66, textAlign: "center",
             }}
           >
-            {thinking ? tr("ДУМАЕТ") : tr("ТВОЙ ХОД")}
+            {vs === "duo"
+              ? (pos.turn === "w" ? tr("ХОД БЕЛЫХ") : tr("ХОД ЧЁРНЫХ"))
+              : thinking ? tr("ДУМАЕТ") : tr("ТВОЙ ХОД")}
           </div>
         }
       />
@@ -365,7 +364,10 @@ export default function Chess({ onExit }: { onExit: () => void }) {
                   <div style={{ position: "absolute", inset: 0, background: "rgba(255,176,32,0.34)" }} />
                 )}
                 {isTarget && !pc && (
-                  <div
+                  <motion.div
+                    initial={lowFx ? false : { scale: 0.4, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    transition={{ duration: 0.16, ease: EASE }}
                     style={{
                       position: "absolute", width: "28%", height: "28%", borderRadius: "50%",
                       background: "rgba(255,176,32,0.65)",
@@ -381,9 +383,15 @@ export default function Chess({ onExit }: { onExit: () => void }) {
                   />
                 )}
                 {pc && !hidden && (
-                  <div style={{ width: "84%", height: "84%", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <motion.div
+                    /* Фигура «оседает» на новой клетке, а не возникает рывком */
+                    initial={lowFx ? false : { scale: 0.82, opacity: 0.4 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    transition={{ duration: 0.18, ease: EASE }}
+                    style={{ width: "84%", height: "84%", display: "flex", alignItems: "center", justifyContent: "center" }}
+                  >
                     <ChessPieceFit kind={pc.kind} color={pc.color} />
-                  </div>
+                  </motion.div>
                 )}
               </div>
             );

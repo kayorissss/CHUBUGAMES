@@ -1,10 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { motion } from "framer-motion";
 import { useGame } from "../core/store";
 import { sfx, haptic } from "../core/fx";
 import { GameHUD, GameOver } from "./shell";
 import { tr } from "../core/i18n";
 import { CheckerPiece } from "../ui/BoardPiece";
 import { isLowFx } from "../core/perf";
+import BoardMenu from "../ui/BoardMenu";
+import { EASE } from "../core/motion";
 import * as CK from "../core/checkers";
 import type { Move, Position } from "../core/checkers";
 
@@ -21,6 +24,8 @@ import type { Move, Position } from "../core/checkers";
  * иначе фишка «телепортируется» и непонятно, кого съели.
  */
 
+type VsMode = "bot" | "duo";
+
 const LEVELS = [
   { id: 1 as const, name: "НОВИЧОК", sub: "Стас отвлекается" },
   { id: 2 as const, name: "КРЕПКИЙ", sub: "Стас собран" },
@@ -32,6 +37,7 @@ const STEP_MS = 240;
 export default function Checkers({ onExit }: { onExit: () => void }) {
   const { s, addCoins, addXp, finishGame, questProgress } = useGame();
   const [level, setLevel] = useState<1 | 2 | 3>(2);
+  const [vs, setVs] = useState<VsMode>("bot");
   const [phase, setPhase] = useState<"menu" | "play" | "over">("menu");
   const [pos, setPos] = useState<Position>(() => CK.initialPosition());
   const [sel, setSel] = useState<number | null>(null);
@@ -49,7 +55,8 @@ export default function Checkers({ onExit }: { onExit: () => void }) {
   const startT = useRef(Date.now());
   const ended = useRef(false);
   const nMoves = useRef(0);
-  const human: CK.Color = "w";
+  /** С другом ходят оба цвета живыми людьми */
+  const human: CK.Color = vs === "duo" ? pos.turn : "w";
   const lowFx = isLowFx();
 
   const best = s.games.checkers?.best || 0;
@@ -77,7 +84,12 @@ export default function Checkers({ onExit }: { onExit: () => void }) {
     const xp = Math.floor(sc * 0.4 + 20);
     setResult({ score: sc, coins, xp });
 
-    if (res === human) {
+    if (vs === "duo") {
+      const w = res === "w";
+      setTitle(res === "draw" ? tr("НИЧЬЯ") : w ? tr("ПОБЕДА БЕЛЫХ") : tr("ПОБЕДА ЧЁРНЫХ"));
+      setSub(res === "draw" ? tr("Никто не сдвинулся") : tr("Партия окончена"));
+      if (res === "draw") { sfx.gameOver(); haptic("error"); } else { sfx.legend(); haptic("success"); }
+    } else if (res === human) {
       setTitle(tr("СТАС РАЗБИТ")); setSub(tr("Он требует реванш"));
       sfx.legend(); haptic("success");
     } else if (res === "draw") {
@@ -91,7 +103,7 @@ export default function Checkers({ onExit }: { onExit: () => void }) {
     finishGame("checkers", sc, Date.now() - startT.current);
     questProgress("plays", 1);
     setPhase("over");
-  }, [addCoins, addXp, finishGame, questProgress, s.prestige, level]);
+  }, [addCoins, addXp, finishGame, questProgress, s.prestige, level, vs]);
 
   /**
    * Проигрываем ход по шагам. Цепочка из трёх взятий должна выглядеть
@@ -142,6 +154,7 @@ export default function Checkers({ onExit }: { onExit: () => void }) {
 
   // ход компьютера
   useEffect(() => {
+    if (vs === "duo") return;                       // с другом бот молчит
     if (phase !== "play" || pos.turn === human || ended.current || animating) return;
     const res = CK.outcome(pos);
     if (res !== "playing") { finish(pos, res); return; }
@@ -156,14 +169,15 @@ export default function Checkers({ onExit }: { onExit: () => void }) {
       });
     }, 380);
     return () => clearTimeout(t);
-  }, [phase, pos, level, animating, playMove, finish]);
+  }, [phase, pos, level, animating, playMove, finish, vs, human]);
 
   // конец после хода человека
   useEffect(() => {
-    if (phase !== "play" || pos.turn !== human || ended.current || animating) return;
+    if (phase !== "play" || ended.current || animating) return;
+    if (vs === "bot" && pos.turn !== human) return;
     const res = CK.outcome(pos);
     if (res !== "playing") finish(pos, res);
-  }, [phase, pos, animating, finish]);
+  }, [phase, pos, animating, finish, vs, human]);
 
   const allMoves = phase === "play" && pos.turn === human && !animating ? CK.legalMoves(pos) : [];
   const movable = new Set(allMoves.map((m) => m.from));
@@ -237,46 +251,26 @@ export default function Checkers({ onExit }: { onExit: () => void }) {
   if (phase === "menu") {
     return (
       <div className="absolute inset-0 flex flex-col" style={{ background: "var(--bg)" }}>
-        <GameHUD score={0} best={best} onExit={onExit} label={tr("ОЧКИ")} />
-        <div
-          className="flex-1 flex flex-col justify-center"
-          style={{ padding: "calc(var(--sat) + 74px) 20px calc(var(--sab) + 26px)" }}
-        >
-          <div className="t-display" style={{ fontSize: 26, marginBottom: 6, textAlign: "center" }}>
-            {tr("ШАШКИ У СТАСА")}
-          </div>
-          <div
-            className="t-body"
-            style={{ fontSize: 12.5, opacity: 0.62, marginBottom: 22, textAlign: "center", lineHeight: 1.5 }}
-          >
-            {tr("Русские шашки. Бить обязательно, даже когда очень не хочется.")}
-          </div>
-          {LEVELS.map((l) => (
-            <button
-              key={l.id}
-              onClick={() => { setLevel(l.id); sfx.click(); }}
-              style={{
-                width: "100%", textAlign: "left", marginBottom: 10,
-                padding: "13px 15px", borderRadius: "var(--r-md)",
-                background: level === l.id ? "var(--acc-soft)" : "var(--surface)",
-                border: `1px solid ${level === l.id ? "var(--acc)" : "var(--surface-brd)"}`,
-                color: "var(--fg)",
-              }}
-            >
-              <div className="t-label" style={{ fontSize: 12, color: level === l.id ? "var(--acc)" : undefined }}>
-                {tr(l.name)}
-              </div>
-              <div className="t-body" style={{ fontSize: 11, opacity: 0.6, marginTop: 2 }}>{tr(l.sub)}</div>
-            </button>
-          ))}
-          <button
-            onClick={start}
-            className="btn-acc t-label"
-            style={{ width: "100%", marginTop: 14, padding: "15px 0", borderRadius: "var(--r-md)", fontSize: 13 }}
-          >
-            {tr("НАЧАТЬ ПАРТИЮ")}
-          </button>
-        </div>
+        <GameHUD score={0} best={best} onExit={onExit} label={tr("ОЧКИ")} rulesId="checkers" />
+        <BoardMenu
+          title={tr("ШАШКИ У СТАСА")}
+          subtitle={tr("Русские шашки. Бить обязательно, даже когда очень не хочется.")}
+          icon="dice"
+          vs={vs}
+          onVs={setVs}
+          level={level}
+          onLevel={setLevel}
+          levels={LEVELS}
+          onStart={start}
+          accentPieces={
+            <div className="flex items-center justify-center" style={{ gap: 8 }}>
+              <CheckerPiece color="w" king={false} size={28} />
+              <CheckerPiece color="w" king size={28} />
+              <CheckerPiece color="b" king size={28} />
+              <CheckerPiece color="b" king={false} size={28} />
+            </div>
+          }
+        />
       </div>
     );
   }
@@ -297,7 +291,9 @@ export default function Checkers({ onExit }: { onExit: () => void }) {
               color: thinking ? "var(--acc)" : "#fff", fontSize: 9.5, minWidth: 66, textAlign: "center",
             }}
           >
-            {thinking ? tr("ДУМАЕТ") : tr("ТВОЙ ХОД")}
+            {vs === "duo"
+              ? (pos.turn === "w" ? tr("ХОД БЕЛЫХ") : tr("ХОД ЧЁРНЫХ"))
+              : thinking ? tr("ДУМАЕТ") : tr("ТВОЙ ХОД")}
           </div>
         }
       />
@@ -372,9 +368,14 @@ export default function Checkers({ onExit }: { onExit: () => void }) {
                   />
                 )}
                 {pc && !hidden && (
-                  <div style={{ width: "88%", height: "88%", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <motion.div
+                    initial={lowFx ? false : { scale: 0.82, opacity: 0.4 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    transition={{ duration: 0.18, ease: EASE }}
+                    style={{ width: "88%", height: "88%", display: "flex", alignItems: "center", justifyContent: "center" }}
+                  >
                     <CheckerFit color={pc.color} king={pc.king} />
-                  </div>
+                  </motion.div>
                 )}
               </div>
             );
