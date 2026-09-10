@@ -2,6 +2,7 @@ import { Fragment, useEffect, useState } from "react";
 import { tr } from "../core/i18n";
 import { AnimatePresence, motion } from "framer-motion";
 import { useGame } from "../core/store";
+import { sfx, haptic } from "../core/fx";
 import { GAME_META } from "../core/content";
 import { EASE } from "../core/motion";
 import { fmt } from "../core/format";
@@ -34,7 +35,7 @@ export default function Home({
   onOpenProfile?: () => void;
   onOpen?: (page: SubPage) => void;
 }) {
-  const { s, mainFriend, levelPct, addCoins, toast } = useGame();
+  const { s, levelPct, addCoins, toast } = useGame();
   const rate = autoRate(s);
   const [showAd, setShowAd] = useState(false);
   const [adLeft, setAdLeft] = useState(() => bonusesLeft());
@@ -59,36 +60,18 @@ export default function Home({
 
   return (
     <Screen>
-      {/* Шапка: голова (тап — профиль), название, монеты */}
+      {/* Шапка: название, уровень, монеты.
+          Иконку персонажа слева убрали по просьбе пользователя — вход в
+          профиль остался на плашке уровня. */}
       <div
         className="flex items-center gap-3"
         style={{ paddingTop: "calc(var(--sat) + 14px)", marginBottom: 16 }}
       >
-        <Tap
-          onClick={() => onOpenProfile?.()}
-          r="md"
-          sound="click"
-          className="shrink-0 relative"
-          style={{ padding: 4, lineHeight: 0 }}
-        >
-          <HeadView friend={mainFriend} size={40} />
-          <span
-            className="t-num absolute flex items-center justify-center"
-            style={{
-              bottom: -2, right: -3, minWidth: 19, height: 19, padding: "0 5px",
-              borderRadius: 999, background: "var(--acc)", color: "var(--acc-ink)",
-              fontSize: 10, border: "2.5px solid var(--bg)",
-            }}
-          >
-            {s.level}
-          </span>
-        </Tap>
-
         <div className="flex-1 min-w-0">
           <h1
             className="t-display"
             style={{
-              fontSize: 21,
+              fontSize: 23,
               backgroundImage: "linear-gradient(94deg, var(--text) 30%, var(--acc))",
               WebkitBackgroundClip: "text",
               backgroundClip: "text",
@@ -97,22 +80,48 @@ export default function Home({
           >
             ЧУБУГЕЙМ
           </h1>
-          <div style={{ marginTop: 5 }}>
-            <Bar pct={levelPct} h={4} />
+          <div className="flex items-center" style={{ gap: 8, marginTop: 6 }}>
+            <button
+              type="button"
+              onClick={() => { sfx.click(); haptic("light"); onOpenProfile?.(); }}
+              className="t-num shrink-0"
+              style={{
+                padding: "2px 8px", borderRadius: 999,
+                background: "var(--acc)", color: "var(--acc-ink)", fontSize: 10.5,
+              }}
+            >
+              {tr("УР")} {s.level}
+            </button>
+            <span className="flex-1 min-w-0"><Bar pct={levelPct} h={4} /></span>
           </div>
         </div>
 
-        <Card r="md" className="shrink-0" style={{ padding: "8px 12px" }}>
+        {/* Тап по валюте — показывает её название (просьба пользователя) */}
+        <Tap
+          onClick={() => {
+            haptic("light");
+            toast({
+              title: tr("ЧУБКОИНЫ"),
+              sub: tr("Основная валюта: игры, магазин, кейсы"),
+              icon: "coin",
+              tone: "gold",
+            });
+          }}
+          r="md"
+          sound="click"
+          className="shrink-0"
+          style={{ padding: "8px 12px" }}
+        >
           <div className="flex items-center gap-1.5">
             <Icon name="coin" size={14} accent />
             <span className="t-num acc-text" style={{ fontSize: 15 }}>{fmt(s.coins)}</span>
           </div>
           {rate > 0 && (
             <div className="t-caption" style={{ fontSize: 10, marginTop: 1 }}>
-              +{fmt(rate)}/сек
+              +{fmt(rate)}/{tr("сек")}
             </div>
           )}
-        </Card>
+        </Tap>
       </div>
 
       {/* Сводка — сразу под шапкой */}

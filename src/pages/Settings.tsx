@@ -16,7 +16,7 @@ import {
 } from "../core/notify";
 import { upcomingBosses } from "../core/bosses";
 import { saveFileNative } from "../core/exportSave";
-import { isLowFx, measuredVerdict, readPerfMode, remeasure, writePerfMode, type PerfMode } from "../core/perf";
+
 import { tr } from "../core/i18n";
 import Icon, { type IconName } from "../ui/Icon";
 import { ACCENTS } from "../core/content";
@@ -28,12 +28,14 @@ import type { SubPage } from "../App";
 
 export default function Settings({
   onOpen,
+  onTab,
 }: {
   onOpen?: (page: SubPage) => void;
+  /** Перейти на вкладку нижнего меню — нужно ссылке «Магазин → Темы» */
+  onTab?: (tab: "home" | "progress" | "shop" | "friends" | "settings") => void;
 }) {
   const { s, set, hardReset, toast, t } = useGame();
   const [confirmReset, setConfirmReset] = useState(false);
-  const [perf, setPerf] = useState<PerfMode>(() => readPerfMode());
   const fileRef = useRef<HTMLInputElement>(null);
 
   const exportSave = async () => {
@@ -155,50 +157,8 @@ export default function Settings({
           onToggle={() => set((d) => { d.settings.fx = !d.settings.fx; })}
         />
         <Divider inset={14} />
-        <div style={{ padding: "13px 14px" }}>
-          <Seg
-            label={tr("Производительность")}
-            value={perf}
-            opts={[["auto", tr("Авто")], ["high", tr("Красиво")], ["low", tr("Быстро")]]}
-            onPick={(v) => {
-              const m = v as PerfMode;
-              setPerf(m);
-              writePerfMode(m);   // сам применит класс и сбросит замер
-              sfx.click();
-            }}
-          />
-          <div className="t-caption" style={{ padding: "0 0 2px" }}>
-            {perf === "auto"
-              ? measuredVerdict() === null
-                ? tr("Замеряю плавность первые секунды после запуска")
-                : isLowFx()
-                  ? tr("Телефон не тянул полное оформление — эффекты отключены")
-                  : tr("Телефон тянет всё — включено полное оформление")
-              : perf === "low"
-                ? tr("Без размытия, теней и анимаций — максимум скорости")
-                : tr("Всё оформление включено")}
-          </div>
-          {perf === "auto" && (
-            <button
-              type="button"
-              onClick={() => {
-                remeasure();
-                sfx.click();
-                // Замер идёт при следующем запуске: сейчас просто сбросили
-                setPerf("auto");
-              }}
-              className="t-label"
-              style={{
-                marginTop: 10, width: "100%", padding: "10px 8px",
-                borderRadius: "var(--r-sm)", background: "var(--btn-bg)",
-                border: "1px solid var(--btn-brd)", color: "var(--text)", fontSize: 9,
-              }}
-            >
-              {tr("ЗАМЕРИТЬ ЗАНОВО")}
-            </button>
-          )}
-        </div>
-
+        {/* Блок «Производительность» убран по просьбе пользователя:
+            режим и так определяется автозамером FPS при запуске. */}
         <Divider inset={14} />
         <Seg
           label={t("settings.language")}
@@ -209,7 +169,7 @@ export default function Settings({
         <Divider inset={14} />
         <div style={{ padding: "13px 14px" }}>
           <div className="t-title-sm" style={{ fontWeight: 600, marginBottom: 10 }}>
-            {t("settings.accent")}
+            {tr("Темы")}
           </div>
           <div className="flex flex-wrap" style={{ gap: 9 }}>
             {ACCENTS.filter((a) => s.ownedThemes.includes(a.id)).map((a) => {
@@ -234,8 +194,24 @@ export default function Settings({
               );
             })}
           </div>
-          <div className="t-caption" style={{ marginTop: 9 }}>{tr("Ещё цвета — в")}<span className="acc-text">{tr("Магазине → Темы")}</span>
-          </div>
+          {/* Была слитная строка «Ещё цвета — вМагазине → Темы» без пробела
+              и без перехода. Теперь это настоящая кнопка в магазин. */}
+          <button
+            type="button"
+            onClick={() => { sfx.click(); haptic("light"); onTab?.("shop"); }}
+            className="t-caption"
+            style={{
+              marginTop: 11, display: "inline-flex", alignItems: "center", gap: 6,
+              padding: "8px 12px", borderRadius: "var(--r-sm)",
+              background: "var(--btn-bg)", border: "1px solid var(--btn-brd)",
+              color: "var(--text)", textAlign: "left",
+            }}
+          >
+            {tr("Ещё цвета")}
+            {" — "}
+            <span className="acc-text" style={{ fontWeight: 700 }}>{tr("Магазин · Темы")}</span>
+            <Icon name="chevron" size={12} />
+          </button>
         </div>
       </Card>
 

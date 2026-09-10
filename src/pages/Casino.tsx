@@ -98,46 +98,67 @@ export default function Casino({ onBack }: { onBack: () => void }) {
         </button>
       }
     >
-      {/* Баланс жетонов */}
+      {/* Баланс жетонов.
+          Было: голая цифра, кнопка «+60» без пояснения и таймер «3:12»
+          без подписи — пользователь не понимал, что это вообще такое.
+          Стало: явные подписи «ЖЕТОНЫ КАЗИНО», «БЕСПЛАТНЫЕ ЖЕТОНЫ»
+          и текст «через 3:12». */}
       <Panel
         r="lg"
         style={{
-          padding: 14, marginBottom: 12,
-          border: "1.5px solid rgba(255,176,32,0.4)",
-          background: "rgba(255,176,32,0.06)",
+          padding: 15, marginBottom: 12,
+          border: "1.5px solid rgba(255,176,32,0.42)",
+          background: "rgba(255,176,32,0.07)",
         }}
       >
         <div className="flex items-center" style={{ gap: 12 }}>
           <span
             className="shrink-0 flex items-center justify-center"
             style={{
-              width: 42, height: 42, borderRadius: "var(--r-sm)",
-              background: "rgba(255,176,32,0.16)", color: "#FFB020",
+              width: 44, height: 44, borderRadius: "var(--r-sm)",
+              background: "rgba(255,176,32,0.18)", color: "#FFB020",
             }}
           >
-            <Icon name="ticket" size={20} />
+            <Icon name="ticket" size={21} />
           </span>
           <span className="flex-1 min-w-0">
-            <span className="t-label block">{tr("Жетоны")}</span>
-            <span className="t-num block acc-text" style={{ fontSize: 26, lineHeight: 1.1 }}>
+            <span className="t-label block" style={{ fontSize: 9 }}>{tr("ЖЕТОНЫ КАЗИНО")}</span>
+            <span className="t-num block" style={{ fontSize: 27, lineHeight: 1.1, color: "#FFB020" }}>
               {fmt(g.chips)}
             </span>
           </span>
-          {freeChipsReady(g) ? (
-            <Tap
-              onClick={takeFree}
-              accent r="sm" center
-              className="shrink-0 t-title"
-              style={{ fontSize: 12, padding: "10px 16px" }}
-              sound="coin"
-            >
-              +{FREE_CHIPS}
-            </Tap>
-          ) : (
-            <span className="t-num shrink-0" style={{ fontSize: 12, color: "var(--text-mute)" }}>
-              {mm}:{String(ss).padStart(2, "0")}
+        </div>
+
+        <div
+          className="flex items-center"
+          style={{
+            gap: 10, marginTop: 13, paddingTop: 12,
+            borderTop: "1px solid rgba(255,176,32,0.22)",
+          }}
+        >
+          <span className="flex-1 min-w-0">
+            <span className="t-label block" style={{ fontSize: 9 }}>{tr("БЕСПЛАТНЫЕ ЖЕТОНЫ")}</span>
+            <span className="t-caption block clip1" style={{ marginTop: 3 }}>
+              {freeChipsReady(g)
+                ? tr("Готовы — забирай")
+                : `${tr("через")} ${mm}:${String(ss).padStart(2, "0")}`}
             </span>
-          )}
+          </span>
+          <button
+            type="button"
+            onClick={takeFree}
+            disabled={!freeChipsReady(g)}
+            className="t-title shrink-0 flex items-center"
+            style={{
+              gap: 6, padding: "11px 16px", borderRadius: "var(--r-sm)", fontSize: 12.5,
+              background: freeChipsReady(g) ? "#FFB020" : "var(--surface-2)",
+              color: freeChipsReady(g) ? "#100c02" : "var(--text-mute)",
+              border: `1px solid ${freeChipsReady(g) ? "#FFB020" : "var(--btn-brd)"}`,
+            }}
+          >
+            <Icon name="ticket" size={14} />
+            {tr("ЗАБРАТЬ")} +{FREE_CHIPS}
+          </button>
         </div>
       </Panel>
 
@@ -732,6 +753,7 @@ function Upgrade({ g, save }: { g: GambleStore; save: (p: Partial<GambleStore>) 
   const [spinning, setSpinning] = useState(false);
   const [angle, setAngle] = useState(0);
   const [res, setRes] = useState<null | { zone: WheelZone; gained: number }>(null);
+  const [help, setHelp] = useState(false);
 
   const from = fromId ? itemById(fromId) : null;
   const mult = WHEEL_MULTS.find((m) => m.id === multId) ?? WHEEL_MULTS[1];
@@ -743,34 +765,59 @@ function Upgrade({ g, save }: { g: GambleStore; save: (p: Partial<GambleStore>) 
     if (fromId && !g.items[fromId]) setFromId(Object.keys(g.items)[0] ?? null);
   }, [g.items, fromId]);
 
-  const go = () => {
-    if (!from || spinning) return;
+  /**
+   * ЗАВИСАНИЕ КОЛЕСА — что было сломано.
+   *
+   * Раньше результат прокрутки лежал в `finishRef`, куда клали ЗНАЧЕНИЕ,
+   * ВОЗВРАЩЁННОЕ функцией `go()`. Если `go()` уходила в ранний `return`
+   * (нет предмета, повторный тап по «КРУТИТЬ» до того, как React применил
+   * `setSpinning(true)`), в реф попадал `null`. Колесо при этом уже
+   * стартовало, доезжало, дёргало `onDone` — а там `null?.()`, то есть
+   * ничего. `spinning` навсегда оставался `true`: кнопка «КРУТИТСЯ…»
+   * заблокирована, предметы не выбираются, выйти можно только сменой
+   * вкладки. Ровно жалоба «колесо зависло».
+   *
+   * Теперь итог прокрутки — обычный ref с данными (не с функцией),
+   * повторный запуск отсекается тем же рефом, а на случай, если кадры
+   * RAF вообще не пойдут (вкладка ушла в фон, слабый телефон), стоит
+   * страховочный таймер: он доведёт спин до конца в любом случае.
+   */
+  const pendingRef = useRef<null | { zone: WheelZone; itemId: string; staked: number; mult: number }>(null);
+  const guardRef = useRef(0);
+
+  const settle = useCallback(() => {
+    const p = pendingRef.current;
+    if (!p) return;
+    pendingRef.current = null;
+    window.clearTimeout(guardRef.current);
+
+    const gained = zonePayout(p.zone, p.staked, p.mult);
+    const items = { ...g.items };
+    items[p.itemId] = (items[p.itemId] || 1) - 1;
+    if (items[p.itemId] <= 0) delete items[p.itemId];
+    // Выигрыш и утешительные выплаты приходят жетонами: подбирать
+    // предмет ровно нужной цены не всегда возможно.
+    save({ items, chips: g.chips + gained });
+    setRes({ zone: p.zone, gained });
+    setSpinning(false);
+    wheelStopFeedback(p.zone === "win");
+  }, [g.items, g.chips, save]);
+
+  const start = () => {
+    if (!from || spinning || pendingRef.current) return;
     setRes(null);
     const r = spinTo(sectors, mult.mult);
+    pendingRef.current = { zone: r.zone, itemId: from.id, staked: from.value, mult: mult.mult };
     setAngle(r.angle);
     setSpinning(true);
     sfx.click();
-
-    // Итог начисляем, когда колесо реально доехало — иначе награда
-    // прилетает раньше, чем видно результат.
-    const finish = () => {
-      const staked = from.value;
-      const gained = zonePayout(r.zone, staked, mult.mult);
-      const items = { ...g.items };
-      items[from.id] = (items[from.id] || 1) - 1;
-      if (items[from.id] <= 0) delete items[from.id];
-      // Выигрыш и утешительные выплаты приходят жетонами: подбирать
-      // предмет ровно нужной цены не всегда возможно.
-      save({ items, chips: g.chips + gained });
-      setRes({ zone: r.zone, gained });
-      setSpinning(false);
-      wheelStopFeedback(r.zone === "win");
-    };
-    return finish;
+    // страховка: колесо обязано остановиться, даже если кадры не пришли
+    window.clearTimeout(guardRef.current);
+    guardRef.current = window.setTimeout(settle, (fast ? 1200 : 4200) + 1500);
   };
 
-  const finishRef = useRef<null | (() => void)>(null);
-  const start = () => { finishRef.current = go() ?? null; };
+  // если компонент размонтировали в середине спина — не оставляем таймер
+  useEffect(() => () => window.clearTimeout(guardRef.current), []);
 
   if (!owned.length) {
     return (
@@ -782,18 +829,49 @@ function Upgrade({ g, save }: { g: GambleStore; save: (p: Partial<GambleStore>) 
     );
   }
 
+  const zoneColor = (z: WheelZone) =>
+    z === "win" ? "var(--ok)" : z === "burn" ? "#FF6B8A" : "#FFB020";
+
   return (
     <>
-      {/* Правила — коротко и сразу, чтобы было понятно, что происходит */}
-      <Panel r="lg" style={{ padding: 13, marginBottom: 12 }}>
-        <div className="t-label" style={{ marginBottom: 7, fontSize: 9.5 }}>{tr("КАК ЭТО РАБОТАЕТ")}</div>
-        <div className="t-caption" style={{ lineHeight: 1.6, fontSize: 11 }}>
-          {tr("Ставишь предмет и выбираешь множитель. Зелёный сверху — забрал, оранжевый по бокам — вернулась часть, красный снизу — сгорело. Чем жирнее множитель, тем тоньше зелёный.")}
-        </div>
-      </Panel>
+      {/* Объяснение было простынёй на пол-экрана и оттесняло само колесо
+          вниз. Свернули в одну строку с раскрытием по тапу. */}
+      <button
+        type="button"
+        onClick={() => { sfx.click(); setHelp((v) => !v); }}
+        className="w-full flex items-center"
+        style={{
+          gap: 9, padding: "10px 13px", marginBottom: 10,
+          borderRadius: "var(--r-md)",
+          background: "var(--surface)", border: "1px solid var(--surface-brd)",
+          textAlign: "left",
+        }}
+      >
+        <Icon name="info" size={14} />
+        <span className="t-label flex-1" style={{ fontSize: 9.5 }}>{tr("КАК ЭТО РАБОТАЕТ")}</span>
+        <span style={{ transform: help ? "rotate(90deg)" : "none", transition: "transform .18s", lineHeight: 0 }}>
+          <Icon name="chevron" size={13} />
+        </span>
+      </button>
+      <AnimatePresence initial={false}>
+        {help && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            style={{ overflow: "hidden" }}
+          >
+            <Panel r="lg" style={{ padding: 13, marginBottom: 12 }}>
+              <div className="t-caption" style={{ lineHeight: 1.65, fontSize: 11.5 }}>
+                {tr("Ставишь предмет и выбираешь множитель. Зелёный сектор — забрал, оранжевый — вернулась часть жетонами, красный — сгорело. Чем жирнее множитель, тем тоньше зелёный сектор.")}
+              </div>
+            </Panel>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <Panel r="lg" style={{ padding: 15, marginBottom: 12 }}>
-        <div className="t-label" style={{ marginBottom: 9 }}>{tr("Что ставим")}</div>
+        <div className="t-label" style={{ marginBottom: 9 }}>{tr("1 · ЧТО СТАВИМ")}</div>
         <div className="flex flex-wrap" style={{ gap: 6, marginBottom: 16 }}>
           {owned.map(([id, n]) => {
             const it = itemById(id);
@@ -807,21 +885,26 @@ function Upgrade({ g, save }: { g: GambleStore; save: (p: Partial<GambleStore>) 
                 onClick={() => { sfx.click(); setFromId(id); setRes(null); }}
                 className="flex items-center"
                 style={{
-                  gap: 7, padding: "8px 11px", borderRadius: "var(--r-sm)",
-                  background: on ? "var(--surface)" : "var(--btn-bg)",
+                  gap: 7, padding: "9px 12px", borderRadius: "var(--r-sm)",
+                  // выбранный предмет заливаем его же цветом редкости,
+                  // а не «чуть светлее серого» — раньше выбор был не виден
+                  background: on
+                    ? `color-mix(in srgb, ${RARITY_COLOR[it.rarity]} 24%, var(--surface))`
+                    : "var(--btn-bg)",
                   border: `1.5px solid ${on ? RARITY_COLOR[it.rarity] : "var(--btn-brd)"}`,
-                  color: RARITY_COLOR[it.rarity],
-                  opacity: spinning ? 0.5 : 1,
+                  boxShadow: on ? `0 0 0 3px color-mix(in srgb, ${RARITY_COLOR[it.rarity]} 22%, transparent)` : "none",
+                  color: on ? "var(--text)" : RARITY_COLOR[it.rarity],
+                  opacity: spinning ? 0.45 : 1,
                 }}
               >
-                <ItemIcon id={id} size={17} />
-                <span className="t-num" style={{ fontSize: 11 }}>{n}</span>
+                <ItemIcon id={id} size={18} />
+                <span className="t-num" style={{ fontSize: 11.5 }}>×{n}</span>
               </button>
             );
           })}
         </div>
 
-        <div className="t-label" style={{ marginBottom: 9 }}>{tr("Множитель")}</div>
+        <div className="t-label" style={{ marginBottom: 9 }}>{tr("2 · МНОЖИТЕЛЬ")}</div>
         <div className="flex flex-wrap" style={{ gap: 6 }}>
           {WHEEL_MULTS.map((m) => {
             const on = multId === m.id;
@@ -832,15 +915,15 @@ function Upgrade({ g, save }: { g: GambleStore; save: (p: Partial<GambleStore>) 
                 disabled={spinning}
                 onClick={() => { sfx.click(); setMultId(m.id); setRes(null); }}
                 style={{
-                  padding: "9px 13px", borderRadius: "var(--r-sm)",
+                  padding: "9px 14px", borderRadius: "var(--r-sm)",
                   background: on ? "var(--acc)" : "var(--btn-bg)",
-                  color: on ? "var(--acc-ink)" : "var(--text-mute)",
+                  color: on ? "var(--acc-ink)" : "var(--text)",
                   border: `1.5px solid ${on ? "var(--acc)" : "var(--btn-brd)"}`,
-                  opacity: spinning ? 0.5 : 1,
+                  opacity: spinning ? 0.45 : 1,
                 }}
               >
-                <span className="t-num" style={{ fontSize: 12 }}>{m.label}</span>
-                <span className="t-label" style={{ fontSize: 8, display: "block", marginTop: 2, opacity: 0.75 }}>
+                <span className="t-num" style={{ fontSize: 12.5 }}>{m.label}</span>
+                <span className="t-label" style={{ fontSize: 8, display: "block", marginTop: 2, opacity: 0.8 }}>
                   {(winChance(m.mult) * 100).toFixed(0)}%
                 </span>
               </button>
@@ -856,7 +939,7 @@ function Upgrade({ g, save }: { g: GambleStore; save: (p: Partial<GambleStore>) 
             angle={angle}
             spinning={spinning}
             duration={fast ? 1200 : 4200}
-            onDone={() => finishRef.current?.()}
+            onDone={settle}
             centerLabel={`${(chance * 100).toFixed(0)}%`}
             centerSub={tr("ШАНС")}
           />
@@ -880,17 +963,21 @@ function Upgrade({ g, save }: { g: GambleStore; save: (p: Partial<GambleStore>) 
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0 }}
                 className="text-center"
-                style={{ marginBottom: 12 }}
+                style={{
+                  marginBottom: 12, padding: "11px 12px",
+                  borderRadius: "var(--r-md)",
+                  // цвет не только в анимации, но и в самом итоге —
+                  // сразу видно, выиграл ты или сгорело
+                  background: `color-mix(in srgb, ${zoneColor(res.zone)} 16%, var(--surface))`,
+                  border: `1.5px solid ${zoneColor(res.zone)}`,
+                }}
               >
-                <div
-                  className="t-title"
-                  style={{ fontSize: 15, color: res.zone === "win" ? "var(--ok)" : res.zone === "burn" ? "#FF6B8A" : "#FFB020" }}
-                >
+                <div className="t-title" style={{ fontSize: 15, color: zoneColor(res.zone) }}>
                   {tr(ZONE_LABEL[res.zone])}
                 </div>
                 {res.gained > 0 && (
-                  <div className="t-num acc-text" style={{ fontSize: 20, marginTop: 3 }}>
-                    +{fmt(res.gained)}
+                  <div className="t-num" style={{ fontSize: 21, marginTop: 3, color: "#FFB020" }}>
+                    +{fmt(res.gained)} <span className="t-label" style={{ fontSize: 9 }}>{tr("ЖЕТОНОВ")}</span>
                   </div>
                 )}
               </motion.div>
@@ -916,15 +1003,17 @@ function Upgrade({ g, save }: { g: GambleStore; save: (p: Partial<GambleStore>) 
             </span>
           </button>
 
-          <Tap
+          {/* Главная кнопка: раньше она была такой же серой, как всё
+              вокруг, и было «непонятно куда жать». */}
+          <button
+            type="button"
             onClick={start}
-            accent r="md" center
-            className="w-full py-3.5 t-title"
-            style={{ fontSize: 14, opacity: spinning ? 0.5 : 1 }}
-            sound="power"
+            disabled={spinning}
+            className="btn-acc w-full"
+            style={{ minHeight: 54, fontSize: 14.5, opacity: spinning ? 0.55 : 1 }}
           >
-            {spinning ? tr("КРУТИТСЯ…") : tr("КРУТИТЬ")}
-          </Tap>
+            {spinning ? tr("КРУТИТСЯ…") : `${tr("КРУТИТЬ")} · ${mult.label}`}
+          </button>
         </Panel>
       )}
     </>

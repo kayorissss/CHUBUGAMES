@@ -198,7 +198,7 @@ function Shell() {
     progress: <ProgressPage />,
     shop: <Shop />,
     friends: <Friends />,
-    settings: <Settings onOpen={setSub} />,
+    settings: <Settings onOpen={setSub} onTab={setTab} />,
   };
 
   return (
@@ -246,7 +246,15 @@ function Shell() {
         )}
       </AnimatePresence>
 
-      {!game && <Nav tab={tab} onTab={setTab} />}
+      {/* Нижнее меню видно и поверх подстраниц (казино, донат…),
+          поэтому переключение вкладки обязано закрывать подстраницу —
+          иначе тапы по вкладкам «не работают». */}
+      {!game && (
+        <Nav
+          tab={tab}
+          onTab={(next) => { setSub(null); setTab(next); }}
+        />
+      )}
 
       <AnimatePresence>
         {game && (
