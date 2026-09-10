@@ -13,6 +13,8 @@ import {
   type UpdateInfo,
 } from "../core/updater";
 import { APP_VERSION } from "../core/version";
+import { CHANGELOG } from "../core/changelog";
+import { cmpVer } from "./ChangelogView";
 
 const SKIP_KEY = "chubgames.skipVersion";
 
@@ -181,7 +183,28 @@ export default function UpdateBanner({
   };
 
   const pct = total > 0 ? Math.min(1, loaded / total) : 0;
-  const sections = info ? parseNotes(info.notes) : [];
+  /**
+   * Что нового.
+   *
+   * Тело релиза на GitHub описывает только САМУЮ свежую версию. Если
+   * человек сидит на 1.14.0, а вышла 1.20.0, из него он не узнает, что
+   * было в промежуточных. Поэтому: заголовок берём из релиза, а список
+   * пунктов достраиваем локальным changelog'ом по всем версиям между
+   * установленной и новой — он лежит в сборке и работает без интернета.
+   */
+  const sections = (() => {
+    if (!info) return [] as { head: string; items: string[] }[];
+    const remote = parseNotes(info.notes);
+    const skipped = Object.keys(CHANGELOG)
+      .sort(cmpVer)                                   // от новых к старым
+      .filter((v) => cmpVer(v, APP_VERSION) < 0)      // новее установленной
+      .filter((v) => CHANGELOG[v]?.length);
+    if (skipped.length <= 1) return remote;
+    return skipped.map((v) => ({
+      head: `${tr("Версия")} ${v}`,
+      items: (CHANGELOG[v] || []).map((it) => `${it.title} — ${it.text}`),
+    }));
+  })();
   const eta = speed > 0 && total > loaded ? Math.ceil((total - loaded) / speed) : 0;
 
   return (
@@ -195,59 +218,53 @@ export default function UpdateBanner({
           className="fixed inset-0 z-[110] flex flex-col"
           style={{ background: "var(--bg)" }}
         >
-          {/* ─── Шапка ─── */}
+          {/* ─── Шапка ───
+              Пересобрана: было три разнородных блока подряд (иконка+версия,
+              потом плашка «СЕЙЧАС → СТАНЕТ», потом размер) — рябило и
+              «болели глаза». Стало одно смысловое пятно: крупный номер
+              версии, под ним переход со старой и вес файла строкой. */}
           <div
             className="shrink-0"
             style={{
-              padding: "calc(var(--sat) + 18px) 18px 18px",
+              padding: "calc(var(--sat) + 26px) 20px 22px",
               background: "var(--surface)",
               borderBottom: "1px solid var(--surface-brd)",
             }}
           >
-            <div className="flex items-center" style={{ gap: 13 }}>
+            <div className="flex items-center" style={{ gap: 8, marginBottom: 16 }}>
               <span
-                className="ico-box ico-box-acc"
-                style={{ width: 46, height: 46, borderRadius: "var(--r-md)" }}
+                className="t-label"
+                style={{
+                  padding: "5px 10px", borderRadius: 999, fontSize: 8.5,
+                  letterSpacing: "0.14em",
+                  background: busy ? "var(--acc)" : "var(--ok-soft)",
+                  color: busy ? "var(--acc-ink)" : "var(--ok)",
+                  border: `1px solid ${busy ? "var(--acc)" : "var(--ok-brd)"}`,
+                }}
               >
-                <Icon name="download" size={22} />
-              </span>
-              <div className="min-w-0 flex-1">
-                <div className="t-label" style={{ fontSize: 9 }}>
-                  {busy ? tr("ЗАГРУЗКА") : tr("ДОСТУПНО ОБНОВЛЕНИЕ")}
-                </div>
-                <div className="t-display-sm clip1" style={{ fontSize: 20, marginTop: 3 }}>
-                  {tr("Версия")} {info.version}
-                </div>
-              </div>
-            </div>
-
-            {/* Что меняется: было → стало. Коротко и без лишних слов. */}
-            <div
-              className="flex items-center"
-              style={{
-                gap: 10, marginTop: 14, padding: "10px 12px",
-                borderRadius: "var(--r-md)",
-                background: "var(--surface-2)",
-                border: "1px solid var(--surface-brd)",
-              }}
-            >
-              <span className="min-w-0">
-                <span className="t-label block" style={{ fontSize: 8.5 }}>{tr("СЕЙЧАС")}</span>
-                <span className="t-num block clip1" style={{ fontSize: 14, marginTop: 2 }}>
-                  {APP_VERSION}
-                </span>
-              </span>
-              <span style={{ color: "var(--text-mute)", lineHeight: 0 }}>
-                <Icon name="chevron" size={14} />
-              </span>
-              <span className="min-w-0">
-                <span className="t-label block" style={{ fontSize: 8.5 }}>{tr("СТАНЕТ")}</span>
-                <span className="t-num acc-text block clip1" style={{ fontSize: 14, marginTop: 2 }}>
-                  {info.version}
-                </span>
+                {busy ? tr("ЗАГРУЗКА") : tr("ДОСТУПНО ОБНОВЛЕНИЕ")}
               </span>
               <span className="flex-1" />
               <span className="t-caption shrink-0">{fmtBytes(info.size)}</span>
+            </div>
+
+            <div
+              className="t-display"
+              style={{ fontSize: "clamp(30px, 10vw, 44px)", lineHeight: 1, letterSpacing: "-0.02em" }}
+            >
+              {info.version}
+            </div>
+
+            <div className="flex items-center" style={{ gap: 7, marginTop: 10 }}>
+              <span className="t-num" style={{ fontSize: 12, color: "var(--text-mute)" }}>
+                {APP_VERSION}
+              </span>
+              <span style={{ color: "var(--text-mute)", lineHeight: 0 }}>
+                <Icon name="chevron" size={12} />
+              </span>
+              <span className="t-num acc-text" style={{ fontSize: 12 }}>
+                {info.version}
+              </span>
             </div>
           </div>
 
@@ -264,21 +281,28 @@ export default function UpdateBanner({
             style={{ padding: "16px 18px 8px", minHeight: 0, overflowY: "auto" }}
           >
             {busy ? (
-              <div>
-                <div
-                  className="flex items-baseline justify-between"
-                  style={{ gap: 10, marginBottom: 9 }}
-                >
-                  <span className="t-num" style={{ fontSize: 30, lineHeight: 1 }}>
+              <div style={{ paddingTop: 8 }}>
+                {/* Процент — главное, что человек хочет видеть. Раньше он
+                    делил строку с байтами мелким кеглем. */}
+                <div className="text-center" style={{ marginBottom: 18 }}>
+                  <div
+                    className="t-num"
+                    style={{ fontSize: 58, lineHeight: 1, letterSpacing: "-0.03em" }}
+                  >
                     {Math.round(pct * 100)}
-                    <span className="t-label" style={{ fontSize: 12, marginLeft: 3 }}>%</span>
-                  </span>
-                  <span className="t-caption">
-                    {fmtBytes(loaded)}{total ? ` / ${fmtBytes(total)}` : ""}
-                  </span>
+                    <span className="t-label" style={{ fontSize: 17, marginLeft: 4 }}>%</span>
+                  </div>
+                  <div className="t-caption" style={{ marginTop: 8 }}>
+                    {fmtBytes(loaded)}{total ? ` ${tr("из")} ${fmtBytes(total)}` : ""}
+                  </div>
                 </div>
+
                 <ProgressLine pct={pct} />
-                <div className="flex items-center justify-between" style={{ gap: 10, marginTop: 9 }}>
+
+                <div
+                  className="flex items-center justify-between"
+                  style={{ gap: 10, marginTop: 12 }}
+                >
                   <span className="t-caption">
                     {speed > 0 ? `${fmtBytes(speed)}/${tr("с")}` : tr("соединяюсь")}
                   </span>
@@ -288,10 +312,11 @@ export default function UpdateBanner({
                     </span>
                   )}
                 </div>
+
                 <div
                   className="t-body"
                   style={{
-                    marginTop: 16, padding: "12px 13px",
+                    marginTop: 20, padding: "13px 14px",
                     borderRadius: "var(--r-md)",
                     background: "var(--surface)",
                     border: "1px solid var(--surface-brd)",

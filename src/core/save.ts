@@ -74,6 +74,7 @@ export function freshSave(): SaveState {
       fx: true, controls: "touchpad", difficulty: "normal",
       notifyUpdates: false,
       notifyBoss: false,
+      notifyNews: false,
     },
     unlockedGames: ALL_GAMES.slice(),
     stats: {

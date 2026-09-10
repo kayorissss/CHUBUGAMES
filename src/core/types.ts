@@ -102,6 +102,8 @@ export interface Settings {
   notifyUpdates: boolean;
   /** Напоминать, что заступил новый босс */
   notifyBoss: boolean;
+  /** Канал НОВИНКИ: ежедневки и события */
+  notifyNews: boolean;
 }
 
 export interface SaveState {

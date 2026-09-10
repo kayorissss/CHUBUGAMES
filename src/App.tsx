@@ -13,6 +13,8 @@ import {
   cancelBossNotifications,
   initNotificationsOnFirstRun,
   scheduleBossNotifications,
+  scheduleNewsNotifications,
+  cancelNewsNotifications,
   syncInstalledVersion,
 } from "./core/notify";
 import { upcomingBosses } from "./core/bosses";
@@ -221,6 +223,13 @@ function Shell() {
     if (s.settings.notifyBoss) void scheduleBossNotifications(upcomingBosses());
     else void cancelBossNotifications();
   }, [s.settings.notifyBoss]);
+
+  // Канал НОВИНКИ: напоминание про ежедневки. Перепланируем при запуске,
+  // потому что расписание ставится на неделю вперёд и постепенно расходуется.
+  useEffect(() => {
+    if (s.settings.notifyNews) void scheduleNewsNotifications();
+    else void cancelNewsNotifications();
+  }, [s.settings.notifyNews]);
 
   // системная кнопка/жест «назад» закрывает игру, а не приложение
   useEffect(() => {

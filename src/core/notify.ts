@@ -73,6 +73,8 @@ const ID = {
   update: 7001,
   /** боссам выделено 7100..7199: планируем несколько вперёд */
   bossBase: 7100,
+  /** новинки и ежедневки — 7200..7209 */
+  newsBase: 7200,
 };
 
 /* ───────────────────────── Плагины ───────────────────────── */
@@ -222,6 +224,57 @@ export async function scheduleBossNotifications(
   } catch {
     /* нет разрешения — молча пропускаем */
   }
+}
+
+/**
+ * Напоминания канала НОВИНКИ: ежедневки обновились, стрик горит.
+ *
+ * Канал «НОВИНКИ» существовал, но в него никто ничего не слал — то есть
+ * в настройках Android он был, а уведомлений по нему не приходило.
+ * Теперь раз в сутки в 19:00 напоминаем про ежедневные задания: это
+ * единственное, что реально протухает, и это не спам.
+ *
+ * Планируем на неделю вперёд: приложение может долго не открываться, а
+ * повторяющееся расписание Capacitor на Android ведёт себя неровно.
+ */
+export async function scheduleNewsNotifications(days = 7): Promise<void> {
+  const n = await notifications();
+  if (!n) return;
+  try {
+    const ids = Array.from({ length: 10 }, (_, i) => ({ id: ID.newsBase + i }));
+    await n.cancel({ notifications: ids });
+  } catch { /* нечего снимать */ }
+
+  const list: { id: number; channelId: string; title: string; body: string; schedule: { at: Date; allowWhileIdle: boolean } }[] = [];
+  const now = new Date();
+  for (let i = 0; i < Math.min(days, 10); i++) {
+    const at = new Date(now);
+    at.setDate(now.getDate() + i);
+    at.setHours(19, 0, 0, 0);
+    if (at.getTime() <= Date.now()) continue;   // сегодняшние 19:00 уже прошли
+    list.push({
+      id: ID.newsBase + i,
+      channelId: channelId("news"),
+      title: "Ежедневки ждут",
+      body: "Забери награду и не теряй стрик.",
+      schedule: { at, allowWhileIdle: true },
+    });
+  }
+  if (!list.length) return;
+  try {
+    await n.schedule({ notifications: list });
+  } catch { /* нет разрешения */ }
+}
+
+/** Снять напоминания канала НОВИНКИ */
+export async function cancelNewsNotifications(): Promise<void> {
+  const n = await notifications();
+  if (!n) return;
+  try {
+    await n.cancel({
+      notifications: Array.from({ length: 10 }, (_, i) => ({ id: ID.newsBase + i })),
+    });
+  } catch { /* нечего снимать */ }
 }
 
 /** Снять все запланированные напоминания о боссах */

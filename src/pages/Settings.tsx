@@ -13,6 +13,8 @@ import {
   notifyGranted,
   openSystemNotificationSettings,
   scheduleBossNotifications,
+  scheduleNewsNotifications,
+  cancelNewsNotifications,
 } from "../core/notify";
 import { upcomingBosses } from "../core/bosses";
 import { saveFileNative } from "../core/exportSave";
@@ -409,6 +411,30 @@ function NotifyBlock() {
     }
   };
 
+  const toggleNews = async () => {
+    if (busy) return;
+    if (s.settings.notifyNews) {
+      set((d) => { d.settings.notifyNews = false; });
+      void cancelNewsNotifications();
+      toast({ title: tr("Больше не напоминаю про ежедневки"), icon: "check" });
+      return;
+    }
+    setBusy(true);
+    try {
+      const ok = await ensurePerm();
+      await ensureChannels();
+      await scheduleNewsNotifications();
+      set((d) => { d.settings.notifyNews = true; });
+      toast(
+        ok
+          ? { title: tr("Напомню про ежедневки"), sub: tr("Каждый день в 19:00"), icon: "check", tone: "gold" }
+          : { title: tr("Включил напоминания"), sub: tr("Разреши уведомления в настройках телефона, чтобы они приходили"), icon: "warn" },
+      );
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const native = isNativeApp();
 
   return (
@@ -431,6 +457,14 @@ function NotifyBlock() {
         on={s.settings.notifyBoss}
         disabled={busy || !native}
         onToggle={() => { void toggleBoss(); }}
+      />
+      <Divider inset={14} />
+      <Toggle
+        label={tr("Новинки")}
+        hint={tr("Раз в день напомню про ежедневки и стрик")}
+        on={s.settings.notifyNews}
+        disabled={busy || !native}
+        onToggle={() => { void toggleNews(); }}
       />
       <Divider inset={14} />
       <div style={{ padding: "13px 14px" }}>

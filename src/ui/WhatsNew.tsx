@@ -1,11 +1,12 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { tr } from "../core/i18n";
 import { AnimatePresence, motion } from "framer-motion";
 import Icon from "./Icon";
 import { sfx, haptic } from "../core/fx";
 import { EASE } from "../core/motion";
 import { APP_VERSION } from "../core/version";
-import { CHANGELOG, type ChangeItem } from "../core/changelog";
+import { CHANGELOG } from "../core/changelog";
+import { cmpVer } from "./ChangelogView";
 import { SAVE_KEY } from "../core/save";
 
 const SEEN_KEY = "chubgames.seenVersion";
@@ -51,7 +52,35 @@ export default function WhatsNew() {
     setShow(false);
   };
 
-  const items: ChangeItem[] = CHANGELOG[APP_VERSION] || [];
+  /**
+   * НАКОПИТЕЛЬНЫЙ СПИСОК.
+   *
+   * Раньше показывались изменения только текущей версии. Если человек
+   * сидел на 1.14.0, а поставил 1.20.0, он видел один экран про 1.20.0 и
+   * не узнавал, что было в 1.15…1.19. Пользователь просил именно это:
+   * «я вижу что добавлено было в 1.15, 1.16, 1.17 и т.д.».
+   *
+   * Теперь берём ВСЕ версии, которые новее той, что человек видел в
+   * прошлый раз, и показываем их по группам, начиная со свежей.
+   */
+  const groups = useMemo(() => {
+    const seen = localStorage.getItem(SEEN_KEY);
+    const all = Object.keys(CHANGELOG).sort(cmpVer);   // от новых к старым
+    // Не знаем прошлую версию — показываем только текущую, чтобы не
+    // вываливать на человека всю историю проекта.
+    if (!seen) {
+      return [{ v: APP_VERSION, items: CHANGELOG[APP_VERSION] || [] }];
+    }
+    const list = all
+      .filter((v) => cmpVer(v, seen) < 0)   // строго новее виденной
+      .map((v) => ({ v, items: CHANGELOG[v] || [] }))
+      .filter((g) => g.items.length > 0);
+    return list.length
+      ? list
+      : [{ v: APP_VERSION, items: CHANGELOG[APP_VERSION] || [] }];
+  }, []);
+
+  const total = groups.reduce((n, g) => n + g.items.length, 0);
 
   return (
     <AnimatePresence>
@@ -93,51 +122,78 @@ export default function WhatsNew() {
               </div>
             </div>
             <div className="t-caption" style={{ marginTop: 12, lineHeight: 1.5 }}>
-              {tr("Вот что изменилось с прошлой версии")}
+              {groups.length > 1
+                ? `${tr("Пропущено версий")}: ${groups.length} · ${total} ${tr("изменений")}`
+                : tr("Вот что изменилось с прошлой версии")}
             </div>
           </div>
 
           {/* Список изменений */}
           <div className="flex-1 scroll" style={{ padding: "14px 18px 8px", minHeight: 0, overflowY: "auto" }}>
             <div className="flex flex-col" style={{ gap: 9 }}>
-              {items.map((it, i) => (
-                <motion.div
-                  key={i}
-                  initial={{ y: 12, opacity: 0 }}
-                  animate={{ y: 0, opacity: 1 }}
-                  transition={{ delay: Math.min(i, 8) * 0.05, duration: 0.28, ease: EASE }}
-                  className="flex items-start"
-                  style={{
-                    gap: 11,
-                    padding: "12px 13px",
-                    borderRadius: "var(--r-lg)",
-                    background: "var(--surface)",
-                    border: "1px solid var(--surface-brd)",
-                  }}
-                >
-                  <span
-                    className={`ico-box ${it.fix ? "" : "ico-box-acc"}`}
-                    style={{
-                      width: 32,
-                      height: 32,
-                      ...(it.fix
-                        ? {
-                            background: "var(--ok-soft)",
-                            borderColor: "var(--ok-brd)",
-                            color: "var(--ok)",
-                          }
-                        : null),
-                    }}
-                  >
-                    <Icon name={it.icon} size={16} />
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <div className="t-title-sm" style={{ fontSize: 13.5 }}>{it.title}</div>
-                    <div className="t-caption" style={{ marginTop: 3, lineHeight: 1.5 }}>
-                      {it.text}
+              {groups.map((grp, gi) => (
+                <div key={grp.v} className="flex flex-col" style={{ gap: 9 }}>
+                  {/* Заголовок версии нужен только когда версий несколько */}
+                  {groups.length > 1 && (
+                    <div
+                      className="flex items-center"
+                      style={{ gap: 9, marginTop: gi === 0 ? 0 : 8 }}
+                    >
+                      <span
+                        className="t-num"
+                        style={{
+                          padding: "4px 10px", borderRadius: 999, fontSize: 11.5,
+                          background: gi === 0 ? "var(--acc)" : "var(--surface-2)",
+                          color: gi === 0 ? "var(--acc-ink)" : "var(--text-dim)",
+                          border: `1px solid ${gi === 0 ? "var(--acc)" : "var(--surface-brd)"}`,
+                        }}
+                      >
+                        {grp.v}
+                      </span>
+                      <span style={{ flex: 1, height: 1, background: "var(--surface-brd)" }} />
                     </div>
-                  </div>
-                </motion.div>
+                  )}
+
+                  {grp.items.map((it, i) => (
+                    <motion.div
+                      key={`${grp.v}-${i}`}
+                      initial={{ y: 12, opacity: 0 }}
+                      animate={{ y: 0, opacity: 1 }}
+                      transition={{ delay: Math.min(i + gi * 2, 8) * 0.045, duration: 0.28, ease: EASE }}
+                      className="flex items-start"
+                      style={{
+                        gap: 11,
+                        padding: "12px 13px",
+                        borderRadius: "var(--r-lg)",
+                        background: "var(--surface)",
+                        border: "1px solid var(--surface-brd)",
+                      }}
+                    >
+                      <span
+                        className={`ico-box ${it.fix ? "" : "ico-box-acc"}`}
+                        style={{
+                          width: 32,
+                          height: 32,
+                          ...(it.fix
+                            ? {
+                                background: "var(--ok-soft)",
+                                borderColor: "var(--ok-brd)",
+                                color: "var(--ok)",
+                              }
+                            : null),
+                        }}
+                      >
+                        <Icon name={it.icon} size={16} />
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <div className="t-title-sm" style={{ fontSize: 13.5 }}>{it.title}</div>
+                        <div className="t-caption" style={{ marginTop: 3, lineHeight: 1.5 }}>
+                          {it.text}
+                        </div>
+                      </div>
+                    </motion.div>
+                  ))}
+                </div>
               ))}
             </div>
           </div>
