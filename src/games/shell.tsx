@@ -578,9 +578,32 @@ export function GameOver({
                 {tr("НОВЫЙ РЕКОРД")}
               </motion.div>
             )}
-            <div className="t-display" style={{ fontSize: 32, lineHeight: 1.1 }}>{title}</div>
+            {/* Заголовок и подпись раньше жили с фиксированным кеглем:
+                длинные слова («ПРИЗЕМЛИЛСЯ», «ПРОРВАЛИСЬ») и подписи вроде
+                «Волн: 12 · лучшая серия: 34» вылезали за карточку на узких
+                экранах. Кегль теперь резиновый, перенос разрешён. */}
+            <div
+              className="t-display"
+              style={{
+                fontSize: "clamp(23px, 7.4vw, 32px)",
+                lineHeight: 1.1,
+                overflowWrap: "anywhere",
+                hyphens: "auto",
+              }}
+            >
+              {title}
+            </div>
             {sub && (
-              <div className="t-body" style={{ marginTop: 5 }}>{sub}</div>
+              <div
+                className="t-body"
+                style={{
+                  marginTop: 6, lineHeight: 1.45,
+                  overflowWrap: "anywhere",
+                  maxWidth: "100%",
+                }}
+              >
+                {sub}
+              </div>
             )}
 
             <div style={{ marginTop: 18 }}>

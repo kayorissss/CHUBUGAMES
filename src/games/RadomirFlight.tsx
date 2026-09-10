@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence } from "framer-motion";
 import { useGame } from "../core/store";
+import { tr } from "../core/i18n";
 import { sfx, haptic } from "../core/fx";
 import { useCanvas, GameHUD, GameOver, Countdown } from "./shell";
 import { drawHead } from "../core/head";
@@ -28,8 +29,25 @@ export default function RadomirFlight({ onExit }: { onExit: () => void }) {
 
   const best = s.games.flap?.best || 0;
   const diff = s.settings.difficulty;
-  const GAP = diff === "insane" ? 0.27 : diff === "chill" ? 0.4 : 0.33;
-  const SPEED = diff === "insane" ? 0.3 : diff === "chill" ? 0.19 : 0.24;
+  /**
+   * Числа пересчитаны, а не подобраны на глаз (/tmp/flight2.mjs).
+   *
+   * Как было: проёмы ставились в полосе 0.24…0.76 (разброс 0.52), а тяга
+   * давала максимум 0.00075 доли высоты в мс. На normal перелёт из самого
+   * нижнего проёма в самый верхний занимал 935 мс при окне между воротами
+   * 930 мс — то есть запас −5 мс, на insane −275 мс. Игрок физически не
+   * успевал, полёт ощущался «тяжёлым и кривым».
+   *
+   * Стало: проёмы разнесены слабее и по-разному на разных сложностях,
+   * тяга и падение бодрее, ворота чуть дальше друг от друга. Запас на
+   * манёвр: chill 683 мс, normal 385 мс, insane 155 мс.
+   */
+  const GAP = diff === "insane" ? 0.29 : diff === "chill" ? 0.42 : 0.35;
+  const SPEED = diff === "insane" ? 0.275 : diff === "chill" ? 0.185 : 0.225;
+  /** Разброс центров проёмов по высоте */
+  const SPREAD = diff === "insane" ? 0.38 : diff === "chill" ? 0.5 : 0.44;
+  /** Множитель расстояния между воротами (в ширинах экрана) */
+  const SPACING_K = diff === "insane" ? 0.68 : diff === "chill" ? 0.72 : 0.7;
 
   const G = useRef({
     y: 0.5,          // 0..1 позиция героя
@@ -103,12 +121,12 @@ export default function RadomirFlight({ onExit }: { onExit: () => void }) {
       const HERO_R = Math.min(26, w * 0.075);
 
       if (g.running) {
-        // тяга/гравитация
-        // ускорение в долях высоты за мс²
-        g.v += (g.thrust ? -0.0000032 : 0.0000024) * dt;
-        g.v = Math.max(-0.00075, Math.min(0.00075, g.v));
+        // тяга/гравитация; ускорение в долях высоты за мс²
+        g.v += (g.thrust ? -0.0000042 : 0.0000032) * dt;
+        g.v = Math.max(-0.00095, Math.min(0.00095, g.v));
         g.y += g.v * dt;
-        g.tilt += ((g.thrust ? -0.35 : 0.42) - g.tilt) * Math.min(1, dt * 0.006);
+        // наклон догоняет плавнее (было 0.006 — герой «щёлкал» между углами)
+        g.tilt += ((g.thrust ? -0.32 : 0.4) - g.tilt) * Math.min(1, dt * 0.0042);
 
         // потолок и пол
         if (g.y < 0.05) { g.y = 0.05; g.v = 0; }
@@ -116,12 +134,20 @@ export default function RadomirFlight({ onExit }: { onExit: () => void }) {
 
         // ворота
         g.dist += SPEED * dt;
-        const spacing = w * 0.62;
+        const spacing = w * SPACING_K;
         const lastX = g.gates.length ? g.gates[g.gates.length - 1].x : w * 0.9;
         if (lastX < w + spacing) {
           g.gates.push({
             x: lastX + spacing,
-            gapY: 0.24 + Math.random() * 0.52,
+            // центр проёма держим в полосе SPREAD вокруг середины и не
+            // даём соседним воротам прыгать с края на край
+            gapY: (() => {
+              const lo = 0.5 - SPREAD / 2;
+              const prev = g.gates.length ? g.gates[g.gates.length - 1].gapY : 0.5;
+              const want = lo + Math.random() * SPREAD;
+              const step = SPREAD * 0.62;   // максимальный скачок между воротами
+              return Math.max(lo, Math.min(lo + SPREAD, prev + Math.max(-step, Math.min(step, want - prev))));
+            })(),
             gap: GAP,
             passed: false,
           });
@@ -154,8 +180,8 @@ export default function RadomirFlight({ onExit }: { onExit: () => void }) {
 
         // след
         g.trail.push({ x: HERO_X, y: g.y * h, a: 1 });
-        if (g.trail.length > 16) g.trail.shift();
-        for (const p of g.trail) { p.a -= dt * 0.0022; p.x -= SPEED * dt * 0.5; }
+        if (g.trail.length > 22) g.trail.shift();
+        for (const p of g.trail) { p.a -= dt * 0.0016; p.x -= SPEED * dt * 0.72; }
       }
       if (g.shake > 0) g.shake = Math.max(0, g.shake - dt * 0.05);
 
@@ -247,10 +273,10 @@ export default function RadomirFlight({ onExit }: { onExit: () => void }) {
         ctx.fillStyle = "rgba(255,255,255,0.5)";
         ctx.font = "600 13px Inter, system-ui, sans-serif";
         ctx.textAlign = "center";
-        ctx.fillText("Держи палец — летишь вверх. Отпусти — вниз.", w / 2, h - 40);
+        ctx.fillText(tr("Держи палец — летишь вверх. Отпусти — вниз."), w / 2, h - 40);
       }
     },
-    [phase, mainFriend],
+    [phase, mainFriend, GAP, SPEED, SPREAD, SPACING_K],
   );
 
   const hold = (on: boolean) => {
@@ -284,8 +310,8 @@ export default function RadomirFlight({ onExit }: { onExit: () => void }) {
           xp={result.xp}
           onRetry={restart}
           onExit={onExit}
-          title="ПРИЗЕМЛИЛСЯ"
-          sub="Радомир стесняется, но не летает"
+          title={tr("ПРИЗЕМЛИЛСЯ")}
+          sub={`${tr("Проёмов пройдено")}: ${result.score}`}
         />
       )}
     </div>
