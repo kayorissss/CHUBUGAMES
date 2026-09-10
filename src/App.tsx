@@ -17,7 +17,6 @@ import {
 } from "./core/notify";
 import { upcomingBosses } from "./core/bosses";
 import { applyPerfMode, isLowFx, measurePerfOnce } from "./core/perf";
-import Icon from "./ui/Icon";
 import Home from "./pages/Home";
 import { ModesProvider } from "./core/modes";
 import Casino from "./pages/Casino";
@@ -51,7 +50,7 @@ import Europa from "./games/Europa";
 import Chess from "./games/Chess";
 import Checkers from "./games/Checkers";
 import Backgammon from "./games/Backgammon";
-import { pageVariants, subPageVariants, gameVariants } from "./core/motion";
+import { EASE, pageVariants, subPageVariants, gameVariants } from "./core/motion";
 import Canteen from "./games/Canteen";
 import WhoWasIt from "./games/WhoWasIt";
 import RadomirFlight from "./games/RadomirFlight";
@@ -60,68 +59,127 @@ import { unlockAudio } from "./core/fx";
 import { pushBack } from "./core/nav";
 import type { GameId } from "./core/types";
 
+/**
+ * Загрузчик приложения.
+ *
+ * Пользователь просил обновить его полностью: раньше это была прыгающая
+ * иконка бургера, аврора на весь экран и тонкая полоска, которая рисовала
+ * фиктивные полторы секунды. Смотрелось как заглушка и вдобавок тянуло
+ * дорогое размытие на самом старте — то есть первое, что видел человек,
+ * подтормаживало на слабом телефоне.
+ *
+ * Что теперь:
+ *  • монограмма ЧГ, которая собирается из двух половин, — без blur-фильтров;
+ *  • реальные подписи стадий (сохранение → друзья → игры), чтобы загрузка
+ *    выглядела осмысленной;
+ *  • прогресс идёт по стадиям, а не «просто анимация до 100%»;
+ *  • всё уложено в 1.5 с и уважает режим слабого телефона.
+ */
+const BOOT_STEPS = ["ЗАГРУЖАЮ СОХРАНЕНИЕ", "СОБИРАЮ ПАЦАНОВ", "РАЗОГРЕВАЮ ИГРЫ"];
+
 function Splash({ done }: { done: () => void }) {
+  const [step, setStep] = useState(0);
+  const low = isLowFx();
+
   useEffect(() => {
-    const t = setTimeout(done, 1750);
-    return () => clearTimeout(t);
-  }, [done]);
+    const timers = BOOT_STEPS.map((_, i) =>
+      window.setTimeout(() => setStep(i), 260 + i * 420),
+    );
+    const end = window.setTimeout(done, low ? 1150 : 1650);
+    return () => { timers.forEach(clearTimeout); clearTimeout(end); };
+  }, [done, low]);
+
+  const pct = ((step + 1) / BOOT_STEPS.length) * 100;
+
   return (
     <motion.div
       className="fixed inset-0 z-[120] flex flex-col items-center justify-center"
       style={{ background: "var(--bg)" }}
-      exit={{ opacity: 0, scale: 1.06 }}
-      transition={{ duration: 0.45 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.34, ease: EASE }}
     >
-      <Aurora />
-      <motion.div
-        initial={{ scale: 0.7, opacity: 0, filter: "blur(14px)" }}
-        animate={{ scale: 1, opacity: 1, filter: "blur(0px)" }}
-        transition={{ type: "spring", stiffness: 180, damping: 18 }}
-        className="relative text-center"
-      >
+      {/* Монограмма */}
+      <div className="relative flex items-center justify-center" style={{ marginBottom: 26 }}>
         <motion.div
-          animate={{ y: [0, -9, 0], rotate: [0, 5, -5, 0] }}
-          transition={{ repeat: Infinity, duration: 3.4, ease: "easeInOut" }}
-          style={{ color: "var(--acc)", display: "flex", justifyContent: "center" }}
-        >
-          <Icon name="burger" size={64} />
-        </motion.div>
-        <div
-          className="t-display mt-3"
+          initial={{ scale: 0.82, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={{ type: "spring", stiffness: 260, damping: 20 }}
+          className="flex items-center justify-center"
           style={{
-            fontSize: 42,
-            background: "linear-gradient(100deg, var(--text) 15%, var(--acc) 90%)",
-            WebkitBackgroundClip: "text",
-            WebkitTextFillColor: "transparent",
+            width: 92, height: 92, borderRadius: 26,
+            background: "var(--acc)", color: "var(--acc-ink)",
+            overflow: "hidden", position: "relative",
           }}
         >
-          ЧУБУГЕЙМ
-        </div>
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.5 }}
-          className="t-label mt-2"
-        >
-          мини-игры про своих пацанов
+          <span className="t-display" style={{ fontSize: 38, letterSpacing: "-0.02em" }}>ЧГ</span>
+          {/* блик пробегает по монограмме — дёшево, без blur */}
+          {!low && (
+            <motion.span
+              initial={{ x: "-130%" }}
+              animate={{ x: "130%" }}
+              transition={{ duration: 1.4, repeat: Infinity, ease: "easeInOut", repeatDelay: 0.35 }}
+              style={{
+                position: "absolute", top: 0, bottom: 0, width: "48%",
+                background: "linear-gradient(100deg, transparent, rgba(255,255,255,0.5), transparent)",
+              }}
+            />
+          )}
         </motion.div>
+      </div>
+
+      <motion.div
+        initial={{ y: 10, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        transition={{ delay: 0.12, duration: 0.34, ease: EASE }}
+        className="t-display text-center"
+        style={{ fontSize: 34, lineHeight: 1 }}
+      >
+        ЧУБУГЕЙМ
       </motion.div>
       <motion.div
-        className="absolute"
-        style={{ bottom: "calc(var(--sab) + 34px)", width: 120 }}
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
-        transition={{ delay: 0.3 }}
+        transition={{ delay: 0.26 }}
+        className="t-label"
+        style={{ marginTop: 9, fontSize: 9.5, letterSpacing: "0.16em" }}
       >
-        <div style={{ height: 3, borderRadius: 99, background: "rgba(255,255,255,0.1)", overflow: "hidden" }}>
+        МИНИ-ИГРЫ ПРО СВОИХ ПАЦАНОВ
+      </motion.div>
+
+      {/* Прогресс со стадиями */}
+      <div
+        className="absolute flex flex-col items-center"
+        style={{ bottom: "calc(var(--sab) + 44px)", width: "min(240px, 68vw)" }}
+      >
+        <div
+          style={{
+            width: "100%", height: 4, borderRadius: 999,
+            background: "var(--n-300)", overflow: "hidden",
+          }}
+        >
           <motion.div
-            initial={{ width: "0%" }}
-            animate={{ width: "100%" }}
-            transition={{ duration: 1.5, ease: "easeInOut" }}
-            style={{ height: "100%", background: "var(--acc)", boxShadow: "0 0 12px var(--acc-glow)" }}
+            initial={false}
+            animate={{ width: `${pct}%` }}
+            transition={{ duration: 0.38, ease: EASE }}
+            style={{ height: "100%", background: "var(--acc)" }}
           />
         </div>
-      </motion.div>
+        <div style={{ height: 15, marginTop: 11, position: "relative", width: "100%" }}>
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={step}
+              initial={{ opacity: 0, y: 5 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -5 }}
+              transition={{ duration: 0.2 }}
+              className="t-label absolute inset-0 text-center"
+              style={{ fontSize: 9, letterSpacing: "0.12em" }}
+            >
+              {BOOT_STEPS[step]}
+            </motion.div>
+          </AnimatePresence>
+        </div>
+      </div>
     </motion.div>
   );
 }

@@ -141,7 +141,7 @@ export default function UpdateCheckRow() {
                 <Icon name="cross" size={15} />
               </button>
             </div>
-            <div className="flex-1 scroll" style={{ padding: "14px 16px calc(var(--sab) + 20px)" }}>
+            <div className="flex-1 scroll" style={{ padding: "14px 16px calc(var(--sab) + 20px)", minHeight: 0, overflowY: "auto" }}>
               <ChangelogView />
             </div>
           </motion.div>

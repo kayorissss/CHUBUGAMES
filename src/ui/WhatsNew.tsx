@@ -98,7 +98,7 @@ export default function WhatsNew() {
           </div>
 
           {/* Список изменений */}
-          <div className="flex-1 scroll" style={{ padding: "14px 18px 8px" }}>
+          <div className="flex-1 scroll" style={{ padding: "14px 18px 8px", minHeight: 0, overflowY: "auto" }}>
             <div className="flex flex-col" style={{ gap: 9 }}>
               {items.map((it, i) => (
                 <motion.div
