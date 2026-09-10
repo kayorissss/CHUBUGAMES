@@ -99,9 +99,23 @@ function ProgressRing({ pct, size = 148 }: { pct: number; size?: number }) {
  * Проверка запускается один раз при старте и молча ничего не делает,
  * если сети нет или версия уже последняя.
  */
-export default function UpdateBanner() {
+export default function UpdateBanner({
+  external = null,
+  onClose,
+}: {
+  /** Обновление, найденное снаружи (кнопка «Проверить» в настройках).
+   *  Если передано — показываем этот же полноэкранный экран, а не
+   *  маленькую карточку с другим оформлением. */
+  external?: UpdateInfo | null;
+  onClose?: () => void;
+} = {}) {
   const { toast } = useGame();
-  const [info, setInfo] = useState<UpdateInfo | null>(null);
+  const [found, setFound] = useState<UpdateInfo | null>(null);
+  const info = external ?? found;
+  const setInfo = (v: UpdateInfo | null) => {
+    if (external) { if (!v) onClose?.(); }
+    else setFound(v);
+  };
   const [busy, setBusy] = useState(false);
   const [loaded, setLoaded] = useState(0);
   const [total, setTotal] = useState(0);
@@ -111,18 +125,21 @@ export default function UpdateBanner() {
   const [speed, setSpeed] = useState(0);
 
   useEffect(() => {
+    // Когда обновление пришло снаружи, своя проверка не нужна.
+    if (external) return;
     let alive = true;
     // небольшая задержка, чтобы не мешать сплэшу
     const t = setTimeout(async () => {
-      const found = await checkQuietly();
-      if (!alive || !found) return;
-      if (localStorage.getItem(SKIP_KEY) === found.version) return;
-      setInfo(found);
+      const got = await checkQuietly();
+      if (!alive || !got) return;
+      if (localStorage.getItem(SKIP_KEY) === got.version) return;
+      setFound(got);
       sfx.achieve?.();
       haptic("light");
     }, 2600);
     return () => { alive = false; clearTimeout(t); };
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [external]);
 
   const install = async () => {
     if (!info) return;
@@ -162,7 +179,9 @@ export default function UpdateBanner() {
 
   const later = () => {
     if (busy) { abort.current?.abort(); setBusy(false); return; }
-    if (info) localStorage.setItem(SKIP_KEY, info.version);
+    // Пропуск версии запоминаем только для автоматического показа: если
+    // человек сам нажал «Проверить», он просто закрывает окно.
+    if (info && !external) localStorage.setItem(SKIP_KEY, info.version);
     setInfo(null);
   };
 
@@ -331,7 +350,7 @@ export default function UpdateBanner() {
                 </Button>
               )}
               <Button variant="secondary" full onClick={later} sound="none">
-                {busy ? "Отменить загрузку" : tr("Позже")}
+                {busy ? tr("Отменить загрузку") : external ? tr("Закрыть") : tr("Позже")}
               </Button>
             </div>
           </div>

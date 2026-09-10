@@ -22,6 +22,8 @@ export interface BossDef {
   quote: string;
   /** Реплики во время боя */
   taunts: string[];
+  /** Запас здоровья. Втрое выше «интуитивного»: при прежних значениях бой
+   *  заканчивался за 3-5 секунд тапания и блок ни на что не влиял. */
   hp: number;
   /** Урон за одну атаку по игроку */
   dmg: number;
@@ -45,10 +47,10 @@ export const BOSSES: BossDef[] = [
       "Комендантский час, забыл?",
       "Ещё слово — и родителям звоню.",
     ],
-    hp: 260,
+    hp: 780,
     dmg: 12,
     every: 1500,
-    reward: { coins: 9000, chips: 120, xp: 340 },
+    reward: { coins: 14000, chips: 180, xp: 520 },
     gimmick: "tank",
     look: {
       skin: "#f2cdaa", hair: "#4a3222", hairStyle: 10, eyes: "#5a4030",
@@ -67,10 +69,10 @@ export const BOSSES: BossDef[] = [
       "Молча. Просто молча.",
       "Я таких, как ты, видела сотни.",
     ],
-    hp: 320,
+    hp: 960,
     dmg: 15,
     every: 1300,
-    reward: { coins: 11000, chips: 150, xp: 400 },
+    reward: { coins: 17000, chips: 220, xp: 620 },
     gimmick: "sleep",
     look: {
       skin: "#e8c9a8", hair: "#5a5148", hairStyle: 9, eyes: "#4a4a44",
@@ -89,10 +91,10 @@ export const BOSSES: BossDef[] = [
       "Возьми пирожок, я испекла.",
       "Ой, ну не расстраивайся.",
     ],
-    hp: 200,
+    hp: 600,
     dmg: 8,
     every: 1800,
-    reward: { coins: 7000, chips: 100, xp: 280 },
+    reward: { coins: 11000, chips: 150, xp: 430 },
     gimmick: "kind",
     look: {
       skin: "#f8d8c0", hair: "#ff8fc0", hairStyle: 11, eyes: "#7a5a8a",
@@ -111,10 +113,10 @@ export const BOSSES: BossDef[] = [
       "Ты сам виноват.",
       "Держись, сейчас пройдёт.",
     ],
-    hp: 280,
+    hp: 840,
     dmg: 14,
     every: 1400,
-    reward: { coins: 10000, chips: 130, xp: 360 },
+    reward: { coins: 15500, chips: 195, xp: 560 },
     gimmick: "gas",
     look: {
       skin: "#eec9a4", hair: "#161210", hairStyle: 9, eyes: "#2e2620",

@@ -2,13 +2,15 @@ import { useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { useGame } from "../core/store";
 import { Card, Button, SectionTitle, Screen, Divider } from "../ui/Glass";
-import Updater from "../ui/Updater";
+import UpdateCheckRow from "../ui/UpdateCheckRow";
 import {
   askNotifyPermission,
   disableBackgroundCheck,
   enableBackgroundCheck,
   isNativeApp,
+  notifyGranted,
 } from "../core/notify";
+import { saveFileNative } from "../core/exportSave";
 import { tr } from "../core/i18n";
 import Icon, { type IconName } from "../ui/Icon";
 import { ACCENTS } from "../core/content";
@@ -30,6 +32,27 @@ export default function Settings({
   const exportSave = async () => {
     const data = localStorage.getItem(SAVE_KEY) || "{}";
     const name = `chubgames-save-${new Date().toISOString().slice(0, 10)}.json`;
+
+    // 0) На телефоне пишем файл нативно и открываем системное «Поделиться».
+    //    В WebView Android нет ни showSaveFilePicker, ни скачивания по ссылке
+    //    blob:, поэтому раньше кнопка просто молчала.
+    if (isNativeApp()) {
+      const res = await saveFileNative(name, data);
+      if (res.ok) {
+        sfx.buy();
+        haptic("success");
+        toast({
+          title: tr("Сохранение выгружено"),
+          sub: res.where,
+          icon: "download",
+          tone: "gold",
+        });
+      } else if (res.reason !== "cancelled") {
+        sfx.error();
+        toast({ title: tr("Не удалось выгрузить"), sub: res.reason, tone: "bad" });
+      }
+      return;
+    }
 
     // 1) Системный «Сохранить как» — пользователь сам выбирает папку
     const picker = (window as any).showSaveFilePicker;
@@ -100,6 +123,14 @@ export default function Settings({
 
   return (
     <Screen title={t("settings.title")}>
+      <SectionTitle>{t("settings.update")}</SectionTitle>
+      <Card r="lg" style={{ marginBottom: 12, padding: 0, overflow: "hidden" }}>
+        <UpdateCheckRow />
+      </Card>
+      <Card r="lg" style={{ marginBottom: 22, overflow: "hidden" }}>
+        <NotifyToggle />
+      </Card>
+
       <SectionTitle>{t("settings.appearance")}</SectionTitle>
       <Card r="lg" style={{ marginBottom: 22, overflow: "hidden" }}>
         <Seg
@@ -178,14 +209,6 @@ export default function Settings({
         />
       </Card>
 
-      <SectionTitle>{t("settings.update")}</SectionTitle>
-      <div style={{ marginBottom: 12 }}>
-        <Updater />
-      </div>
-      <Card r="lg" style={{ marginBottom: 22, overflow: "hidden" }}>
-        <NotifyToggle />
-      </Card>
-
       <SectionTitle>{tr("Инструменты")}</SectionTitle>
       <Card r="lg" style={{ padding: 0, marginBottom: 22, overflow: "hidden" }}>
         <NavRow
@@ -258,7 +281,7 @@ export default function Settings({
             <Icon name="burger" size={22} />
           </div>
           <div className="min-w-0 flex-1">
-            <div className="t-title-sm">Чубуков Иван Сергеевич</div>
+            <div className="t-title-sm">KAYORISAN</div>
             <div className="t-caption" style={{ marginTop: 2 }}>
               {t("settings.author")}
             </div>
@@ -320,18 +343,20 @@ function NotifyToggle() {
 
     setBusy(true);
     try {
-      const okPerm = await askNotifyPermission();
+      // Разрешение обычно уже выдано на первом запуске. Если человек тогда
+      // отказал — предлагаем системное окно ещё раз, но тумблер всё равно
+      // включаем: он про НАШИ напоминания, а не про системный доступ.
+      const okPerm = (await notifyGranted()) || (await askNotifyPermission());
+      await enableBackgroundCheck();
+      set((d) => { d.settings.notifyUpdates = true; });
       if (!okPerm) {
         toast({
-          title: tr("Нужно разрешить уведомления"),
-          sub: tr("Настройки телефона · Приложения · ЧУБУГЕЙМ"),
+          title: tr("Включил напоминания"),
+          sub: tr("Разреши уведомления в настройках телефона, чтобы они приходили"),
           icon: "warn",
-          tone: "bad",
         });
         return;
       }
-      await enableBackgroundCheck();
-      set((d) => { d.settings.notifyUpdates = true; });
       toast({
         title: tr("Напомню о новой версии"),
         sub: tr("Проверяю примерно раз в час"),

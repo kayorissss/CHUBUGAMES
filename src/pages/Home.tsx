@@ -1,22 +1,22 @@
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { tr } from "../core/i18n";
 import { AnimatePresence, motion } from "framer-motion";
 import { useGame } from "../core/store";
 import { GAME_META } from "../core/content";
 import { fmt } from "../core/format";
-import { xpForLevel, autoRate } from "../core/save";
+import { autoRate } from "../core/save";
 import { Card, Tap, Bar, SectionTitle, Screen } from "../ui/Glass";
 import HeadView from "../ui/HeadView";
 import GameIcon from "../ui/GameIcon";
-import Icon from "../ui/Icon";
+import Icon, { type IconName } from "../ui/Icon";
 import type { GameId } from "../core/types";
 import AdModal from "../ui/AdModal";
 import { bonusesLeft, hasAds, noteBonus } from "../core/ads";
-import ModesPanel from "../ui/ModesPanel";
 import type { SubPage } from "../App";
+import { readGamble } from "../core/gamble";
 import {
   BOSS_EVERY_MS, BOSS_WINDOW_MS,
-  bossActive, bossOfHour, canFight, nextBossIn, readBosses, windowLeft,
+  bossActive, bossOfHour, canFight, clearedThisHour, nextBossIn, readBosses, windowLeft,
 } from "../core/bosses";
 
 /** «5 мин» / «42 сек» — коротко, чтобы влезало в строку */
@@ -40,7 +40,13 @@ export default function Home({
   // босс-воспитатель этого часа
   const [bossTick, setBossTick] = useState(0);
   const boss = bossOfHour();
-  const bossOn = canFight(readBosses());
+  const bossStore = readBosses();
+  const bossOn = canFight(bossStore);
+  const cleared = clearedThisHour(bossStore);
+  // кто заступит в следующий час — чтобы было видно расписание наперёд
+  const nextBoss = bossOfHour(Date.now() + BOSS_EVERY_MS);
+  // жетоны показываем прямо на плашке казино — видно, есть ли на что играть
+  const chips = readGamble().chips;
   useEffect(() => {
     const iv = setInterval(() => setBossTick((n) => n + 1), 1000);
     return () => clearInterval(iv);
@@ -49,21 +55,39 @@ export default function Home({
   const bossLive = bossActive();
   // награда — как 3 минуты автодохода, но не меньше осмысленной суммы
   const adReward = Math.max(500, Math.floor(rate * 180) + s.level * 250);
-  const featured = GAME_META.filter((g) => s.unlockedGames.includes(g.id)).sort(
-    (a, b) => s.games[b.id].plays - s.games[a.id].plays,
-  )[0];
 
   return (
     <Screen>
-      {/* Шапка */}
+      {/* Шапка: голова (тап — профиль), название, монеты */}
       <div
-        className="flex items-center justify-between gap-3"
+        className="flex items-center gap-3"
         style={{ paddingTop: "calc(var(--sat) + 14px)", marginBottom: 16 }}
       >
-        <div className="min-w-0">
+        <Tap
+          onClick={() => onOpenProfile?.()}
+          r="md"
+          sound="click"
+          className="shrink-0 relative"
+          style={{ padding: 4, lineHeight: 0 }}
+        >
+          <HeadView friend={mainFriend} size={40} />
+          <span
+            className="t-num absolute flex items-center justify-center"
+            style={{
+              bottom: -2, right: -3, minWidth: 19, height: 19, padding: "0 5px",
+              borderRadius: 999, background: "var(--acc)", color: "var(--acc-ink)",
+              fontSize: 10, border: "2.5px solid var(--bg)",
+            }}
+          >
+            {s.level}
+          </span>
+        </Tap>
+
+        <div className="flex-1 min-w-0">
           <h1
             className="t-display"
             style={{
+              fontSize: 21,
               backgroundImage: "linear-gradient(94deg, var(--text) 30%, var(--acc))",
               WebkitBackgroundClip: "text",
               backgroundClip: "text",
@@ -72,7 +96,11 @@ export default function Home({
           >
             ЧУБУГЕЙМ
           </h1>
+          <div style={{ marginTop: 5 }}>
+            <Bar pct={levelPct} h={4} />
+          </div>
         </div>
+
         <Card r="md" className="shrink-0" style={{ padding: "8px 12px" }}>
           <div className="flex items-center gap-1.5">
             <Icon name="coin" size={14} accent />
@@ -86,229 +114,279 @@ export default function Home({
         </Card>
       </div>
 
-      {/* Профиль — тап открывает статистику */}
-      <Tap
-        solid
-        r="lg"
-        onClick={() => onOpenProfile?.()}
-        sound="click"
-        className="w-full"
-        style={{ padding: 14, marginBottom: 18, display: "block" }}
-      >
-        <div className="flex items-center" style={{ gap: 13 }}>
-          <div className="relative shrink-0">
-            <HeadView friend={mainFriend} size={46} />
-            <div
-              className="t-num absolute flex items-center justify-center"
-              style={{
-                bottom: -4, right: -6, minWidth: 21, height: 21, padding: "0 5px",
-                borderRadius: 999, background: "var(--acc)", color: "var(--acc-ink)",
-                fontSize: 10.5, border: "2.5px solid var(--surface)",
-              }}
-            >
-              {s.level}
-            </div>
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className="flex items-baseline justify-between gap-2" style={{ marginBottom: 7 }}>
-              <span className="t-title-sm clip1">{mainFriend.name}</span>
-              <span className="t-num shrink-0" style={{ fontSize: 11, color: "var(--text-mute)" }}>
-                {fmt(s.xp)}/{fmt(xpForLevel(s.level))}
-              </span>
-            </div>
-            <Bar pct={levelPct} h={6} />
-          </div>
-          <svg
-            className="shrink-0" width="15" height="15" viewBox="0 0 24 24"
-            fill="none" stroke="currentColor" strokeWidth="2.4"
-            strokeLinecap="round" style={{ color: "var(--text-mute)" }}
-          >
-            <path d="M9 6l6 6-6 6" />
-          </svg>
-        </div>
-      </Tap>
+      {/* Сводка — сразу под шапкой */}
+      <div className="grid grid-cols-3" style={{ gap: 10, marginBottom: 18 }}>
+        <Stat icon="run" v={fmt(s.stats.burgersDodged)} l={tr("уклонов")} />
+        <Stat icon="tap" v={fmt(s.stats.tapsTotal)} l={tr("тапов")} />
+        <Stat icon="coin" v={fmt(s.totalCoinsEver)} l={tr("монет всего")} accent />
+      </div>
 
-      {/* Босс-воспитатель: карточка видна всегда, наверху */}
+      {/* Босс — главная плашка экрана */}
       {onOpen && (
         <Tap
           onClick={() => onOpen("boss")}
-          r="lg"
+          r="xl"
           className="w-full overflow-hidden relative"
           style={{
             padding: 0, marginBottom: 18, display: "block",
             border: bossOn
-              ? "1.5px solid rgba(255,90,60,0.55)"
+              ? "1.5px solid rgba(255,90,60,0.6)"
               : "1px solid var(--surface-brd)",
-            background: bossOn ? "rgba(255,90,60,0.09)" : "var(--surface)",
+            background: bossOn ? "rgba(255,90,60,0.10)" : "var(--surface)",
+            boxShadow: bossOn ? "0 14px 40px -18px rgba(255,90,60,0.75)" : undefined,
           }}
           sound={bossOn ? "power" : "click"}
         >
+          {/* пульс за головой, только когда босс реально доступен */}
           {bossOn && (
             <motion.div
               className="absolute pointer-events-none"
-              animate={{ opacity: [0.16, 0.34, 0.16] }}
-              transition={{ duration: 2.6, repeat: Infinity, ease: "easeInOut" }}
+              animate={{ opacity: [0.2, 0.42, 0.2] }}
+              transition={{ duration: 2.4, repeat: Infinity, ease: "easeInOut" }}
               style={{
                 inset: 0,
                 background:
-                  "radial-gradient(circle at 18% 50%, rgba(255,90,60,0.5), transparent 62%)",
+                  "radial-gradient(circle at 22% 42%, rgba(255,90,60,0.55), transparent 60%)",
               }}
             />
           )}
-          <div className="relative" style={{ padding: 14 }}>
-            <div className="flex items-center" style={{ gap: 12 }}>
-              <span className="shrink-0" style={{ opacity: bossOn ? 1 : 0.5 }}>
-                <HeadView friend={{ look: boss.look } as never} size={44} />
-              </span>
+
+          <div className="relative" style={{ padding: 18 }}>
+            <div className="flex items-center" style={{ gap: 14 }}>
+              <motion.span
+                className="shrink-0 relative"
+                style={{ lineHeight: 0, opacity: bossOn ? 1 : 0.55 }}
+                animate={bossOn ? { y: [0, -5, 0] } : {}}
+                transition={{ duration: 2.8, repeat: Infinity, ease: "easeInOut" }}
+              >
+                <HeadView friend={{ look: boss.look } as never} size={72} />
+              </motion.span>
+
               <span className="flex-1 min-w-0">
                 <span
                   className="t-label block"
                   style={{ fontSize: 9, color: bossOn ? "#FF6B4D" : undefined }}
                 >
                   {bossOn
-                    ? tr("БОСС НА СМЕНЕ")
+                    ? tr("БОСС ПОЯВИЛСЯ")
                     : bossLive ? tr("СМЕНА ЗАКРЫТА") : tr("СЛЕДУЮЩИЙ БОСС")}
                 </span>
-                <span className="t-title-sm block clip1" style={{ marginTop: 3 }}>
+                <span
+                  className="t-display-sm block clip1"
+                  style={{ fontSize: 22, marginTop: 4 }}
+                >
                   {boss.name}
                 </span>
-                <span className="t-caption block clip1" style={{ marginTop: 2 }}>
-                  {bossOn
-                    ? `${tr("осталось")} ${fmtLeft(windowLeft())}`
-                    : `${tr("через")} ${fmtLeft(nextBossIn())}`}
+                <span className="t-caption block clip2" style={{ marginTop: 3 }}>
+                  {boss.nick}
                 </span>
               </span>
-              <Icon name="chevron" size={16} />
             </div>
+
+            {/* таймер и следующий по расписанию */}
+            <div
+              className="flex items-center"
+              style={{
+                gap: 10, marginTop: 14, paddingTop: 13,
+                borderTop: "1px solid var(--surface-brd)",
+              }}
+            >
+              <span className="flex-1 min-w-0">
+                <span className="t-label block" style={{ fontSize: 8.5 }}>
+                  {bossOn ? tr("СМЕНА ЗАКОНЧИТСЯ ЧЕРЕЗ") : tr("ПРИДЁТ ЧЕРЕЗ")}
+                </span>
+                <span
+                  className="t-num block"
+                  style={{ fontSize: 20, marginTop: 2, color: bossOn ? "#FF6B4D" : undefined }}
+                >
+                  {fmtLeft(bossOn ? windowLeft() : nextBossIn())}
+                </span>
+              </span>
+
+              {/* кто заступит следующим */}
+              <span className="flex items-center shrink-0" style={{ gap: 7 }}>
+                <span className="text-right">
+                  <span className="t-label block" style={{ fontSize: 8.5 }}>{tr("ДАЛЬШЕ")}</span>
+                  <span className="t-caption block clip1" style={{ marginTop: 2, maxWidth: 92 }}>
+                    {nextBoss.name}
+                  </span>
+                </span>
+                <span style={{ lineHeight: 0, opacity: 0.5 }}>
+                  <HeadView friend={{ look: nextBoss.look } as never} size={30} />
+                </span>
+              </span>
+            </div>
+
             <div style={{ marginTop: 11 }}>
               <Bar
-                pct={
-                  bossOn
-                    ? windowLeft() / BOSS_WINDOW_MS
-                    : 1 - nextBossIn() / BOSS_EVERY_MS
-                }
+                pct={bossOn ? windowLeft() / BOSS_WINDOW_MS : 1 - nextBossIn() / BOSS_EVERY_MS}
                 h={5}
               />
             </div>
+
+            <div
+              className="flex items-center justify-center"
+              style={{
+                gap: 7, marginTop: 14, padding: "11px 16px",
+                borderRadius: 999,
+                background: bossOn ? "#FF5A3C" : "var(--btn-bg)",
+                color: bossOn ? "#fff" : "var(--text-mute)",
+                border: bossOn ? "none" : "1px solid var(--btn-brd)",
+                fontSize: 13, fontWeight: 800, lineHeight: 1,
+              }}
+            >
+              <Icon name={bossOn ? "skull" : "clock"} size={14} />
+              {bossOn ? tr("В БОЙ") : cleared ? tr("УЖЕ ПОБЕЖДЁН") : tr("ЖДЁМ СМЕНУ")}
+            </div>
           </div>
         </Tap>
       )}
 
-      {/* Продолжить */}
-      {featured && (
-        <div style={{ marginBottom: 22 }}>
-          <Tap
-            onClick={() => onPlay(featured.id)}
-            r="xl"
-            className="w-full overflow-hidden relative"
-            sound="power"
-          >
-            <div
-              className="absolute pointer-events-none"
-              style={{ right: 6, bottom: -6, opacity: 0.14, lineHeight: 0 }}
-            >
-              <GameIcon id={featured.id} size={104} />
-            </div>
-            <div style={{ padding: 18, position: "relative" }}>
-              <div className="t-label acc-text">{tr("Продолжить")}</div>
-              <div
-                className="t-display-sm"
-                style={{ fontSize: 24, marginTop: 6, maxWidth: "72%" }}
-              >
-                {featured.name}
-              </div>
-              <div className="t-body clip2" style={{ marginTop: 7, maxWidth: "70%" }}>
-                {featured.desc}
-              </div>
-              <div className="flex items-center" style={{ gap: 12, marginTop: 16 }}>
-                <span
-                  className="inline-flex items-center"
-                  style={{
-                    gap: 6, padding: "10px 18px", borderRadius: 999,
-                    background: "var(--acc)", color: "var(--acc-ink)",
-                    fontSize: 13, fontWeight: 800, lineHeight: 1,
-                  }}
-                >
-                  <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                    <path d="M8 5v14l11-7z" />
-                  </svg>
-                  {tr("Играть")}
-                </span>
-                <span className="t-caption">{tr("рекорд")}<span className="t-num" style={{ color: "var(--text-dim)" }}>{fmt(s.games[featured.id].best)}</span>
-                </span>
-              </div>
-            </div>
-          </Tap>
-        </div>
-      )}
-
-      {/* Режимы: марафон и испытание дня */}
-      <ModesPanel />
-
-      {/* Казино */}
+      {/* Казино — крупная плашка, сразу понятно, что это казино */}
       {onOpen && (
         <Tap
           onClick={() => onOpen("casino")}
-          r="lg"
-          className="w-full"
+          r="xl"
+          className="w-full overflow-hidden relative"
           style={{
-            padding: 14, marginBottom: 10,
-            border: "1.5px solid rgba(200,155,255,0.42)",
-            background: "rgba(200,155,255,0.07)",
+            padding: 0, marginBottom: 12, display: "block",
+            border: "1.5px solid rgba(200,155,255,0.5)",
+            background: "rgba(200,155,255,0.09)",
+            boxShadow: "0 14px 38px -20px rgba(200,155,255,0.8)",
           }}
           sound="power"
         >
-          <div className="flex items-center" style={{ gap: 12 }}>
-            <span
-              className="shrink-0 flex items-center justify-center"
-              style={{
-                width: 40, height: 40, borderRadius: "var(--r-sm)",
-                background: "rgba(200,155,255,0.15)", color: "#C89BFF",
-              }}
-            >
-              <Icon name="dice" size={19} />
-            </span>
-            <span className="flex-1 min-w-0">
-              <span className="t-title-sm block">{tr("Казино")}</span>
-              <span className="t-caption block" style={{ marginTop: 2 }}>{tr("Слоты, кейсы, батлы и апгрейд — на жетоны")}</span>
-            </span>
-            <Icon name="chevron" size={16} />
+          <motion.div
+            className="absolute pointer-events-none"
+            animate={{ opacity: [0.18, 0.4, 0.18] }}
+            transition={{ duration: 3.2, repeat: Infinity, ease: "easeInOut" }}
+            style={{
+              inset: 0,
+              background:
+                "radial-gradient(circle at 82% 30%, rgba(200,155,255,0.5), transparent 62%)",
+            }}
+          />
+          <div className="relative" style={{ padding: 18 }}>
+            <div className="flex items-center" style={{ gap: 13 }}>
+              <motion.span
+                className="shrink-0 flex items-center justify-center"
+                animate={{ rotate: [0, -9, 9, 0] }}
+                transition={{ duration: 4.4, repeat: Infinity, ease: "easeInOut" }}
+                style={{
+                  width: 54, height: 54, borderRadius: "var(--r-md)",
+                  background: "rgba(200,155,255,0.2)", color: "#C89BFF",
+                  border: "1px solid rgba(200,155,255,0.45)",
+                }}
+              >
+                <Icon name="dice" size={27} />
+              </motion.span>
+              <span className="flex-1 min-w-0">
+                <span className="t-label block" style={{ fontSize: 9, color: "#C89BFF" }}>
+                  {tr("НА ЖЕТОНЫ")}
+                </span>
+                <span className="t-display-sm block" style={{ fontSize: 22, marginTop: 3 }}>
+                  {tr("КАЗИНО")}
+                </span>
+              </span>
+              <span
+                className="t-num shrink-0 flex items-center"
+                style={{
+                  gap: 5, padding: "7px 11px", borderRadius: 999,
+                  background: "rgba(200,155,255,0.16)",
+                  border: "1px solid rgba(200,155,255,0.4)",
+                  color: "#C89BFF", fontSize: 13,
+                }}
+              >
+                <Icon name="ticket" size={13} />
+                {fmt(chips)}
+              </span>
+            </div>
+
+            {/* что внутри — иначе непонятно, куда ведёт кнопка */}
+            <div className="flex" style={{ gap: 7, marginTop: 14 }}>
+              {([
+                ["Слоты", "gem"],
+                ["Кейсы", "case"],
+                ["Батлы", "skull"],
+                ["Апгрейд", "bolt"],
+              ] as [string, IconName][]).map(([label, icon]) => (
+                <span
+                  key={label}
+                  className="flex-1 flex flex-col items-center justify-center"
+                  style={{
+                    gap: 5, padding: "9px 4px", borderRadius: "var(--r-sm)",
+                    background: "rgba(255,255,255,0.05)",
+                    border: "1px solid var(--surface-brd)",
+                  }}
+                >
+                  <Icon name={icon} size={15} />
+                  <span className="t-label clip1" style={{ fontSize: 8 }}>{tr(label)}</span>
+                </span>
+              ))}
+            </div>
           </div>
         </Tap>
       )}
 
-      {/* Бонус за рекламу */}
+      {/* Бонус за ролик */}
       {hasAds() && adLeft > 0 && (
         <Tap
           onClick={() => setShowAd(true)}
-          r="lg"
-          className="w-full"
+          r="xl"
+          className="w-full overflow-hidden relative"
           style={{
-            padding: 14, marginBottom: 18,
-            border: "1.5px solid rgba(89,255,158,0.45)",
-            background: "rgba(89,255,158,0.07)",
+            padding: 0, marginBottom: 18, display: "block",
+            border: "1.5px solid rgba(89,255,158,0.5)",
+            background: "rgba(89,255,158,0.08)",
           }}
           sound="power"
         >
-          <div className="flex items-center" style={{ gap: 12 }}>
-            <span
-              className="shrink-0 flex items-center justify-center"
-              style={{
-                width: 40, height: 40, borderRadius: "var(--r-sm)",
-                background: "rgba(89,255,158,0.14)", color: "#59FF9E",
-              }}
-            >
-              <Icon name="play" size={19} />
-            </span>
-            <span className="flex-1 min-w-0">
-              <span className="t-title-sm block">{tr("Бонус за ролик")}</span>
-              <span className="t-caption block" style={{ marginTop: 2 }}>
-                10 секунд — и {fmt(adReward)} монет
+          <div className="relative" style={{ padding: 16 }}>
+            <div className="flex items-center" style={{ gap: 13 }}>
+              <motion.span
+                className="shrink-0 flex items-center justify-center relative"
+                animate={{ scale: [1, 1.07, 1] }}
+                transition={{ duration: 2.2, repeat: Infinity, ease: "easeInOut" }}
+                style={{
+                  width: 50, height: 50, borderRadius: "var(--r-md)",
+                  background: "rgba(89,255,158,0.18)", color: "#59FF9E",
+                  border: "1px solid rgba(89,255,158,0.45)",
+                }}
+              >
+                <Icon name="play" size={22} />
+              </motion.span>
+
+              <span className="flex-1 min-w-0">
+                <span className="t-label block" style={{ fontSize: 9, color: "#59FF9E" }}>
+                  {tr("10 СЕКУНД РЕКЛАМЫ")}
+                </span>
+                <span
+                  className="t-num block clip1"
+                  style={{ fontSize: 23, marginTop: 3, color: "#59FF9E" }}
+                >
+                  +{fmt(adReward)}
+                </span>
+                <span className="t-caption block clip1" style={{ marginTop: 2 }}>
+                  {tr("монет за просмотр")}
+                </span>
               </span>
-            </span>
-            <span className="t-num shrink-0" style={{ fontSize: 11, color: "var(--text-mute)" }}>
-              {adLeft}/5
-            </span>
+
+              {/* сколько попыток осталось — точками, а не дробью */}
+              <span className="shrink-0 flex flex-col items-end" style={{ gap: 6 }}>
+                <span className="t-label" style={{ fontSize: 8 }}>{tr("ОСТАЛОСЬ")}</span>
+                <span className="flex items-center" style={{ gap: 4 }}>
+                  {Array.from({ length: 5 }).map((_, i) => (
+                    <span
+                      key={i}
+                      style={{
+                        width: 7, height: 7, borderRadius: 999, display: "block",
+                        background: i < adLeft ? "#59FF9E" : "rgba(255,255,255,0.16)",
+                      }}
+                    />
+                  ))}
+                </span>
+              </span>
+            </div>
           </div>
         </Tap>
       )}
@@ -335,9 +413,12 @@ export default function Home({
         {GAME_META.map((g, i) => {
           const unlocked = s.unlockedGames.includes(g.id);
           const st = s.games[g.id];
+          // Поддержку показываем ровно после «Башни Лёхи»: это конец
+          // четвёртого ряда, дальше идут остальные игры.
+          const donateHere = g.id === "stack";
           return (
+            <Fragment key={g.id}>
             <motion.div
-              key={g.id}
               initial={{ opacity: 0, y: 14 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: i * 0.04, duration: 0.26 }}
@@ -398,58 +479,69 @@ export default function Home({
                 </div>
               </Tap>
             </motion.div>
+            {donateHere && onOpen && (
+              <div style={{ gridColumn: "1 / -1" }}>
+                <Tap
+                  onClick={() => onOpen("donate")}
+                  r="lg"
+                  className="w-full"
+                  style={{
+                    padding: 14,
+                    border: "1.5px solid rgba(255,176,32,0.4)",
+                    background: "rgba(255,176,32,0.06)",
+                  }}
+                  sound="coin"
+                >
+                  <div className="flex items-center" style={{ gap: 12 }}>
+                    <span
+                      className="shrink-0 flex items-center justify-center"
+                      style={{
+                        width: 40, height: 40, borderRadius: "var(--r-sm)",
+                        background: "rgba(255,176,32,0.15)", color: "#FFB020",
+                      }}
+                    >
+                      <Icon name="heart" size={19} />
+                    </span>
+                    <span className="flex-1 min-w-0">
+                      <span className="t-title-sm block">{tr("Поддержите проект")}</span>
+                      <span className="t-caption block clip1" style={{ marginTop: 2 }}>
+                        {tr("Игра бесплатная — развивается на энтузиазме")}
+                      </span>
+                    </span>
+                    <Icon name="chevron" size={16} />
+                  </div>
+                </Tap>
+              </div>
+            )}
+            </Fragment>
           );
         })}
       </div>
 
-      {/* Сводка */}
-      <SectionTitle>{tr("Сводка")}</SectionTitle>
-      <div className="grid grid-cols-3" style={{ gap: 10 }}>
-        <Stat v={fmt(s.stats.burgersDodged)} l={tr("уклонов")} />
-        <Stat v={fmt(s.stats.tapsTotal)} l={tr("тапов")} />
-        <Stat v={fmt(s.totalCoinsEver)} l={tr("монет всего")} />
-      </div>
-
-      {/* Поддержать проект */}
-      {onOpen && (
-        <Tap
-          onClick={() => onOpen("donate")}
-          r="lg"
-          className="w-full"
-          style={{
-            padding: 14, marginTop: 14,
-            border: "1.5px solid rgba(255,176,32,0.4)",
-            background: "rgba(255,176,32,0.06)",
-          }}
-          sound="coin"
-        >
-          <div className="flex items-center" style={{ gap: 12 }}>
-            <span
-              className="shrink-0 flex items-center justify-center"
-              style={{
-                width: 40, height: 40, borderRadius: "var(--r-sm)",
-                background: "rgba(255,176,32,0.15)", color: "#FFB020",
-              }}
-            >
-              <Icon name="heart" size={19} />
-            </span>
-            <span className="flex-1 min-w-0">
-              <span className="t-title-sm block">{tr("Поддержите проект")}</span>
-              <span className="t-caption block" style={{ marginTop: 2 }}>{tr("Игра бесплатная — развивается на энтузиазме")}</span>
-            </span>
-            <Icon name="chevron" size={16} />
-          </div>
-        </Tap>
-      )}
     </Screen>
   );
 }
 
-function Stat({ v, l }: { v: string; l: string }) {
+function Stat({
+  v, l, icon, accent,
+}: {
+  v: string; l: string; icon: IconName; accent?: boolean;
+}) {
   return (
-    <Card r="md" className="text-center" style={{ padding: "13px 8px" }}>
-      <div className="t-num" style={{ fontSize: 16 }}>{v}</div>
-      <div className="t-label" style={{ fontSize: 8.5, marginTop: 3 }}>{l}</div>
+    <Card r="md" style={{ padding: "11px 9px" }}>
+      <div
+        className="flex items-center"
+        style={{ gap: 5, marginBottom: 6, color: accent ? "var(--acc)" : "var(--text-mute)" }}
+      >
+        <Icon name={icon} size={12} />
+        <span className="t-label clip1" style={{ fontSize: 8, letterSpacing: "0.06em" }}>{l}</span>
+      </div>
+      <div
+        className="t-num clip1"
+        style={{ fontSize: 17, lineHeight: 1, color: accent ? "var(--acc)" : undefined }}
+      >
+        {v}
+      </div>
     </Card>
   );
 }

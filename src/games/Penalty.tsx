@@ -315,12 +315,58 @@ export default function Penalty({ onExit }: { onExit: () => void }) {
     ctx.translate(g.kx, g.ky);
     ctx.rotate(((g.kx - (g.goalX + g.goalW / 2)) / g.goalW) * 0.9 * g.kDive);
     drawHead(ctx, keeper.look, 0, 0, 27, { body: true, squish: kSquish, mouth: g.kDive * 0.7 });
-    // перчатки
-    ctx.fillStyle = "#ffb020";
+    // Руки: плечо -> локоть -> кисть с пальцами. Раньше это были две
+    // плоские капли по бокам, и понять, что это руки, было невозможно.
     for (const sx of [-1, 1]) {
+      const reach = g.kDive;                     // 0 стоит, 1 в прыжке
+      const sh = { x: sx * 15, y: 12 };          // плечо
+      const el = { x: sx * (26 + reach * 12), y: 6 - reach * 14 };   // локоть
+      const wr = { x: sx * (34 + reach * 22), y: -6 - reach * 30 };  // кисть
+
+      // рукав
+      ctx.strokeStyle = "#2e3540";
+      ctx.lineWidth = 9;
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
       ctx.beginPath();
-      ctx.ellipse(sx * (30 + g.kDive * 16), -6 - g.kDive * 12, 8, 10, sx * 0.4, 0, Math.PI * 2);
+      ctx.moveTo(sh.x, sh.y);
+      ctx.lineTo(el.x, el.y);
+      ctx.lineTo(wr.x, wr.y);
+      ctx.stroke();
+      // светлая полоса по рукаву, чтобы рука читалась на тёмном фоне
+      ctx.strokeStyle = "#4a5563";
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.moveTo(sh.x, sh.y);
+      ctx.lineTo(el.x, el.y);
+      ctx.lineTo(wr.x, wr.y);
+      ctx.stroke();
+
+      // перчатка: ладонь + четыре пальца веером + большой палец
+      const ang = Math.atan2(wr.y - el.y, wr.x - el.x);
+      ctx.save();
+      ctx.translate(wr.x, wr.y);
+      ctx.rotate(ang);
+      ctx.fillStyle = "#ffb020";
+      ctx.beginPath();
+      ctx.roundRect(-4, -7, 13, 14, 4);
       ctx.fill();
+      ctx.strokeStyle = "#c8791a";
+      ctx.lineWidth = 3.2;
+      ctx.lineCap = "round";
+      for (let f = 0; f < 4; f++) {
+        const fa = -0.42 + f * 0.28;
+        ctx.beginPath();
+        ctx.moveTo(8, -5 + f * 3.4);
+        ctx.lineTo(8 + Math.cos(fa) * 9, -5 + f * 3.4 + Math.sin(fa) * 9);
+        ctx.stroke();
+      }
+      // большой палец вбок
+      ctx.beginPath();
+      ctx.moveTo(1, 6);
+      ctx.lineTo(-3, 13);
+      ctx.stroke();
+      ctx.restore();
     }
     ctx.restore();
 

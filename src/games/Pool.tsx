@@ -17,8 +17,15 @@ import { tr } from "../core/i18n";
  */
 
 const R = 11;                 // радиус шара
-const FRICTION = 0.9915;      // затухание за мс (домножается по dt)
-const STOP_V = 0.012;
+/**
+ * Трение подобрано расчётом, а не на глаз. При прежних 0.9915 биток
+ * проезжал всего ~180-230 px, тогда как пирамида стоит примерно в 400 px:
+ * до шаров было физически не докатиться даже на максимальной силе.
+ * При 0.9985 полный удар проносит шар ~1000-1260 px — хватает и на
+ * пирамиду, и на отскок от борта.
+ */
+const FRICTION = 0.9985;
+const STOP_V = 0.02;
 const POCKET_R = 20;
 const SHOTS_START = 8;
 
@@ -155,7 +162,7 @@ export default function Pool({ onExit }: { onExit: () => void }) {
     const len = Math.hypot(dx, dy);
     if (len < 14) return;
     const power = Math.min(len, 190) / 190;
-    const sp = 0.25 + power * 1.25;
+    const sp = 0.42 + power * 1.5;
     c.vx = (dx / len) * sp;
     c.vy = (dy / len) * sp;
     g.moving = true;

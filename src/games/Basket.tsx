@@ -76,7 +76,7 @@ export default function Basket({ onExit }: { onExit: () => void }) {
   const spawnBall = useCallback((w: number, h: number) => {
     const g = G.current;
     g.ball = {
-      x: w / 2, y: h - 96, vx: 0, vy: 0,
+      x: w / 2, y: h - 150, vx: 0, vy: 0,
       live: false, hitBoard: false, passed: false,
     };
   }, []);
@@ -136,11 +136,14 @@ export default function Basket({ onExit }: { onExit: () => void }) {
   const onDown = useCallback((e: React.PointerEvent) => {
     const g = G.current;
     if (!g.running || !g.ball || g.ball.live) return;
-    const r = (e.target as HTMLElement).getBoundingClientRect();
+    const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    // Начать свайп можно в ЛЮБОЙ точке экрана: раньше тянуть надо было
+    // от мяча вниз-назад, а под мячом у нижнего края экрана просто нет места.
     g.aiming = true;
-    g.ox = g.ball.x; g.oy = g.ball.y;
-    g.ax = e.clientX - r.left;
-    g.ay = e.clientY - r.top;
+    g.ox = e.clientX - r.left;
+    g.oy = e.clientY - r.top;
+    g.ax = g.ox;
+    g.ay = g.oy;
   }, []);
 
   const onMove = useCallback((e: React.PointerEvent) => {
@@ -156,10 +159,11 @@ export default function Basket({ onExit }: { onExit: () => void }) {
     if (!g.aiming || !g.ball) return;
     g.aiming = false;
     // вектор броска — противоположен оттяжке
-    const dx = g.ox - g.ax;
-    const dy = g.oy - g.ay;
+    // Куда ведёшь — туда и летит: направление свайпа = направление броска.
+    const dx = g.ax - g.ox;
+    const dy = g.ay - g.oy;
     const len = Math.hypot(dx, dy);
-    if (len < 18) return;                 // слишком короткий свайп — не бросок
+    if (len < 18 || dy > -12) return;     // короткий свайп или вниз — не бросок
     const power = Math.min(len, 230) / 230;
     const sp = 0.28 + power * 1.67;       // px/мс
     g.ball.vx = (dx / len) * sp;
@@ -360,9 +364,9 @@ export default function Basket({ onExit }: { onExit: () => void }) {
 
     // линия прицела — пунктирная траектория
     if (g.aiming && b && !b.live) {
-      const dx = g.ox - g.ax, dy = g.oy - g.ay;
+      const dx = g.ax - g.ox, dy = g.ay - g.oy;
       const len = Math.hypot(dx, dy);
-      if (len > 8) {
+      if (len > 8 && dy < -8) {
         const power = Math.min(len, 230) / 230;
         const sp = 0.28 + power * 1.67;
         let px = b.x, py = b.y;
@@ -383,7 +387,7 @@ export default function Basket({ onExit }: { onExit: () => void }) {
         ctx.lineWidth = 3;
         ctx.beginPath();
         ctx.moveTo(b.x, b.y);
-        ctx.lineTo(g.ax, g.ay);
+        ctx.lineTo(b.x + (dx / len) * 70 * power, b.y + (dy / len) * 70 * power);
         ctx.stroke();
       }
     }
@@ -403,7 +407,7 @@ export default function Basket({ onExit }: { onExit: () => void }) {
     if (g.running && g.shots === 0) {
       ctx.fillStyle = "rgba(255,255,255,0.45)";
       ctx.font = "600 13px Inter, system-ui, sans-serif";
-      ctx.fillText(tr("Тяни от мяча назад и отпусти"), w / 2, h - 24);
+      ctx.fillText(tr("Свайп вверх в любом месте экрана"), w / 2, h - 24);
     }
   }, [phase]);
 

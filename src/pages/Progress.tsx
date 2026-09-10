@@ -9,6 +9,7 @@ import {
 import { fmt, fmtTime, today, daysBetween } from "../core/format";
 import { spentSkillPoints, xpForLevel } from "../core/save";
 import { Card, Button, Bar, Chip, SectionTitle, Screen, Divider } from "../ui/Glass";
+import ModesPanel from "../ui/ModesPanel";
 import GameIcon from "../ui/GameIcon";
 import Icon, { type IconName } from "../ui/Icon";
 import { sfx, haptic } from "../core/fx";
@@ -127,6 +128,9 @@ function Daily() {
             : tr("Уже забрал · заходи завтра")}
         </Button>
       </Card>
+
+      {/* Режимы и испытание дня — их место здесь, а не на главной */}
+      <ModesPanel />
 
       <SectionTitle>{tr("Задания дня")}</SectionTitle>
       {s.daily.quests.map((q) => {

@@ -9,7 +9,7 @@ export type SubPage = "network" | "casino" | "donate" | "boss";
 import { Toasts, OfflineModal } from "./components/Overlays";
 import UpdateBanner from "./ui/UpdateBanner";
 import WhatsNew from "./ui/WhatsNew";
-import { syncInstalledVersion } from "./core/notify";
+import { initNotificationsOnFirstRun, syncInstalledVersion } from "./core/notify";
 import Icon from "./ui/Icon";
 import Home from "./pages/Home";
 import { ModesProvider } from "./core/modes";
@@ -124,6 +124,10 @@ function Shell() {
   // Сообщаем фоновой проверке, какая версия стоит сейчас, — иначе она
   // не поймёт, что вышло обновление, пока игра закрыта.
   useEffect(() => { void syncInstalledVersion(); }, []);
+
+  // При первом запуске система сама спросит про уведомления — тумблер в
+  // настройках после этого только включает и выключает напоминания.
+  useEffect(() => { void initNotificationsOnFirstRun(); }, []);
 
   // системная кнопка/жест «назад» закрывает игру, а не приложение
   useEffect(() => {

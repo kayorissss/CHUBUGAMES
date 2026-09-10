@@ -50,19 +50,39 @@ export default function BossFight({ onBack }: { onBack: () => void }) {
   const [hits, setHits] = useState(0);
   /** Кулак игрока попадает не всегда: во время «газа» шанс промаха */
   const [fog, setFog] = useState(false);
+  /** Босс замахнулся: есть окно, чтобы поставить блок */
+  const [windup, setWindup] = useState(false);
+  /** Блок держится доли секунды и уходит в перезарядку */
+  const [blocking, setBlocking] = useState(false);
+  const [blockReady, setBlockReady] = useState(true);
+  /** Ниже трети здоровья босс звереет: бьёт чаще и больнее */
+  const [rage, setRage] = useState(false);
+  const [combo, setCombo] = useState(0);
   const [, tick] = useState(0);
+
+  const windupRef = useRef(false);
+  const blockRef = useRef(false);
+  const rageRef = useRef(false);
+  /** Замах босса — нужен и из punch(), когда включается ярость */
+  const swingRef = useRef<(() => void) | null>(null);
 
   const atkTimer = useRef<number | null>(null);
   const gimTimer = useRef<number | null>(null);
   const tauntTimer = useRef<number | null>(null);
+  const windupTimer = useRef<number | null>(null);
+  const blockTimer = useRef<number | null>(null);
 
   const clearTimers = useCallback(() => {
     if (atkTimer.current) clearInterval(atkTimer.current);
     if (gimTimer.current) clearInterval(gimTimer.current);
     if (tauntTimer.current) clearTimeout(tauntTimer.current);
+    if (windupTimer.current) clearTimeout(windupTimer.current);
+    if (blockTimer.current) clearTimeout(blockTimer.current);
     atkTimer.current = null;
     gimTimer.current = null;
     tauntTimer.current = null;
+    windupTimer.current = null;
+    blockTimer.current = null;
   }, []);
 
   useEffect(() => clearTimers, [clearTimers]);
@@ -128,22 +148,49 @@ export default function BossFight({ onBack }: { onBack: () => void }) {
     setMyHp(100);
     setHits(0);
     setFog(false);
+    setWindup(false);
+    setBlocking(false);
+    setBlockReady(true);
+    setRage(false);
+    setCombo(0);
+    windupRef.current = false;
+    blockRef.current = false;
+    rageRef.current = false;
     setPhase("fight");
     sfx.click();
     say(boss.quote);
 
-    // босс лупит по расписанию
-    atkTimer.current = window.setInterval(() => {
-      setMyHp((hp) => {
-        const next = hp - boss.dmg;
-        haptic("light");
-        sfx.hit?.();
-        if (next <= 0) {
-          finish(false);
-          return 0;
+    // Босс бьёт не молча: сначала замах, и это окно под блок.
+    // Раньше урон просто капал по таймеру, и от игрока ничего не зависело.
+    const swing = () => {
+      setWindup(true);
+      windupRef.current = true;
+      const tell = rageRef.current ? 420 : 620;   // в ярости замах короче
+      windupTimer.current = window.setTimeout(() => {
+        setWindup(false);
+        windupRef.current = false;
+        const blocked = blockRef.current;
+        const raw = rageRef.current ? Math.round(boss.dmg * 1.6) : boss.dmg;
+        const dealt = blocked ? Math.round(raw * 0.18) : raw;
+        if (blocked) {
+          sfx.click();
+          haptic("light");
+        } else {
+          sfx.hit?.();
+          haptic("medium");
+          setCombo(0);          // пропустил — комбо сгорело
         }
-        return next;
-      });
+        setMyHp((hp) => {
+          const next = hp - dealt;
+          if (next <= 0) { finish(false); return 0; }
+          return next;
+        });
+      }, tell);
+    };
+
+    swingRef.current = swing;
+    atkTimer.current = window.setInterval(() => {
+      swing();
       if (Math.random() < 0.5) say(boss.taunts[Math.floor(Math.random() * boss.taunts.length)]);
     }, boss.every);
 
@@ -175,18 +222,55 @@ export default function BossFight({ onBack }: { onBack: () => void }) {
     }
     const base = 9 + Math.floor(Math.random() * 7);
     // Броня-танк держит удар
-    const dmg = boss.gimmick === "tank" ? Math.round(base * 0.72) : base;
+    let dmg = boss.gimmick === "tank" ? Math.round(base * 0.72) : base;
+    // Серия точных ударов без пропусков усиливает урон — до +50%
+    const nextCombo = combo + 1;
+    setCombo(nextCombo);
+    dmg = Math.round(dmg * (1 + Math.min(10, nextCombo) * 0.05));
+    // Бить во время своего блока нельзя: блок — это выбор, а не бесплатный бонус
+    if (blockRef.current) return;
+
     setHits((n) => n + 1);
     sfx.hit?.();
     haptic("light");
     setBossHp((hp) => {
       const next = hp - dmg;
+      // Ниже трети — босс звереет: чаще бьёт и сильнее
+      if (!rageRef.current && next <= boss.hp * 0.34 && next > 0) {
+        rageRef.current = true;
+        setRage(true);
+        say(tr("Ну всё, ты доигрался."));
+        sfx.error?.();
+        haptic("heavy");
+        if (atkTimer.current) clearInterval(atkTimer.current);
+        atkTimer.current = window.setInterval(() => {
+          swingRef.current?.();
+          if (Math.random() < 0.6) {
+            say(boss.taunts[Math.floor(Math.random() * boss.taunts.length)]);
+          }
+        }, Math.max(700, Math.round(boss.every * 0.62)));
+      }
       if (next <= 0) {
         finish(true);
         return 0;
       }
       return next;
     });
+  };
+
+  /** Поставить блок: короткое окно и перезарядка, спамить нельзя */
+  const block = () => {
+    if (phase !== "fight" || !blockReady) return;
+    setBlocking(true);
+    blockRef.current = true;
+    setBlockReady(false);
+    sfx.swoosh?.();
+    haptic("light");
+    window.setTimeout(() => {
+      setBlocking(false);
+      blockRef.current = false;
+    }, 520);
+    blockTimer.current = window.setTimeout(() => setBlockReady(true), 1100);
   };
 
   const active = canFight(store, Date.now());
@@ -321,8 +405,23 @@ export default function BossFight({ onBack }: { onBack: () => void }) {
           {/* Здоровье босса */}
           <Panel r="lg" style={{ padding: 13, marginBottom: 10 }}>
             <div className="flex items-center" style={{ gap: 9, marginBottom: 8 }}>
-              <span className="t-title-sm flex-1">{boss.name}</span>
-              <span className="t-num" style={{ fontSize: 12 }}>
+              <span className="t-title-sm flex-1 clip1">{boss.name}</span>
+              {rage && (
+                <motion.span
+                  className="t-label shrink-0"
+                  animate={{ opacity: [1, 0.45, 1] }}
+                  transition={{ duration: 0.9, repeat: Infinity }}
+                  style={{
+                    fontSize: 8.5, padding: "3px 8px", borderRadius: 999,
+                    background: "rgba(255,90,60,0.18)",
+                    border: "1px solid rgba(255,90,60,0.55)",
+                    color: "#FF6B4D",
+                  }}
+                >
+                  {tr("В ЯРОСТИ")}
+                </motion.span>
+              )}
+              <span className="t-num shrink-0" style={{ fontSize: 12 }}>
                 {Math.max(0, bossHp)} / {boss.hp}
               </span>
             </div>
@@ -359,16 +458,53 @@ export default function BossFight({ onBack }: { onBack: () => void }) {
               )}
             </AnimatePresence>
 
+            {/* Замах: красная рамка и надпись — сигнал поставить блок */}
+            <AnimatePresence>
+              {windup && (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="absolute pointer-events-none"
+                  style={{
+                    inset: 0, zIndex: 5,
+                    border: "2.5px solid #FF5A3C",
+                    borderRadius: "var(--r-xl)",
+                    background:
+                      "radial-gradient(circle at 50% 50%, rgba(255,90,60,0.22), transparent 68%)",
+                  }}
+                />
+              )}
+            </AnimatePresence>
+
             <motion.div
               key={hits}
               initial={{ scale: 1 }}
-              animate={{ scale: [1, 0.95, 1], rotate: [0, -2, 2, 0] }}
-              transition={{ duration: 0.18 }}
+              animate={
+                windup
+                  ? { scale: [1, 1.1, 1.06], rotate: [0, -4, 3] }
+                  : { scale: [1, 0.95, 1], rotate: [0, -2, 2, 0] }
+              }
+              transition={{ duration: windup ? 0.5 : 0.18 }}
               className="flex justify-center"
               style={{ position: "relative", zIndex: 2 }}
             >
               <HeadView friend={{ look: boss.look } as never} size={128} />
             </motion.div>
+
+            {windup && (
+              <motion.div
+                className="t-label"
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                style={{
+                  position: "relative", zIndex: 6, marginTop: 12,
+                  color: "#FF6B4D", fontSize: 11,
+                }}
+              >
+                {tr("ЗАМАХНУЛСЯ — СТАВЬ БЛОК")}
+              </motion.div>
+            )}
 
             {/* Туман от газа */}
             <AnimatePresence>
@@ -397,18 +533,48 @@ export default function BossFight({ onBack }: { onBack: () => void }) {
             <HpBar v={myHp} max={100} color="#59FF9E" />
           </Panel>
 
-          <Tap
-            onClick={punch}
-            accent r="md" center
-            className="w-full t-title"
-            style={{ fontSize: 16, padding: "20px 0" }}
-            sound="hit"
-          >
-            <span className="inline-flex items-center" style={{ gap: 9 }}>
-              <Icon name="fist" size={19} />{tr("БИТЬ")}</span>
-          </Tap>
+          <div className="flex" style={{ gap: 9 }}>
+            <Tap
+              onClick={punch}
+              accent r="md" center
+              className="t-title"
+              style={{ fontSize: 16, padding: "20px 0", flex: 2 }}
+              sound="hit"
+            >
+              <span className="inline-flex items-center" style={{ gap: 9 }}>
+                <Icon name="fist" size={19} />{tr("БИТЬ")}
+              </span>
+            </Tap>
+
+            <Tap
+              onClick={block}
+              r="md" center
+              disabled={!blockReady}
+              className="t-title"
+              style={{
+                fontSize: 14, padding: "20px 0", flex: 1,
+                background: blocking ? "rgba(89,255,158,0.2)" : undefined,
+                border: blocking
+                  ? "1.5px solid rgba(89,255,158,0.7)"
+                  : windup && blockReady
+                    ? "1.5px solid rgba(255,90,60,0.7)"
+                    : undefined,
+                opacity: blockReady ? 1 : 0.45,
+              }}
+              sound="none"
+            >
+              <span className="inline-flex items-center" style={{ gap: 7 }}>
+                <Icon name="shield" size={17} />{tr("БЛОК")}
+              </span>
+            </Tap>
+          </div>
+
           <div className="t-caption" style={{ marginTop: 9, textAlign: "center" }}>
-            {fog ? "Ничего не видно — половина ударов мимо" : `ударов: ${hits}`}
+            {fog
+              ? tr("Ничего не видно — половина ударов мимо")
+              : combo > 2
+                ? `${tr("серия")} ×${combo} · +${Math.min(10, combo) * 5}% ${tr("урона")}`
+                : `${tr("ударов")}: ${hits}`}
           </div>
         </>
       )}

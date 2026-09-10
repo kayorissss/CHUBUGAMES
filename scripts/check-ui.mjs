@@ -61,7 +61,9 @@ console.log('\n[6] Сборка офлайн');
 const dist=fs.readFileSync('dist/index.html','utf8');
 ok((dist.match(/data:font\/woff2/g)||[]).length===4,'шрифты вшиты в HTML (не грузятся из сети)');
 ok(!/fonts\.googleapis|fonts\.gstatic/.test(dist),'нет обращений к Google Fonts');
-ok(fs.statSync('dist/index.html').size < 900*1024,`размер ${(fs.statSync('dist/index.html').size/1024).toFixed(0)} КБ — в пределах нормы`);
+// Порог поднят с 900 КБ: 4 спорт-игры и переработанный главный экран
+// добавили ~45 КБ. Всё в одном файле — приложение обязано работать офлайн.
+ok(fs.statSync('dist/index.html').size < 1000*1024,`размер ${(fs.statSync('dist/index.html').size/1024).toFixed(0)} КБ — в пределах нормы`);
 
 console.log('\n[7] Обновление приложения');
 const upd=fs.readFileSync('src/core/updater.ts','utf8');
@@ -224,6 +226,37 @@ for (const g of ['basket', 'volley', 'penalty', 'pool']) {
 const bsk = fs.readFileSync('src/games/Basket.tsx','utf8');
 ok(bsk.includes('0.28 + power * 1.67'), 'сила броска совпадает с линией прицела');
 ok(!/[\u{1F300}-\u{1FAFF}]/u.test(bsk + fs.readFileSync('src/games/Pool.tsx','utf8')), 'в спорт-играх нет эмодзи');
+
+/* ── [18] Главный экран, босс, обновления ── */
+console.log('\n[18] Главный экран и обновления');
+const home18 = fs.readFileSync('src/pages/Home.tsx', 'utf8');
+ok(!home18.includes('Продолжить'), 'огромная плашка «Продолжить» убрана');
+ok(home18.includes('БОСС ПОЯВИЛСЯ'), 'на главной большая карточка босса');
+ok(home18.includes('nextBoss'), 'видно, кто заступит следующим');
+ok(!home18.includes('ModesPanel'), 'режимы и испытание убраны с главной');
+ok(fs.readFileSync('src/pages/Progress.tsx', 'utf8').includes('ModesPanel'),
+  'режимы и испытание переехали в «Прогресс»');
+ok(home18.indexOf('Сводка') === -1 || home18.indexOf('Stat icon') < home18.indexOf('GAME_META.map'),
+  'сводка поднята над сеткой игр');
+
+const bf18 = fs.readFileSync('src/pages/BossFight.tsx', 'utf8');
+ok(bf18.includes('setWindup'), 'босс замахивается перед ударом');
+ok(bf18.includes('blockReady'), 'у блока есть перезарядка');
+ok(bf18.includes('rageRef'), 'босс звереет на низком здоровье');
+ok(/hp: 780/.test(fs.readFileSync('src/core/bosses.ts', 'utf8')),
+  'здоровья боссам добавлено — бой не кончается за 4 секунды');
+
+const st18 = fs.readFileSync('src/pages/Settings.tsx', 'utf8');
+ok(st18.indexOf('settings.update') < st18.indexOf('settings.appearance'),
+  'раздел обновления в самом верху настроек');
+ok(st18.includes('KAYORISAN'), 'автор указан как KAYORISAN');
+ok(st18.includes('saveFileNative'), 'выгрузка сохранения работает на телефоне');
+ok(fs.readFileSync('src/core/notify.ts', 'utf8').includes('initNotificationsOnFirstRun'),
+  'разрешение на уведомления спрашивается при первом запуске');
+ok(fs.readFileSync('src/ui/UpdateBanner.tsx', 'utf8').includes('external'),
+  'проверка из настроек открывает тот же полноэкранный экран');
+ok(/FRICTION = 0\.9985/.test(fs.readFileSync('src/games/Pool.tsx', 'utf8')),
+  'в бильярде шары долетают до пирамиды');
 
 const stg2=fs.readFileSync('src/pages/Settings.tsx','utf8');
 ok(stg2.includes('notifyUpdates'),'тумблер уведомлений хранит своё состояние');
