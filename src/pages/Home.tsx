@@ -307,7 +307,7 @@ export default function Home({
                 className="t-num shrink-0 flex items-center"
                 style={{
                   gap: 5, padding: "7px 11px", borderRadius: 999,
-                  background: "rgba(200,155,255,0.16)",
+                  background: "var(--violet-soft)",
                   border: "1px solid rgba(200,155,255,0.4)",
                   color: "var(--violet)", fontSize: 13,
                 }}

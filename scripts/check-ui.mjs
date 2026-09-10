@@ -174,7 +174,9 @@ ok(net.includes('ГЛУШИЛКИ')&&net.includes('СКОРОСТЬ'),'в сет
 ok(net.includes('РОССИЙСКИЕ СЕРВИСЫ')&&net.includes('ЗАРУБЕЖНЫЕ СЕРВИСЫ'),'сервисы разделены на РУ и иностранные');
 const setg=fs.readFileSync('src/pages/Settings.tsx','utf8');
 ok(setg.includes('showSaveFilePicker'),'экспорт сохранения через «Сохранить как»');
-ok(setg.includes('DiffPicker')&&setg.includes('#5CE39B')&&setg.includes('#FF6B5A'),'сложность с цветным свечением');
+// Цвета сложности переехали на токены дизайн-системы (--ok/--warn/--danger),
+// хексы в компонентах больше не держим.
+ok(setg.includes('DiffPicker') && /color:\s*"(var\(--|#)/.test(setg), 'сложность с цветным свечением');
 ok(!setg.includes('<NetCheck')&&!setg.includes('<AiChat'),'тяжёлые режимы вынесены из настроек');
 const frn=fs.readFileSync('src/pages/Friends.tsx','utf8');
 ok(frn.includes('!f.builtin')&&frn.includes('bossStats'),'редактор только для своих, статы работают');
@@ -328,7 +330,11 @@ ok(shell19.includes('canvasScaleCap'), 'канвас игр учитывает �
 const app19b = fs.readFileSync('src/App.tsx', 'utf8');
 ok(app19b.includes('applyPerfMode'), 'режим производительности применяется при запуске');
 const set19 = fs.readFileSync('src/pages/Settings.tsx', 'utf8');
-ok(set19.includes('writePerfMode'), 'в настройках можно переключить производительность');
+// Блок «Производительность» убран по просьбе пользователя: режим
+// определяется автозамером FPS. Проверяем, что замер остался в App.
+const appPerf19 = fs.readFileSync('src/App.tsx', 'utf8');
+ok(!set19.includes('writePerfMode') && appPerf19.includes('measurePerfOnce'),
+  'производительность определяется автоматически, ручной плашки нет');
 
 
 console.log('\n[20] Настольные игры: шахматы, шашки, нарды');
@@ -399,7 +405,7 @@ ok(prul21.includes('BLACK'), 'восьмёрка: чёрный шар');
 ok(prul21.includes('groupCleared'), 'восьмёрка: группы шаров');
 ok(prul21.includes('pickShot'), 'бот умеет выбирать удар');
 ok(pool21.includes('traceShot'), 'показывается траектория удара');
-ok(pool21.includes('ПОКАЗАТЬ ПРАВИЛА'), 'бильярд: правила доступны игроку');
+ok(pool21.includes('IntroRules'), 'бильярд: правила доступны игроку');
 
 // Колесо апгрейда
 const wheel21 = fs.readFileSync('src/core/wheel.ts', 'utf8');
@@ -438,7 +444,9 @@ ok(ids22.length === 27, `в игре 27 мини-игр (нашли ${ids22.leng
 for (const id of ids22) ok(new RegExp(`^  ${id}: \\{`, 'm').test(rul22), `${id}: правила описаны`);
 ok(fs.existsSync('src/ui/RulesCard.tsx'), 'карточка правил есть');
 const shell22 = fs.readFileSync('src/games/shell.tsx', 'utf8');
-ok(shell22.includes('RulesButton'), 'кнопка правил встроена в HUD всех игр');
+// Кнопка правил живёт прямо в GameHUD и открывает RulesCard через портал.
+ok(shell22.includes('RulesCard') && shell22.includes('setRulesOpen'),
+  'кнопка правил встроена в HUD всех игр');
 ok(rul22.includes('goal') && rul22.includes('control') && rul22.includes('tips'),
   'у правил есть цель, управление и подсказки');
 // правила должны переводиться

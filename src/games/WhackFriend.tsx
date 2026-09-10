@@ -242,7 +242,7 @@ export default function WhackFriend({ onExit }: { onExit: () => void }) {
                   className="absolute inset-0 overflow-hidden"
                   style={{
                     borderRadius: 20,
-                    background: "radial-gradient(ellipse at 50% 30%, rgba(0,0,0,0.55), rgba(255,255,255,0.04))",
+                    background: "radial-gradient(ellipse at 50% 30%, var(--n-000), var(--n-200))",
                     border: "1px solid var(--glass-brd)",
                   }}
                   onPointerDown={() => m && hit(m)}
@@ -253,7 +253,7 @@ export default function WhackFriend({ onExit }: { onExit: () => void }) {
                         key={m.id}
                         initial={{ y: "100%" }}
                         animate={{ y: "12%" }}
-                        exit={{ y: "100%", opacity: 0.4 }}
+                        exit={{ y: "100%", opacity: 0 }}
                         transition={{ type: "spring", stiffness: 380, damping: 26 }}
                         className="absolute inset-0 flex items-end justify-center"
                       >

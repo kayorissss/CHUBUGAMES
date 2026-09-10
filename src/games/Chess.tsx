@@ -423,7 +423,7 @@ export default function Chess({ onExit }: { onExit: () => void }) {
 
         <div
           className="t-body"
-          style={{ fontSize: 11, opacity: 0.5, textAlign: "center", marginTop: 8, lineHeight: 1.45 }}
+          style={{ fontSize: 11.5, color: "var(--text-mute)", textAlign: "center", marginTop: 8, lineHeight: 1.45 }}
         >
           {tr("Веди фигуру пальцем или тапни клетку")}
         </div>

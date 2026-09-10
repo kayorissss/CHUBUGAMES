@@ -128,7 +128,7 @@ export default function ModesPanel() {
               className="shrink-0 flex items-center justify-center"
               style={{
                 width: 42, height: 42, borderRadius: "var(--r-sm)",
-                background: "rgba(95,168,255,0.16)", color: "#5FA8FF",
+                background: "var(--info-soft)", color: "var(--info)",
               }}
             >
               <Icon name="bolt" size={20} />

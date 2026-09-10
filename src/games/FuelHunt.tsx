@@ -302,7 +302,7 @@ export default function FuelHunt({ onExit }: { onExit: () => void }) {
               {dryPct}% {tr("сухо")}
             </span>
           </div>
-          <div style={{ height: 6, borderRadius: 999, background: "rgba(89,255,158,0.25)", overflow: "hidden" }}>
+          <div style={{ height: 6, borderRadius: 999, background: "var(--ok-soft)", overflow: "hidden" }}>
             <motion.div
               animate={{ width: `${dryPct}%` }}
               transition={{ duration: 0.3 }}
@@ -362,7 +362,7 @@ export default function FuelHunt({ onExit }: { onExit: () => void }) {
                   padding: "12px 13px", borderRadius: "var(--r-md)",
                   background: "var(--surface)",
                   border: `1px solid ${
-                    st.visited ? "rgba(255,255,255,0.07)"
+                    st.visited ? "var(--fill-1)"
                       : st.known ? (st.stock > 0 ? "rgba(89,255,158,0.45)" : "rgba(255,107,77,0.45)")
                         : "var(--surface-brd)"
                   }`,

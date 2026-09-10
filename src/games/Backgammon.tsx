@@ -275,7 +275,7 @@ export default function Backgammon({ onExit }: { onExit: () => void }) {
         {/* доска */}
         <div
           style={{
-            background: "#2a2a32", border: "1px solid var(--surface-brd)",
+            background: "var(--surface-2)", border: "1px solid var(--surface-brd)",
             borderRadius: "var(--r-md)", padding: 6, overflow: "hidden",
           }}
         >
@@ -421,7 +421,7 @@ function PointRow({
             {isHead && n === 0 && (
               <div
                 className="t-label"
-                style={{ position: "absolute", top: "45%", fontSize: 7, opacity: 0.3 }}
+                style={{ position: "absolute", top: "45%", fontSize: 8, opacity: 0.75 }}
               >
                 {tr("ГОЛОВА")}
               </div>
@@ -443,7 +443,7 @@ function PointRow({
                 className="t-num"
                 style={{
                   fontSize: 9, color: color === "w" ? "#fff" : "#fff",
-                  background: "rgba(0,0,0,0.6)", borderRadius: 3, padding: "0 3px",
+                  background: "var(--scrim)", borderRadius: 3, padding: "0 3px",
                 }}
               >
                 +{n - 5}

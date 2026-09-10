@@ -33,7 +33,7 @@ interface NeedDef {
 
 const NEEDS: NeedDef[] = [
   { id: "food", label: "Сытость", icon: "burger", color: "var(--gold)", drain: 3.1, action: "КОРМИТЬ" },
-  { id: "clean", label: "Чистота", icon: "sparkle", color: "#8FD3FF", drain: 2.4, action: "МЫТЬ" },
+  { id: "clean", label: "Чистота", icon: "sparkle", color: "#8fd3ff", drain: 2.4, action: "МЫТЬ" },
   { id: "laundry", label: "Одежда", icon: "shop", color: "var(--violet)", drain: 1.9, action: "СТИРАТЬ" },
   { id: "toilet", label: "Терпит", icon: "warn", color: "var(--ok)", drain: 2.7, action: "НА УНИТАЗ" },
 ];

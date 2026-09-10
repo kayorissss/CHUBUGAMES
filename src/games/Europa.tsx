@@ -295,7 +295,7 @@ export default function Europa({ onExit }: { onExit: () => void }) {
                       key={`${p.id}-${id}`}
                       x1={p.x * 100} y1={p.y * 105}
                       x2={q.x * 100} y2={q.y * 105}
-                      stroke="rgba(255,255,255,0.13)"
+                      stroke="var(--surface-brd)"
                       strokeWidth="0.5"
                     />
                   );
@@ -339,7 +339,7 @@ export default function Europa({ onExit }: { onExit: () => void }) {
                       key={i}
                       style={{
                         width: 3, height: 3, borderRadius: 999, display: "block",
-                        background: "rgba(255,255,255,0.5)",
+                        background: "var(--n-700)",
                       }}
                     />
                   ))}

@@ -338,7 +338,7 @@ export default function Settings({
       </Card>
 
       <div className="text-center" style={{ paddingBlock: 18 }}>
-        <div className="t-display-sm" style={{ opacity: 0.22 }}>ЧУБУГЕЙМ</div>
+        <div className="t-display-sm" style={{ color: "var(--n-400)" }}>ЧУБУГЕЙМ</div>
         <div className="t-caption" style={{ marginTop: 5 }}>
           {t("common.version")} {APP_VERSION} · {t("settings.offline")}
         </div>
@@ -527,7 +527,7 @@ function Toggle({
       >
         <div
           style={{
-            width: 21, height: 21, borderRadius: 999, background: "#fff",
+            width: 21, height: 21, borderRadius: 999, background: "var(--n-900)",
             transform: `translateX(${on ? 19 : 0}px)`,
             transition: "transform 0.22s cubic-bezier(0.34,1.4,0.64,1)",
             boxShadow: "0 2px 6px rgba(0,0,0,0.35)",

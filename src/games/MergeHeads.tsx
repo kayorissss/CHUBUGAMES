@@ -380,7 +380,7 @@ function Tile({ v, friends, pop }: { v: number; friends: Friend[]; pop: boolean 
         style={{
           bottom: 3, fontSize: v >= 1024 ? 9.5 : 11,
           padding: "1px 6px", borderRadius: 999, lineHeight: 1.35,
-          background: "rgba(0,0,0,0.42)",
+          background: "var(--scrim)",
           color: isBig ? "var(--acc)" : "#e8e8f0",
         }}
       >
