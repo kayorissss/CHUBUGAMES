@@ -105,10 +105,16 @@ export const DEFAULT_FRIENDS: Friend[] = [
     builtin: true,
     rarity: "legend",
     quote: "Кто трогал настройки в тридцать первом кабинете?",
+    /* Пользователь: «Шитов не так выглядит, в игре он какой-то старик,
+       а не брюнет пухлый с короткой стрижкой». Волосы были почти
+       чёрными, но hairStyle 9 с полупрозрачными висками читался как
+       седина/лысина, а очки (glasses: 2) добавляли возраста.
+       Стало: чистый брюнет, короткая стрижка (1), без очков,
+       широкое лицо и плотное телосложение. */
     look: {
-      skin: "#e8b48c", hair: "#17131a", hairStyle: 9, eyes: "#3a3340",
-      brow: 1, facial: 0, glasses: 2, wide: 1.24,
-      shirt: "plain", shirtColor: "#31384a",
+      skin: "#e8b48c", hair: "#1b1620", hairStyle: 1, eyes: "#3a3340",
+      brow: 1, facial: 0, glasses: 0, wide: 1.3,
+      shirt: "plain", shirtColor: "#31384a", build: "short",
     },
     stats: { spit: 66, chub: 58, chaos: 70, luck: 74 },
   },

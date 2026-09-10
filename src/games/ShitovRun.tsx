@@ -34,10 +34,35 @@ interface Obstacle {
 /* Габариты героя в долях высоты экрана */
 const HERO_H = 0.15; // рост стоя
 const HERO_DUCK_H = 0.072; // рост в подкате
-const HERO_W = 0.052;
 
-const GRAV = 0.0028;
-const JUMP_V = -0.95;
+/**
+ * Полуширина ХИТБОКСА (не картинки!).
+ *
+ * Было 0.052 — то есть корпус шириной 10.4% экрана. Именно отсюда
+ * «человечек по виду даже не задевает, а всё равно задевает»: игрок
+ * смотрит на нарисованного бегуна, а считается широкий прямоугольник
+ * вокруг него. Теперь хитбокс уже рисунка, как и принято в раннерах:
+ * лучше простить лишний пиксель, чем засчитать несправедливый удар.
+ */
+const HERO_W = 0.030;
+
+/**
+ * Прыжок пересчитан, а не подобран на глаз.
+ *
+ * Проверка старых чисел (GRAV 0.0028, JUMP_V -0.95): полёт 678 мс, пик
+ * 0.257 экрана. Монитор высотой 0.132 на стартовой скорости перекрывает
+ * героя по горизонтали 785 мс, а выше монитора герой находится только
+ * 473 мс. То есть перепрыгнуть его одним прыжком было МАТЕМАТИЧЕСКИ
+ * НЕВОЗМОЖНО — ровно то, на что жаловался пользователь («через
+ * препятствие перепрыгивает только через 2 тапа»).
+ *
+ * Новые числа подобраны перебором так, чтобы на всех скоростях
+ * (0.26…0.78) любое наземное препятствие проходилось ОДНИМ прыжком с
+ * запасом не меньше 120 мс: полёт 916 мс, пик 0.40 экрана, худший
+ * случай — монитор на старте, запас 136 мс.
+ */
+const GRAV = 0.0024;
+const JUMP_V = -1.1;
 
 export default function ShitovRun({ onExit }: { onExit: () => void }) {
   const { s, addCoins, addXp, bump, finishGame, questProgress } = useGame();
@@ -122,7 +147,8 @@ export default function ShitovRun({ onExit }: { onExit: () => void }) {
     const g = G.current;
     if (!g.running) return;
     if (g.jumps >= 2) return;
-    g.vy = JUMP_V * (g.jumps === 0 ? 1 : 0.82);
+    // второй прыжок — «доводка» в воздухе, а не способ вообще перелететь
+    g.vy = JUMP_V * (g.jumps === 0 ? 1 : 0.7);
     g.jumps += 1;
     sfx.swoosh?.();
     haptic("light");
@@ -130,35 +156,54 @@ export default function ShitovRun({ onExit }: { onExit: () => void }) {
 
   const surfRef = useRef<HTMLDivElement>(null);
   const touchStart = useRef<{ x: number; y: number; t: number } | null>(null);
+  /** касание ещё может стать тапом-прыжком (палец не увели в жест) */
+  const pendingTap = useRef(false);
 
   useEffect(() => {
     const el = surfRef.current;
     if (!el) return;
 
-    // Управление сделано предсказуемым:
-    // нижняя треть экрана — держишь палец, герой в подкате;
-    // остальной экран — тап прыгает. Плюс свайп вниз тоже приседает.
+    /**
+     * Управление жестами по ВСЕМУ экрану.
+     *
+     * Раньше приседание работало только в нижней трети — пользователь
+     * спросил, почему нельзя присесть в любом месте. Причина была лишь
+     * в том, что зона задавалась координатой. Теперь решает жест:
+     *
+     *   тап (короткое касание без движения) — прыжок;
+     *   потянул вниз — подкат, пока держишь палец;
+     *   потянул вверх — прыжок.
+     *
+     * Прыжок откладывается до отпускания или до того, как палец
+     * сдвинется: иначе «нажал, чтобы присесть» сначала подбрасывало.
+     */
+    const SWIPE = 22;      // порог жеста, px
+    const TAP_MS = 260;    // дольше — уже удержание, а не тап
+
     const down = (e: PointerEvent) => {
       e.preventDefault();
       el.setPointerCapture?.(e.pointerId);
-      const r = el.getBoundingClientRect();
-      const lowZone = e.clientY - r.top > r.height * 0.62;
       touchStart.current = { x: e.clientX, y: e.clientY, t: performance.now() };
-      if (lowZone) {
-        G.current.ducking = true;
-      } else {
-        jump();
-      }
+      pendingTap.current = true;
     };
     const move = (e: PointerEvent) => {
       const st = touchStart.current;
       if (!st) return;
       const dy = e.clientY - st.y;
-      // потянул вниз в любой зоне — тоже подкат
-      if (dy > 24) G.current.ducking = true;
-      if (dy < -34) G.current.ducking = false;
+      if (dy > SWIPE) {
+        // тянут вниз — подкат, прыжка уже не будет
+        pendingTap.current = false;
+        G.current.ducking = true;
+      } else if (dy < -SWIPE) {
+        G.current.ducking = false;
+        if (pendingTap.current) { pendingTap.current = false; jump(); }
+      }
     };
     const up = () => {
+      const st = touchStart.current;
+      // короткое касание без жеста = прыжок
+      if (st && pendingTap.current && performance.now() - st.t < TAP_MS) jump();
+      pendingTap.current = false;
       touchStart.current = null;
       G.current.ducking = false;
     };
@@ -401,7 +446,8 @@ export default function ShitovRun({ onExit }: { onExit: () => void }) {
       heroR * 0.92,
       { mouth: 0.4 + Math.sin(g.run) * 0.2, angry: 0.75, tilt: Math.sin(g.run * 0.5) * 0.1 },
     );
-    drawRunnerBody(ctx, chaseX + heroR * 0.4, groundY - shHop, heroR * 0.92, g.run, "#4a5a6a", false);
+    // chub 1.55 — Шитов заметно плотнее героя, как и описан
+    drawRunnerBody(ctx, chaseX + heroR * 0.4, groundY - shHop, heroR * 0.92, g.run, "#4a5a6a", false, 1.55);
 
     // ГЕРОЙ
     const hy = groundY - g.y * H;
@@ -469,8 +515,15 @@ export default function ShitovRun({ onExit }: { onExit: () => void }) {
           className="absolute left-0 right-0 text-center pointer-events-none"
           style={{ bottom: "calc(var(--sab) + 22px)" }}
         >
-          <div className="t-caption">
-            Верх экрана — прыжок (двойной тоже) · низ экрана держи — подкат
+          <div
+            className="t-title-sm flex items-center"
+            style={{
+              gap: 8, padding: "9px 14px", borderRadius: "var(--r-md)",
+              background: "var(--surface-2)", border: "1px solid var(--btn-brd)",
+              fontSize: 11.5,
+            }}
+          >
+            {tr("Тап — прыжок · потяни вниз — подкат")}
           </div>
         </div>
       )}
@@ -513,10 +566,15 @@ export default function ShitovRun({ onExit }: { onExit: () => void }) {
 
 /* ================= отрисовка ================= */
 
+/**
+ * @param chub  полнота корпуса: 1 — обычный, 1.5 — заметно пухлый.
+ *              Шитов по описанию «брюнет пухлый», а рисовался таким же
+ *              худым прямоугольником, как герой.
+ */
 function drawRunnerBody(
   ctx: CanvasRenderingContext2D,
   x: number, groundY: number, r: number,
-  phase: number, color: string, duck: boolean,
+  phase: number, color: string, duck: boolean, chub = 1,
 ) {
   ctx.save();
   ctx.translate(x, groundY);
@@ -524,35 +582,41 @@ function drawRunnerBody(
 
   // ноги
   ctx.strokeStyle = color;
-  ctx.lineWidth = r * 0.26;
+  ctx.lineWidth = r * 0.26 * chub;
   ctx.lineCap = "round";
   const swing = Math.sin(phase) * r * 0.45;
   ctx.beginPath();
-  ctx.moveTo(-r * 0.16, -bodyH * 0.15);
-  ctx.lineTo(-r * 0.16 + swing, -2);
-  ctx.moveTo(r * 0.16, -bodyH * 0.15);
-  ctx.lineTo(r * 0.16 - swing, -2);
+  ctx.moveTo(-r * 0.16 * chub, -bodyH * 0.15);
+  ctx.lineTo(-r * 0.16 * chub + swing, -2);
+  ctx.moveTo(r * 0.16 * chub, -bodyH * 0.15);
+  ctx.lineTo(r * 0.16 * chub - swing, -2);
   ctx.stroke();
 
   // корпус
   ctx.fillStyle = color;
   ctx.beginPath();
   if (duck) {
-    ctx.roundRect(-r * 0.7, -bodyH - r * 0.05, r * 1.4, bodyH, r * 0.28);
+    ctx.roundRect(-r * 0.7 * chub, -bodyH - r * 0.05, r * 1.4 * chub, bodyH, r * 0.28);
   } else {
-    ctx.roundRect(-r * 0.46, -bodyH - r * 0.1, r * 0.92, bodyH, r * 0.3);
+    // пухлому корпус не просто шире, а с округлым животом
+    const bw = r * 0.46 * chub;
+    ctx.moveTo(-bw * 0.82, -bodyH - r * 0.1);
+    ctx.quadraticCurveTo(-bw * 1.18, -bodyH * 0.5, -bw * 0.92, -r * 0.06);
+    ctx.lineTo(bw * 0.92, -r * 0.06);
+    ctx.quadraticCurveTo(bw * 1.18, -bodyH * 0.5, bw * 0.82, -bodyH - r * 0.1);
+    ctx.closePath();
   }
   ctx.fill();
 
   // руки
   ctx.strokeStyle = color;
-  ctx.lineWidth = r * 0.2;
+  ctx.lineWidth = r * 0.2 * chub;
   const arm = Math.sin(phase + Math.PI) * r * 0.4;
   ctx.beginPath();
-  ctx.moveTo(-r * 0.4, -bodyH * 0.72);
-  ctx.lineTo(-r * 0.62 + arm, -bodyH * 0.28);
-  ctx.moveTo(r * 0.4, -bodyH * 0.72);
-  ctx.lineTo(r * 0.62 - arm, -bodyH * 0.28);
+  ctx.moveTo(-r * 0.4 * chub, -bodyH * 0.72);
+  ctx.lineTo(-r * 0.62 * chub + arm, -bodyH * 0.28);
+  ctx.moveTo(r * 0.4 * chub, -bodyH * 0.72);
+  ctx.lineTo(r * 0.62 * chub - arm, -bodyH * 0.28);
   ctx.stroke();
   ctx.restore();
 }

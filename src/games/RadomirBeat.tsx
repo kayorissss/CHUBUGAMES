@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence } from "framer-motion";
 import { useGame } from "../core/store";
 import { tr } from "../core/i18n";
 import { drawHead } from "../core/head";
@@ -11,6 +11,7 @@ import {
   type Onset,
 } from "../core/track";
 import Icon from "../ui/Icon";
+import GameIntro, { IntroGroup } from "../ui/GameIntro";
 
 /**
  * РИТМ РАДОМИРА.
@@ -58,19 +59,49 @@ const GOOD = 250;
  *  - аккорды (две ноты разом) только на адском уровне;
  *  - плотность растёт плавно и зависит от выбранной сложности.
  */
-function builtinChart(diff: "chill" | "normal" | "insane"): Note[] {
+function builtinChart(diff: "chill" | "normal" | "insane", seed = 1): Note[] {
   const notes: Note[] = [];
   const beat = 60000 / 124;
   // шаг между возможными нотами: на чилле реже, на адском чаще
   const step = diff === "insane" ? beat / 2 : beat;
+
+  /**
+   * Заход генерируется от seed, поэтому каждый раз рисунок нот другой.
+   *
+   * Пользователь: «уровни должны меняться каждый раз, а то однотипные
+   * ноты». Раньше полоса считалась формулой (i*7 + bar*3) % 3 — она
+   * детерминированная, и партия была БУКВАЛЬНО одна и та же всегда.
+   * Простой ГПСЧ (xorshift) даёт разный рисунок при том же ритме.
+   */
+  let rnd = (seed * 2654435761) >>> 0;
+  const rand = () => {
+    rnd ^= rnd << 13; rnd >>>= 0;
+    rnd ^= rnd >> 17;
+    rnd ^= rnd << 5; rnd >>>= 0;
+    return rnd / 4294967296;
+  };
+  /** каждые 4 такта — свой рисунок: лесенка, качели или разброс */
+  const figures = ["stair", "swing", "spread"] as const;
+
   let t = 2000;
   let i = 0;
+  let lastLane = -1;
   while (t < 95000) {
     const bar = Math.floor(i / 8);
     const dMax = diff === "chill" ? 3 : diff === "insane" ? 5 : 4;
     const density = Math.min(dMax, bar < 4 ? 2 : bar < 10 ? 3 : bar < 18 ? 4 : 5);
     if (i % 8 < density) {
-      const lane = ((i * 7 + bar * 3) % LANES) as 0 | 1 | 2;
+      const fig = figures[Math.floor(rand() * figures.length + bar / 4) % figures.length];
+      let lane: 0 | 1 | 2;
+      if (fig === "stair") lane = ((i + bar) % LANES) as 0 | 1 | 2;
+      else if (fig === "swing") lane = ((i % 2 === 0 ? 0 : 2 - (bar % 2))) as 0 | 1 | 2;
+      else {
+        // разброс, но не две одинаковые полосы подряд
+        let l = Math.floor(rand() * LANES);
+        if (l === lastLane) l = (l + 1 + Math.floor(rand() * (LANES - 1))) % LANES;
+        lane = l as 0 | 1 | 2;
+      }
+      lastLane = lane;
       // длинная нота пореже, чтобы не сбивать ритм
       const hold = bar >= 6 && i % 32 === 0 ? beat * 2 : 0;
       notes.push({ lane, t, hold, hit: false, missed: false, holding: false, holdOk: 0, done: false });
@@ -96,6 +127,20 @@ function chartFromOnsets(
   const notes: Note[] = [];
   // Минимальный промежуток между нотами: пальцем быстрее просто не успеть
   const minGap = diff === "chill" ? 420 : diff === "insane" ? 220 : 320;
+  /**
+   * Сколько полос разрешено держать ОДНОВРЕМЕННО.
+   *
+   * Пользователь: «три зажима одновременно, а тебе чо паук чтоль».
+   * Проверка старого генератора это подтвердила: длинные ноты
+   * накладывались друг на друга и в пике требовалось держать три
+   * полосы разом. Причём каждая по отдельности выглядела законной —
+   * ограничения на пересечение просто не было.
+   *
+   * Телефон держат одной-двумя руками, поэтому: 1 палец на чилле,
+   * 2 на остальных. Нота, которая не влезает в лимит, становится
+   * обычной, а не длинной.
+   */
+  const maxHold = diff === "chill" ? 1 : 2;
   let lastT = -9999;
   for (let i = 0; i < ons.length; i++) {
     const o = ons[i];
@@ -104,7 +149,14 @@ function chartFromOnsets(
     // длинная нота: если в этой же полосе дальше пауза > 700 мс, а удар сильный
     const nextSame = ons.find((x, j) => j > i && x.band === o.band);
     const gapMs = nextSame ? nextSame.t - o.t : 9999;
-    const hold = o.strength > 0.72 && gapMs > 900 ? Math.min(1400, gapMs - 400) : 0;
+    let hold = o.strength > 0.72 && gapMs > 900 ? Math.min(1400, gapMs - 400) : 0;
+
+    if (hold > 0) {
+      // сколько длинных нот ещё звучит в этот момент
+      const busy = notes.filter((n) => n.hold > 0 && n.t <= o.t && n.t + n.hold >= o.t).length;
+      if (busy >= maxHold) hold = 0;
+    }
+
     notes.push({
       lane: o.band, t: o.t, hold,
       hit: false, missed: false, holding: false, holdOk: 0, done: false,
@@ -234,7 +286,9 @@ export default function RadomirBeat({ onExit }: { onExit: () => void }) {
   const reset = useCallback(() => {
     const g = G.current;
     g.running = false;
-    g.notes = (useOwn ? chartRef.current! : builtinChart(s.settings.difficulty)).map((n) => ({ ...n }));
+    // seed от времени: каждый заход — новый рисунок нот
+    g.notes = (useOwn ? chartRef.current! : builtinChart(s.settings.difficulty, Date.now() & 0xffff))
+      .map((n) => ({ ...n }));
     g.time = 0; g.score = 0; g.combo = 0; g.bestCombo = 0;
     g.lives = 5; g.hits = 0; g.perfect = 0;
     g.flash = [0, 0, 0]; g.held = [false, false, false];
@@ -598,86 +652,74 @@ export default function RadomirBeat({ onExit }: { onExit: () => void }) {
       {/* Меню трека */}
       <AnimatePresence>
         {phase === "menu" && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="absolute inset-0 z-30 flex items-center justify-center"
-            style={{ background: "rgba(6,6,9,0.92)", padding: 20 }}
+          <GameIntro
+            title={tr("РИТМ РАДОМИРА")}
+            subtitle={tr("Короткие ноты — тап, длинные — держи палец до конца хвоста.")}
+            icon="note"
+            startLabel={tr("ИГРАТЬ")}
+            onStart={start}
+            onExit={onExit}
           >
-            <motion.div
-              initial={{ y: 26, scale: 0.96 }}
-              animate={{ y: 0, scale: 1 }}
-              className="w-full"
-              style={{
-                maxWidth: 360, background: "var(--surface)",
-                border: "1px solid var(--surface-brd)",
-                borderRadius: "var(--r-xl)", padding: 20,
-              }}
-            >
-              <div className="t-title" style={{ marginBottom: 4 }}>РИТМ РАДОМИРА</div>
-              <div className="t-caption" style={{ marginBottom: 16, lineHeight: 1.5 }}>
-                Ноты падают по трём дорожкам. Короткие — тап, длинные зелёные — держи палец
-                до конца хвоста.
-              </div>
-
+            {/* Что играет сейчас. Инструкцию «как поставить Фембойчик» со
+                ссылкой на hitmoz убрал: трек уже лежит в приложении. */}
+            <IntroGroup label={tr("СЕЙЧАС ИГРАЕТ")}>
               <div
                 style={{
-                  padding: "12px 13px", borderRadius: "var(--r-md)",
-                  background: "var(--btn-bg)", border: "1px solid var(--btn-brd)",
+                  padding: "14px 15px", borderRadius: "var(--r-md)",
+                  background: "var(--surface-2)", border: "1px solid var(--btn-brd)",
                 }}
               >
-                <div className="flex items-center" style={{ gap: 9 }}>
-                  <Icon name="music" size={17} accent />
+                <div className="flex items-center" style={{ gap: 11 }}>
+                  <span className="ico-box ico-box-acc shrink-0" style={{ width: 40, height: 40 }}>
+                    <Icon name="music" size={19} />
+                  </span>
                   <div className="min-w-0 flex-1">
-                    <div className="t-body clip1" style={{ fontWeight: 600 }}>
-                      {trackName
-                        || (builtinReady ? BUILTIN_TRACK.title : "Встроенный бит")}
+                    <div className="t-title-sm clip1" style={{ fontSize: 13 }}>
+                      {trackName || (builtinReady ? BUILTIN_TRACK.title : tr("Встроенный бит"))}
                     </div>
-                    <div className="t-caption clip1">
+                    <div className="t-caption clip1" style={{ marginTop: 2 }}>
                       {trackName
-                        ? "твой трек, ноты из музыки"
+                        ? tr("твой трек — ноты из музыки")
                         : builtinReady
-                          ? `${BUILTIN_TRACK.artist} — ноты из музыки`
-                          : analyzing ? "загружаю трек…" : "синтезируется в приложении"}
+                          ? `${BUILTIN_TRACK.artist} — ${tr("ноты из музыки")}`
+                          : analyzing ? tr("загружаю трек…") : tr("синтезируется в приложении")}
                     </div>
                   </div>
                 </div>
 
                 {loadErr && (
-                  <div className="t-caption" style={{ marginTop: 8, color: "var(--danger)" }}>
+                  <div className="t-caption" style={{ marginTop: 9, color: "var(--danger)" }}>
                     {loadErr}
                   </div>
                 )}
 
-                <div className="flex flex-wrap" style={{ gap: 7, marginTop: 11 }}>
+                {/* Кнопка крупная и по центру — пользователь просил именно так */}
+                <button
+                  type="button"
+                  disabled={analyzing}
+                  onClick={() => { sfx.click(); fileRef.current?.click(); }}
+                  className="btn-flat w-full"
+                  style={{ marginTop: 12, minHeight: 46, fontSize: 12.5 }}
+                >
+                  <Icon name="upload" size={15} />
+                  {analyzing
+                    ? tr("АНАЛИЗИРУЮ…")
+                    : trackName ? tr("ЗАМЕНИТЬ ТРЕК") : tr("ЗАГРУЗИТЬ СВОЙ ТРЕК")}
+                </button>
+                {trackName && (
                   <button
                     type="button"
-                    disabled={analyzing}
-                    onClick={() => fileRef.current?.click()}
-                    className="t-caption"
+                    onClick={() => { sfx.click(); dropTrack(); }}
+                    className="w-full t-caption"
                     style={{
-                      padding: "8px 12px", borderRadius: "var(--r-sm)",
-                      background: "var(--acc)", color: "var(--acc-ink)", fontWeight: 700,
-                      opacity: analyzing ? 0.6 : 1,
+                      marginTop: 8, minHeight: 38, borderRadius: "var(--r-sm)",
+                      background: "transparent", border: "1px solid var(--btn-brd)",
+                      color: "var(--text-dim)",
                     }}
                   >
-                    {analyzing ? "Анализирую…" : trackName ? "Заменить трек" : "Загрузить свой трек"}
+                    {tr("Вернуть встроенный трек")}
                   </button>
-                  {trackName && (
-                    <button
-                      type="button"
-                      onClick={dropTrack}
-                      className="t-caption"
-                      style={{
-                        padding: "8px 12px", borderRadius: "var(--r-sm)",
-                        background: "transparent", border: "1px solid var(--btn-brd)",
-                      }}
-                    >
-                      Убрать
-                    </button>
-                  )}
-                </div>
+                )}
                 <input
                   ref={fileRef}
                   type="file"
@@ -690,47 +732,12 @@ export default function RadomirBeat({ onExit }: { onExit: () => void }) {
                   }}
                 />
               </div>
+            </IntroGroup>
 
-              <div
-                className="t-caption"
-                style={{
-                  marginTop: 10, lineHeight: 1.6, padding: "11px 12px",
-                  borderRadius: "var(--r-md)",
-                  background: "var(--btn-bg)", border: "1px solid var(--btn-brd)",
-                }}
-              >
-                <span className="t-title-sm" style={{ fontSize: 11.5, display: "block", marginBottom: 5 }}>
-                  КАК ПОСТАВИТЬ «ФЕМБОЙЧИК»
-                </span>
-                1. Открой ru.hitmoz.org/song/81331674 в браузере.<br />
-                2. Скачай mp3 в память телефона.<br />
-                3. Жми «Загрузить свой трек» и выбери файл.<br />
-                Игра сама разложит удары по дорожкам. Трек останется на телефоне
-                и будет играть офлайн — авторские права остаются у onokami,
-                поэтому файл не зашит в приложение.
-              </div>
-
-              <button
-                type="button"
-                onClick={() => { sfx.power?.(); haptic("medium"); start(); }}
-                className="w-full t-title-sm"
-                style={{
-                  marginTop: 16, padding: "13px 0", borderRadius: "var(--r-md)",
-                  background: "var(--acc)", color: "var(--acc-ink)", fontWeight: 700,
-                }}
-              >
-                ИГРАТЬ
-              </button>
-              <button
-                type="button"
-                onClick={onExit}
-                className="w-full t-caption"
-                style={{ marginTop: 10, padding: 6 }}
-              >
-                Выйти
-              </button>
-            </motion.div>
-          </motion.div>
+            <div className="t-caption" style={{ lineHeight: 1.55 }}>
+              {tr("Рисунок нот собирается заново на каждый заход, так что дважды одинаковых партий не будет.")}
+            </div>
+          </GameIntro>
         )}
       </AnimatePresence>
 
