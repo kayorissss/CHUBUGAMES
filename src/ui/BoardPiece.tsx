@@ -61,7 +61,7 @@ export function CheckerPiece({
       {king && (
         <path
           d="M16 27l-1.6-8 5.2 3.6L24 15l4.4 7.6 5.2-3.6L32 27H16z"
-          fill="#ffb020" stroke="#7a5200" strokeWidth="1.1" strokeLinejoin="round"
+          fill="var(--gold)" stroke="#7a5200" strokeWidth="1.1" strokeLinejoin="round"
         />
       )}
     </svg>

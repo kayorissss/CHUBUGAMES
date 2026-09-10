@@ -273,10 +273,10 @@ export default function FuelHunt({ onExit }: { onExit: () => void }) {
             <span className="t-label flex-1" style={{ fontSize: 9 }}>{tr("НАЛИТО В БАК")}</span>
             <span className="t-num" style={{ fontSize: 12 }}>{got} / {GOAL} {tr("л")}</span>
           </div>
-          <div style={{ height: 6, borderRadius: 999, background: "rgba(255,255,255,0.08)", overflow: "hidden" }}>
+          <div style={{ height: 6, borderRadius: 999, background: "var(--fill-2)", overflow: "hidden" }}>
             <motion.div
               animate={{ width: `${goalPct}%` }}
-              style={{ height: "100%", background: "#59FF9E" }}
+              style={{ height: "100%", background: "var(--ok)" }}
             />
           </div>
         </div>
@@ -297,7 +297,7 @@ export default function FuelHunt({ onExit }: { onExit: () => void }) {
             <span className="t-label flex-1" style={{ fontSize: 9 }}>{tr("ОБСТАНОВКА С БЕНЗИНОМ")}</span>
             <span
               className="t-num"
-              style={{ fontSize: 12, color: dryPct > 70 ? "#FF6B4D" : dryPct > 55 ? "#FFB020" : "#59FF9E" }}
+              style={{ fontSize: 12, color: dryPct > 70 ? "var(--danger)" : dryPct > 55 ? "var(--gold)" : "var(--ok)" }}
             >
               {dryPct}% {tr("сухо")}
             </span>
@@ -306,7 +306,7 @@ export default function FuelHunt({ onExit }: { onExit: () => void }) {
             <motion.div
               animate={{ width: `${dryPct}%` }}
               transition={{ duration: 0.3 }}
-              style={{ height: "100%", background: dryPct > 70 ? "#FF6B4D" : "#FFB020" }}
+              style={{ height: "100%", background: dryPct > 70 ? "var(--danger)" : "var(--gold)" }}
             />
           </div>
           <div className="t-caption" style={{ fontSize: 10.5, marginTop: 7, opacity: 0.7 }}>
@@ -380,7 +380,7 @@ export default function FuelHunt({ onExit }: { onExit: () => void }) {
                       style={{
                         fontSize: 8, padding: "3px 7px", borderRadius: 999,
                         background: st.stock > 0 ? "rgba(89,255,158,0.14)" : "rgba(255,107,77,0.14)",
-                        color: st.stock > 0 ? "#59FF9E" : "#FF6B4D",
+                        color: st.stock > 0 ? "var(--ok)" : "var(--danger)",
                       }}
                     >
                       {st.stock > 0 ? tr("ЕСТЬ") : tr("СУХО")}
@@ -389,7 +389,7 @@ export default function FuelHunt({ onExit }: { onExit: () => void }) {
                 </div>
 
                 <div className="flex items-center" style={{ gap: 12, marginBottom: 10 }}>
-                  <span className="t-caption" style={{ color: far ? "#FF6B4D" : "var(--text-mute)" }}>
+                  <span className="t-caption" style={{ color: far ? "var(--danger)" : "var(--text-mute)" }}>
                     {tr("дорога")} {st.dist} {tr("л")}
                   </span>
                   <span className="t-caption" style={{ color: "var(--text-mute)" }}>
@@ -424,7 +424,7 @@ export default function FuelHunt({ onExit }: { onExit: () => void }) {
                       flex: 1.3, padding: "10px 8px", borderRadius: "var(--r-sm)",
                       background: far ? "rgba(255,107,77,0.16)" : "var(--acc)",
                       border: `1px solid ${far ? "rgba(255,107,77,0.5)" : "var(--acc)"}`,
-                      color: far ? "#FF6B4D" : "#0b0b0e", fontSize: 9,
+                      color: far ? "var(--danger)" : "#0b0b0e", fontSize: 9,
                       opacity: st.visited || driving ? 0.4 : 1,
                     }}
                   >
@@ -446,7 +446,7 @@ export default function FuelHunt({ onExit }: { onExit: () => void }) {
                 style={{
                   padding: "7px 10px", borderRadius: "var(--r-sm)",
                   background: "var(--surface)",
-                  color: l.ok ? "#59FF9E" : "#FF6B4D",
+                  color: l.ok ? "var(--ok)" : "var(--danger)",
                   opacity: 1 - i * 0.16,
                 }}
               >

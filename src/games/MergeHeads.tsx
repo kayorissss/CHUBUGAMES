@@ -243,7 +243,7 @@ export default function MergeHeads({ onExit }: { onExit: () => void }) {
                   boxSizing: "border-box",
                 }}
               >
-                <div style={{ width: "100%", height: "100%", borderRadius: 12, background: "rgba(255,255,255,0.05)" }} />
+                <div style={{ width: "100%", height: "100%", borderRadius: 12, background: "var(--fill-2)" }} />
               </div>
             ))}
             <AnimatePresence>

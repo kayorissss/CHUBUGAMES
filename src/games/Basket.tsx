@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence } from "framer-motion";
 import { useGame } from "../core/store";
+import { scene } from "../core/palette";
 import { sfx, haptic } from "../core/fx";
 import { useCanvas, GameHUD, GameOver, Countdown, HudStat } from "./shell";
 import { tr } from "../core/i18n";
@@ -190,6 +191,7 @@ export default function Basket({ onExit }: { onExit: () => void }) {
   }, []);
 
   const canvasRef = useCanvas((ctx, w, h, dt) => {
+    const P = scene();
     const g = G.current;
     if (!g.ball) reset(w, h);
     g.w = w; g.h = h;
@@ -310,7 +312,7 @@ export default function Basket({ onExit }: { onExit: () => void }) {
           g.pops.push({
             x: g.hoopX, y: g.hoopY + 30, t: 1,
             txt: clean ? `${tr("ЧИСТЯК")} +${pts}` : `+${pts}`,
-            col: clean ? "#59FF9E" : "#ffb020",
+            col: clean ? "var(--ok)" : "var(--gold)",
           });
           /**
            * Уровень = каждые 5 попаданий. Скорость кольца привязана к
@@ -332,7 +334,7 @@ export default function Basket({ onExit }: { onExit: () => void }) {
           if (!b.passed) {
             g.combo = 0;
             setCombo(0);
-            g.pops.push({ x: w / 2, y: h * 0.55, t: 1, txt: tr("МИМО"), col: "#FF6B4D" });
+            g.pops.push({ x: w / 2, y: h * 0.55, t: 1, txt: tr("МИМО"), col: "var(--danger)" });
             haptic("error");
           }
           g.trail = [];
@@ -448,7 +450,7 @@ export default function Basket({ onExit }: { onExit: () => void }) {
         }
         ctx.globalAlpha = 1;
         // индикатор силы
-        ctx.strokeStyle = power > 0.92 ? "#FF6B4D" : "var(--acc)";
+        ctx.strokeStyle = power > 0.92 ? P.danger : P.acc;
         ctx.lineWidth = 3;
         ctx.beginPath();
         ctx.moveTo(b.x, b.y);

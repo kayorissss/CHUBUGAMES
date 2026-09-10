@@ -158,7 +158,7 @@ export default function AdModal({
           <div
             style={{
               position: "absolute", top: 0, left: 0, right: 0, height: 2.5,
-              background: "rgba(255,255,255,0.18)", pointerEvents: "none",
+              background: "var(--fill-3)", pointerEvents: "none",
             }}
           >
             <div
@@ -231,7 +231,7 @@ export default function AdModal({
             className="absolute inset-0 flex items-center justify-center"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            style={{ background: "rgba(4,4,6,0.94)", padding: 26 }}
+            style={{ background: "var(--scrim-strong)", padding: 26 }}
           >
             <motion.div
               initial={{ scale: 0.88, y: 14, opacity: 0 }}

@@ -122,10 +122,39 @@
   --warn: #ffc53d;
   --warn-soft: rgba(255, 197, 61, 0.14);
   --danger: #ff6b5a;
+  --danger-ink: #180507;      /* текст на заливке --danger */
   --danger-soft: rgba(255, 107, 90, 0.14);
   --danger-brd: rgba(255, 107, 90, 0.45);
   --info: #6bb8ff;
   --info-soft: rgba(107, 184, 255, 0.14);
+
+  /* ── Дополнительные семантические цвета ──────────────────────────────
+     Раньше эти оттенки писались хексами прямо в компонентах: жёлтый
+     жетонов «#FFB020», сиреневый престижа «#C89BFF», красный промаха
+     «#ff5a3c». Из-за этого они не менялись со светлой темой и не
+     подчинялись выбранной теме акцента — часть экрана жила своей
+     жизнью. Теперь это токены, у каждого есть парная светлая версия. */
+  --gold: #ffc247;          /* жетоны казино, редкая награда */
+  --gold-soft: rgba(255, 194, 71, 0.16);
+  --gold-brd: rgba(255, 194, 71, 0.45);
+  --gold-ink: #171003;
+  --violet: #c89bff;        /* престиж, сезоны */
+  --violet-soft: rgba(200, 155, 255, 0.16);
+  --violet-brd: rgba(200, 155, 255, 0.45);
+
+  /* Подсветка клеток на досках и в мини-играх */
+  --sel: color-mix(in srgb, var(--acc) 34%, transparent);
+  --sel-strong: color-mix(in srgb, var(--acc) 62%, transparent);
+  --hit: rgba(255, 107, 90, 0.5);
+
+  /* Полупрозрачные «призрачные» подложки заменяем настоящими ступенями */
+  --fill-1: var(--n-200);
+  --fill-2: var(--n-300);
+  --fill-3: var(--n-400);
+
+  /* Затемнение под модалками — плотное, чтобы текст читался всегда */
+  --scrim: rgba(4, 4, 7, 0.86);
+  --scrim-strong: rgba(3, 3, 5, 0.94);
 
   /* Доски настольных игр. Были вписаны прямо в компоненты хексами и не
      менялись со светлой темой; заодно контраст тёмной и светлой клетки
@@ -199,10 +228,30 @@ html.light {
   --warn: #9a6a00;
   --warn-soft: rgba(154, 106, 0, 0.12);
   --danger: #c8362a;
+  --danger-ink: #fff5f3;
   --danger-soft: rgba(200, 54, 42, 0.1);
   --danger-brd: rgba(200, 54, 42, 0.38);
   --info: #1f6fc4;
   --info-soft: rgba(31, 111, 196, 0.12);
+
+  --gold: #a86a00;
+  --gold-soft: rgba(168, 106, 0, 0.13);
+  --gold-brd: rgba(168, 106, 0, 0.4);
+  --gold-ink: #fffdf6;
+  --violet: #7a3fd0;
+  --violet-soft: rgba(122, 63, 208, 0.12);
+  --violet-brd: rgba(122, 63, 208, 0.4);
+
+  --sel: color-mix(in srgb, var(--acc) 34%, transparent);
+  --sel-strong: color-mix(in srgb, var(--acc) 58%, transparent);
+  --hit: rgba(200, 54, 42, 0.42);
+
+  --fill-1: #e8e8ef;
+  --fill-2: #dcdce4;
+  --fill-3: #c8c8d4;
+
+  --scrim: rgba(20, 20, 28, 0.6);
+  --scrim-strong: rgba(16, 16, 22, 0.78);
 
   --acc-text: color-mix(in srgb, var(--acc) 72%, #000000);
   --acc-line: color-mix(in srgb, var(--acc) 55%, var(--surface-3));

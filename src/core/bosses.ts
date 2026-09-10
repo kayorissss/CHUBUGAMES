@@ -195,15 +195,19 @@ export function upcomingBosses(
 /* ─────────────────────────── Хранилище ─────────────────────────── */
 
 export interface BossStore {
-  /** Час, за который уже забрали награду */
+  /** Час, за который уже забрали ПОЛНУЮ награду */
   clearedHour: number;
   /** id -> сколько раз побеждён */
   wins: Record<string, number>;
   /** Всего попыток */
   fights: number;
+  /** Час, к которому относится счётчик добиваний */
+  runHour: number;
+  /** Сколько раз уже завалили босса в текущий час */
+  runKills: number;
 }
 
-const EMPTY: BossStore = { clearedHour: -1, wins: {}, fights: 0 };
+const EMPTY: BossStore = { clearedHour: -1, wins: {}, fights: 0, runHour: -1, runKills: 0 };
 
 export function readBosses(): BossStore {
   try {
@@ -223,12 +227,48 @@ export function writeBosses(s: BossStore) {
   }
 }
 
-/** Босса этого часа уже побили */
+/** Полную награду за этот час уже забрали */
 export function clearedThisHour(s: BossStore, t = Date.now()): boolean {
   return s.clearedHour === hourIndex(t);
 }
 
-/** Можно ли драться прямо сейчас */
-export function canFight(s: BossStore, t = Date.now()): boolean {
-  return bossActive(t) && !clearedThisHour(s, t);
+/**
+ * Можно ли драться прямо сейчас.
+ *
+ * СОБЫТИЕ ИДЁТ ВЕСЬ ЧАС И НЕ ЗАКРЫВАЕТСЯ ПОСЛЕ ПЕРВОГО УБИЙСТВА.
+ *
+ * Раньше здесь стояло `&& !clearedThisHour(...)`: завалил босса за
+ * полминуты — и смена схлопывалась, экран показывал «приходи через час».
+ * Пользователь: «а не за секунду убить и всё, у других она тоже
+ * закрылась». Теперь бой доступен всю смену: первое убийство даёт полную
+ * награду, дальше можно добивать сколько успеешь, но выплата за каждое
+ * следующее падает (см. `killRewardScale`) — чтобы фарм за час не
+ * ломал экономику.
+ */
+export function canFight(_s: BossStore, t = Date.now()): boolean {
+  return bossActive(t);
+}
+
+/** Сколько раз уже завалили дежурного в текущий час */
+export function killsThisHour(s: BossStore, t = Date.now()): number {
+  return s.runHour === hourIndex(t) ? s.runKills : 0;
+}
+
+/**
+ * Множитель награды за очередное убийство в пределах одной смены.
+ *
+ * Первое — полное, дальше половина, четверть и так далее, но не ниже
+ * 8%: добивать всегда чуть выгоднее, чем стоять без дела, и при этом
+ * час фарма одного босса не перебивает обычные игры.
+ */
+export function killRewardScale(prevKills: number): number {
+  return Math.max(0.08, Math.pow(0.5, prevKills));
+}
+
+/**
+ * Насколько крепче становится босс с каждым добиванием за смену.
+ * Иначе повторные заходы превращаются в бессмысленное тапание.
+ */
+export function killHpScale(prevKills: number): number {
+  return 1 + prevKills * 0.35;
 }

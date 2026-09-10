@@ -32,10 +32,10 @@ interface NeedDef {
 }
 
 const NEEDS: NeedDef[] = [
-  { id: "food", label: "Сытость", icon: "burger", color: "#FFB020", drain: 3.1, action: "КОРМИТЬ" },
+  { id: "food", label: "Сытость", icon: "burger", color: "var(--gold)", drain: 3.1, action: "КОРМИТЬ" },
   { id: "clean", label: "Чистота", icon: "sparkle", color: "#8FD3FF", drain: 2.4, action: "МЫТЬ" },
-  { id: "laundry", label: "Одежда", icon: "shop", color: "#C89BFF", drain: 1.9, action: "СТИРАТЬ" },
-  { id: "toilet", label: "Терпит", icon: "warn", color: "#59FF9E", drain: 2.7, action: "НА УНИТАЗ" },
+  { id: "laundry", label: "Одежда", icon: "shop", color: "var(--violet)", drain: 1.9, action: "СТИРАТЬ" },
+  { id: "toilet", label: "Терпит", icon: "warn", color: "var(--ok)", drain: 2.7, action: "НА УНИТАЗ" },
 ];
 
 const TICK = 250;
@@ -246,7 +246,7 @@ export default function ChubPet({ onExit }: { onExit: () => void }) {
           {huge && (
             <div
               className="t-caption"
-              style={{ marginTop: 8, color: "#FFB020", textAlign: "center" }}
+              style={{ marginTop: 8, color: "var(--gold)", textAlign: "center" }}
             >
               {tr("Разъелся — теперь нужно два унитаза")}
             </div>
@@ -274,7 +274,7 @@ export default function ChubPet({ onExit }: { onExit: () => void }) {
                   <span className="t-label flex-1" style={{ fontSize: 9 }}>{tr(n.label)}</span>
                   <span
                     className="t-num"
-                    style={{ fontSize: 11, color: low ? "#FF6B4D" : "var(--text-mute)" }}
+                    style={{ fontSize: 11, color: low ? "var(--danger)" : "var(--text-mute)" }}
                   >
                     {Math.round(v)}
                   </span>
@@ -282,13 +282,13 @@ export default function ChubPet({ onExit }: { onExit: () => void }) {
                 <div
                   style={{
                     height: 6, borderRadius: 999,
-                    background: "rgba(255,255,255,0.08)", overflow: "hidden",
+                    background: "var(--fill-2)", overflow: "hidden",
                   }}
                 >
                   <motion.div
                     animate={{ width: `${v}%` }}
                     transition={{ duration: 0.2 }}
-                    style={{ height: "100%", background: low ? "#FF6B4D" : n.color }}
+                    style={{ height: "100%", background: low ? "var(--danger)" : n.color }}
                   />
                 </div>
               </div>

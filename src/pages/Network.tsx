@@ -13,8 +13,8 @@ type Tab = "block" | "speed";
 
 const COLOR: Record<NetVerdict["status"], string> = {
   ok: "var(--ok)",
-  throttled: "#ffb020",
-  blocked: "#ff5a3c",
+  throttled: "var(--gold)",
+  blocked: "var(--danger)",
   offline: "#8f8f9c",
 };
 
@@ -227,7 +227,7 @@ function GroupCard({
   title: string; hint: string;
   probes: NetVerdict["probes"]; ok: number; total: number; avg: number | null;
 }) {
-  const c = ok === 0 ? "#ff5a3c" : ok === total ? "var(--ok)" : "#ffb020";
+  const c = ok === 0 ? "var(--danger)" : ok === total ? "var(--ok)" : "var(--gold)";
   return (
     <Card r="lg" style={{ padding: 0, marginBottom: 14, overflow: "hidden" }}>
       <div style={{ padding: "13px 14px" }}>
@@ -264,7 +264,7 @@ function GroupCard({
                   </span>
                 </>
               ) : (
-                <span className="t-num" style={{ fontSize: 11.5, color: "#ff5a3c" }}>{tr("нет связи")}</span>
+                <span className="t-num" style={{ fontSize: 11.5, color: "var(--danger)" }}>{tr("нет связи")}</span>
               )}
             </span>
           </motion.div>
@@ -278,7 +278,7 @@ function GroupCard({
 /** Полоски качества связи по пингу */
 function PingBars({ ms }: { ms: number }) {
   const level = ms < 120 ? 3 : ms < 400 ? 2 : 1;
-  const c = level === 3 ? "var(--ok)" : level === 2 ? "#ffb020" : "#ff5a3c";
+  const c = level === 3 ? "var(--ok)" : level === 2 ? "var(--gold)" : "var(--danger)";
   return (
     <span className="flex items-end" style={{ gap: 2, height: 12 }}>
       {[6, 9, 12].map((h, i) => (

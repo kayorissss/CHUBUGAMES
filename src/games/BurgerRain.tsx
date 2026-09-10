@@ -417,8 +417,8 @@ export default function BurgerRain({ onExit }: { onExit: () => void }) {
             setUiLives(g.lives);
             g.shake = 26;
             g.flash = 1;
-            burst(g, p.x, p.y, "#ff5a3c", 30);
-            g.pops.push({ x: p.x, y: p.y, txt: "-1 ЖИЗНЬ", life: 900, c: "#ff5a3c" });
+            burst(g, p.x, p.y, "var(--danger)", 30);
+            g.pops.push({ x: p.x, y: p.y, txt: "-1 ЖИЗНЬ", life: 900, c: "var(--danger)" });
             sfx.hit();
             haptic("heavy");
             if (g.lives <= 0) { end(); return; }
@@ -436,7 +436,7 @@ export default function BurgerRain({ onExit }: { onExit: () => void }) {
           g.score += pts;
           setUiScore(Math.floor(g.score));
           if (g.comboStreak > 0 && g.comboStreak % 25 === 0) {
-            g.pops.push({ x: g.px * W, y: hy - heroR * 2, txt: `${g.comboStreak} ПОДРЯД!`, life: 1100, c: "#ffb020" });
+            g.pops.push({ x: g.px * W, y: hy - heroR * 2, txt: `${g.comboStreak} ПОДРЯД!`, life: 1100, c: "var(--gold)" });
             sfx.crit();
           }
           sfx.dodge();
@@ -459,8 +459,8 @@ export default function BurgerRain({ onExit }: { onExit: () => void }) {
         const dy = by - hy;
         if (dx * dx + dy * dy < (heroR * 2.1) ** 2) {
           applyBonus(g, b.type, setUiBuffs, setUiLives);
-          burst(g, bx, by, "#ffb020", 20);
-          g.pops.push({ x: bx, y: by, txt: BONUS_LABEL[b.type], life: 1000, c: "#ffb020" });
+          burst(g, bx, by, "var(--gold)", 20);
+          g.pops.push({ x: bx, y: by, txt: BONUS_LABEL[b.type], life: 1000, c: "var(--gold)" });
           sfx.power();
           haptic("success");
           g.bonuses.splice(i, 1);

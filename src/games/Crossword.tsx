@@ -219,7 +219,7 @@ export default function Crossword({ onExit }: { onExit: () => void }) {
   };
 
   const w = words[active];
-  const suspColor = susp > 0.7 ? "#FF6B4D" : susp > 0.4 ? "#FFB020" : "#59FF9E";
+  const suspColor = susp > 0.7 ? "var(--danger)" : susp > 0.4 ? "var(--gold)" : "var(--ok)";
 
   return (
     <div className="absolute inset-0 flex flex-col" style={{ background: "var(--bg)" }}>
@@ -243,7 +243,7 @@ export default function Crossword({ onExit }: { onExit: () => void }) {
               {Math.round(susp * 100)}%
             </span>
           </div>
-          <div style={{ height: 7, borderRadius: 999, background: "rgba(255,255,255,0.09)", overflow: "hidden" }}>
+          <div style={{ height: 7, borderRadius: 999, background: "var(--fill-2)", overflow: "hidden" }}>
             <motion.div
               animate={{ width: `${susp * 100}%` }}
               transition={{ duration: 0.2 }}
@@ -347,7 +347,7 @@ export default function Crossword({ onExit }: { onExit: () => void }) {
                       done ? "rgba(89,255,158,0.5)"
                         : inActive ? "var(--acc)" : "var(--surface-brd)"
                     }`,
-                    color: done ? "#59FF9E" : "var(--text)",
+                    color: done ? "var(--ok)" : "var(--text)",
                   }}
                 >
                   {shown}
@@ -374,7 +374,7 @@ export default function Crossword({ onExit }: { onExit: () => void }) {
             >
               <span className="flex items-center" style={{ gap: 6 }}>
                 {solved[i] && (
-                  <span style={{ color: "#59FF9E", lineHeight: 0, flexShrink: 0 }}>
+                  <span style={{ color: "var(--ok)", lineHeight: 0, flexShrink: 0 }}>
                     <Icon name="check" size={11} />
                   </span>
                 )}

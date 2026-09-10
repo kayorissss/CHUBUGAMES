@@ -289,7 +289,7 @@ export default function Settings({
                 full
                 sound="none"
                 onClick={() => { hardReset(); setConfirmReset(false); }}
-                style={{ background: "var(--danger)", color: "#14060a" }}
+                style={{ background: "var(--danger)", color: "var(--danger-ink)" }}
               >{tr("Удалить всё")}</Button>
             </div>
           </>
@@ -590,8 +590,8 @@ const DIFFS: {
 }[] = [
   /* Тут нужны именно хексы: ниже к цвету дописывается альфа («…1a»),
      а к var(--…) так дописать нельзя — получилась бы битая строка. */
-  { id: "chill",  name: "ЧИЛЛ",   desc: "Медленно, для расслабона", color: "#5CE39B", icon: "clover" },
-  { id: "normal", name: "НОРМАС", desc: "Как задумано",             color: "#FFB020", icon: "bolt" },
+  { id: "chill",  name: "ЧИЛЛ",   desc: "Медленно, для расслабона", color: "var(--ok)", icon: "clover" },
+  { id: "normal", name: "НОРМАС", desc: "Как задумано",             color: "var(--gold)", icon: "bolt" },
   { id: "insane", name: "АДСКИЙ", desc: "Быстро и злобно",          color: "#FF6B5A", icon: "fire" },
 ];
 

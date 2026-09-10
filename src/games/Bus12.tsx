@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence } from "framer-motion";
 import { useGame } from "../core/store";
+import { scene } from "../core/palette";
 import { sfx, haptic } from "../core/fx";
 import { useCanvas, GameHUD, GameOver, Countdown, HudGauge, HudStat } from "./shell";
 import { drawHead } from "../core/head";
@@ -161,6 +162,7 @@ export default function Bus12({ onExit }: { onExit: () => void }) {
   }, []);
 
   const canvasRef = useCanvas((ctx, w, h, dt) => {
+    const P = scene();
     const g = G.current;
     if (!g.w) reset(w, h);
     g.w = w; g.h = h;
@@ -185,7 +187,7 @@ export default function Bus12({ onExit }: { onExit: () => void }) {
           g.timer = RIDE_MS;
           g.patience -= MISS_COST;
           setPatience(Math.max(0, g.patience));
-          g.pops.push({ x: w / 2, y: h * 0.5, t: 1, txt: tr("ДВЕРИ ЗАКРЫЛИСЬ"), col: "#FF6B4D" });
+          g.pops.push({ x: w / 2, y: h * 0.5, t: 1, txt: tr("ДВЕРИ ЗАКРЫЛИСЬ"), col: "var(--danger)" });
           sfx.error();
           haptic("error");
           if (g.patience <= 0) { end(false); return; }
@@ -201,7 +203,7 @@ export default function Bus12({ onExit }: { onExit: () => void }) {
           g.pops.push({
             x: w / 2, y: h * 0.45, t: 1,
             txt: `${tr("ВЫХОД")}: ${tr(exitName(g.exit))}`,
-            col: "#59FF9E",
+            col: "var(--ok)",
           });
         }
       }
@@ -293,7 +295,7 @@ export default function Bus12({ onExit }: { onExit: () => void }) {
             g.pops.push({
               x: b.x, y: b.y - 22, t: 1,
               txt: b.bag ? tr("АВОСЬКОЙ!") : tr("КУДА ПРЁШЬ"),
-              col: "#FF6B4D",
+              col: "var(--danger)",
             });
             if (g.patience <= 0) { end(false); return; }
           }
@@ -318,7 +320,7 @@ export default function Bus12({ onExit }: { onExit: () => void }) {
         fillCrowd(w, h, crowdBase + g.stop);
         g.patience = Math.min(PATIENCE, g.patience + STOP_BONUS);
         setPatience(g.patience);
-        g.pops.push({ x: w / 2, y: h * 0.4, t: 1, txt: tr("ЕДЕМ ДАЛЬШЕ"), col: "#59FF9E" });
+        g.pops.push({ x: w / 2, y: h * 0.4, t: 1, txt: tr("ЕДЕМ ДАЛЬШЕ"), col: "var(--ok)" });
       }
     }
 
@@ -429,7 +431,7 @@ export default function Bus12({ onExit }: { onExit: () => void }) {
     ctx.beginPath(); ctx.ellipse(g.me.x, g.me.y + 14, 14, 5, 0, 0, Math.PI * 2); ctx.fill();
     drawHead(ctx, me.look, g.me.x, g.me.y, R_ME, { body: false });
     // подсветка своей головы, чтобы не потеряться в толпе
-    ctx.strokeStyle = "var(--acc)";
+    ctx.strokeStyle = P.acc;
     ctx.strokeStyle = "#ffb020";
     ctx.lineWidth = 2;
     ctx.beginPath(); ctx.arc(g.me.x, g.me.y, R_ME + 5, 0, Math.PI * 2); ctx.stroke();

@@ -322,7 +322,7 @@ export function GameOver({
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         className="absolute inset-0 z-40 flex items-center justify-center px-6"
-        style={{ background: "rgba(4,4,6,0.72)", backdropFilter: "blur(18px)" }}
+        style={{ background: "var(--scrim)", backdropFilter: "blur(18px)" }}
       >
         <motion.div
           initial={{ scale: 0.86, y: 30, opacity: 0 }}
@@ -336,7 +336,7 @@ export function GameOver({
             </div>
             <div
               className="t-display"
-              style={{ fontSize: 32, color: surv.failed ? "#FF6B4D" : undefined }}
+              style={{ fontSize: 32, color: surv.failed ? "var(--danger)" : undefined }}
             >
               {surv.failed ? tr("НЕ ХВАТИЛО") : tr("ДЕРЖИШЬСЯ")}
             </div>
@@ -407,7 +407,7 @@ export function GameOver({
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         className="absolute inset-0 z-40 flex items-center justify-center px-6"
-        style={{ background: "rgba(4,4,6,0.72)", backdropFilter: "blur(18px)" }}
+        style={{ background: "var(--scrim)", backdropFilter: "blur(18px)" }}
       >
         <motion.div
           initial={{ scale: 0.86, y: 30, opacity: 0 }}
@@ -451,7 +451,7 @@ export function GameOver({
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         className="absolute inset-0 z-40 flex items-center justify-center px-6"
-        style={{ background: "rgba(4,4,6,0.72)", backdropFilter: "blur(18px)" }}
+        style={{ background: "var(--scrim)", backdropFilter: "blur(18px)" }}
       >
         <motion.div
           initial={{ scale: 0.86, y: 30, opacity: 0 }}
@@ -484,7 +484,7 @@ export function GameOver({
                   key={i}
                   style={{
                     width: 9, height: 9, borderRadius: 99,
-                    background: i < run.scores.length ? "var(--acc)" : "rgba(255,255,255,0.16)",
+                    background: i < run.scores.length ? "var(--acc)" : "var(--fill-3)",
                   }}
                 />
               ))}
@@ -537,7 +537,7 @@ export function GameOver({
       initial="initial"
       animate="animate"
       className="absolute inset-0 z-40 flex items-center justify-center px-5"
-      style={{ background: "rgba(6,6,9,0.88)" }}
+      style={{ background: "var(--scrim-strong)" }}
     >
       <motion.div
         variants={modalCard}

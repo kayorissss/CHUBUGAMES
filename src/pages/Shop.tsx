@@ -114,8 +114,8 @@ const CASE_SKIN: Record<string, { box: string; ink: string; line: string; glow: 
     line: "rgba(194,204,216,0.34)", glow: "rgba(194,204,216,0.10)",
   },
   gold: {
-    box: "rgba(255,176,32,0.20)", ink: "#ffb020",
-    line: "rgba(255,176,32,0.42)", glow: "rgba(255,176,32,0.14)",
+    box: "rgba(255,176,32,0.20)", ink: "var(--gold)",
+    line: "var(--gold-brd)", glow: "rgba(255,176,32,0.14)",
   },
 };
 
@@ -363,7 +363,7 @@ function Cases() {
           <motion.div
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             className="fixed inset-0 z-[80] flex items-center justify-center px-5"
-            style={{ background: "rgba(3,3,5,0.86)", backdropFilter: "blur(20px)" }}
+            style={{ background: "var(--scrim-strong)", backdropFilter: "blur(20px)" }}
             onClick={() => !spinning && setRolling(null)}
           >
             {flash && (

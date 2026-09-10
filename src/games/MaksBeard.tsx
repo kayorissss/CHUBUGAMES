@@ -196,7 +196,7 @@ export default function MaksBeard({ onExit }: { onExit: () => void }) {
         g.shake = 12;
         sfx.hit();
         haptic("error");
-        g.pops.push({ x: hr.x, y: hr.y - 18, t: 1, txt: tr("АЙ!"), col: "#FF6B4D" });
+        g.pops.push({ x: hr.x, y: hr.y - 18, t: 1, txt: tr("АЙ!"), col: "var(--danger)" });
       } else {
         g.rage = Math.max(0, g.rage - 3);
         sfx.crit();
@@ -204,7 +204,7 @@ export default function MaksBeard({ onExit }: { onExit: () => void }) {
         g.pops.push({
           x: hr.x, y: hr.y - 18, t: 1,
           txt: hr.tough ? "+30" : "+15",
-          col: hr.tough ? "#FFD86B" : "#59FF9E",
+          col: hr.tough ? "#FFD86B" : "var(--ok)",
         });
       }
       g.score += hr.tough ? 30 : 15;

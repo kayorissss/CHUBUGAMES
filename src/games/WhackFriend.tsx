@@ -269,7 +269,7 @@ export default function WhackFriend({ onExit }: { onExit: () => void }) {
                       initial={{ opacity: 1, y: 0, scale: 1.1 }}
                       animate={{ opacity: 0, y: -34, scale: 1.3 }}
                       className="absolute inset-0 flex items-center justify-center pointer-events-none t-num"
-                      style={{ fontSize: 20, color: f.bad ? "#ff5a3c" : "var(--acc)", fontWeight: 900 }}
+                      style={{ fontSize: 20, color: f.bad ? "var(--danger)" : "var(--acc)", fontWeight: 900 }}
                     >
                       {f.txt}
                     </motion.div>
@@ -281,7 +281,7 @@ export default function WhackFriend({ onExit }: { onExit: () => void }) {
         </div>
 
         <div className="t-label mt-5 text-center px-8" style={{ lineHeight: 1.6 }}>
-          Бей всех, кроме <span style={{ color: "#ff5a3c" }}>КРАСНЫХ</span>.
+          Бей всех, кроме <span style={{ color: "var(--danger)" }}>КРАСНЫХ</span>.
           Золотые дают ×5 очков
         </div>
       </div>
@@ -341,7 +341,7 @@ function MoleHead({ friend, bad, gold }: { friend: Friend; bad: boolean; gold: b
         <canvas ref={ref} style={{ width: "100%", height: "100%" }} />
       )}
       {bad && (
-        <div className="absolute inset-0 flex items-start justify-center" style={{ color: "#ff5a3c" }}>
+        <div className="absolute inset-0 flex items-start justify-center" style={{ color: "var(--danger)" }}>
           <Icon name="cross" size={18} />
         </div>
       )}

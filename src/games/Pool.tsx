@@ -294,7 +294,7 @@ export default function Pool({ onExit }: { onExit: () => void }) {
 
     if (v.foul) {
       setMsg(tr(v.reason));
-      g.pops.push({ x: g.w / 2, y: g.h * 0.42, t: 1, txt: tr("ФОЛ"), col: "#FF6B4D" });
+      g.pops.push({ x: g.w / 2, y: g.h * 0.42, t: 1, txt: tr("ФОЛ"), col: "var(--danger)" });
       sfx.error(); haptic("error");
       // биток в руки соперника
       const c = cueBall();
@@ -433,12 +433,12 @@ export default function Pool({ onExit }: { onExit: () => void }) {
               b.vx = 0; b.vy = 0;
               if (b.num === 0) {
                 g.cuePotted = true;
-                g.pops.push({ x: p.x, y: p.y - 20, t: 1, txt: tr("БИТОК"), col: "#FF6B4D" });
+                g.pops.push({ x: p.x, y: p.y - 20, t: 1, txt: tr("БИТОК"), col: "var(--danger)" });
                 sfx.error();
               } else {
                 g.potted.push(b.num);
                 g.railHit = true;
-                g.pops.push({ x: p.x, y: p.y - 20, t: 1, txt: `${b.num}`, col: "#59FF9E" });
+                g.pops.push({ x: p.x, y: p.y - 20, t: 1, txt: `${b.num}`, col: "var(--ok)" });
                 sfx.coin();
                 haptic("success");
               }
@@ -755,7 +755,7 @@ export default function Pool({ onExit }: { onExit: () => void }) {
             style={{
               padding: "8px 14px", borderRadius: "var(--r-sm)",
               background: "var(--toast-bg)", border: "1px solid #FF6B4D",
-              color: "#FF6B4D", fontSize: 11.5, textAlign: "center",
+              color: "var(--danger)", fontSize: 11.5, textAlign: "center",
             }}
           >
             {msg}

@@ -10,6 +10,7 @@ import {
   ACHIEVEMENTS, ACCENTS, QUEST_POOL, DAILY_LADDER, GAME_META,
   SEASON_XP_PER_TIER, SEASON_TIERS,
 } from "./content";
+import { refreshPalette } from "./palette";
 import { today, daysBetween } from "./format";
 import { sfx, haptic, setSound, setHaptics } from "./fx";
 import { pickQuests } from "./save";
@@ -175,6 +176,9 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
     root.style.setProperty("--acc-ink", s.settings.accent === "mono" ? "#0b0b0e" : "#12100a");
     const meta = document.querySelector('meta[name="theme-color"]');
     if (meta) meta.setAttribute("content", s.settings.theme === "light" ? "#ECECED" : "#08080A");
+    // Канвас не понимает var(--…) и кеширует цвета — сбрасываем кеш,
+    // иначе игры продолжат рисовать прошлой темой.
+    refreshPalette();
   }, [s.settings.theme, s.settings.accent, s.settings.fx]);
 
   useEffect(() => setSound(s.settings.sound), [s.settings.sound]);

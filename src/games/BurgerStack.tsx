@@ -52,11 +52,11 @@ const FLOOR_SIZE = 8;
 
 /** Этажи башни: свой фон, название и прибавка к скорости */
 const FLOORS = [
-  { name: "СТОЛОВАЯ",  top: "#0b0b10", bot: "#15151d", tint: "#FFB020" },
+  { name: "СТОЛОВАЯ",  top: "#0b0b10", bot: "#15151d", tint: "var(--gold)" },
   { name: "ОБЩАГА",    top: "#0a0f16", bot: "#131c26", tint: "#8FD3FF" },
-  { name: "КРЫША",     top: "#120a16", bot: "#1d1226", tint: "#C89BFF" },
-  { name: "ОБЛАКА",    top: "#0a1614", bot: "#12241f", tint: "#59FF9E" },
-  { name: "КОСМОС",    top: "#08080c", bot: "#101019", tint: "#FF6B8A" },
+  { name: "КРЫША",     top: "#120a16", bot: "#1d1226", tint: "var(--violet)" },
+  { name: "ОБЛАКА",    top: "#0a1614", bot: "#12241f", tint: "var(--ok)" },
+  { name: "КОСМОС",    top: "#08080c", bot: "#101019", tint: "var(--danger)" },
 ];
 
 const floorOf = (n: number) => Math.min(FLOORS.length - 1, Math.floor(n / FLOOR_SIZE));

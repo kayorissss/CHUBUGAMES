@@ -17,7 +17,7 @@ import Icon from "../ui/Icon";
 
 type Slot = 0 | 1 | 2;
 
-const SLOT_COLORS = ["#59FF9E", "#FFB020", "#8FD3FF"];
+const SLOT_COLORS = ["var(--ok)", "var(--gold)", "#8FD3FF"];
 const SLOT_NAMES = ["ПЕРВОЕ", "ВТОРОЕ", "КОМПОТ"];
 const DISHES = [
   ["Борщ", "Щи", "Суп"],
@@ -373,7 +373,7 @@ export default function Canteen({ onExit }: { onExit: () => void }) {
                       animate={{ opacity: 1, y: -12, scale: 1 }}
                       exit={{ opacity: 0 }}
                       className="t-title-sm absolute"
-                      style={{ color: pop.ok ? "#59FF9E" : "#FF4D4D", fontSize: 13 }}
+                      style={{ color: pop.ok ? "var(--ok)" : "var(--danger)", fontSize: 13 }}
                     >
                       {pop.ok ? "+" : "×"}
                     </motion.span>

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence } from "framer-motion";
 import { useGame } from "../core/store";
+import { scene } from "../core/palette";
 import { sfx, haptic } from "../core/fx";
 import { useCanvas, GameHUD, GameOver, Countdown, HudStat } from "./shell";
 import { drawHead } from "../core/head";
@@ -181,6 +182,7 @@ export default function Penalty({ onExit }: { onExit: () => void }) {
   }, [zoneOf]);
 
   const canvasRef = useCanvas((ctx, w, h, dt) => {
+    const P = scene();
     const g = G.current;
     if (!g.goalW) reset(w, h);
 
@@ -229,7 +231,7 @@ export default function Penalty({ onExit }: { onExit: () => void }) {
             g.pops.push({
               x: w / 2, y: g.goalY + g.goalH + 30, t: 1,
               txt: topCorner ? tr("ДЕВЯТКА") : tr("ГОЛ"),
-              col: topCorner ? "#FFD86B" : "#59FF9E",
+              col: topCorner ? "#FFD86B" : "var(--ok)",
             });
             g.flash = 1;
             sfx.coin();
@@ -241,7 +243,7 @@ export default function Penalty({ onExit }: { onExit: () => void }) {
             g.pops.push({
               x: w / 2, y: g.goalY + g.goalH + 30, t: 1,
               txt: saved ? tr("ВЗЯЛ") : tr("МИМО"),
-              col: "#FF6B4D",
+              col: "var(--danger)",
             });
             g.shake = 12;
             sfx.error();
@@ -422,7 +424,7 @@ export default function Penalty({ onExit }: { onExit: () => void }) {
         ctx.beginPath(); ctx.moveTo(g.bx, g.by); ctx.lineTo(aimX, aimY); ctx.stroke();
         ctx.setLineDash([]);
         // маркер
-        ctx.strokeStyle = "var(--acc)";
+        ctx.strokeStyle = P.acc;
         ctx.lineWidth = 2.5;
         ctx.beginPath(); ctx.arc(aimX, aimY, 15, 0, Math.PI * 2); ctx.stroke();
         ctx.beginPath(); ctx.moveTo(aimX - 20, aimY); ctx.lineTo(aimX + 20, aimY); ctx.stroke();

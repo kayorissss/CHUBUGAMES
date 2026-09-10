@@ -226,7 +226,7 @@ export default function WhoWasIt({ onExit }: { onExit: () => void }) {
                     : on
                       ? "rgba(255,176,32,0.2)"
                       : "var(--surface-2)",
-                  border: `2px solid ${bad ? "#FF4D4D" : on ? "var(--acc)" : "var(--surface-brd)"}`,
+                  border: `2px solid ${bad ? "var(--danger)" : on ? "var(--acc)" : "var(--surface-brd)"}`,
                   boxShadow: on ? "0 0 30px -6px var(--acc-glow)" : "none",
                   opacity: phase === "input" ? 1 : 0.92,
                   transition: "background .12s, border-color .12s, box-shadow .12s",

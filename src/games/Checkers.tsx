@@ -364,14 +364,14 @@ export default function Checkers({ onExit }: { onExit: () => void }) {
                   display: "flex", alignItems: "center", justifyContent: "center",
                 }}
               >
-                {inPath && <div style={{ position: "absolute", inset: 0, background: "rgba(255,176,32,0.18)" }} />}
+                {inPath && <div style={{ position: "absolute", inset: 0, background: "var(--gold-soft)" }} />}
                 {isSel && <div style={{ position: "absolute", inset: 0, border: "2px solid var(--acc)" }} />}
-                {isOver && <div style={{ position: "absolute", inset: 0, background: "rgba(255,176,32,0.34)" }} />}
+                {isOver && <div style={{ position: "absolute", inset: 0, background: "var(--sel-strong)" }} />}
                 {isTarget && (
                   <div
                     style={{
                       position: "absolute", width: "30%", height: "30%", borderRadius: "50%",
-                      background: "rgba(255,176,32,0.7)",
+                      background: "var(--acc)",
                     }}
                   />
                 )}
@@ -465,7 +465,7 @@ function CheckerFit({ color, king }: { color: CK.Color; king: boolean }) {
       {king && (
         <path
           d="M16 27l-1.6-8 5.2 3.6L24 15l4.4 7.6 5.2-3.6L32 27H16z"
-          fill="#ffb020" stroke="#7a5200" strokeWidth="1.1" strokeLinejoin="round"
+          fill="var(--gold)" stroke="#7a5200" strokeWidth="1.1" strokeLinejoin="round"
         />
       )}
     </svg>

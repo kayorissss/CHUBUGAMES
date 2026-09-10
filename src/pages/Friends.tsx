@@ -328,7 +328,7 @@ function Editor({ friend, isNew, onClose }: { friend: Friend; isNew: boolean; on
     <motion.div
       initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
       className="fixed inset-0 z-[70] flex items-end"
-      style={{ background: "rgba(3,3,5,0.72)", backdropFilter: "blur(14px)" }}
+      style={{ background: "var(--scrim)", backdropFilter: "blur(14px)" }}
       onClick={onClose}
     >
       <motion.div
@@ -361,7 +361,7 @@ function Editor({ friend, isNew, onClose }: { friend: Friend; isNew: boolean; on
                     className="absolute press"
                     style={{
                       bottom: -2, right: -2, width: 24, height: 24, borderRadius: 99,
-                      background: "var(--danger)", color: "#14060a", fontSize: 12, border: "2px solid var(--bg)",
+                      background: "var(--danger)", color: "var(--danger-ink)", fontSize: 12, border: "2px solid var(--bg)",
                     }}
                   >
                     <Icon name="cross" size={15} />

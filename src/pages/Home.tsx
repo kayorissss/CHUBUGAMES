@@ -18,7 +18,7 @@ import type { SubPage } from "../App";
 import { readGamble } from "../core/gamble";
 import {
   BOSS_EVERY_MS, BOSS_WINDOW_MS,
-  bossActive, bossOfHour, canFight, clearedThisHour, nextBossIn, readBosses, windowLeft,
+  bossActive, bossOfHour, canFight, killsThisHour, nextBossIn, readBosses, windowLeft,
 } from "../core/bosses";
 
 /** «5 мин» / «42 сек» — коротко, чтобы влезало в строку */
@@ -44,7 +44,8 @@ export default function Home({
   const boss = bossOfHour();
   const bossStore = readBosses();
   const bossOn = canFight(bossStore);
-  const cleared = clearedThisHour(bossStore);
+  /** Сколько раз уже завалили дежурного за эту смену */
+  const bossKills = killsThisHour(bossStore);
   // кто заступит в следующий час — чтобы было видно расписание наперёд
   const nextBoss = bossOfHour(Date.now() + BOSS_EVERY_MS);
   // жетоны показываем прямо на плашке казино — видно, есть ли на что играть
@@ -221,7 +222,7 @@ export default function Home({
                     {nextBoss.name}
                   </span>
                 </span>
-                <span style={{ lineHeight: 0, opacity: 0.5 }}>
+                <span style={{ lineHeight: 0, opacity: 0.72 }}>
                   <HeadView friend={{ look: nextBoss.look } as never} size={30} />
                 </span>
               </span>
@@ -240,13 +241,17 @@ export default function Home({
                 gap: 7, marginTop: 14, padding: "11px 16px",
                 borderRadius: 999,
                 background: bossOn ? "var(--danger)" : "var(--btn-bg)",
-                color: bossOn ? "#14060a" : "var(--text-dim)",
+                color: bossOn ? "var(--danger-ink)" : "var(--text-dim)",
                 border: bossOn ? "1px solid var(--danger)" : "1px solid var(--btn-brd)",
                 fontSize: 13, fontWeight: 800, lineHeight: 1,
               }}
             >
               <Icon name={bossOn ? "skull" : "clock"} size={14} />
-              {bossOn ? tr("В БОЙ") : cleared ? tr("УЖЕ ПОБЕЖДЁН") : tr("ЖДЁМ СМЕНУ")}
+              {/* Событие идёт весь час: после победы кнопка не гаснет,
+                  а предлагает добить ещё раз. */}
+              {bossOn
+                ? bossKills > 0 ? `${tr("ДОБИТЬ")} · ${tr("завалил")} ×${bossKills}` : tr("В БОЙ")
+                : tr("ЖДЁМ СМЕНУ")}
             </div>
           </div>
         </Tap>
@@ -260,9 +265,9 @@ export default function Home({
           className="w-full overflow-hidden relative"
           style={{
             padding: 0, marginBottom: 12, display: "block",
-            border: "1.5px solid rgba(200,155,255,0.5)",
-            background: "rgba(200,155,255,0.09)",
-            boxShadow: "0 14px 38px -20px rgba(200,155,255,0.8)",
+            border: "1.5px solid var(--violet-brd)",
+            background: "var(--violet-soft)",
+            boxShadow: "0 14px 38px -20px var(--violet-brd)",
           }}
           sound="power"
         >
@@ -284,14 +289,14 @@ export default function Home({
                 transition={{ duration: 4.4, repeat: Infinity, ease: "easeInOut" }}
                 style={{
                   width: 54, height: 54, borderRadius: "var(--r-md)",
-                  background: "rgba(200,155,255,0.2)", color: "#C89BFF",
+                  background: "var(--violet-soft)", color: "var(--violet)",
                   border: "1px solid rgba(200,155,255,0.45)",
                 }}
               >
                 <Icon name="dice" size={27} />
               </motion.span>
               <span className="flex-1 min-w-0">
-                <span className="t-label block" style={{ fontSize: 9, color: "#C89BFF" }}>
+                <span className="t-label block" style={{ fontSize: 9, color: "var(--violet)" }}>
                   {tr("НА ЖЕТОНЫ")}
                 </span>
                 <span className="t-display-sm block" style={{ fontSize: 22, marginTop: 3 }}>
@@ -304,7 +309,7 @@ export default function Home({
                   gap: 5, padding: "7px 11px", borderRadius: 999,
                   background: "rgba(200,155,255,0.16)",
                   border: "1px solid rgba(200,155,255,0.4)",
-                  color: "#C89BFF", fontSize: 13,
+                  color: "var(--violet)", fontSize: 13,
                 }}
               >
                 <Icon name="ticket" size={13} />
@@ -500,8 +505,8 @@ export default function Home({
                   className="w-full"
                   style={{
                     padding: 14,
-                    border: "1.5px solid rgba(255,176,32,0.4)",
-                    background: "rgba(255,176,32,0.06)",
+                    border: "1.5px solid var(--gold-brd)",
+                    background: "var(--gold-soft)",
                   }}
                   sound="coin"
                 >
@@ -510,7 +515,7 @@ export default function Home({
                       className="shrink-0 flex items-center justify-center"
                       style={{
                         width: 40, height: 40, borderRadius: "var(--r-sm)",
-                        background: "rgba(255,176,32,0.15)", color: "#FFB020",
+                        background: "var(--gold-soft)", color: "var(--gold)",
                       }}
                     >
                       <Icon name="heart" size={19} />

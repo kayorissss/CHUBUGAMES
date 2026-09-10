@@ -9,8 +9,9 @@ import { fmt } from "../core/format";
 import { useGame } from "../core/store";
 import { readGamble, writeGamble } from "../core/gamble";
 import {
-  BOSSES, bossOfHour, canFight, clearedThisHour, nextBossIn, readBosses,
-  windowLeft, writeBosses, type BossDef, type BossStore,
+  BOSSES, bossOfHour, canFight, nextBossIn, readBosses,
+  windowLeft, writeBosses, killsThisHour, killRewardScale, killHpScale,
+  type BossDef, type BossStore,
 } from "../core/bosses";
 
 type Phase = "intro" | "fight" | "win" | "lose";
@@ -45,6 +46,8 @@ export default function BossFight({ onBack }: { onBack: () => void }) {
   const [phase, setPhase] = useState<Phase>("intro");
 
   const [bossHp, setBossHp] = useState(boss.hp);
+  /** Максимум HP текущего боя — растёт с каждым добиванием за смену */
+  const [bossHpMax, setBossHpMax] = useState(boss.hp);
   const [myHp, setMyHp] = useState(100);
   const [taunt, setTaunt] = useState<string | null>(null);
   const [hits, setHits] = useState(0);
@@ -116,21 +119,36 @@ export default function BossFight({ onBack }: { onBack: () => void }) {
       clearTimers();
       setPhase(won ? "win" : "lose");
       if (won) {
-        addCoins(boss.reward.coins);
-        addXp(boss.reward.xp);
+        /**
+         * Событие длится весь час: убийство босса НЕ закрывает смену.
+         * Первая победа за час даёт полную награду, каждая следующая —
+         * вдвое меньше предыдущей (но не ниже 8%), а сам босс крепчает.
+         * Так добивать можно сколько угодно, а фарм не ломает экономику.
+         */
+        const prev = killsThisHour(store);
+        const k = killRewardScale(prev);
+        const gotCoins = Math.max(1, Math.floor(boss.reward.coins * k));
+        const gotChips = Math.max(1, Math.floor(boss.reward.chips * k));
+        const gotXp = Math.max(1, Math.floor(boss.reward.xp * k));
+        addCoins(gotCoins);
+        addXp(gotXp);
         // жетоны для казино
         const g = readGamble();
-        writeGamble({ ...g, chips: g.chips + boss.reward.chips });
+        writeGamble({ ...g, chips: g.chips + gotChips });
+        const hourNow = Math.floor(Date.now() / (60 * 60 * 1000));
         save({
-          clearedHour: Math.floor(Date.now() / (60 * 60 * 1000)),
+          // отмечаем только ПЕРВУЮ победу за час — она снимает «полную» награду
+          clearedHour: prev === 0 ? hourNow : store.clearedHour,
+          runHour: hourNow,
+          runKills: prev + 1,
           wins: { ...store.wins, [boss.id]: (store.wins[boss.id] || 0) + 1 },
           fights: store.fights + 1,
         });
         sfx.legend?.();
         haptic("success");
         toast({
-          title: tr("Босс повержен"),
-          sub: `+${fmt(boss.reward.coins)} и ${boss.reward.chips} жетонов`,
+          title: prev === 0 ? tr("Босс повержен") : `${tr("Добит")} ×${prev + 1}`,
+          sub: `+${fmt(gotCoins)} ${tr("и")} ${gotChips} ${tr("жетонов")}`,
           icon: "trophy",
           tone: "gold",
         });
@@ -144,7 +162,11 @@ export default function BossFight({ onBack }: { onBack: () => void }) {
   );
 
   const start = () => {
-    setBossHp(boss.hp);
+    {
+      const hp0 = Math.round(boss.hp * killHpScale(killsThisHour(store)));
+      setBossHp(hp0);
+      setBossHpMax(hp0);
+    }
     setMyHp(100);
     setHits(0);
     setFog(false);
@@ -236,7 +258,7 @@ export default function BossFight({ onBack }: { onBack: () => void }) {
     setBossHp((hp) => {
       const next = hp - dmg;
       // Ниже трети — босс звереет: чаще бьёт и сильнее
-      if (!rageRef.current && next <= boss.hp * 0.34 && next > 0) {
+      if (!rageRef.current && next <= bossHpMax * 0.34 && next > 0) {
         rageRef.current = true;
         setRage(true);
         say(tr("Ну всё, ты доигрался."));
@@ -274,7 +296,8 @@ export default function BossFight({ onBack }: { onBack: () => void }) {
   };
 
   const active = canFight(store, Date.now());
-  const cleared = clearedThisHour(store);
+  /** Сколько раз уже завалили дежурного в эту смену */
+  const kills = killsThisHour(store);
   const wLeft = windowLeft();
   const nLeft = nextBossIn();
 
@@ -304,20 +327,22 @@ export default function BossFight({ onBack }: { onBack: () => void }) {
             strong
             style={{
               padding: 20, marginBottom: 12, textAlign: "center",
-              border: active && !cleared
+              border: active
                 ? "1.5px solid var(--danger-brd)"
                 : "1.5px solid var(--btn-brd)",
-              background: active && !cleared
-                ? "radial-gradient(120% 90% at 50% 0%, rgba(255,90,60,0.13), transparent 70%)"
+              background: active
+                ? "radial-gradient(120% 90% at 50% 0%, var(--danger-soft), transparent 70%)"
                 : undefined,
             }}
           >
+            {/* Смена больше не «закрывается» после первого убийства —
+                событие идёт весь час. */}
             <div className="t-label" style={{ marginBottom: 12 }}>
-              {cleared ? "СМЕНА ЗАКРЫТА" : active ? "СЕЙЧАС ДЕЖУРИТ" : tr("ПЕРЕРЫВ")}
+              {active ? tr("СЕЙЧАС ДЕЖУРИТ") : tr("ПЕРЕРЫВ")}
             </div>
 
             <motion.div
-              animate={active && !cleared ? { y: [0, -5, 0] } : {}}
+              animate={active ? { y: [0, -5, 0] } : {}}
               transition={{ duration: 2.6, repeat: Infinity, ease: "easeInOut" }}
               className="flex justify-center"
               style={{ marginBottom: 14 }}
@@ -337,40 +362,82 @@ export default function BossFight({ onBack }: { onBack: () => void }) {
 
             <div className="flex" style={{ gap: 8, marginTop: 16 }}>
               <Panel r="md" className="flex-1" style={{ padding: "9px 4px" }}>
-                <div className="t-num" style={{ fontSize: 15 }}>{fmt(boss.reward.coins)}</div>
+                <div className="t-num" style={{ fontSize: 15 }}>
+                  {fmt(Math.max(1, Math.floor(boss.reward.coins * killRewardScale(kills))))}
+                </div>
                 <div className="t-label" style={{ fontSize: 8.5 }}>{tr("монет")}</div>
               </Panel>
               <Panel r="md" className="flex-1" style={{ padding: "9px 4px" }}>
-                <div className="t-num" style={{ fontSize: 15 }}>{boss.reward.chips}</div>
+                <div className="t-num" style={{ fontSize: 15 }}>
+                  {Math.max(1, Math.floor(boss.reward.chips * killRewardScale(kills)))}
+                </div>
                 <div className="t-label" style={{ fontSize: 8.5 }}>{tr("жетонов")}</div>
               </Panel>
               <Panel r="md" className="flex-1" style={{ padding: "9px 4px" }}>
-                <div className="t-num" style={{ fontSize: 15 }}>{boss.reward.xp}</div>
+                <div className="t-num" style={{ fontSize: 15 }}>
+                  {Math.max(1, Math.floor(boss.reward.xp * killRewardScale(kills)))}
+                </div>
                 <div className="t-label" style={{ fontSize: 8.5 }}>{tr("опыта")}</div>
               </Panel>
             </div>
 
             <div style={{ marginTop: 16 }}>
-              {cleared ? (
-                <div className="t-caption">
-                  {tr("Уже разобрались. Следующий через")} {mmss(nLeft)}
-                </div>
-              ) : active ? (
+              {active ? (
                 <>
-                  <Tap
-                    onClick={start}
-                    accent r="md" center
-                    className="w-full py-3.5 t-title"
-                    style={{ fontSize: 14 }}
-                    sound="power"
-                  >{tr("В БОЙ")}</Tap>
-                  <div className="t-caption" style={{ marginTop: 9 }}>
-                    {tr("Дежурит весь час — успей до")} {mmss(wLeft)}
+                  <button
+                    type="button"
+                    onClick={() => { sfx.power?.(); haptic("medium"); start(); }}
+                    className="btn-acc w-full"
+                    style={{ minHeight: 54, fontSize: 14.5 }}
+                  >
+                    {kills === 0 ? tr("В БОЙ") : tr("ДОБИТЬ ЕЩЁ РАЗ")}
+                  </button>
+
+                  {/* Понятно, что событие идёт весь час и сколько его осталось */}
+                  <div
+                    className="flex items-center"
+                    style={{
+                      gap: 9, marginTop: 11, padding: "9px 12px",
+                      borderRadius: "var(--r-md)",
+                      background: "var(--surface-2)",
+                      border: "1px solid var(--surface-brd)",
+                    }}
+                  >
+                    <span style={{ color: "var(--danger)", lineHeight: 0 }}>
+                      <Icon name="clock" size={14} />
+                    </span>
+                    <span className="flex-1 min-w-0 text-left">
+                      <span className="t-label block" style={{ fontSize: 8.5 }}>
+                        {tr("СОБЫТИЕ ИДЁТ ЕЩЁ")}
+                      </span>
+                      <span className="t-num block" style={{ fontSize: 15, marginTop: 1 }}>
+                        {mmss(wLeft)}
+                      </span>
+                    </span>
+                    {kills > 0 && (
+                      <span className="text-right shrink-0">
+                        <span className="t-label block" style={{ fontSize: 8.5 }}>
+                          {tr("ЗАВАЛИЛ")}
+                        </span>
+                        <span
+                          className="t-num block"
+                          style={{ fontSize: 15, marginTop: 1, color: "var(--ok)" }}
+                        >
+                          ×{kills}
+                        </span>
+                      </span>
+                    )}
                   </div>
+
+                  {kills > 0 && (
+                    <div className="t-caption" style={{ marginTop: 8, lineHeight: 1.5 }}>
+                      {tr("Полную награду за смену уже забрал. Босс стал крепче, за добивание платят меньше — но событие открыто до конца часа.")}
+                    </div>
+                  )}
                 </>
               ) : (
                 <div className="t-caption">
-                  Следующий дежурный через {mmss(nLeft)}
+                  {tr("Следующий дежурный через")} {mmss(nLeft)}
                 </div>
               )}
             </div>
@@ -392,7 +459,7 @@ export default function BossFight({ onBack }: { onBack: () => void }) {
                   className="t-num shrink-0"
                   style={{ fontSize: 11, color: "var(--text-mute)" }}
                 >
-                  {store.wins[b.id] || 0} побед
+                  {store.wins[b.id] || 0} {tr("побед")}
                 </span>
               </div>
             </Panel>
@@ -422,10 +489,10 @@ export default function BossFight({ onBack }: { onBack: () => void }) {
                 </motion.span>
               )}
               <span className="t-num shrink-0" style={{ fontSize: 12 }}>
-                {Math.max(0, bossHp)} / {boss.hp}
+                {Math.max(0, bossHp)} / {bossHpMax}
               </span>
             </div>
-            <HpBar v={bossHp} max={boss.hp} color="#FF5A3C" />
+            <HpBar v={bossHp} max={bossHpMax} color="var(--danger)" />
           </Panel>
 
           {/* Арена */}
@@ -588,7 +655,7 @@ export default function BossFight({ onBack }: { onBack: () => void }) {
           <Panel r="xl" strong style={{ padding: 24, textAlign: "center" }}>
             <div
               className="t-display"
-              style={{ fontSize: 30, color: phase === "win" ? "var(--ok)" : "#FF6B8A" }}
+              style={{ fontSize: 30, color: phase === "win" ? "var(--ok)" : "var(--danger)" }}
             >
               {phase === "win" ? "ПОБЕДА" : tr("ОТЧИСЛЕН")}
             </div>

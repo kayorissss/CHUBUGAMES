@@ -416,7 +416,7 @@ function PointRow({
             }}
           >
             {isTarget && (
-              <div style={{ position: "absolute", inset: 0, background: "rgba(255,176,32,0.2)" }} />
+              <div style={{ position: "absolute", inset: 0, background: "var(--sel)" }} />
             )}
             {isHead && n === 0 && (
               <div

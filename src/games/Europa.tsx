@@ -326,7 +326,7 @@ export default function Europa({ onExit }: { onExit: () => void }) {
               >
                 <div
                   className="t-label clip1"
-                  style={{ fontSize: 7.5, color: isMine ? "#59FF9E" : "#FF6B4D" }}
+                  style={{ fontSize: 7.5, color: isMine ? "var(--ok)" : "var(--danger)" }}
                 >
                   {tr(p.name)}
                 </div>
@@ -365,7 +365,7 @@ export default function Europa({ onExit }: { onExit: () => void }) {
                 style={{
                   fontSize: 8, padding: "3px 8px", borderRadius: 999,
                   background: selP.owner === "me" ? "rgba(89,255,158,0.14)" : "rgba(255,107,77,0.14)",
-                  color: selP.owner === "me" ? "#59FF9E" : "#FF6B4D",
+                  color: selP.owner === "me" ? "var(--ok)" : "var(--danger)",
                 }}
               >
                 {selP.owner === "me" ? tr("МОЯ") : tr("ЧУЖАЯ")}
@@ -423,8 +423,8 @@ export default function Europa({ onExit }: { onExit: () => void }) {
                 className="t-label"
                 style={{
                   width: "100%", padding: "12px 8px", borderRadius: "var(--r-sm)",
-                  background: attackFrom(selP) ? "#FF6B4D" : "var(--btn-bg)",
-                  border: `1px solid ${attackFrom(selP) ? "#FF6B4D" : "var(--btn-brd)"}`,
+                  background: attackFrom(selP) ? "var(--danger)" : "var(--btn-bg)",
+                  border: `1px solid ${attackFrom(selP) ? "var(--danger)" : "var(--btn-brd)"}`,
                   color: attackFrom(selP) ? "#0b0b0e" : "var(--text-mute)", fontSize: 9.5,
                   opacity: attackFrom(selP) ? 1 : 0.5,
                 }}
@@ -447,7 +447,7 @@ export default function Europa({ onExit }: { onExit: () => void }) {
                 style={{
                   padding: "7px 10px", borderRadius: "var(--r-sm)",
                   background: "var(--surface)",
-                  color: l.ok ? "#59FF9E" : "#FF6B4D",
+                  color: l.ok ? "var(--ok)" : "var(--danger)",
                   opacity: 1 - i * 0.18,
                 }}
               >
@@ -465,7 +465,7 @@ export default function Europa({ onExit }: { onExit: () => void }) {
           style={{
             width: "100%", padding: "15px 8px", borderRadius: "var(--r-md)",
             background: "var(--acc)", border: "1px solid var(--acc)",
-            color: "#0b0b0e", fontSize: 10.5, marginTop: "auto",
+            color: "var(--acc-ink)", fontSize: 10.5, marginTop: "auto",
             display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
           }}
         >

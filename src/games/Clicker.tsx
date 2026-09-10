@@ -723,7 +723,7 @@ const STAGES: { at: number; name: string; color: string }[] = [
   { at: 0, name: "Обычный", color: "#8f8f9c" },
   { at: 500, name: "Разогретый", color: "#5fa8ff" },
   { at: 5000, name: "Сияющий", color: "#b07bff" },
-  { at: 30000, name: "Крылатый", color: "#ffb020" },
+  { at: 30000, name: "Крылатый", color: "var(--gold)" },
   { at: 150000, name: "ИМБОВЫЙ", color: "#59ff9e" },
 ];
 

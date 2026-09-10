@@ -399,7 +399,7 @@ export default function RadomirBeat({ onExit }: { onExit: () => void }) {
           n.done = true;
           g.combo = 0;
           setUiCombo(0);
-          g.pops.push({ lane, txt: "РАНО", c: "#ffb020", life: 500 });
+          g.pops.push({ lane, txt: "РАНО", c: "var(--gold)", life: 500 });
         } else {
           n.done = true;
         }

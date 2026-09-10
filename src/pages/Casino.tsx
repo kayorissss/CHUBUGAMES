@@ -38,8 +38,8 @@ function SlotGlyph({ id, size = 34 }: { id: SlotSymbol; size?: number }) {
     gem: "gem", crown: "crown", skull: "skull",
   };
   const col: Record<SlotSymbol, string> = {
-    burger: "#e8b06a", tooth: "#ffffff", bolt: "#FFB020",
-    gem: "#8FD3FF", crown: "#FFD84D", skull: "#FF6B8A",
+    burger: "#e8b06a", tooth: "#ffffff", bolt: "var(--gold)",
+    gem: "#8FD3FF", crown: "#FFD84D", skull: "var(--danger)",
   };
   return (
     <span style={{ color: col[id], lineHeight: 0 }}>
@@ -107,8 +107,8 @@ export default function Casino({ onBack }: { onBack: () => void }) {
         r="lg"
         style={{
           padding: 15, marginBottom: 12,
-          border: "1.5px solid rgba(255,176,32,0.42)",
-          background: "rgba(255,176,32,0.07)",
+          border: "1.5px solid var(--gold-brd)",
+          background: "var(--gold-soft)",
         }}
       >
         <div className="flex items-center" style={{ gap: 12 }}>
@@ -116,14 +116,14 @@ export default function Casino({ onBack }: { onBack: () => void }) {
             className="shrink-0 flex items-center justify-center"
             style={{
               width: 44, height: 44, borderRadius: "var(--r-sm)",
-              background: "rgba(255,176,32,0.18)", color: "#FFB020",
+              background: "var(--gold-soft)", color: "var(--gold)",
             }}
           >
             <Icon name="ticket" size={21} />
           </span>
           <span className="flex-1 min-w-0">
             <span className="t-label block" style={{ fontSize: 9 }}>{tr("ЖЕТОНЫ КАЗИНО")}</span>
-            <span className="t-num block" style={{ fontSize: 27, lineHeight: 1.1, color: "#FFB020" }}>
+            <span className="t-num block" style={{ fontSize: 27, lineHeight: 1.1, color: "var(--gold)" }}>
               {fmt(g.chips)}
             </span>
           </span>
@@ -133,7 +133,7 @@ export default function Casino({ onBack }: { onBack: () => void }) {
           className="flex items-center"
           style={{
             gap: 10, marginTop: 13, paddingTop: 12,
-            borderTop: "1px solid rgba(255,176,32,0.22)",
+            borderTop: "1px solid var(--gold-brd)",
           }}
         >
           <span className="flex-1 min-w-0">
@@ -151,9 +151,9 @@ export default function Casino({ onBack }: { onBack: () => void }) {
             className="t-title shrink-0 flex items-center"
             style={{
               gap: 6, padding: "11px 16px", borderRadius: "var(--r-sm)", fontSize: 12.5,
-              background: freeChipsReady(g) ? "#FFB020" : "var(--surface-2)",
+              background: freeChipsReady(g) ? "var(--gold)" : "var(--surface-2)",
               color: freeChipsReady(g) ? "#100c02" : "var(--text-mute)",
-              border: `1px solid ${freeChipsReady(g) ? "#FFB020" : "var(--btn-brd)"}`,
+              border: `1px solid ${freeChipsReady(g) ? "var(--gold)" : "var(--btn-brd)"}`,
             }}
           >
             <Icon name="ticket" size={14} />
@@ -442,7 +442,7 @@ function Cases({ g, save }: { g: GambleStore; save: (p: Partial<GambleStore>) =>
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="fixed inset-0 z-[80] flex items-center justify-center px-5"
-            style={{ background: "rgba(4,4,6,0.86)", backdropFilter: "blur(16px)" }}
+            style={{ background: "var(--scrim-strong)", backdropFilter: "blur(16px)" }}
           >
             <div className="w-full max-w-sm">
               {!got ? (
@@ -721,7 +721,7 @@ function Battle({ g, save }: { g: GambleStore; save: (p: Partial<GambleStore>) =
                 className="t-title text-center"
                 style={{
                   fontSize: 18, marginBottom: 12,
-                  color: live.win ? "var(--ok)" : "#FF6B8A",
+                  color: live.win ? "var(--ok)" : "var(--danger)",
                 }}
               >
                 {live.win ? "ПОБЕДА" : tr("ПРОИГРЫШ")}
@@ -830,7 +830,7 @@ function Upgrade({ g, save }: { g: GambleStore; save: (p: Partial<GambleStore>) 
   }
 
   const zoneColor = (z: WheelZone) =>
-    z === "win" ? "var(--ok)" : z === "burn" ? "#FF6B8A" : "#FFB020";
+    z === "win" ? "var(--ok)" : z === "burn" ? "var(--danger)" : "var(--gold)";
 
   return (
     <>
@@ -976,7 +976,7 @@ function Upgrade({ g, save }: { g: GambleStore; save: (p: Partial<GambleStore>) 
                   {tr(ZONE_LABEL[res.zone])}
                 </div>
                 {res.gained > 0 && (
-                  <div className="t-num" style={{ fontSize: 21, marginTop: 3, color: "#FFB020" }}>
+                  <div className="t-num" style={{ fontSize: 21, marginTop: 3, color: "var(--gold)" }}>
                     +{fmt(res.gained)} <span className="t-label" style={{ fontSize: 9 }}>{tr("ЖЕТОНОВ")}</span>
                   </div>
                 )}

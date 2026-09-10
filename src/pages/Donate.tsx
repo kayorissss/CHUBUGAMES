@@ -66,7 +66,7 @@ export default function Donate({ onBack }: { onBack: () => void }) {
               width: 74, height: 74, borderRadius: "var(--r-lg)",
               background: "rgba(255,176,32,0.14)",
               border: "1.5px solid rgba(255,176,32,0.5)",
-              color: "#FFB020",
+              color: "var(--gold)",
               marginBottom: 16,
             }}
           >

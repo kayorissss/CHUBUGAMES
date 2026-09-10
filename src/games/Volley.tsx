@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence } from "framer-motion";
 import { useGame } from "../core/store";
+import { scene } from "../core/palette";
 import { sfx, haptic } from "../core/fx";
 import { useCanvas, GameHUD, GameOver, Countdown, HudStat } from "./shell";
 import { drawHead } from "../core/head";
@@ -146,6 +147,7 @@ export default function Volley({ onExit }: { onExit: () => void }) {
   }, []);
 
   const canvasRef = useCanvas((ctx, w, h, dt) => {
+    const P = scene();
     const g = G.current;
     if (!g.w) reset(w, h);
     g.w = w; g.h = h;
@@ -257,7 +259,7 @@ export default function Volley({ onExit }: { onExit: () => void }) {
             g.lives -= 1;
             setLives(g.lives);
             g.rally = 0; setRally(0);
-            g.pops.push({ x: w * 0.74, y: h * 0.5, t: 1, txt: tr("ПРОПУСТИЛ"), col: "#FF6B4D" });
+            g.pops.push({ x: w * 0.74, y: h * 0.5, t: 1, txt: tr("ПРОПУСТИЛ"), col: "var(--danger)" });
             sfx.error();
             haptic("error");
             g.shake = 12;
@@ -266,7 +268,7 @@ export default function Volley({ onExit }: { onExit: () => void }) {
           } else {
             g.score += 1;
             setScore(g.score);
-            g.pops.push({ x: w * 0.26, y: h * 0.5, t: 1, txt: `${tr("ОЧКО")} +1`, col: "#59FF9E" });
+            g.pops.push({ x: w * 0.26, y: h * 0.5, t: 1, txt: `${tr("ОЧКО")} +1`, col: "var(--ok)" });
             sfx.coin();
             haptic("success");
             serve(w, h, false);
@@ -308,7 +310,7 @@ export default function Volley({ onExit }: { onExit: () => void }) {
     for (let y = netTop; y < groundY; y += 11) {
       ctx.beginPath(); ctx.moveTo(netX - 9, y); ctx.lineTo(netX + 9, y); ctx.stroke();
     }
-    ctx.fillStyle = "var(--acc)";
+    ctx.fillStyle = P.acc;
     ctx.fillRect(netX - 7, netTop - 5, 14, 6);
 
     // след мяча

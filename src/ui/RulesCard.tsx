@@ -32,7 +32,7 @@ export default function RulesCard({
           variants={modalBackdrop}
           initial="initial" animate="animate" exit="exit"
           className="absolute inset-0 z-[70] flex items-center justify-center"
-          style={{ background: "rgba(6,6,9,0.88)", padding: 20 }}
+          style={{ background: "var(--scrim-strong)", padding: 20 }}
           onClick={onClose}
         >
           <motion.div

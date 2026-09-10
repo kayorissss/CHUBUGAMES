@@ -372,16 +372,16 @@ export default function Chess({ onExit }: { onExit: () => void }) {
                 }}
               >
                 {isLast && (
-                  <div style={{ position: "absolute", inset: 0, background: "rgba(255,176,32,0.20)" }} />
+                  <div style={{ position: "absolute", inset: 0, background: "var(--sel)" }} />
                 )}
                 {isCheck && (
-                  <div style={{ position: "absolute", inset: 0, background: "rgba(255,80,60,0.45)" }} />
+                  <div style={{ position: "absolute", inset: 0, background: "var(--hit)" }} />
                 )}
                 {isSel && (
                   <div style={{ position: "absolute", inset: 0, border: "2px solid var(--acc)" }} />
                 )}
                 {isOver && (
-                  <div style={{ position: "absolute", inset: 0, background: "rgba(255,176,32,0.34)" }} />
+                  <div style={{ position: "absolute", inset: 0, background: "var(--sel-strong)" }} />
                 )}
                 {isTarget && !pc && (
                   <motion.div
@@ -390,7 +390,7 @@ export default function Chess({ onExit }: { onExit: () => void }) {
                     transition={{ duration: 0.16, ease: EASE }}
                     style={{
                       position: "absolute", width: "28%", height: "28%", borderRadius: "50%",
-                      background: "rgba(255,176,32,0.65)",
+                      background: "var(--acc)",
                     }}
                   />
                 )}
@@ -449,7 +449,7 @@ export default function Chess({ onExit }: { onExit: () => void }) {
           <motion.div
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             className="absolute inset-0 z-40 flex items-center justify-center"
-            style={{ background: "rgba(0,0,0,0.78)", padding: 24 }}
+            style={{ background: "var(--scrim-strong)", padding: 24 }}
           >
             <div
               style={{

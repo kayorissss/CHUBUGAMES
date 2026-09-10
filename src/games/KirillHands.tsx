@@ -143,7 +143,7 @@ export default function KirillHands({ onExit }: { onExit: () => void }) {
           setScore(Math.floor(g.score));
           sfx.error();
           haptic("error");
-          g.pops.push({ x: tip.x, y: tip.y - 22, t: 1, txt: tr("СВОЯ РУКА!"), col: "#FF6B4D" });
+          g.pops.push({ x: tip.x, y: tip.y - 22, t: 1, txt: tr("СВОЯ РУКА!"), col: "var(--danger)" });
         } else {
           hnd.slap = 320;
           hnd.state = "carry";   // получила по рукам и убирается ни с чем
@@ -157,7 +157,7 @@ export default function KirillHands({ onExit }: { onExit: () => void }) {
           g.pops.push({
             x: tip.x, y: tip.y - 22, t: 1,
             txt: `+${bonus}`,
-            col: g.combo > 4 ? "#FFD86B" : "#59FF9E",
+            col: g.combo > 4 ? "#FFD86B" : "var(--ok)",
           });
         }
         break;
@@ -233,7 +233,7 @@ export default function KirillHands({ onExit }: { onExit: () => void }) {
             g.pops.push({
               x: w / 2, y: h * 0.52 - 40, t: 1,
               txt: `−${tr(hnd.loot)}`,
-              col: "#FF6B4D",
+              col: "var(--danger)",
             });
             if (g.items <= 0) { end(); return; }
           }

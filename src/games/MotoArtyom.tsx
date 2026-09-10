@@ -207,7 +207,7 @@ export default function MotoArtyom({ onExit }: { onExit: () => void }) {
           g.overheat = OVERHEAT_MS;
           sfx.error();
           haptic("error");
-          g.pops.push({ x: w / 2, y: h * 0.4, t: 1, txt: tr("ПЕРЕГРЕВ"), col: "#FF6B4D" });
+          g.pops.push({ x: w / 2, y: h * 0.4, t: 1, txt: tr("ПЕРЕГРЕВ"), col: "var(--danger)" });
         }
       } else {
         g.speed = Math.max(0, g.speed - dt * DECAY);
@@ -252,7 +252,7 @@ export default function MotoArtyom({ onExit }: { onExit: () => void }) {
             g.pops.push({
               x: bikeX, y: roadY - 60, t: 1,
               txt: o.kind === "wire" ? tr("НИТКА!") : o.kind === "hole" ? tr("ЯМА") : tr("КОНУС"),
-              col: "#FF6B4D",
+              col: "var(--danger)",
             });
             if (g.lives <= 0) { end(false); return; }
           }
