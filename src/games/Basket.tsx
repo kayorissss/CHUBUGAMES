@@ -43,6 +43,7 @@ export default function Basket({ onExit }: { onExit: () => void }) {
   const [score, setScore] = useState(0);
   const [combo, setCombo] = useState(0);
   const [left, setLeft] = useState(START_MS);
+  const [level, setLevel] = useState(1);
   const [result, setResult] = useState({ score: 0, coins: 0, xp: 0 });
 
   const best = s.games.basket?.best || 0;
@@ -55,6 +56,8 @@ export default function Basket({ onExit }: { onExit: () => void }) {
     hoopDir: 1,
     hoopSpeed: speedBase,
     hoopY: 0,
+    level: 1,
+    addFx: 0,
     running: false,
     score: 0,
     combo: 0,
@@ -88,13 +91,13 @@ export default function Basket({ onExit }: { onExit: () => void }) {
     g.hoopY = h * 0.34;
     g.hoopDir = Math.random() < 0.5 ? 1 : -1;
     g.hoopSpeed = speedBase;
-    g.score = 0; g.combo = 0; g.shots = 0; g.made = 0;
+    g.score = 0; g.combo = 0; g.shots = 0; g.made = 0; g.level = 1;
     g.left = START_MS;
     g.pops = []; g.trail = []; g.shake = 0;
     g.aiming = false;
     g.startT = Date.now();
     spawnBall(w, h);
-    setScore(0); setCombo(0); setLeft(START_MS);
+    setScore(0); setCombo(0); setLeft(START_MS); setLevel(1);
   }, [speedBase, spawnBall]);
 
   const restart = useCallback(() => {
@@ -164,8 +167,20 @@ export default function Basket({ onExit }: { onExit: () => void }) {
     const dy = g.ay - g.oy;
     const len = Math.hypot(dx, dy);
     if (len < 18 || dy > -12) return;     // короткий свайп или вниз — не бросок
+    /**
+     * Сила броска (пересчитано перебором, /tmp/basket3.mjs).
+     *
+     * Было `0.28 + power * 1.67`: нижние две трети хода свайпа давали
+     * скорость, при которой мяч физически не долетал до кольца, — отсюда
+     * жалоба на недолёты и перелёты. Полезной была только узкая полоска
+     * у самого конца жеста: среднее окно попадания 67 px по длине свайпа,
+     * доля попаданий при случайном свайпе 10.8%.
+     *
+     * Стало `1.00 + power * 1.05`: весь ход свайпа лежит в рабочем
+     * диапазоне скоростей. Окно выросло до 110 px, доля попаданий — 16.8%.
+     */
     const power = Math.min(len, 230) / 230;
-    const sp = 0.28 + power * 1.67;       // px/мс
+    const sp = 1.0 + power * 1.05;        // px/мс
     g.ball.vx = (dx / len) * sp;
     g.ball.vy = (dy / len) * sp;
     g.ball.live = true;
@@ -211,11 +226,49 @@ export default function Basket({ onExit }: { onExit: () => void }) {
         if (b.x < BALL_R) { b.x = BALL_R; b.vx = Math.abs(b.vx) * 0.72; }
         if (b.x > w - BALL_R) { b.x = w - BALL_R; b.vx = -Math.abs(b.vx) * 0.72; }
 
-        // щит над кольцом
-        const boardY = g.hoopY - 76;
-        if (b.y - BALL_R < g.hoopY - 6 && b.y + BALL_R > boardY &&
-            Math.abs(b.x - g.hoopX) < RIM_HALF + 8 && b.vy < 0) {
-          // отскок от щита сверху вниз бывает редко; главное — дужки ниже
+        /**
+         * ЩИТ.
+         *
+         * Раньше тут стояла пустая заглушка с комментарием — мяч пролетал
+         * сквозь щит насквозь, «отскока от щита» в игре не существовало.
+         *
+         * Важная тонкость этой проекции: щит нарисован ПРЯМО НАД кольцом,
+         * поэтому сделать его сплошным нельзя — он перекрыл бы любой
+         * чистый бросок сверху. Твёрдые только те части, которые в
+         * реальности и мешают: боковые «крылья» шире кольца и верхняя
+         * кромка. Попал в крыло — мяч сваливается вниз к дужке, как
+         * настоящий бэнкшот; перебросил — стукнулся о верх и упал.
+         */
+        {
+          /* Числа проверены перебором (/tmp/basket6.mjs): крылья начинаются
+             в 10 px за кромкой кольца, твёрдая только нижняя 45% высоты щита.
+             Итог по случайным свайпам: чистых 5.8%, через щит 33.6%,
+             всего 39.4% против 16.8% без щита — щит помогает, но не
+             превращает игру в «кидай куда попало». */
+          const bw2 = 96 / 2;                 // половина ширины щита
+          const WING = RIM_HALF + 10;         // где начинается твёрдое крыло
+          const boardTop = g.hoopY - 62 - 12;
+          const boardBot = g.hoopY - 12 - 62 * 0.55;
+          const inY = b.y > boardTop - BALL_R && b.y < boardBot + BALL_R;
+          const dxb = b.x - g.hoopX;
+          const onWing = Math.abs(dxb) > WING && Math.abs(dxb) < bw2 + BALL_R;
+          if (inY && onWing) {
+            const side = Math.sign(dxb) || 1;
+            // отражаем внутрь и гасим — мяч валится к кольцу
+            b.x = g.hoopX + side * (WING - BALL_R * 0.2);
+            b.vx = -Math.abs(b.vx) * side * 0.34;
+            b.vy = Math.abs(b.vy) * 0.55 + 0.12;
+            b.hitBoard = true;
+            sfx.hit();
+            haptic("light");
+          } else if (b.vy < 0 && Math.abs(dxb) <= WING &&
+                     b.y - BALL_R < boardTop && b.y > boardTop - BALL_R - 12) {
+            // перебросил — упёрся в верхнюю кромку и пошёл вниз
+            b.y = boardTop - BALL_R;
+            b.vy = Math.abs(b.vy) * 0.4;
+            b.hitBoard = true;
+            sfx.hit();
+          }
         }
 
         // дужки кольца — два кружка по краям
@@ -251,13 +304,24 @@ export default function Basket({ onExit }: { onExit: () => void }) {
           setScore(Math.floor(g.score));
           setCombo(g.combo);
           setLeft(g.left);
+          // сетка гасит мяч — он не вылетает вниз пулей, а «проваливается»
+          b.vy *= 0.45;
+          b.vx *= 0.3;
           g.pops.push({
             x: g.hoopX, y: g.hoopY + 30, t: 1,
             txt: clean ? `${tr("ЧИСТЯК")} +${pts}` : `+${pts}`,
             col: clean ? "#59FF9E" : "#ffb020",
           });
-          // кольцо ускоряется — но не бесконечно
-          g.hoopSpeed = Math.min(0.26, g.hoopSpeed + 0.006);
+          /**
+           * Уровень = каждые 5 попаданий. Скорость кольца привязана к
+           * уровню, а не к каждому мячу: так рост заметен ступенями и
+           * его видно в шапке. Потолок оставляем, чтобы кольцо не
+           * превращалось в мелькающую полосу.
+           */
+          g.addFx = 1;
+          g.level = 1 + Math.floor(g.made / 5);
+          g.hoopSpeed = Math.min(0.3, speedBase + (g.level - 1) * 0.022);
+          setLevel(g.level);
           sfx.coin();
           haptic("success");
           g.shake = 6;
@@ -281,6 +345,7 @@ export default function Basket({ onExit }: { onExit: () => void }) {
     g.pops = g.pops.filter((p) => p.t > 0);
     for (const t of g.trail) t.a -= dt * 0.004;
     if (g.shake > 0) g.shake = Math.max(0, g.shake - dt * 0.02);
+    if (g.addFx > 0) g.addFx = Math.max(0, g.addFx - dt * 0.0012);
 
     /* ---------- отрисовка ---------- */
     const grd = ctx.createLinearGradient(0, 0, 0, h);
@@ -368,7 +433,7 @@ export default function Basket({ onExit }: { onExit: () => void }) {
       const len = Math.hypot(dx, dy);
       if (len > 8 && dy < -8) {
         const power = Math.min(len, 230) / 230;
-        const sp = 0.28 + power * 1.67;
+        const sp = 1.0 + power * 1.05;
         let px = b.x, py = b.y;
         let pvx = (dx / len) * sp, pvy = (dy / len) * sp;
         ctx.fillStyle = "rgba(255,255,255,0.55)";
@@ -404,12 +469,44 @@ export default function Basket({ onExit }: { onExit: () => void }) {
     }
     ctx.globalAlpha = 1;
 
-    if (g.running && g.shots === 0) {
-      ctx.fillStyle = "rgba(255,255,255,0.45)";
-      ctx.font = "600 13px Inter, system-ui, sans-serif";
-      ctx.fillText(tr("Свайп вверх в любом месте экрана"), w / 2, h - 24);
+    /**
+     * Подсказки. Раньше была одна серая строка у самого низа, и та только
+     * до первого броска. Теперь это читаемая плашка, которая ведёт игрока
+     * по шагам и объясняет главное правило — попадание докидывает время.
+     */
+    if (g.running) {
+      const tip =
+        g.shots === 0 ? tr("Свайп в сторону кольца — чем длиннее, тем сильнее") :
+          g.made === 0 ? tr("Целься чуть выше кольца, щит поможет") :
+            g.made < 3 ? tr("Попадание добавляет секунды на часы") :
+              null;
+      if (tip) {
+        ctx.font = "600 12.5px Inter, system-ui, sans-serif";
+        ctx.textAlign = "center";
+        const tw = ctx.measureText(tip).width;
+        const ty = h - 92;
+        ctx.fillStyle = "rgba(8,8,12,0.82)";
+        ctx.beginPath();
+        ctx.roundRect(w / 2 - tw / 2 - 14, ty - 15, tw + 28, 28, 8);
+        ctx.fill();
+        ctx.strokeStyle = "rgba(255,255,255,0.14)";
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        ctx.fillStyle = "rgba(255,255,255,0.86)";
+        ctx.fillText(tip, w / 2, ty + 4);
+      }
+
+      // «+2.6 с» при попадании — видно, что таймер пополняется
+      if (g.addFx > 0) {
+        ctx.globalAlpha = Math.min(1, g.addFx);
+        ctx.fillStyle = "#59FF9E";
+        ctx.font = "800 15px Unbounded, Inter, system-ui, sans-serif";
+        ctx.textAlign = "center";
+        ctx.fillText(`+${(ADD_MS / 1000).toFixed(1)} ${tr("с")}`, w / 2, h * 0.2 + (1 - g.addFx) * -18);
+        ctx.globalAlpha = 1;
+      }
     }
-  }, [phase]);
+  }, [phase, speedBase]);
 
   useEffect(() => {
     if (phase === "play") {
@@ -441,6 +538,7 @@ export default function Basket({ onExit }: { onExit: () => void }) {
         onExit={onExit}
         extra={
           <>
+            <HudStat label={tr("УР")} value={level} tone="acc" min={38} />
             {combo > 1 && <HudStat label={tr("СЕРИЯ")} value={`×${combo}`} tone="ok" min={44} />}
             <HudStat label={tr("ВРЕМЯ")} value={secs} tone={secs <= 8 ? "danger" : "plain"} min={48} />
           </>
