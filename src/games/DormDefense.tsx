@@ -237,12 +237,53 @@ export default function DormDefense({ onExit }: { onExit: () => void }) {
       if (g.shake > 0) g.shake = Math.max(0, g.shake - dt * 0.05);
       if (g.flash > 0) g.flash = Math.max(0, g.flash - dt * 0.003);
 
-      /* ---------- фон ---------- */
+      /* ---------- фон ----------
+         Было: ровная тёмная заливка сверху вниз, на которой дорожки
+         еле проступали, — «оформить стильнее». Стало: коридор с уходящей
+         в перспективу плиткой пола и лампами по потолку. Всё рисуется
+         примитивами, без картинок и фильтров: на слабом телефоне это
+         десяток заливок за кадр. */
       const grd = ctx.createLinearGradient(0, 0, 0, h);
-      grd.addColorStop(0, "#0d0d12");
-      grd.addColorStop(1, "#17171f");
+      grd.addColorStop(0, "#0c0c11");
+      grd.addColorStop(0.55, "#14141c");
+      grd.addColorStop(1, "#1b1b25");
       ctx.fillStyle = grd;
       ctx.fillRect(0, 0, w, h);
+
+      {
+        const topY0 = h * 0.16;
+        const doorY0 = h * 0.82;
+        // перспективные линии пола
+        ctx.strokeStyle = "rgba(255,255,255,0.05)";
+        ctx.lineWidth = 1;
+        for (let i = 1; i <= 7; i++) {
+          const k = i / 8;
+          const y = topY0 + (doorY0 - topY0) * (k * k);
+          ctx.beginPath();
+          ctx.moveTo(w * (0.5 - 0.5 * (0.25 + k * 0.75)), y);
+          ctx.lineTo(w * (0.5 + 0.5 * (0.25 + k * 0.75)), y);
+          ctx.stroke();
+        }
+        // стены по краям
+        const wallL = ctx.createLinearGradient(0, 0, w * 0.16, 0);
+        wallL.addColorStop(0, "rgba(0,0,0,0.55)");
+        wallL.addColorStop(1, "rgba(0,0,0,0)");
+        ctx.fillStyle = wallL;
+        ctx.fillRect(0, 0, w * 0.16, h);
+        const wallR = ctx.createLinearGradient(w, 0, w * 0.84, 0);
+        wallR.addColorStop(0, "rgba(0,0,0,0.55)");
+        wallR.addColorStop(1, "rgba(0,0,0,0)");
+        ctx.fillStyle = wallR;
+        ctx.fillRect(w * 0.84, 0, w * 0.16, h);
+        // лампы на потолке — задают глубину и подсвечивают вход
+        for (let i = 0; i < 3; i++) {
+          const y = topY0 * (0.28 + i * 0.24);
+          ctx.fillStyle = "rgba(255,240,200,0.1)";
+          ctx.beginPath();
+          ctx.roundRect(w * 0.36, y, w * 0.28, 3.5, 2);
+          ctx.fill();
+        }
+      }
 
       ctx.save();
       if (g.shake > 0) ctx.translate((Math.random() - 0.5) * g.shake, (Math.random() - 0.5) * g.shake);
@@ -251,26 +292,59 @@ export default function DormDefense({ onExit }: { onExit: () => void }) {
       for (let l = 0; l < LANES; l++) {
         const x = laneX(l);
         const lg = ctx.createLinearGradient(0, topY, 0, doorY);
-        lg.addColorStop(0, "rgba(255,255,255,0.02)");
-        lg.addColorStop(1, "rgba(255,255,255,0.06)");
+        lg.addColorStop(0, "rgba(255,255,255,0.015)");
+        lg.addColorStop(1, "rgba(255,255,255,0.075)");
         ctx.fillStyle = lg;
         ctx.beginPath();
-        ctx.roundRect(x - w * 0.13, topY, w * 0.26, doorY - topY, 14);
+        ctx.roundRect(x - w * 0.13, topY, w * 0.26, doorY - topY, 12);
         ctx.fill();
+        // тонкая кромка дорожки — видно, где чья полоса
+        ctx.strokeStyle = "rgba(255,255,255,0.06)";
+        ctx.lineWidth = 1;
+        ctx.stroke();
       }
 
-      // дверь
-      ctx.fillStyle = "#2a2233";
-      ctx.beginPath();
-      ctx.roundRect(w * 0.06, doorY, w * 0.88, h * 0.1, 12);
-      ctx.fill();
-      ctx.strokeStyle = g.lives <= 2 ? "#FF4D4D" : "rgba(255,255,255,0.14)";
-      ctx.lineWidth = 2;
-      ctx.stroke();
-      ctx.fillStyle = "rgba(255,255,255,0.55)";
-      ctx.font = "700 12px Inter, system-ui, sans-serif";
-      ctx.textAlign = "center";
-      ctx.fillText("ОБЩАГА", w / 2, doorY + h * 0.062);
+      // дверь общаги: рама, створки и табличка — вместо серой плашки
+      {
+        const dh = h * 0.1;
+        const dg = ctx.createLinearGradient(0, doorY, 0, doorY + dh);
+        dg.addColorStop(0, "#332a3d");
+        dg.addColorStop(1, "#221c2a");
+        ctx.fillStyle = dg;
+        ctx.beginPath();
+        ctx.roundRect(w * 0.06, doorY, w * 0.88, dh, 10);
+        ctx.fill();
+        // створки
+        ctx.strokeStyle = "rgba(255,255,255,0.08)";
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(w / 2, doorY + 6);
+        ctx.lineTo(w / 2, doorY + dh - 6);
+        ctx.stroke();
+        // ручки
+        ctx.fillStyle = "rgba(255,255,255,0.22)";
+        ctx.beginPath();
+        ctx.roundRect(w / 2 - 12, doorY + dh * 0.46, 6, 12, 3);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.roundRect(w / 2 + 6, doorY + dh * 0.46, 6, 12, 3);
+        ctx.fill();
+        // рамка краснеет, когда жизней мало
+        ctx.strokeStyle = g.lives <= 2 ? "#FF4D4D" : "rgba(255,255,255,0.16)";
+        ctx.lineWidth = g.lives <= 2 ? 2.5 : 1.5;
+        ctx.beginPath();
+        ctx.roundRect(w * 0.06, doorY, w * 0.88, dh, 10);
+        ctx.stroke();
+        // табличка над дверью
+        ctx.fillStyle = "rgba(0,0,0,0.5)";
+        ctx.beginPath();
+        ctx.roundRect(w / 2 - 44, doorY - 15, 88, 17, 5);
+        ctx.fill();
+        ctx.fillStyle = "rgba(255,255,255,0.7)";
+        ctx.font = "800 10px Inter, system-ui, sans-serif";
+        ctx.textAlign = "center";
+        ctx.fillText("ОБЩАГА", w / 2, doorY - 3);
+      }
 
       // враги
       for (const e of g.enemies) {
@@ -344,7 +418,7 @@ export default function DormDefense({ onExit }: { onExit: () => void }) {
           ctx.fillStyle = "#59FF9E";
           ctx.font = "700 9px Inter, system-ui, sans-serif";
           ctx.textAlign = "center";
-          ctx.fillText("СВОЙ", x, y - rr - 10);
+          ctx.fillText(tr("СВОЙ"), x, y - rr - 10);
         }
         ctx.restore();
       }
@@ -372,7 +446,7 @@ export default function DormDefense({ onExit }: { onExit: () => void }) {
         ctx.fillStyle = "rgba(255,255,255,0.45)";
         ctx.font = "600 12.5px Inter, system-ui, sans-serif";
         ctx.textAlign = "center";
-        ctx.fillText("Бей чужих. Зелёных своих не трогай.", w / 2, topY - 12);
+        ctx.fillText(tr("Бей чужих. Зелёных своих не трогай."), w / 2, topY - 12);
       }
     },
     [phase, s.friends, densityK, speedK],
@@ -510,8 +584,8 @@ export default function DormDefense({ onExit }: { onExit: () => void }) {
           xp={result.xp}
           onRetry={restart}
           onExit={onExit}
-          title="ПРОРВАЛИСЬ"
-          sub={`Волн: ${wave} · лучшая серия: ${G.current.bestCombo}`}
+          title={tr("ПРОРВАЛИСЬ")}
+          sub={`${tr("Волн")}: ${wave} · ${tr("серия")}: ${G.current.bestCombo}`}
         />
       )}
     </div>
