@@ -252,6 +252,52 @@ export default function Crossword({ onExit }: { onExit: () => void }) {
           </div>
         </div>
 
+        {/*
+          Вопрос активного слова — крупно и целиком.
+          Раньше он висел одной строкой над клавиатурой с обрезкой clip1,
+          и длинные вопросы просто не читались.
+        */}
+        <div
+          style={{
+            padding: "12px 14px", borderRadius: "var(--r-md)",
+            background: "var(--surface)",
+            border: `1px solid ${solved[active] ? "rgba(89,255,158,0.5)" : "var(--acc)"}`,
+            marginBottom: 14,
+          }}
+        >
+          <div className="flex items-center justify-between" style={{ gap: 10, marginBottom: 6 }}>
+            <span className="t-label" style={{ fontSize: 9, opacity: 0.6 }}>
+              {tr("ВОПРОС")} {active + 1}/{words.length} · {w.dir === "h" ? tr("ПО ГОРИЗОНТАЛИ") : tr("ПО ВЕРТИКАЛИ")}
+            </span>
+            <span className="t-num shrink-0" style={{ fontSize: 11, opacity: 0.75 }}>
+              {w.answer.length} {tr("букв")}
+            </span>
+          </div>
+          <div
+            className="t-title"
+            style={{ fontSize: 15, lineHeight: 1.35, textAlign: "left" }}
+          >
+            {tr(w.clue)}
+          </div>
+          {/* набранные буквы отдельной строкой — видно, что уже введено */}
+          <div className="flex items-center" style={{ gap: 4, marginTop: 9, flexWrap: "wrap" }}>
+            {Array.from({ length: w.answer.length }).map((_, i) => (
+              <span
+                key={i}
+                className="t-num flex items-center justify-center"
+                style={{
+                  width: 20, height: 24, borderRadius: 4, fontSize: 13,
+                  background: i < typed.length ? "var(--acc-soft)" : "var(--surface-2)",
+                  border: `1px solid ${i < typed.length ? "var(--acc)" : "var(--surface-brd)"}`,
+                  color: i < typed.length ? "var(--acc)" : "var(--text-mute)",
+                }}
+              >
+                {solved[active] ? w.answer[i] : (typed[i] || "")}
+              </span>
+            ))}
+          </div>
+        </div>
+
         {/* Сетка */}
         <motion.div
           key={shake}
@@ -343,8 +389,7 @@ export default function Crossword({ onExit }: { onExit: () => void }) {
         {/* Клавиатура */}
         {!solved[active] && (
           <div style={{ marginTop: "auto" }}>
-            <div className="flex items-center justify-between" style={{ marginBottom: 8 }}>
-              <span className="t-caption clip1" style={{ flex: 1 }}>{w.clue}</span>
+            <div className="flex items-center justify-end" style={{ marginBottom: 8 }}>
               <button
                 type="button"
                 onClick={hint}
