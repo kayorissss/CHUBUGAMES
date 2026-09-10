@@ -33,11 +33,23 @@ const HIT_COST_BAG = 9;       // а эта ещё и с авоськой
 const MISS_COST = 28;         // не успел выйти на остановке
 const STOP_BONUS = 18;        // терпение возвращается за успешный выход
 
+/** Где в этот раз двери: сзади, спереди или сбоку */
+type ExitSide = "back" | "front" | "left" | "right";
+const EXITS: ExitSide[] = ["back", "front", "left", "right"];
+
 interface Babka {
   x: number; y: number;
   vx: number; vy: number;
   bag: boolean;               // с авоськой — толкается больнее
   ph: number;                 // фаза покачивания
+  /**
+   * Бабка «на охоте»: заметила тебя и целенаправленно идёт требовать
+   * место. Обычные просто дрейфуют по салону, а эта преследует, поэтому
+   * от неё надо уворачиваться, а не обходить по дуге.
+   */
+  hunting: boolean;
+  /** сколько ещё преследует, мс */
+  huntT: number;
 }
 
 export default function Bus12({ onExit }: { onExit: () => void }) {
@@ -73,6 +85,9 @@ export default function Bus12({ onExit }: { onExit: () => void }) {
     shake: 0,
     w: 0, h: 0,
     hitCd: 0,
+    exit: "back" as ExitSide,   // где двери на этой остановке
+    announce: 0,                // сколько ещё показывать объявление, мс
+    huntT: 2600,                // таймер до следующей охотницы
   });
 
   const fillCrowd = useCallback((w: number, h: number, n: number) => {
@@ -86,6 +101,8 @@ export default function Bus12({ onExit }: { onExit: () => void }) {
         vy: (Math.random() - 0.5) * 0.045,
         bag: Math.random() < 0.45,
         ph: Math.random() * Math.PI * 2,
+        hunting: false,
+        huntT: 0,
       });
     }
     g.babki = arr;
@@ -99,6 +116,9 @@ export default function Bus12({ onExit }: { onExit: () => void }) {
     g.stop = 0; g.patience = PATIENCE; g.score = 0;
     g.door = false; g.timer = RIDE_MS;
     g.pops = []; g.shake = 0; g.bump = 0; g.bumpT = 1800; g.hitCd = 0;
+    g.exit = EXITS[Math.floor(Math.random() * EXITS.length)];
+    g.announce = 0;
+    g.huntT = 2600;
     g.startT = Date.now();
     fillCrowd(w, h, crowdBase);
     setStop(0); setPatience(PATIENCE); setScore(0); setDoorOpen(false);
@@ -145,8 +165,14 @@ export default function Bus12({ onExit }: { onExit: () => void }) {
     if (!g.w) reset(w, h);
     g.w = w; g.h = h;
 
-    const doorY = h - 46;                 // зона выхода снизу
-    const doorX0 = w * 0.28, doorX1 = w * 0.72;
+    /**
+     * Зона выхода зависит от стороны, объявленной на остановке.
+     * Раньше двери всегда были снизу по центру, и маршрут не менялся:
+     * пользователь просил, чтобы выход «менялся» и заранее был неизвестен.
+     */
+    const doorRect = exitRect(g.exit, w, h);
+    const inDoor = (x: number, y: number) =>
+      x > doorRect.x0 && x < doorRect.x1 && y > doorRect.y0 && y < doorRect.y1;
 
     if (g.running) {
       /* таймеры этапа */
@@ -164,13 +190,23 @@ export default function Bus12({ onExit }: { onExit: () => void }) {
           haptic("error");
           if (g.patience <= 0) { end(false); return; }
         } else {
+          // Выход становится известен только сейчас — до объявления
+          // игрок не знает, куда бежать.
+          g.exit = EXITS[Math.floor(Math.random() * EXITS.length)];
           g.door = true;
           setDoorOpen(true);
           g.timer = DOOR_MS;
+          g.announce = 2200;
           sfx.power();
-          g.pops.push({ x: w / 2, y: h * 0.45, t: 1, txt: tr("ОСТАНОВКА"), col: "#59FF9E" });
+          g.pops.push({
+            x: w / 2, y: h * 0.45, t: 1,
+            txt: `${tr("ВЫХОД")}: ${tr(exitName(g.exit))}`,
+            col: "#59FF9E",
+          });
         }
       }
+
+      if (g.announce > 0) g.announce -= dt;
 
       /* кочки: автобус потряхивает, толпу качает */
       g.bumpT -= dt;
@@ -195,13 +231,44 @@ export default function Bus12({ onExit }: { onExit: () => void }) {
       g.me.x = Math.max(24, Math.min(w - 24, g.me.x));
       g.me.y = Math.max(60, Math.min(h - 24, g.me.y));
 
+      /*
+       * Время от времени одна из бабулек «выходит на охоту»: замечает
+       * тебя и идёт требовать место. Такую надо активно оббегать, а не
+       * просто обходить статичное препятствие.
+       */
+      g.huntT -= dt;
+      if (g.huntT <= 0) {
+        g.huntT = 3200 + Math.random() * 2600;
+        const free = g.babki.filter((b) => !b.hunting);
+        if (free.length) {
+          const pick = free[Math.floor(Math.random() * free.length)];
+          pick.hunting = true;
+          pick.huntT = 2600 + Math.random() * 1400;
+          g.pops.push({
+            x: pick.x, y: pick.y - 26, t: 1,
+            txt: tr("УСТУПИ МЕСТО!"), col: "#FFD86B",
+          });
+        }
+      }
+
       /* бабульки бродят + качаются на кочке */
       for (const b of g.babki) {
         b.ph += dt * 0.004;
-        b.x += b.vx * dt + Math.sin(b.ph) * g.bump * 0.9;
-        b.y += b.vy * dt;
-        if (b.x < 34 || b.x > w - 34) b.vx *= -1;
-        if (b.y < h * 0.14 || b.y > h * 0.78) b.vy *= -1;
+        if (b.hunting) {
+          b.huntT -= dt;
+          if (b.huntT <= 0) b.hunting = false;
+          // идёт прямо на тебя, но медленнее, чем ты — убежать реально
+          const dx = g.me.x - b.x, dy = g.me.y - b.y;
+          const d = Math.hypot(dx, dy) || 1;
+          const sp = 0.085 * dt;
+          b.x += (dx / d) * sp + Math.sin(b.ph) * g.bump * 0.9;
+          b.y += (dy / d) * sp;
+        } else {
+          b.x += b.vx * dt + Math.sin(b.ph) * g.bump * 0.9;
+          b.y += b.vy * dt;
+          if (b.x < 34 || b.x > w - 34) b.vx *= -1;
+          if (b.y < h * 0.14 || b.y > h * 0.78) b.vy *= -1;
+        }
         b.x = Math.max(34, Math.min(w - 34, b.x));
         b.y = Math.max(h * 0.14, Math.min(h * 0.78, b.y));
       }
@@ -234,7 +301,7 @@ export default function Bus12({ onExit }: { onExit: () => void }) {
       }
 
       /* выход на остановке */
-      if (g.door && g.me.y > doorY - 12 && g.me.x > doorX0 && g.me.x < doorX1) {
+      if (g.door && inDoor(g.me.x, g.me.y)) {
         g.stop += 1;
         g.score += 200 + Math.round(g.patience);
         setStop(g.stop);
@@ -288,26 +355,55 @@ export default function Bus12({ onExit }: { onExit: () => void }) {
       ctx.beginPath(); ctx.roundRect(w - 52, y, 34, 44, 6); ctx.fill();
     }
 
-    // двери
-    const doorCol = g.door ? "#59FF9E" : "rgba(255,255,255,0.2)";
-    ctx.fillStyle = g.door ? "rgba(89,255,158,0.14)" : "rgba(255,255,255,0.04)";
-    ctx.fillRect(doorX0, doorY - 10, doorX1 - doorX0, h - doorY + 10);
-    ctx.strokeStyle = doorCol;
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    ctx.moveTo(doorX0, doorY - 10); ctx.lineTo(doorX0, h);
-    ctx.moveTo(doorX1, doorY - 10); ctx.lineTo(doorX1, h);
-    ctx.moveTo(doorX0, doorY - 10); ctx.lineTo(doorX1, doorY - 10);
-    ctx.stroke();
-    ctx.fillStyle = doorCol;
-    ctx.font = "700 11px Inter, system-ui, sans-serif";
-    ctx.textAlign = "center";
-    ctx.fillText(g.door ? tr("ВЫХОД ОТКРЫТ") : tr("ДВЕРИ ЗАКРЫТЫ"), w / 2, h - 16);
+    // двери: рисуем только когда открыты — до объявления игрок не
+    // должен знать, с какой стороны выход
+    if (g.door) {
+      const d = doorRect;
+      ctx.fillStyle = "rgba(89,255,158,0.16)";
+      ctx.fillRect(d.x0, d.y0, d.x1 - d.x0, d.y1 - d.y0);
+      ctx.strokeStyle = "#59FF9E";
+      ctx.lineWidth = 3;
+      ctx.strokeRect(d.x0, d.y0, d.x1 - d.x0, d.y1 - d.y0);
+      ctx.fillStyle = "#59FF9E";
+      ctx.font = "700 11px Inter, system-ui, sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText(tr("ВЫХОД"), (d.x0 + d.x1) / 2, (d.y0 + d.y1) / 2 + 4);
+    }
+
+    // объявление о том, где открылись двери
+    if (g.announce > 0) {
+      const a = Math.min(1, g.announce / 400);
+      ctx.globalAlpha = a;
+      ctx.fillStyle = "rgba(0,0,0,0.82)";
+      ctx.fillRect(0, h * 0.30, w, 46);
+      ctx.fillStyle = "#FFD86B";
+      ctx.font = "800 15px Inter, system-ui, sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText(`${tr("ВЫХОД ПОЯВИЛСЯ")}: ${tr(exitName(g.exit))}`, w / 2, h * 0.30 + 29);
+      ctx.globalAlpha = 1;
+    }
+
+    if (!g.door) {
+      ctx.fillStyle = "rgba(255,255,255,0.35)";
+      ctx.font = "700 11px Inter, system-ui, sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText(tr("ДВЕРИ ЗАКРЫТЫ"), w / 2, h - 16);
+    }
 
     // бабульки
     for (const b of g.babki) {
       ctx.fillStyle = "rgba(0,0,0,0.3)";
       ctx.beginPath(); ctx.ellipse(b.x, b.y + 15, 15, 5, 0, 0, Math.PI * 2); ctx.fill();
+      // охотницу видно сразу: красное кольцо и восклицательный знак
+      if (b.hunting) {
+        ctx.strokeStyle = "#FF6B4D";
+        ctx.lineWidth = 2.5;
+        ctx.beginPath(); ctx.arc(b.x, b.y, R_BABKA + 7, 0, Math.PI * 2); ctx.stroke();
+        ctx.fillStyle = "#FF6B4D";
+        ctx.font = "800 15px Inter, system-ui, sans-serif";
+        ctx.textAlign = "center";
+        ctx.fillText("!", b.x, b.y - R_BABKA - 10);
+      }
       // платок
       ctx.fillStyle = b.bag ? "#c85a7a" : "#8a7ac8";
       ctx.beginPath(); ctx.arc(b.x, b.y, R_BABKA, Math.PI, 0); ctx.fill();
@@ -426,4 +522,25 @@ export default function Bus12({ onExit }: { onExit: () => void }) {
       )}
     </div>
   );
+}
+
+/** Прямоугольник дверей для стороны выхода */
+function exitRect(side: ExitSide, w: number, h: number) {
+  const T = 44;   // толщина зоны
+  switch (side) {
+    case "back":  return { x0: w * 0.28, x1: w * 0.72, y0: h - T, y1: h };
+    case "front": return { x0: w * 0.28, x1: w * 0.72, y0: h * 0.12, y1: h * 0.12 + T };
+    case "left":  return { x0: 0, x1: T, y0: h * 0.34, y1: h * 0.66 };
+    case "right": return { x0: w - T, x1: w, y0: h * 0.34, y1: h * 0.66 };
+  }
+}
+
+/** Человеческое название стороны для объявления */
+function exitName(side: ExitSide): string {
+  switch (side) {
+    case "back": return "СЗАДИ";
+    case "front": return "СПЕРЕДИ";
+    case "left": return "СЛЕВА";
+    case "right": return "СПРАВА";
+  }
 }
