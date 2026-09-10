@@ -85,21 +85,39 @@ export function GameHUD({
       {gid && (
         <RulesCard id={gid} open={rulesOpen} onClose={() => setRulesOpen(false)} />
       )}
-      <Tap onClick={onExit} r="md" className="px-3 py-2.5 shrink-0" sound="swoosh">
+      {/* Шапка игры непрозрачная: сквозь неё летели снаряды и цифры
+          становились нечитаемыми. Отсюда solid, а не стекло. */}
+      <Tap
+        onClick={onExit}
+        r="md"
+        solid
+        center
+        className="shrink-0 flex items-center justify-center"
+        style={{ width: 40, height: 40, padding: 0, background: "var(--surface-2)" }}
+        sound="swoosh"
+      >
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round">
           <path d="M15 18l-6-6 6-6" />
         </svg>
       </Tap>
-      <Panel r="md" className="px-4 py-2 flex-1 flex items-center justify-between">
-        <div>
-          <div className="t-label" style={{ fontSize: 9 }}>{label}</div>
-          <div className="t-num" style={{ fontSize: 21, lineHeight: 1 }}>{fmt(score)}</div>
+      <div
+        className="px-4 flex-1 flex items-center justify-between"
+        style={{
+          height: 40,
+          borderRadius: "var(--r-md)",
+          background: "var(--surface-2)",
+          border: "1px solid var(--btn-brd)",
+        }}
+      >
+        <div className="min-w-0">
+          <div className="t-label" style={{ fontSize: 8.5, lineHeight: 1.1 }}>{label}</div>
+          <div className="t-num" style={{ fontSize: 19, lineHeight: 1.05 }}>{fmt(score)}</div>
         </div>
-        <div className="text-right">
-          <div className="t-label" style={{ fontSize: 9 }}>{tr("Рекорд")}</div>
-          <div className="t-num acc-text" style={{ fontSize: 15, lineHeight: 1.2 }}>{fmt(best)}</div>
+        <div className="text-right shrink-0" style={{ marginLeft: 10 }}>
+          <div className="t-label" style={{ fontSize: 8.5, lineHeight: 1.1 }}>{tr("Рекорд")}</div>
+          <div className="t-num acc-text" style={{ fontSize: 14, lineHeight: 1.15 }}>{fmt(best)}</div>
         </div>
-      </Panel>
+      </div>
       {gid && <RulesButton onClick={() => setRulesOpen(true)} />}
       {extra}
     </div>
@@ -388,8 +406,8 @@ export function GameOver({
       variants={modalBackdrop}
       initial="initial"
       animate="animate"
-      className="absolute inset-0 z-40 flex items-center justify-center px-6"
-      style={{ background: "rgba(4,4,6,0.82)", backdropFilter: "blur(18px)" }}
+      className="absolute inset-0 z-40 flex items-center justify-center px-5"
+      style={{ background: "rgba(6,6,9,0.88)" }}
     >
       <motion.div
         variants={modalCard}
@@ -397,126 +415,174 @@ export function GameOver({
         animate="animate"
         className="w-full max-w-sm"
       >
-        <Panel r="xl" strong className="p-6 text-center">
-          {isRecord && (
-            <motion.div
-              initial={{ scale: 0, rotate: -8 }}
-              animate={{ scale: 1, rotate: 0 }}
-              transition={{ delay: 0.24, ...springPop }}
-              className="inline-block px-3 py-1 rounded-full mb-3 t-label"
-              style={{ background: "var(--acc)", color: "var(--acc-ink)", fontSize: 10 }}
-            >
-              <span className="inline-flex items-center" style={{ gap: 7 }}><Icon name="medal" size={14} />{tr("НОВЫЙ РЕКОРД")}</span>
-            </motion.div>
-          )}
-          <div className="t-display" style={{ fontSize: 36 }}>{title}</div>
-          {sub && <div className="text-sm mt-1" style={{ color: "var(--text-mute)" }}>{sub}</div>}
+        {/* Итог забега — непрозрачная карточка со ступенями поверхностей.
+            Раньше это было полупрозрачное стекло: поверх пёстрой игры
+            цифры читались плохо. */}
+        <div
+          style={{
+            borderRadius: "var(--r-xl)",
+            background: "var(--surface)",
+            border: "1px solid var(--surface-brd)",
+            boxShadow: "0 30px 70px -28px rgba(0,0,0,0.95)",
+            overflow: "hidden",
+          }}
+        >
+          {/* Шапка: заголовок и результат на подложке потемнее */}
+          <div
+            className="text-center"
+            style={{
+              padding: "22px 20px 20px",
+              background: "var(--surface-2)",
+              borderBottom: "1px solid var(--surface-brd)",
+            }}
+          >
+            {isRecord && (
+              <motion.div
+                initial={{ scale: 0, rotate: -8 }}
+                animate={{ scale: 1, rotate: 0 }}
+                transition={{ delay: 0.22, ...springPop }}
+                className="tag tag-acc"
+                style={{ marginBottom: 12 }}
+              >
+                <Icon name="medal" size={13} />
+                {tr("НОВЫЙ РЕКОРД")}
+              </motion.div>
+            )}
+            <div className="t-display" style={{ fontSize: 32, lineHeight: 1.1 }}>{title}</div>
+            {sub && (
+              <div className="t-body" style={{ marginTop: 5 }}>{sub}</div>
+            )}
 
-          <div className="my-5">
-            <div className="t-label mb-1">{tr("Результат")}</div>
-            <CountUp value={score} className="t-num acc-text" style={{ fontSize: 52, lineHeight: 1 }} />
-            <div className="text-xs mt-1" style={{ color: "var(--text-mute)" }}>
-              рекорд {fmt(Math.max(best, score))}
+            <div style={{ marginTop: 18 }}>
+              <div className="t-label" style={{ marginBottom: 4 }}>{tr("Результат")}</div>
+              <CountUp
+                value={score}
+                className="t-num acc-text"
+                style={{ fontSize: 54, lineHeight: 1 }}
+              />
+              <div className="t-caption" style={{ marginTop: 5 }}>
+                {tr("рекорд")} {fmt(Math.max(best, score))}
+              </div>
             </div>
           </div>
 
-          <div className="flex gap-2 mb-5">
-            <motion.div
-              className="flex-1"
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.3, duration: 0.3, ease: EASE }}
-            >
-              <Panel r="md" className="py-2.5">
-                <div className="t-num" style={{ fontSize: 17 }}>+{fmt(coins)}</div>
-                <div className="t-label" style={{ fontSize: 9 }}>{tr("монет")}</div>
-              </Panel>
-            </motion.div>
-            <motion.div
-              className="flex-1"
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.38, duration: 0.3, ease: EASE }}
-            >
-              <Panel r="md" className="py-2.5">
-                <div className="t-num" style={{ fontSize: 17 }}>+{fmt(xp)}</div>
-                <div className="t-label" style={{ fontSize: 9 }}>{tr("опыта")}</div>
-              </Panel>
-            </motion.div>
-          </div>
+          {/* Награда */}
+          <div style={{ padding: "16px 20px 20px" }}>
+            <div className="flex" style={{ gap: 10, marginBottom: 16 }}>
+              {[
+                { v: coins, l: tr("монет"), i: "coin" as const, d: 0.28 },
+                { v: xp, l: tr("опыта"), i: "level" as const, d: 0.36 },
+              ].map((it) => (
+                <motion.div
+                  key={it.l}
+                  className="flex-1 flex items-center"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: it.d, duration: 0.3, ease: EASE }}
+                  style={{
+                    gap: 10,
+                    padding: "11px 12px",
+                    borderRadius: "var(--r-md)",
+                    background: "var(--surface-2)",
+                    border: "1px solid var(--surface-brd)",
+                  }}
+                >
+                  <span className="ico-box ico-box-acc" style={{ width: 30, height: 30 }}>
+                    <Icon name={it.i} size={15} />
+                  </span>
+                  <span className="min-w-0">
+                    <span className="t-num block" style={{ fontSize: 17, lineHeight: 1.1 }}>
+                      +{fmt(it.v)}
+                    </span>
+                    <span className="t-label block" style={{ fontSize: 8.5, marginTop: 1 }}>
+                      {it.l}
+                    </span>
+                  </span>
+                </motion.div>
+              ))}
+            </div>
 
-          {onRevive && (
-            <Tap
-              onClick={onRevive}
-              r="md"
-              solid
-              center
-              className="w-full py-3.5 t-title"
-              style={{
-                fontSize: 13, marginBottom: 10,
-                border: "1.5px solid #59FF9E",
-                color: "#59FF9E",
-              }}
-              sound="power"
-            >
-              <span className="inline-flex items-center" style={{ gap: 8 }}>
-                <Icon name="play" size={15} />{tr("ПРОДОЛЖИТЬ ЗА РЕКЛАМУ")}</span>
-            </Tap>
-          )}
+            {onRevive && (
+              <Tap
+                onClick={onRevive}
+                r="md"
+                solid
+                center
+                className="w-full t-title"
+                style={{
+                  fontSize: 13,
+                  marginBottom: 10,
+                  padding: "13px 0",
+                  background: "var(--ok-soft)",
+                  border: "1.5px solid var(--ok-brd)",
+                  color: "var(--ok)",
+                }}
+                sound="power"
+              >
+                <span className="inline-flex items-center" style={{ gap: 8 }}>
+                  <Icon name="play" size={15} />{tr("ПРОДОЛЖИТЬ ЗА РЕКЛАМУ")}
+                </span>
+              </Tap>
+            )}
 
-          {/* Обе кнопки одной высоты и с центрированным текстом: раньше
-              «Ещё раз» была без center и надпись липла к левому краю. */}
-          <div className="flex" style={{ gap: 10 }}>
-            <Tap
-              onClick={onExit}
-              r="md" center
-              className="t-title"
-              style={{ fontSize: 13, flex: "0 0 34%", padding: "14px 0", lineHeight: 1.1 }}
-              sound="swoosh"
-            >
-              {tr("Выйти")}
-            </Tap>
-            <Tap
-              onClick={onRetry}
-              accent r="md" center
-              className="t-title"
-              style={{ fontSize: 14, flex: 1, padding: "14px 0", lineHeight: 1.1 }}
-              sound="power"
-            >
-              {tr("ЕЩЁ РАЗ")}
-            </Tap>
+            {/* Обе кнопки одной высоты и с центрированным текстом. */}
+            <div className="flex" style={{ gap: 10 }}>
+              <Tap
+                onClick={onExit}
+                r="md" center solid
+                className="t-title"
+                style={{
+                  fontSize: 13, flex: "0 0 36%", padding: "14px 0", lineHeight: 1.1,
+                  background: "var(--btn-bg)", border: "1px solid var(--btn-brd)",
+                }}
+                sound="swoosh"
+              >
+                {tr("Выйти")}
+              </Tap>
+              <Tap
+                onClick={onRetry}
+                accent r="md" center
+                className="t-title"
+                style={{ fontSize: 14, flex: 1, padding: "14px 0", lineHeight: 1.1 }}
+                sound="power"
+              >
+                {tr("ЕЩЁ РАЗ")}
+              </Tap>
+            </div>
           </div>
-        </Panel>
+        </div>
       </motion.div>
     </motion.div>
   );
 }
 
+/**
+ * Отсчёт перед стартом.
+ *
+ * Только цифра. Раньше вокруг счётчика расходилось кольцо — пользователь
+ * назвал это «уродскими кругами», так что никаких колец, рамок и подложек:
+ * число появляется, слегка ужимается и уходит.
+ */
 export function Countdown({ n }: { n: number }) {
-  const low = isLowFx();
   return (
     <motion.div
       key={n}
-      initial={{ scale: 2.2, opacity: 0 }}
+      initial={{ scale: 1.5, opacity: 0 }}
       animate={{ scale: 1, opacity: 1 }}
-      exit={{ scale: 0.5, opacity: 0 }}
-      transition={{ duration: 0.32, ease: EASE }}
+      exit={{ scale: 0.82, opacity: 0 }}
+      transition={{ duration: 0.26, ease: EASE }}
       className="absolute inset-0 z-30 flex items-center justify-center pointer-events-none"
     >
-      {/* Расходящееся кольцо задаёт ритм отсчёта. На слабых телефонах не
-          рисуем: это лишний перерисовываемый слой на весь экран. */}
-      {!low && (
-        <motion.div
-          initial={{ scale: 0.6, opacity: 0.5 }}
-          animate={{ scale: 1.7, opacity: 0 }}
-          transition={{ duration: 0.7, ease: "easeOut" }}
-          style={{
-            position: "absolute", width: 190, height: 190, borderRadius: "50%",
-            border: "2px solid var(--acc)",
-          }}
-        />
-      )}
-      <div className="t-display acc-text" style={{ fontSize: 110, textShadow: "0 0 60px var(--acc-glow)" }}>
+      <div
+        className="t-display"
+        style={{
+          fontSize: n > 0 ? 128 : 92,
+          lineHeight: 1,
+          color: "var(--text)",
+          // мягкая тень только чтобы цифра читалась на светлом фоне игры
+          textShadow: "0 6px 30px rgba(0,0,0,0.7)",
+        }}
+      >
         {n > 0 ? n : "GO"}
       </div>
     </motion.div>

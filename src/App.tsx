@@ -9,7 +9,13 @@ export type SubPage = "network" | "casino" | "donate" | "boss";
 import { Toasts, OfflineModal } from "./components/Overlays";
 import UpdateBanner from "./ui/UpdateBanner";
 import WhatsNew from "./ui/WhatsNew";
-import { initNotificationsOnFirstRun, syncInstalledVersion } from "./core/notify";
+import {
+  cancelBossNotifications,
+  initNotificationsOnFirstRun,
+  scheduleBossNotifications,
+  syncInstalledVersion,
+} from "./core/notify";
+import { upcomingBosses } from "./core/bosses";
 import { applyPerfMode, isLowFx, measurePerfOnce } from "./core/perf";
 import Icon from "./ui/Icon";
 import Home from "./pages/Home";
@@ -149,6 +155,14 @@ function Shell() {
   // При первом запуске система сама спросит про уведомления — тумблер в
   // настройках после этого только включает и выключает напоминания.
   useEffect(() => { void initNotificationsOnFirstRun(); }, []);
+
+  // Напоминания о боссах. Расписание считается формулой, поэтому ставим
+  // их сразу на 12 часов вперёд — приложение может долго не открываться.
+  // Переставляем при каждом запуске, чтобы список всегда был свежим.
+  useEffect(() => {
+    if (s.settings.notifyBoss) void scheduleBossNotifications(upcomingBosses());
+    else void cancelBossNotifications();
+  }, [s.settings.notifyBoss]);
 
   // системная кнопка/жест «назад» закрывает игру, а не приложение
   useEffect(() => {

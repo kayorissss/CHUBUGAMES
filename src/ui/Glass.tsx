@@ -79,21 +79,25 @@ export function Button({
     primary: {
       background: "var(--acc)",
       color: "var(--acc-ink)",
-      border: "1px solid transparent",
-      boxShadow: "0 6px 18px -10px var(--acc-glow)",
+      // Светлая кромка отделяет кнопку от фона даже на светлой теме
+      border: "1px solid color-mix(in srgb, var(--acc) 70%, #ffffff)",
+      boxShadow: "0 8px 22px -12px var(--acc-glow)",
     },
     secondary: {
       background: "var(--btn-bg)",
       color: "var(--text)",
       border: "1px solid var(--btn-brd)",
     },
+    /* «Призрачная» кнопка раньше была полностью прозрачной и без рамки —
+       её было не отличить от обычного текста. Теперь у неё есть контур. */
     ghost: {
       background: "transparent",
       color: "var(--text-dim)",
-      border: "1px solid transparent",
+      border: "1px solid var(--surface-brd)",
     },
+    /* Опасное действие: заливка, а не только цвет текста на пустоте */
     danger: {
-      background: "transparent",
+      background: "var(--danger-soft)",
       color: "var(--danger)",
       border: "1px solid var(--danger-brd)",
     },

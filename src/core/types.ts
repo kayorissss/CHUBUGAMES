@@ -100,6 +100,8 @@ export interface Settings {
   difficulty: "chill" | "normal" | "insane";
   /** Напоминать о новой версии, когда игра закрыта */
   notifyUpdates: boolean;
+  /** Напоминать, что заступил новый босс */
+  notifyBoss: boolean;
 }
 
 export interface SaveState {

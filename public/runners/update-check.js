@@ -70,6 +70,9 @@ addEventListener('checkUpdate', function (resolve, reject, args) {
         CapacitorNotifications.schedule([
           {
             id: 7001,
+            // Отдельный канал: в системных настройках телефона его можно
+            // выключить, не трогая уведомления о боссах и новинках.
+            channelId: 'chub-updates',
             title: 'ЧУБУГЕЙМ ' + version,
             body: 'Вышло обновление. Открой игру, чтобы установить.',
           },

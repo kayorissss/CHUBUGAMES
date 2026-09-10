@@ -131,9 +131,9 @@ export default function Home({
           style={{
             padding: 0, marginBottom: 18, display: "block",
             border: bossOn
-              ? "1.5px solid rgba(255,90,60,0.6)"
+              ? "1.5px solid var(--danger-brd)"
               : "1px solid var(--surface-brd)",
-            background: bossOn ? "rgba(255,90,60,0.10)" : "var(--surface)",
+            background: bossOn ? "var(--danger-soft)" : "var(--surface)",
             boxShadow: bossOn ? "0 14px 40px -18px rgba(255,90,60,0.75)" : undefined,
           }}
           sound={bossOn ? "power" : "click"}
@@ -147,7 +147,7 @@ export default function Home({
               style={{
                 inset: 0,
                 background:
-                  "radial-gradient(circle at 22% 42%, rgba(255,90,60,0.55), transparent 60%)",
+                  "radial-gradient(circle at 22% 42%, var(--danger-brd), transparent 60%)",
               }}
             />
           )}
@@ -166,7 +166,7 @@ export default function Home({
               <span className="flex-1 min-w-0">
                 <span
                   className="t-label block"
-                  style={{ fontSize: 9, color: bossOn ? "#FF6B4D" : undefined }}
+                  style={{ fontSize: 9, color: bossOn ? "var(--danger)" : undefined }}
                 >
                   {bossOn
                     ? tr("БОСС ПОЯВИЛСЯ")
@@ -194,11 +194,11 @@ export default function Home({
             >
               <span className="flex-1 min-w-0">
                 <span className="t-label block" style={{ fontSize: 8.5 }}>
-                  {bossOn ? tr("СМЕНА ЗАКОНЧИТСЯ ЧЕРЕЗ") : tr("ПРИДЁТ ЧЕРЕЗ")}
+                  {bossOn ? tr("УСПЕТЬ ДО СМЕНЫ") : tr("ПРИДЁТ ЧЕРЕЗ")}
                 </span>
                 <span
                   className="t-num block"
-                  style={{ fontSize: 20, marginTop: 2, color: bossOn ? "#FF6B4D" : undefined }}
+                  style={{ fontSize: 20, marginTop: 2, color: bossOn ? "var(--danger)" : undefined }}
                 >
                   {fmtLeft(bossOn ? windowLeft() : nextBossIn())}
                 </span>
@@ -230,9 +230,9 @@ export default function Home({
               style={{
                 gap: 7, marginTop: 14, padding: "11px 16px",
                 borderRadius: 999,
-                background: bossOn ? "#FF5A3C" : "var(--btn-bg)",
-                color: bossOn ? "#fff" : "var(--text-mute)",
-                border: bossOn ? "none" : "1px solid var(--btn-brd)",
+                background: bossOn ? "var(--danger)" : "var(--btn-bg)",
+                color: bossOn ? "#14060a" : "var(--text-dim)",
+                border: bossOn ? "1px solid var(--danger)" : "1px solid var(--btn-brd)",
                 fontSize: 13, fontWeight: 800, lineHeight: 1,
               }}
             >
@@ -316,7 +316,7 @@ export default function Home({
                   className="flex-1 flex flex-col items-center justify-center"
                   style={{
                     gap: 5, padding: "9px 4px", borderRadius: "var(--r-sm)",
-                    background: "rgba(255,255,255,0.05)",
+                    background: "var(--surface-2)",
                     border: "1px solid var(--surface-brd)",
                   }}
                 >
@@ -337,8 +337,8 @@ export default function Home({
           className="w-full overflow-hidden relative"
           style={{
             padding: 0, marginBottom: 18, display: "block",
-            border: "1.5px solid rgba(89,255,158,0.5)",
-            background: "rgba(89,255,158,0.08)",
+            border: "1.5px solid var(--ok-brd)",
+            background: "var(--ok-soft)",
           }}
           sound="power"
         >
@@ -350,20 +350,20 @@ export default function Home({
                 transition={{ duration: 2.2, repeat: Infinity, ease: "easeInOut" }}
                 style={{
                   width: 50, height: 50, borderRadius: "var(--r-md)",
-                  background: "rgba(89,255,158,0.18)", color: "#59FF9E",
-                  border: "1px solid rgba(89,255,158,0.45)",
+                  background: "var(--ok-soft)", color: "var(--ok)",
+                  border: "1px solid var(--ok-brd)",
                 }}
               >
                 <Icon name="play" size={22} />
               </motion.span>
 
               <span className="flex-1 min-w-0">
-                <span className="t-label block" style={{ fontSize: 9, color: "#59FF9E" }}>
+                <span className="t-label block" style={{ fontSize: 9, color: "var(--ok)" }}>
                   {tr("10 СЕКУНД РЕКЛАМЫ")}
                 </span>
                 <span
                   className="t-num block clip1"
-                  style={{ fontSize: 23, marginTop: 3, color: "#59FF9E" }}
+                  style={{ fontSize: 23, marginTop: 3, color: "var(--ok)" }}
                 >
                   +{fmt(adReward)}
                 </span>
@@ -381,7 +381,7 @@ export default function Home({
                       key={i}
                       style={{
                         width: 7, height: 7, borderRadius: 999, display: "block",
-                        background: i < adLeft ? "#59FF9E" : "rgba(255,255,255,0.16)",
+                        background: i < adLeft ? "var(--ok)" : "var(--btn-brd)",
                       }}
                     />
                   ))}

@@ -254,7 +254,7 @@ function Season() {
               ) : unlocked ? (
                 <Button variant="primary" size="sm" sound="none" onClick={() => claim(i)}>{tr("Взять")}</Button>
               ) : (
-                <span className="shrink-0" style={{ opacity: 0.5 }}><Icon name="lock" size={12} /></span>
+                <span className="shrink-0" style={{ color: "var(--text-mute)" }}><Icon name="lock" size={12} /></span>
               )}
             </Card>
           );

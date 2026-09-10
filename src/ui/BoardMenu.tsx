@@ -128,7 +128,7 @@ export default function BoardMenu({
                       key={k}
                       style={{
                         width: 4, height: 6 + k * 6, borderRadius: 2,
-                        background: k < l.id ? (on ? "var(--acc)" : "var(--text-mute)") : "rgba(255,255,255,0.14)",
+                        background: k < l.id ? (on ? "var(--acc)" : "var(--text-mute)") : "var(--btn-brd)",
                       }}
                     />
                   ))}

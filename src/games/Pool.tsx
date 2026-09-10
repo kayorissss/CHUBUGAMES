@@ -651,7 +651,7 @@ export default function Pool({ onExit }: { onExit: () => void }) {
                 padding: "12px 14px", borderRadius: "var(--r-md)",
                 background: mode === id ? "var(--acc-soft)" : "var(--surface)",
                 border: `1px solid ${mode === id ? "var(--acc)" : "var(--surface-brd)"}`,
-                color: "var(--fg)",
+                color: "var(--text)",
               }}
             >
               <div className="t-label" style={{ fontSize: 11.5, color: mode === id ? "var(--acc)" : undefined }}>{tr(nm)}</div>

@@ -73,6 +73,7 @@ export function freshSave(): SaveState {
       theme: "dark", lang: "ru", accent: "amber", sound: true, haptics: true,
       fx: true, controls: "touchpad", difficulty: "normal",
       notifyUpdates: false,
+      notifyBoss: false,
     },
     unlockedGames: ALL_GAMES.slice(),
     stats: {

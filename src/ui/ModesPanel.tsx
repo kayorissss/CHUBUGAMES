@@ -43,7 +43,7 @@ export default function ModesPanel() {
           style={{
             padding: 14,
             marginBottom: 10,
-            border: "1.5px solid rgba(255,255,255,0.14)",
+            border: "1.5px solid var(--btn-brd)",
           }}
           sound="power"
         >
@@ -78,7 +78,7 @@ export default function ModesPanel() {
           style={{
             padding: 14,
             marginBottom: 10,
-            border: "1.5px solid rgba(255,90,60,0.35)",
+            border: "1.5px solid var(--danger-brd)",
           }}
           sound="power"
         >
@@ -87,7 +87,7 @@ export default function ModesPanel() {
               className="shrink-0 flex items-center justify-center"
               style={{
                 width: 42, height: 42, borderRadius: "var(--r-sm)",
-                background: "rgba(255,90,60,0.16)", color: "#FF6B4D",
+                background: "var(--danger-soft)", color: "var(--danger)",
               }}
             >
               <Icon name="shield" size={20} />
@@ -154,9 +154,9 @@ export default function ModesPanel() {
           style={{
             padding: 14,
             border: challengeDone
-              ? "1.5px solid rgba(89,255,158,0.45)"
-              : "1.5px solid rgba(255,255,255,0.12)",
-            background: challengeDone ? "rgba(89,255,158,0.06)" : undefined,
+              ? "1.5px solid var(--ok-brd)"
+              : "1.5px solid var(--btn-brd)",
+            background: challengeDone ? "var(--ok-soft)" : undefined,
           }}
         >
           <div className="flex items-center" style={{ gap: 12, marginBottom: 12 }}>
@@ -166,7 +166,7 @@ export default function ModesPanel() {
                 width: 42,
                 height: 42,
                 borderRadius: "var(--r-sm)",
-                background: "rgba(255,255,255,0.07)",
+                background: "var(--surface-2)",
               }}
             >
               {meta ? <GameIcon id={challenge.game} size={22} /> : <Icon name="target" size={20} />}
@@ -193,7 +193,7 @@ export default function ModesPanel() {
             style={{
               height: 6,
               borderRadius: 99,
-              background: "rgba(255,255,255,0.09)",
+              background: "var(--surface-3)",
               overflow: "hidden",
               marginBottom: 10,
             }}
@@ -204,7 +204,7 @@ export default function ModesPanel() {
               transition={{ duration: 0.5, ease: "easeOut" }}
               style={{
                 height: "100%",
-                background: challengeDone ? "#59FF9E" : "var(--acc)",
+                background: challengeDone ? "var(--ok)" : "var(--acc)",
               }}
             />
           </div>
@@ -221,7 +221,7 @@ export default function ModesPanel() {
             {challengeClaimed ? (
               <span
                 className="t-label inline-flex items-center shrink-0"
-                style={{ gap: 6, fontSize: 10, color: "#59FF9E" }}
+                style={{ gap: 6, fontSize: 10, color: "var(--ok)" }}
               >
                 <Icon name="check" size={13} />{tr("ЗАБРАНО")}</span>
             ) : challengeDone ? (

@@ -361,7 +361,7 @@ function Editor({ friend, isNew, onClose }: { friend: Friend; isNew: boolean; on
                     className="absolute press"
                     style={{
                       bottom: -2, right: -2, width: 24, height: 24, borderRadius: 99,
-                      background: "#ff4a30", color: "#fff", fontSize: 12, border: "2px solid var(--bg)",
+                      background: "var(--danger)", color: "#14060a", fontSize: 12, border: "2px solid var(--bg)",
                     }}
                   >
                     <Icon name="cross" size={15} />
@@ -375,7 +375,7 @@ function Editor({ friend, isNew, onClose }: { friend: Friend; isNew: boolean; on
                   placeholder={tr("ИМЯ")}
                   className="t-display"
                   style={{
-                    background: "rgba(255,255,255,0.06)", border: "1px solid var(--glass-brd)",
+                    background: "var(--surface-2)", border: "1px solid var(--glass-brd)",
                     borderRadius: 12, padding: "8px 12px", fontSize: 19, color: "var(--text)", width: "100%",
                   }}
                 />
@@ -384,7 +384,7 @@ function Editor({ friend, isNew, onClose }: { friend: Friend; isNew: boolean; on
                   onChange={(e) => setF({ ...f, nick: e.target.value.slice(0, 26) })}
                   placeholder={tr("Прозвище")}
                   style={{
-                    background: "rgba(255,255,255,0.06)", border: "1px solid var(--glass-brd)",
+                    background: "var(--surface-2)", border: "1px solid var(--glass-brd)",
                     borderRadius: 10, padding: "7px 12px", fontSize: 12, color: "var(--text-dim)", width: "100%",
                   }}
                 />
@@ -396,7 +396,7 @@ function Editor({ friend, isNew, onClose }: { friend: Friend; isNew: boolean; on
               onChange={(e) => setF({ ...f, quote: e.target.value.slice(0, 60) })}
               placeholder={tr("Коронная фраза")}
               style={{
-                background: "rgba(255,255,255,0.06)", border: "1px solid var(--glass-brd)",
+                background: "var(--surface-2)", border: "1px solid var(--glass-brd)",
                 borderRadius: 10, padding: "9px 12px", fontSize: 12, color: "var(--text)",
                 width: "100%", fontStyle: "italic", marginBottom: 12,
               }}
@@ -484,7 +484,7 @@ function Editor({ friend, isNew, onClose }: { friend: Friend; isNew: boolean; on
                     className="press flex-1 py-1.5"
                     style={{
                       borderRadius: 8, fontSize: 8, fontWeight: 800, letterSpacing: "0.08em",
-                      background: f.rarity === r ? RARITY_COLOR[r] : "rgba(255,255,255,0.06)",
+                      background: f.rarity === r ? RARITY_COLOR[r] : "var(--surface-2)",
                       color: f.rarity === r ? "#0b0b0e" : "var(--text-mute)",
                       border: "1px solid var(--glass-brd)",
                     }}
@@ -546,7 +546,7 @@ function Swatches({ list, val, onPick }: { list: string[]; val: string; onPick: 
           className="press"
           style={{
             width: 30, height: 30, borderRadius: 10, background: c,
-            border: val === c ? "2.5px solid var(--acc)" : "1px solid rgba(255,255,255,0.16)",
+            border: val === c ? "2.5px solid var(--acc)" : "1px solid var(--btn-brd)",
             boxShadow: val === c ? "0 0 14px var(--acc-glow)" : "none",
           }}
         />
@@ -565,7 +565,7 @@ function Opts({ list, val, onPick }: { list: string[]; val: number; onPick: (i: 
           className="press px-3 py-1.5"
           style={{
             borderRadius: 9, fontSize: 10, fontWeight: 700,
-            background: val === i ? "var(--acc)" : "rgba(255,255,255,0.06)",
+            background: val === i ? "var(--acc)" : "var(--surface-2)",
             color: val === i ? "var(--acc-ink)" : "var(--text-dim)",
             border: "1px solid var(--glass-brd)",
           }}

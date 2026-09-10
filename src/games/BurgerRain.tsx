@@ -8,23 +8,105 @@ import Icon, { type IconName } from "../ui/Icon";
 import { useCanvas, GameHUD, GameOver, Countdown } from "./shell";
 import AdModal from "../ui/AdModal";
 import { hasAds, noteRevive } from "../core/ads";
-import { Panel } from "../ui/Glass";
 
 type PType = "burger" | "cheese" | "nugget" | "shake" | "fries";
 interface Proj {
   x: number; y: number; vx: number; vy: number; r: number; type: PType;
   rot: number; vr: number; scored: boolean;
+  /** Своё ускорение: рассчитано из времени полёта на момент вылета */
+  g: number;
 }
 type BType = "shield" | "slow" | "magnet" | "x2" | "heal";
-interface Bonus { x: number; y: number; vy: number; type: BType; t: number }
+/** Бонус спускается на парашюте; sway — фаза покачивания на стропах */
+interface Bonus { x: number; y: number; vy: number; type: BType; t: number; sway: number }
 interface Part { x: number; y: number; vx: number; vy: number; life: number; max: number; c: string; s: number }
 interface Pop { x: number; y: number; txt: string; life: number; c: string }
 
+/**
+ * Темп игры задаётся ВРЕМЕНЕМ ПОЛЁТА снаряда, а не скоростью в пикселях.
+ *
+ * Так игра одинаково честная на любом экране и, главное, её можно
+ * сверить с человеческой реакцией. Считали по трём слагаемым:
+ *   простая зрительная реакция          ~250 мс
+ *   выбор, в какую сторону уходить      ~120 мс
+ *   сам сдвиг пальца на треть экрана    ~220 мс
+ * Итого уклонение занимает ~590 мс. Ниже этого опускаться нельзя.
+ *
+ * fallMax — сколько летит снаряд на первой секунде забега;
+ * fallMin — предел, к которому всё сходится (у «ада» это 820 мс,
+ *           то есть даже там остаётся запас 230 мс);
+ * tau     — за сколько миллисекунд разгон проходит большую часть пути.
+ * Разгон плавный (экспонента), а не рывком: пользователь жаловался,
+ * что еда сразу летит слишком быстро.
+ */
 const DIFF = {
-  chill: { spawn: 1150, speed: 0.85, ramp: 0.00012 },
-  normal: { spawn: 900, speed: 1, ramp: 0.00019 },
-  insane: { spawn: 640, speed: 1.28, ramp: 0.00031 },
+  chill: { spawn: 1150, fallMax: 2400, fallMin: 1250, tau: 90000 },
+  normal: { spawn: 900, fallMax: 2050, fallMin: 1000, tau: 75000 },
+  insane: { spawn: 640, fallMax: 1750, fallMin: 820, tau: 60000 },
 };
+
+/**
+ * Скорость снижения аирдропа.
+ *
+ * 0.035 — это ~4.8 секунды от верха экрана до земли. Чтобы дойти до
+ * парашюта через весь экран, нужно ~700 мс на движение плюс ~370 мс на
+ * «заметил и решил», то есть минимум ~1.1 с; 4.8 с дают спокойный запас
+ * и при этом бонус не висит в воздухе вечно.
+ */
+const PARA_FALL = 0.035;
+
+/**
+ * Доля средней скорости, с которой снаряд ВЫЛЕТАЕТ изо рта.
+ * Остальное добирается ускорением: при 0.7 снаряд к земле разгоняется
+ * в 1.86 раза — падение живое, но в начале не «зависает».
+ *
+ * Почему не фиксированная гравитация: тогда стартовую скорость надо было
+ * бы считать как (dist - g*t²/2)/t, и на коротком экране (360x640)
+ * выражение уходило в МИНУС — снаряды полетели бы вверх. Проверено
+ * расчётом: при dist=398 и полёте 2400 мс получалось v0 = -0.17.
+ * Теперь и скорость, и ускорение выводятся из времени полёта, поэтому
+ * оба положительны на любом экране.
+ */
+const LAUNCH_K = 0.7;
+
+/** Стартовая вертикальная скорость, чтобы пролететь `dist` за `ms` */
+function speedForTime(dist: number, ms: number): number {
+  return (LAUNCH_K * dist) / ms;
+}
+
+/** Ускорение, добирающее остаток пути ровно за то же время */
+function gravForTime(dist: number, ms: number): number {
+  return (2 * dist * (1 - LAUNCH_K)) / (ms * ms);
+}
+
+/** Текущее время полёта: плавно падает от fallMax к fallMin */
+function fallTime(d: typeof DIFF.normal, elapsed: number): number {
+  return d.fallMin + (d.fallMax - d.fallMin) * Math.exp(-elapsed / d.tau);
+}
+
+/**
+ * Жёсткость пружины, которая ведёт героя за пальцем.
+ *
+ * Раньше стояла схема «накопить скорость и умножить на 0.74» — она
+ * зависела от длины кадра, поэтому на просадках героя мотало: в расчёте
+ * получалось до 22 смен направления и перелёт цели на 124%. Критически
+ * задемпфированная пружина с omega=22 доходит до цели за 284 мс, вообще
+ * без колебаний и перелёта, и остаётся устойчивой даже при 20 кадрах.
+ */
+const HERO_OMEGA = 22;
+
+/** Шаг физики героя. Подшаг не длиннее 8 мс — тогда провал кадра не ломает пружину. */
+function heroStep(px: number, pv: number, target: number, dtMs: number) {
+  let left = Math.min(dtMs, 100);
+  while (left > 0) {
+    const h = Math.min(left, 8) / 1000;
+    const a = HERO_OMEGA * HERO_OMEGA * (target - px) - 2 * HERO_OMEGA * pv;
+    pv += a * h;
+    px += pv * h;
+    left -= 8;
+  }
+  return { px, pv };
+}
 
 export default function BurgerRain({ onExit }: { onExit: () => void }) {
   const { s, mainFriend, addCoins, addXp, bump, finishGame, questProgress } = useGame();
@@ -54,6 +136,8 @@ export default function BurgerRain({ onExit }: { onExit: () => void }) {
     mouth: 0, blink: 0, blinkT: 1400, cheeks: 0, headShake: 0, headX: 0,
     rage: 0, rageT: 26000, shake: 0, flash: 0, dodged: 0, running: false,
     invuln: 0, comboStreak: 0,
+    /** наклон корпуса героя, -1..1 — считается из скорости пружины */
+    lean: 0,
   });
 
   const inputRef = useRef({ left: false, right: false, touchX: null as number | null });
@@ -66,7 +150,7 @@ export default function BurgerRain({ onExit }: { onExit: () => void }) {
     g.shield = 0; g.slow = 0; g.magnet = 0; g.x2 = 0;
     g.mouth = 0; g.cheeks = 0; g.headShake = 0; g.headX = 0;
     g.rage = 0; g.rageT = 26000; g.shake = 0; g.flash = 0; g.dodged = 0;
-    g.invuln = 0; g.comboStreak = 0; g.running = false;
+    g.invuln = 0; g.comboStreak = 0; g.running = false; g.lean = 0;
     setUiScore(0); setUiLives(3); setRage(false);
     setUiBuffs({ shield: 0, slow: 0, magnet: 0, x2: 0 });
   }, []);
@@ -190,10 +274,19 @@ export default function BurgerRain({ onExit }: { onExit: () => void }) {
       g.elapsed += dt;
       const timeScale = g.slow > 0 ? 0.48 : 1;
       const sdt = dt * timeScale;
-      // Разгон ограничен потолком: иначе через минуту снаряды летят быстрее,
-      // чем их вообще можно заметить.
-      const ramp = Math.min(1.85, 1 + g.elapsed * diff.ramp);
-      const speedMul = diff.speed * ramp * (g.rage > 0 ? 1.4 : 1) * timeScale;
+      // Сколько времени у игрока на уклонение прямо сейчас. Плавно
+      // сокращается по ходу забега, но никогда не опускается ниже
+      // порога человеческой реакции (см. комментарий к DIFF).
+      // В ярости окно ужимается, но не больше чем на 15%.
+      const fall = fallTime(diff, g.elapsed) * (g.rage > 0 ? 0.85 : 1);
+      // Расстояние от рта до головы героя — по нему считаем скорость.
+      const dropDist = Math.max(1, groundY - heroR - (headCy + headR * 0.5));
+      const vy0 = speedForTime(dropDist, fall) * timeScale;
+      // Ускорение своё у каждого снаряда: оно вытекает из времени полёта.
+      const gNow = gravForTime(dropDist, fall) * timeScale * timeScale;
+      // Горизонтальный разброс масштабируем тем же временем полёта:
+      // чем быстрее падает, тем меньше должен успевать уехать вбок.
+      const spread = (W * 0.22) / fall * timeScale;
 
       /* ярость */
       g.rageT -= dt;
@@ -209,13 +302,14 @@ export default function BurgerRain({ onExit }: { onExit: () => void }) {
       else if (inp.left) target = Math.max(0.06, g.px - 0.05);
       else if (inp.right) target = Math.min(0.94, g.px + 0.05);
       g.ptx = Math.max(0.06, Math.min(0.94, target));
-      const diffx = g.ptx - g.px;
-      // Более резкий отклик: герой почти мгновенно идёт за пальцем,
-      // но сохраняет инерцию для наклона корпуса
-      g.pv += diffx * 0.055 * dt;
-      g.pv *= 0.74;
-      g.px += g.pv;
-      g.px = Math.max(0.05, Math.min(0.95, g.px));
+      // Плавное ведение: критически задемпфированная пружина с подшагами.
+      // Не колеблется и не перелетает даже на рваном кадре.
+      const st = heroStep(g.px, g.pv, g.ptx, dt);
+      g.px = Math.max(0.05, Math.min(0.95, st.px));
+      // Скорость нужна для наклона корпуса; храним «за кадр», как раньше,
+      // чтобы наклон не зависел от частоты обновления.
+      g.pv = st.pv;
+      g.lean = Math.max(-1, Math.min(1, st.pv * 0.55));
 
       /* спавн снарядов */
       g.spawnT -= sdt;
@@ -235,15 +329,20 @@ export default function BurgerRain({ onExit }: { onExit: () => void }) {
 
         const hx = W * 0.5 + g.headX;
         const my = headCy + headR * 0.5;
+        // Куда целится: рядом с игроком, но с промахом — иначе снаряды
+        // всегда летели бы точно в лоб и уклоняться было бы нечем.
         const aim = g.px * W + (Math.random() - 0.5) * W * 0.5;
-        const dirx = (aim - hx) / (H * 0.6);
+        const dirx = (aim - hx) / dropDist;
 
         if (type === "nugget") {
+          // веер: середина в игрока, края в стороны
           for (let i = -2; i <= 2; i++) {
             g.projs.push({
-              x: hx, y: my, vx: (dirx + i * 0.34) * 0.16 * speedMul,
-              vy: (0.24 + Math.random() * 0.06) * speedMul, r: heroR * 0.42,
-              type: "nugget", rot: 0, vr: (Math.random() - 0.5) * 0.02, scored: false,
+              x: hx, y: my,
+              vx: dirx * vy0 + i * spread * 0.34,
+              vy: vy0 * (0.97 + Math.random() * 0.06),
+              r: heroR * 0.42,
+              type: "nugget", rot: 0, vr: (Math.random() - 0.5) * 0.02, scored: false, g: gNow,
             });
           }
         } else if (type === "fries") {
@@ -251,20 +350,22 @@ export default function BurgerRain({ onExit }: { onExit: () => void }) {
           for (let i = -1; i <= 1; i++) {
             g.projs.push({
               x: hx, y: my,
-              vx: (dirx + i * 0.22) * 0.15 * speedMul,
-              vy: (0.26 + Math.random() * 0.05) * speedMul,
+              vx: dirx * vy0 + i * spread * 0.22,
+              vy: vy0 * (0.97 + Math.random() * 0.06),
               r: heroR * 0.34, type: "fries", rot: Math.random() * 6,
-              vr: (Math.random() - 0.5) * 0.03, scored: false,
+              vr: (Math.random() - 0.5) * 0.03, scored: false, g: gNow,
             });
           }
         } else {
-          // чизбургер больше не разгоняется до неуловимого
-          const fast = type === "cheese" ? 1.16 : type === "shake" ? 0.78 : 1;
+          // Разница между видами еды — только во внешности и очках.
+          // Скорость у всех одна: иначе чизбургер снова стал бы
+          // «неуловимым», как жаловался пользователь.
           g.projs.push({
-            x: hx, y: my, vx: dirx * 0.18 * speedMul * fast,
-            vy: (0.26 + Math.random() * 0.05) * speedMul * fast,
+            x: hx, y: my,
+            vx: dirx * vy0,
+            vy: vy0 * (0.97 + Math.random() * 0.06),
             r: type === "shake" ? heroR * 0.72 : heroR * 0.62,
-            type, rot: 0, vr: (Math.random() - 0.5) * 0.016, scored: false,
+            type, rot: 0, vr: (Math.random() - 0.5) * 0.016, scored: false, g: gNow,
           });
         }
       }
@@ -276,7 +377,17 @@ export default function BurgerRain({ onExit }: { onExit: () => void }) {
         g.bonusT = (10000 + Math.random() * 8000) / bonusChance;
         const types: BType[] = ["shield", "slow", "magnet", "x2", "heal"];
         const type = types[Math.floor(Math.random() * (g.lives < 3 ? 5 : 4))];
-        g.bonuses.push({ x: 0.12 + Math.random() * 0.76, y: -0.05, vy: 0.13 * speedMul, type, t: 0 });
+        // Бонус спускается на парашюте: медленно и с покачиванием,
+        // чтобы его успевали заметить и добежать. Скорость своя, к
+        // темпу еды не привязана — иначе аирдроп «проваливался» бы.
+        g.bonuses.push({
+          x: 0.12 + Math.random() * 0.76,
+          y: -0.08,
+          vy: PARA_FALL,
+          type,
+          t: 0,
+          sway: Math.random() * Math.PI * 2,
+        });
       }
 
       /* обновление снарядов */
@@ -285,7 +396,7 @@ export default function BurgerRain({ onExit }: { onExit: () => void }) {
         const p = g.projs[i];
         p.x += p.vx * sdt;
         p.y += p.vy * sdt;
-        p.vy += 0.00028 * sdt;
+        p.vy += p.g * sdt;
         p.rot += p.vr * sdt;
         if (p.x < p.r || p.x > W - p.r) p.vx *= -0.86;
 
@@ -339,7 +450,10 @@ export default function BurgerRain({ onExit }: { onExit: () => void }) {
         b.t += sdt;
         b.y += b.vy * sdt * 0.0055;
         if (g.magnet > 0) b.x += (g.px - b.x) * 0.02;
-        const bx = b.x * W;
+        // Покачивание на стропах — только визуальное смещение, на
+        // попадание не влияет, иначе бонус было бы не поймать.
+        const swayX = Math.sin(b.sway + b.t * 0.0016) * W * 0.035;
+        const bx = b.x * W + swayX;
         const by = b.y * H;
         const dx = bx - g.px * W;
         const dy = by - hy;
@@ -435,14 +549,17 @@ export default function BurgerRain({ onExit }: { onExit: () => void }) {
     // снаряды
     for (const p of g.projs) drawProj(ctx, p);
 
-    // бонусы
-    for (const b of g.bonuses) drawBonus(ctx, b, b.x * W, b.y * H, heroR * 0.85);
+    // бонусы — на парашютах
+    for (const b of g.bonuses) {
+      const swayX = Math.sin(b.sway + b.t * 0.0016) * W * 0.035;
+      drawBonus(ctx, b, b.x * W + swayX, b.y * H, heroR * 0.85);
+    }
 
     // ГЕРОЙ
     const hx = g.px * W;
     const hyy = groundY - heroR;
     const blinkV = g.invuln > 0 && Math.floor(g.invuln / 90) % 2 === 0;
-    if (!blinkV) drawHero(ctx, hx, hyy, heroR, skin, g.pv, g.shield > 0, heroFriend.look);
+    if (!blinkV) drawHero(ctx, hx, hyy, heroR, skin, g.lean, g.shield > 0, heroFriend.look);
 
     // тень
     ctx.fillStyle = "rgba(0,0,0,0.34)";
@@ -510,15 +627,30 @@ export default function BurgerRain({ onExit }: { onExit: () => void }) {
         best={s.games.burger.best}
         onExit={onExit}
         extra={
-          <Panel r="md" className="px-3 py-2 shrink-0">
-            <div className="flex items-center" style={{ gap: 3 }}>
-              {[0, 1, 2].map((i) => (
-                <span key={i} style={{ opacity: i < uiLives ? 1 : 0.2, lineHeight: 0, color: "#ff5a6a" }}>
-                  <Icon name="heart" size={14} />
-                </span>
-              ))}
-            </div>
-          </Panel>
+          /* Жизни. Панель непрозрачная — сквозь стекло летели бургеры
+             и сердечки было не разобрать. */
+          <div
+            className="shrink-0 flex items-center justify-center"
+            style={{
+              gap: 4, height: 40, padding: "0 11px",
+              borderRadius: "var(--r-md)",
+              background: "var(--surface-2)",
+              border: "1px solid var(--btn-brd)",
+            }}
+          >
+            {[0, 1, 2].map((i) => (
+              <span
+                key={i}
+                style={{
+                  lineHeight: 0,
+                  color: i < uiLives ? "var(--danger)" : "var(--surface-3)",
+                  transition: "color 0.2s",
+                }}
+              >
+                <Icon name="heart" size={14} />
+              </span>
+            ))}
+          </div>
         }
       />
 
@@ -533,10 +665,22 @@ export default function BurgerRain({ onExit }: { onExit: () => void }) {
                 animate={{ x: 0, opacity: 1 }}
                 exit={{ x: -50, opacity: 0 }}
               >
-                <Panel r="sm" className="px-2.5 py-1.5 flex items-center gap-1.5">
-                  <Icon name={BONUS_ICON[k]} size={14} accent />
-                  <span className="t-num" style={{ fontSize: 11 }}>{(uiBuffs[k] / 1000).toFixed(1)}</span>
-                </Panel>
+                <div
+                  className="flex items-center"
+                  style={{
+                    gap: 6, padding: "6px 9px",
+                    borderRadius: "var(--r-sm)",
+                    background: "var(--surface-2)",
+                    border: "1px solid var(--acc-line)",
+                  }}
+                >
+                  <span style={{ color: "var(--acc-text)", lineHeight: 0 }}>
+                    <Icon name={BONUS_ICON[k]} size={13} />
+                  </span>
+                  <span className="t-num" style={{ fontSize: 11 }}>
+                    {(uiBuffs[k] / 1000).toFixed(1)}
+                  </span>
+                </div>
               </motion.div>
             ) : null,
           )}
@@ -735,20 +879,70 @@ function drawProj(ctx: CanvasRenderingContext2D, p: Proj) {
 function drawBonus(ctx: CanvasRenderingContext2D, b: Bonus, x: number, y: number, r: number) {
   ctx.save();
   ctx.translate(x, y);
-  const pulse = 1 + Math.sin(b.t * 0.006) * 0.09;
-  ctx.scale(pulse, pulse);
-  ctx.rotate(Math.sin(b.t * 0.003) * 0.2);
-  ctx.shadowColor = "rgba(255,176,32,0.9)";
-  ctx.shadowBlur = 22;
-  ctx.fillStyle = "rgba(255,255,255,0.14)";
-  ctx.strokeStyle = "#ffb020";
-  ctx.lineWidth = 2.4;
+
+  // Наклон всей связки по ходу качания — как настоящий парашют
+  const tilt = Math.sin(b.sway + b.t * 0.0016) * 0.16;
+  ctx.rotate(tilt);
+
+  const domeR = r * 1.65;
+  const domeY = -r * 3.1;
+
+  /* ─── Купол ─── */
+  const dome = ctx.createLinearGradient(0, domeY - domeR, 0, domeY + domeR * 0.3);
+  dome.addColorStop(0, "#ffd98a");
+  dome.addColorStop(1, "#e08a1e");
+  ctx.fillStyle = dome;
   ctx.beginPath();
-  ctx.roundRect(-r, -r, r * 2, r * 2, r * 0.42);
+  ctx.arc(0, domeY, domeR, Math.PI, 0);
+  ctx.closePath();
+  ctx.fill();
+
+  // Дольки купола: без них это просто полукруг
+  ctx.strokeStyle = "rgba(90,45,0,0.35)";
+  ctx.lineWidth = Math.max(1, r * 0.07);
+  for (let i = 1; i < 4; i++) {
+    const a = Math.PI + (Math.PI * i) / 4;
+    ctx.beginPath();
+    ctx.moveTo(Math.cos(a) * domeR, domeY + Math.sin(a) * domeR);
+    ctx.lineTo(Math.cos(a) * domeR * 0.24, domeY);
+    ctx.stroke();
+  }
+  // нижняя кромка
+  ctx.strokeStyle = "rgba(60,30,0,0.45)";
+  ctx.beginPath();
+  ctx.moveTo(-domeR, domeY);
+  ctx.lineTo(domeR, domeY);
+  ctx.stroke();
+
+  /* ─── Стропы ─── */
+  ctx.strokeStyle = "rgba(240,240,246,0.7)";
+  ctx.lineWidth = Math.max(0.9, r * 0.05);
+  for (const sx of [-1, -0.4, 0.4, 1]) {
+    ctx.beginPath();
+    ctx.moveTo(sx * domeR * 0.94, domeY + 1);
+    ctx.lineTo(sx * r * 0.62, -r);
+    ctx.stroke();
+  }
+
+  /* ─── Ящик с бонусом ─── */
+  const pulse = 1 + Math.sin(b.t * 0.006) * 0.05;
+  ctx.save();
+  ctx.scale(pulse, pulse);
+  ctx.fillStyle = "#1b1b22";
+  ctx.strokeStyle = "#ffb020";
+  ctx.lineWidth = Math.max(1.8, r * 0.14);
+  ctx.beginPath();
+  ctx.roundRect(-r, -r, r * 2, r * 2, r * 0.3);
   ctx.fill();
   ctx.stroke();
+  // подсветка, чтобы ящик читался на тёмном фоне
+  ctx.shadowColor = "rgba(255,176,32,0.75)";
+  ctx.shadowBlur = 16;
+  ctx.stroke();
   ctx.shadowBlur = 0;
-  drawBonusGlyph(ctx, b.type, r * 0.62);
+  drawBonusGlyph(ctx, b.type, r * 0.6);
+  ctx.restore();
+
   ctx.restore();
 }
 
@@ -824,7 +1018,9 @@ function drawHero(
 ) {
   ctx.save();
   ctx.translate(x, y);
-  const lean = Math.max(-0.34, Math.min(0.34, vel * 9));
+  // vel сюда приходит уже нормализованным (-1..1) и сглаженным пружиной,
+  // поэтому наклон плавный, а не дёрганый, как при расчёте из «пикселей за кадр».
+  const lean = Math.max(-0.3, Math.min(0.3, vel * 0.3));
   ctx.rotate(lean);
 
   if (shield) {

@@ -70,9 +70,13 @@ const upd=fs.readFileSync('src/core/updater.ts','utf8');
 ok(/getReader\(\)/.test(upd),'загрузка идёт потоком — можно показать прогресс');
 ok(/checkForUpdate/.test(upd)&&/isNewer/.test(upd),'версия сравнивается по числам, а не строкой');
 ok(/installFromFile/.test(upd),'есть установка из скачанного файла');
-const updui=fs.readFileSync('src/ui/Updater.tsx','utf8');
-ok(/<Bar\s+pct=\{total \? pct : 0\.06\}/.test(updui),'прогресс-бар загрузки выводится');
-ok(/Отменить/.test(updui),'загрузку можно отменить');
+// Экран обновления один на всё приложение (Updater.tsx удалён как дубль)
+const updui=fs.readFileSync('src/ui/UpdateBanner.tsx','utf8');
+ok(!fs.existsSync('src/ui/Updater.tsx'),'нет второго экрана обновления со своим оформлением');
+ok(/ProgressLine/.test(updui)&&/animate=\{\{ width:/.test(updui),'прогресс загрузки выводится полосой');
+ok(!/ProgressRing/.test(updui),'кольца прогресса больше нет');
+ok(/Отменить загрузку/.test(updui),'загрузку можно отменить');
+ok(/var\(--surface\)/.test(updui)&&!/radial-gradient\(circle at 50% 50%, var\(--acc-glow\)/.test(updui),'экран обновления без свечения на пол-экрана');
 const wf2=fs.readFileSync('.github/workflows/build-apk.yml','utf8');
 ok(/assembleRelease/.test(wf2),'CI собирает release-APK');
 ok(/setup-android-signing/.test(wf2),'APK подписывается постоянным ключом (нет «конфликта пакетов»)');
@@ -98,7 +102,13 @@ ok(fs.existsSync('src/games/ShitovRun.tsx'),'мини-игра «Побег от
 const app=fs.readFileSync('src/App.tsx','utf8');
 ok(app.includes('<ArtyomBite')&&app.includes('<ShitovRun'),'новые игры подключены');
 const brn=fs.readFileSync('src/games/BurgerRain.tsx','utf8');
-ok(/Math\.min\(1\.85/.test(brn),'снаряды не разгоняются до невидимости');
+// Темп задан временем полёта, а не множителем скорости: снаряд обязан
+// лететь дольше порога человеческой реакции (250+120+220 = 590 мс).
+ok(/fallMin/.test(brn)&&/fallMax/.test(brn),'темп еды задан временем полёта, а не «скоростью»');
+ok(/fallMin: 820/.test(brn),'даже на «аду» остаётся запас на реакцию');
+ok(/speedForTime/.test(brn)&&/gravForTime/.test(brn),'скорость и ускорение выводятся из времени полёта');
+ok(/HERO_OMEGA/.test(brn)&&/heroStep/.test(brn),'герой ведётся пружиной — не трясётся');
+ok(/PARA_FALL/.test(brn)&&/Купол/.test(brn),'бонус спускается на парашюте');
 ok(brn.includes('drawHead(ctx, look'),'человечек меняется вместе с героем');
 const stg=fs.readFileSync('src/pages/Settings.tsx','utf8');
 ok(stg.includes('t.me/kayorisan'),'есть ссылка на автора');
@@ -119,7 +129,7 @@ ok(wn.includes('seenVersion'),'экран «что обновилось» пом
 const chg=fs.readFileSync('src/core/changelog.ts','utf8');
 ok(chg.includes(`"${VER}"`),'в списке изменений есть текущая версия');
 const upb=fs.readFileSync('src/ui/UpdateBanner.tsx','utf8');
-ok(upb.includes('ProgressRing'),'загрузка обновления — полноэкранная, с кольцом прогресса');
+ok(upb.includes('ProgressLine')&&!upb.includes('ProgressRing'),'загрузка обновления — полноэкранная, с полосой прогресса');
 const dd=fs.readFileSync('src/games/DormDefense.tsx','utf8');
 ok(dd.includes('SPEED_BASE')&&dd.includes('0.000167'),'оборона: враги ускорены');
 ok(dd.includes('bestCombo'),'оборона: серия ударов множит очки');
@@ -164,7 +174,7 @@ ok(net.includes('ГЛУШИЛКИ')&&net.includes('СКОРОСТЬ'),'в сет
 ok(net.includes('РОССИЙСКИЕ СЕРВИСЫ')&&net.includes('ЗАРУБЕЖНЫЕ СЕРВИСЫ'),'сервисы разделены на РУ и иностранные');
 const setg=fs.readFileSync('src/pages/Settings.tsx','utf8');
 ok(setg.includes('showSaveFilePicker'),'экспорт сохранения через «Сохранить как»');
-ok(setg.includes('DiffPicker')&&setg.includes('#59FF9E')&&setg.includes('#FF3B2F'),'сложность с цветным свечением');
+ok(setg.includes('DiffPicker')&&setg.includes('#5CE39B')&&setg.includes('#FF6B5A'),'сложность с цветным свечением');
 ok(!setg.includes('<NetCheck')&&!setg.includes('<AiChat'),'тяжёлые режимы вынесены из настроек');
 const frn=fs.readFileSync('src/pages/Friends.tsx','utf8');
 ok(frn.includes('!f.builtin')&&frn.includes('bossStats'),'редактор только для своих, статы работают');

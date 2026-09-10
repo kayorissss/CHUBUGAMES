@@ -32,7 +32,7 @@ export default function RulesCard({
           variants={modalBackdrop}
           initial="initial" animate="animate" exit="exit"
           className="absolute inset-0 z-[70] flex items-center justify-center"
-          style={{ background: "rgba(4,4,6,0.86)", padding: 20 }}
+          style={{ background: "rgba(6,6,9,0.88)", padding: 20 }}
           onClick={onClose}
         >
           <motion.div
@@ -57,7 +57,7 @@ export default function RulesCard({
             <Block label={tr("ЦЕЛЬ")} text={tr(r.goal)} />
             <Block label={tr("УПРАВЛЕНИЕ")} text={tr(r.control)} />
 
-            <div className="t-label" style={{ fontSize: 9, opacity: 0.55, marginBottom: 6 }}>
+            <div className="t-label" style={{ fontSize: 9, marginBottom: 6 }}>
               {tr("ВАЖНО")}
             </div>
             <div style={{ marginBottom: 16 }}>
@@ -65,7 +65,7 @@ export default function RulesCard({
                 <div
                   key={t}
                   className="t-body"
-                  style={{ fontSize: 11.5, opacity: 0.78, lineHeight: 1.62, marginBottom: 3 }}
+                  style={{ fontSize: 11.5, lineHeight: 1.62, marginBottom: 3 }}
                 >
                   — {tr(t)}
                 </div>
@@ -73,9 +73,10 @@ export default function RulesCard({
             </div>
 
             <button
+              type="button"
               onClick={() => { sfx.click(); (onStart ?? onClose)(); }}
-              className="btn-acc t-label"
-              style={{ width: "100%", padding: "13px 0", borderRadius: "var(--r-md)", fontSize: 12 }}
+              className="btn-acc"
+              style={{ width: "100%", minHeight: 46, fontSize: 13 }}
             >
               {onStart ? tr("ИГРАТЬ") : tr("ПОНЯТНО")}
             </button>
@@ -89,7 +90,7 @@ export default function RulesCard({
 function Block({ label, text }: { label: string; text: string }) {
   return (
     <div style={{ marginBottom: 13 }}>
-      <div className="t-label" style={{ fontSize: 9, opacity: 0.55, marginBottom: 4 }}>{label}</div>
+      <div className="t-label" style={{ fontSize: 9, marginBottom: 4 }}>{label}</div>
       <div className="t-body" style={{ fontSize: 12.5, lineHeight: 1.55 }}>{text}</div>
     </div>
   );
@@ -104,8 +105,8 @@ export function RulesButton({ onClick }: { onClick: () => void }) {
       className="shrink-0 flex items-center justify-center"
       style={{
         width: 38, height: 38, borderRadius: "var(--r-md)",
-        background: "var(--btn-bg)", border: "1px solid rgba(255,255,255,0.16)",
-        color: "#fff",
+        background: "var(--surface-2)", border: "1px solid var(--btn-brd)",
+        color: "var(--text)",
       }}
       aria-label={tr("Правила")}
     >

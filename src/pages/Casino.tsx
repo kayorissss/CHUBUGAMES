@@ -252,7 +252,7 @@ function Slots({ g, save }: { g: GambleStore; save: (p: Partial<GambleStore>) =>
                 height: 92,
                 borderRadius: "var(--r-md)",
                 background: "var(--surface-2)",
-                border: `1.5px solid ${win && win > 0 ? "#59FF9E" : "var(--btn-brd)"}`,
+                border: `1.5px solid ${win && win > 0 ? "var(--ok)" : "var(--btn-brd)"}`,
               }}
             >
               <motion.div
@@ -277,7 +277,7 @@ function Slots({ g, save }: { g: GambleStore; save: (p: Partial<GambleStore>) =>
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0 }}
                 className="t-title-sm"
-                style={{ color: win > 0 ? "#59FF9E" : "var(--text-mute)", fontSize: 14 }}
+                style={{ color: win > 0 ? "var(--ok)" : "var(--text-mute)", fontSize: 14 }}
               >
                 {win > 0 ? `+${fmt(win)} жетонов` : tr("Мимо")}
               </motion.div>
@@ -700,7 +700,7 @@ function Battle({ g, save }: { g: GambleStore; save: (p: Partial<GambleStore>) =
                 className="t-title text-center"
                 style={{
                   fontSize: 18, marginBottom: 12,
-                  color: live.win ? "#59FF9E" : "#FF6B8A",
+                  color: live.win ? "var(--ok)" : "#FF6B8A",
                 }}
               >
                 {live.win ? "ПОБЕДА" : tr("ПРОИГРЫШ")}
@@ -884,7 +884,7 @@ function Upgrade({ g, save }: { g: GambleStore; save: (p: Partial<GambleStore>) 
               >
                 <div
                   className="t-title"
-                  style={{ fontSize: 15, color: res.zone === "win" ? "#59FF9E" : res.zone === "burn" ? "#FF6B8A" : "#FFB020" }}
+                  style={{ fontSize: 15, color: res.zone === "win" ? "var(--ok)" : res.zone === "burn" ? "#FF6B8A" : "#FFB020" }}
                 >
                   {tr(ZONE_LABEL[res.zone])}
                 </div>
@@ -1064,7 +1064,7 @@ function ChipFarm({ g, save }: { g: GambleStore; save: (p: Partial<GambleStore>)
             <div className="t-label" style={{ fontSize: 9 }}>{tr("ВРЕМЯ")}</div>
             <div
               className="t-num"
-              style={{ fontSize: 22, lineHeight: 1.1, color: left < 5000 ? "#FF6B4D" : undefined }}
+              style={{ fontSize: 22, lineHeight: 1.1, color: left < 5000 ? "var(--danger)" : undefined }}
             >
               {phase === "play" ? secs : "20.0"}
             </div>

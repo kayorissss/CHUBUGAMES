@@ -47,7 +47,7 @@ export function Toasts() {
               <div className="flex-1 min-w-0">
                 <div
                   className="t-title clip1"
-                  style={{ fontSize: 14, color: t.tone === "bad" ? "#ff7a5d" : "var(--text)" }}
+                  style={{ fontSize: 14, color: t.tone === "bad" ? "var(--danger)" : "var(--text)" }}
                 >
                   {t.title}
                 </div>

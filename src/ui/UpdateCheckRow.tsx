@@ -1,10 +1,13 @@
 import { useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
 import { tr } from "../core/i18n";
 import { Button } from "./Glass";
 import Icon from "./Icon";
 import { useGame } from "../core/store";
 import { sfx, haptic } from "../core/fx";
 import UpdateBanner from "./UpdateBanner";
+import ChangelogView from "./ChangelogView";
+import { subPageVariants } from "../core/motion";
 import {
   APP_VERSION_LABEL,
   checkForUpdate,
@@ -24,6 +27,8 @@ export default function UpdateCheckRow() {
   const { toast } = useGame();
   const [busy, setBusy] = useState(false);
   const [found, setFound] = useState<UpdateInfo | null>(null);
+  /** История версий прямо в приложении — чтобы не ходить на GitHub */
+  const [logOpen, setLogOpen] = useState(false);
 
   const check = async () => {
     if (busy) return;
@@ -76,6 +81,20 @@ export default function UpdateCheckRow() {
         >
           {busy ? tr("Проверяю…") : tr("Проверить обновление")}
         </Button>
+
+        {/* Что изменилось — читается офлайн, без похода на GitHub */}
+        <Button
+          variant="secondary"
+          full
+          sound="click"
+          style={{ marginTop: 8 }}
+          onClick={() => setLogOpen(true)}
+        >
+          <span className="inline-flex items-center" style={{ gap: 8 }}>
+            <Icon name="info" size={14} />
+            {tr("Что нового в версиях")}
+          </span>
+        </Button>
         {!isNative() && (
           <div className="t-caption" style={{ marginTop: 9 }}>
             {tr("Установка доступна только в приложении на телефоне")}
@@ -85,6 +104,49 @@ export default function UpdateCheckRow() {
 
       {/* тот же полноэкранный экран, что и при запуске */}
       <UpdateBanner external={found} onClose={() => setFound(null)} />
+
+      {/* История изменений */}
+      <AnimatePresence>
+        {logOpen && (
+          <motion.div
+            variants={subPageVariants}
+            initial="initial"
+            animate="animate"
+            exit="exit"
+            className="fixed inset-0 z-[108] flex flex-col"
+            style={{ background: "var(--bg)" }}
+          >
+            <div
+              className="shrink-0 flex items-center"
+              style={{
+                gap: 12,
+                padding: "calc(var(--sat) + 16px) 16px 14px",
+                background: "var(--surface)",
+                borderBottom: "1px solid var(--surface-brd)",
+              }}
+            >
+              <div className="min-w-0 flex-1">
+                <div className="t-label" style={{ fontSize: 9 }}>{tr("ИСТОРИЯ")}</div>
+                <div className="t-display-sm" style={{ fontSize: 19, marginTop: 3 }}>
+                  {tr("Что нового")}
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => { sfx.click(); setLogOpen(false); }}
+                className="ico-box shrink-0"
+                style={{ width: 36, height: 36 }}
+                aria-label={tr("Закрыть")}
+              >
+                <Icon name="cross" size={15} />
+              </button>
+            </div>
+            <div className="flex-1 scroll" style={{ padding: "14px 16px calc(var(--sab) + 20px)" }}>
+              <ChangelogView />
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </>
   );
 }

@@ -1,20 +1,27 @@
 /**
- * Уведомления об обновлении, когда игра закрыта.
+ * Уведомления ЧУБУГЕЙМ.
  *
- * Как это работает:
- *  1) при запуске приложение кладёт свою версию в CapacitorKV — общее хранилище
- *     с фоновым скриптом (public/runners/update-check.js);
- *  2) Android примерно раз в час будит этот скрипт, он спрашивает GitHub про
- *     последний релиз и, если версия новее, шлёт уведомление в шторку;
- *  3) про одну и ту же версию скрипт напоминает один раз.
+ * Три отдельных КАНАЛА Android — так человек может отключить лишнее прямо
+ * в системных настройках телефона («Настройки → Приложения → ЧУБУГЕЙМ →
+ * Уведомления»), не заходя в игру:
  *
- * Всё это работает только на телефоне. В браузере плагинов нет, поэтому
- * каждая функция тихо ничего не делает — дев-режим не ломается.
+ *   chub-updates  ОБНОВЛЕНИЯ  вышла новая версия
+ *   chub-boss     БОССЫ       заступил новый воспитатель
+ *   chub-news     НОВИНКИ     напоминания и события в игре
  *
- * Разрешение спрашиваем системным диалогом при первом запуске: так человеку
- * не нужно искать тумблер в настройках, а Android сам покажет привычное окно
- * «Разрешить уведомления?». Дальше тумблер лишь включает и выключает
- * напоминания, ничего больше не выпрашивая.
+ * Каналы создаются при первом запуске. Android показывает их списком с
+ * человеческими названиями, и каждый переключается отдельно — это ровно
+ * то, о чём просил пользователь.
+ *
+ * Как работает напоминание, когда игра ЗАКРЫТА:
+ *  1) при запуске приложение кладёт свою версию в CapacitorKV — общее
+ *     хранилище с фоновым скриптом (public/runners/update-check.js);
+ *  2) Android примерно раз в час будит скрипт, он спрашивает у GitHub
+ *     последний релиз и шлёт уведомление, если версия новее;
+ *  3) боссы не требуют сети: расписание детерминированное, поэтому
+ *     уведомления о них планируются заранее локально.
+ *
+ * В браузере плагинов нет, поэтому каждая функция тихо ничего не делает.
  */
 
 import { Capacitor } from "@capacitor/core";
@@ -25,8 +32,50 @@ const isNative = () => Capacitor.getPlatform() === "android";
 /** Мы в настоящем приложении на телефоне, а не в браузере? */
 export const isNativeApp = isNative;
 
-/** Должен совпадать с label в capacitor.config.ts */
+/** Должен совпадать с label в capacitor.config.json */
 const RUNNER_LABEL = "com.chubgames.update";
+
+/* ────────────────────────── Каналы ────────────────────────── */
+
+export type NotifyChannel = "updates" | "boss" | "news";
+
+export const CHANNELS: {
+  key: NotifyChannel;
+  id: string;
+  name: string;
+  description: string;
+}[] = [
+  {
+    key: "updates",
+    id: "chub-updates",
+    name: "ОБНОВЛЕНИЯ",
+    description: "Вышла новая версия игры",
+  },
+  {
+    key: "boss",
+    id: "chub-boss",
+    name: "БОССЫ",
+    description: "Заступил новый воспитатель — можно драться",
+  },
+  {
+    key: "news",
+    id: "chub-news",
+    name: "НОВИНКИ",
+    description: "События, ежедневки и напоминания",
+  },
+];
+
+export const channelId = (k: NotifyChannel): string =>
+  CHANNELS.find((c) => c.key === k)?.id ?? "chub-news";
+
+/** Диапазоны id, чтобы уведомления разных типов не затирали друг друга */
+const ID = {
+  update: 7001,
+  /** боссам выделено 7100..7199: планируем несколько вперёд */
+  bossBase: 7100,
+};
+
+/* ───────────────────────── Плагины ───────────────────────── */
 
 /** Плагины грузим лениво: в браузере их просто нет, и статический импорт всё уронит */
 async function notifications() {
@@ -80,6 +129,117 @@ export async function askNotifyPermission(): Promise<boolean> {
 }
 
 /**
+ * Создаёт каналы уведомлений.
+ *
+ * Важно: канал нельзя изменить после создания — Android запоминает его
+ * настройки навсегда (пока приложение не удалят). Поэтому имена и
+ * важность задаём сразу правильные.
+ */
+export async function ensureChannels(): Promise<void> {
+  const n = await notifications();
+  if (!n?.createChannel) return;
+  for (const c of CHANNELS) {
+    try {
+      await n.createChannel({
+        id: c.id,
+        name: c.name,
+        description: c.description,
+        // 4 — со звуком и всплытием; человек сам приглушит, если захочет
+        importance: c.key === "news" ? 3 : 4,
+        visibility: 1,
+        vibration: c.key !== "news",
+      });
+    } catch {
+      /* канал уже есть или плагин недоступен */
+    }
+  }
+}
+
+/** Package id приложения — совпадает с appId в capacitor.config.json */
+const PACKAGE_ID = "com.chubgames.app";
+
+/**
+ * Открывает системные настройки уведомлений приложения.
+ *
+ * Одна кнопка — и человек сразу в списке каналов НОВИНКИ / ОБНОВЛЕНИЯ /
+ * БОССЫ, где каждый выключается отдельно.
+ *
+ * В @capacitor/local-notifications метода для этого нет (есть только
+ * changeExactNotificationSetting — он про точное время будильников).
+ * Поэтому переходим системным intent-адресом: Capacitor отдаёт ссылки с
+ * нестандартной схемой Android, и тот открывает нужный экран настроек.
+ * Если не сработало — возвращаем false, и экран настроек показывает путь
+ * словами, чтобы человек дошёл руками.
+ */
+export async function openSystemNotificationSettings(): Promise<boolean> {
+  if (!isNative()) return false;
+  const intent =
+    "intent://settings#Intent;" +
+    "action=android.settings.APP_NOTIFICATION_SETTINGS;" +
+    `S.android.provider.extra.APP_PACKAGE=${PACKAGE_ID};` +
+    "end";
+  try {
+    window.location.href = intent;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/* ───────────────────── Боссы: локальные напоминания ───────────────────── */
+
+/**
+ * Планирует уведомления о ближайших боссах.
+ *
+ * Сеть не нужна: кто и когда заступает, считается формулой. Планируем
+ * несколько часов вперёд, потому что приложение может долго не
+ * открываться. При каждом запуске старые снимаем и ставим заново —
+ * так расписание не расползается.
+ */
+export async function scheduleBossNotifications(
+  bosses: { at: number; name: string }[],
+): Promise<void> {
+  const n = await notifications();
+  if (!n) return;
+  try {
+    // снимаем прошлые, чтобы не копились дубли
+    const ids = Array.from({ length: 12 }, (_, i) => ({ id: ID.bossBase + i }));
+    await n.cancel({ notifications: ids });
+  } catch {
+    /* нечего снимать */
+  }
+  if (!bosses.length) return;
+  try {
+    await n.schedule({
+      notifications: bosses.slice(0, 12).map((b, i) => ({
+        id: ID.bossBase + i,
+        channelId: channelId("boss"),
+        title: `Заступил ${b.name}`,
+        body: "Дежурит весь час. Зайди и разберись.",
+        schedule: { at: new Date(b.at), allowWhileIdle: true },
+      })),
+    });
+  } catch {
+    /* нет разрешения — молча пропускаем */
+  }
+}
+
+/** Снять все запланированные напоминания о боссах */
+export async function cancelBossNotifications(): Promise<void> {
+  const n = await notifications();
+  if (!n) return;
+  try {
+    await n.cancel({
+      notifications: Array.from({ length: 12 }, (_, i) => ({ id: ID.bossBase + i })),
+    });
+  } catch {
+    /* нечего снимать */
+  }
+}
+
+/* ───────────────────── Обновления: фоновая проверка ───────────────────── */
+
+/**
  * Сообщает фоновому скрипту, какая версия установлена сейчас.
  * Без этого он не с чем сравнивать и молчит.
  */
@@ -100,13 +260,13 @@ export async function syncInstalledVersion(): Promise<void> {
 }
 
 /**
- * Выключает напоминания: гасим уже показанное уведомление и просим фоновый
- * скрипт молчать. Системное разрешение при этом не трогаем — отозвать его
- * из приложения всё равно нельзя, да и незачем.
+ * Выключает напоминания об обновлениях: гасим уже показанное уведомление
+ * и просим фоновый скрипт молчать. Системное разрешение не трогаем —
+ * отозвать его из приложения всё равно нельзя.
  */
 export async function disableBackgroundCheck(): Promise<void> {
   const n = await notifications();
-  try { await n?.cancel({ notifications: [{ id: 7001 }] }); } catch { /* нечего гасить */ }
+  try { await n?.cancel({ notifications: [{ id: ID.update }] }); } catch { /* нечего гасить */ }
   const r = await runner();
   if (!r) return;
   try {
@@ -155,15 +315,19 @@ export async function checkNow(): Promise<void> {
 }
 
 /**
- * Первый запуск: просим разрешение системным окном и сразу включаем фоновую
- * проверку. Спрашиваем ровно один раз — повторно Android всё равно окно не
- * покажет, а дёргать плагин при каждом старте незачем.
+ * Первый запуск: создаём каналы, просим разрешение системным окном и
+ * включаем фоновую проверку. Спрашиваем ровно один раз — повторно Android
+ * окно всё равно не покажет.
  */
 const ASKED_KEY = "chubgames.notifyAsked";
 
 export async function initNotificationsOnFirstRun(): Promise<void> {
   if (!isNative()) return;
   try {
+    // Каналы создаём всегда: если приложение обновилось со старой версии,
+    // их ещё нет, а без них уведомления уйдут в канал «по умолчанию».
+    await ensureChannels();
+
     if (localStorage.getItem(ASKED_KEY) === "1") {
       // уже спрашивали — просто поддерживаем фоновую проверку живой
       if (await notifyGranted()) await enableBackgroundCheck();

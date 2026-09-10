@@ -274,7 +274,7 @@ export default function AdModal({
         {skipped ? (
           <div
             className="t-body flex items-center justify-center"
-            style={{ gap: 8, marginTop: 12, color: "#59FF9E" }}
+            style={{ gap: 8, marginTop: 12, color: "var(--ok)" }}
           >
             <Icon name="check" size={15} />{tr("Награда засчитана — закрой крестиком")}</div>
         ) : (

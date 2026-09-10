@@ -5,11 +5,16 @@ import { Card, Button, SectionTitle, Screen, Divider } from "../ui/Glass";
 import UpdateCheckRow from "../ui/UpdateCheckRow";
 import {
   askNotifyPermission,
+  cancelBossNotifications,
   disableBackgroundCheck,
   enableBackgroundCheck,
+  ensureChannels,
   isNativeApp,
   notifyGranted,
+  openSystemNotificationSettings,
+  scheduleBossNotifications,
 } from "../core/notify";
+import { upcomingBosses } from "../core/bosses";
 import { saveFileNative } from "../core/exportSave";
 import { isLowFx, measuredVerdict, readPerfMode, remeasure, writePerfMode, type PerfMode } from "../core/perf";
 import { tr } from "../core/i18n";
@@ -129,8 +134,9 @@ export default function Settings({
       <Card r="lg" style={{ marginBottom: 12, padding: 0, overflow: "hidden" }}>
         <UpdateCheckRow />
       </Card>
+      <SectionTitle>{tr("Уведомления")}</SectionTitle>
       <Card r="lg" style={{ marginBottom: 22, overflow: "hidden" }}>
-        <NotifyToggle />
+        <NotifyBlock />
       </Card>
 
       <SectionTitle>{t("settings.appearance")}</SectionTitle>
@@ -307,7 +313,7 @@ export default function Settings({
                 full
                 sound="none"
                 onClick={() => { hardReset(); setConfirmReset(false); }}
-                style={{ background: "var(--danger)", color: "#fff" }}
+                style={{ background: "var(--danger)", color: "#14060a" }}
               >{tr("Удалить всё")}</Button>
             </div>
           </>
@@ -358,7 +364,7 @@ export default function Settings({
         <div className="t-caption" style={{ marginTop: 5 }}>
           {t("common.version")} {APP_VERSION} · {t("settings.offline")}
         </div>
-        <div className="t-caption" style={{ marginTop: 2, opacity: 0.6 }}>
+        <div className="t-caption" style={{ marginTop: 2 }}>
           {t("settings.forOurs")}
         </div>
       </div>
@@ -367,66 +373,119 @@ export default function Settings({
 }
 
 /**
- * Уведомление о новой версии, когда игра закрыта.
- * Разрешение спрашиваем только здесь, по явному нажатию, — а не при
- * первом запуске, где человек не поймёт, о чём его просят.
+ * Уведомления.
+ *
+ * Два переключателя — что именно присылать, — и переход в системные
+ * настройки телефона, где каналы НОВИНКИ / ОБНОВЛЕНИЯ / БОССЫ
+ * выключаются по отдельности средствами Android.
  */
-function NotifyToggle() {
+function NotifyBlock() {
   const { s, set, toast } = useGame();
   const [busy, setBusy] = useState(false);
-  const on = s.settings.notifyUpdates;
 
-  const toggle = async () => {
+  /** Общая часть: убедиться, что разрешение есть */
+  const ensurePerm = async () => (await notifyGranted()) || (await askNotifyPermission());
+
+  const toggleUpdates = async () => {
     if (busy) return;
-
-    // Выключение — наша настройка. Системное разрешение не трогаем:
-    // отозвать его из приложения нельзя, да и незачем.
-    if (on) {
+    if (s.settings.notifyUpdates) {
       set((d) => { d.settings.notifyUpdates = false; });
       void disableBackgroundCheck();
-      toast({ title: tr("Больше не напоминаю"), icon: "check" });
+      toast({ title: tr("Больше не напоминаю об обновлениях"), icon: "check" });
       return;
     }
-
     setBusy(true);
     try {
-      // Разрешение обычно уже выдано на первом запуске. Если человек тогда
-      // отказал — предлагаем системное окно ещё раз, но тумблер всё равно
-      // включаем: он про НАШИ напоминания, а не про системный доступ.
-      const okPerm = (await notifyGranted()) || (await askNotifyPermission());
+      const ok = await ensurePerm();
       await enableBackgroundCheck();
       set((d) => { d.settings.notifyUpdates = true; });
-      if (!okPerm) {
-        toast({
-          title: tr("Включил напоминания"),
-          sub: tr("Разреши уведомления в настройках телефона, чтобы они приходили"),
-          icon: "warn",
-        });
-        return;
-      }
-      toast({
-        title: tr("Напомню о новой версии"),
-        sub: tr("Проверяю примерно раз в час"),
-        icon: "check",
-        tone: "gold",
-      });
+      toast(
+        ok
+          ? { title: tr("Напомню о новой версии"), sub: tr("Проверяю примерно раз в час"), icon: "check", tone: "gold" }
+          : { title: tr("Включил напоминания"), sub: tr("Разреши уведомления в настройках телефона, чтобы они приходили"), icon: "warn" },
+      );
     } finally {
       setBusy(false);
     }
   };
 
+  const toggleBoss = async () => {
+    if (busy) return;
+    if (s.settings.notifyBoss) {
+      set((d) => { d.settings.notifyBoss = false; });
+      void cancelBossNotifications();
+      toast({ title: tr("Больше не напоминаю о боссах"), icon: "check" });
+      return;
+    }
+    setBusy(true);
+    try {
+      const ok = await ensurePerm();
+      await ensureChannels();
+      await scheduleBossNotifications(upcomingBosses());
+      set((d) => { d.settings.notifyBoss = true; });
+      toast(
+        ok
+          ? { title: tr("Скажу, когда заступит босс"), sub: tr("Каждый час, пока не выключишь"), icon: "skull", tone: "gold" }
+          : { title: tr("Включил напоминания"), sub: tr("Разреши уведомления в настройках телефона, чтобы они приходили"), icon: "warn" },
+      );
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const native = isNativeApp();
+
   return (
-    <Toggle
-      label={tr("Уведомлять об обновлениях")}
-      hint={
-        isNativeApp()
-          ? tr("Напомню о новой версии, даже когда игра закрыта")
-          : tr("Работает только в приложении на телефоне")
-      }
-      on={on}
-      disabled={busy || !isNativeApp()}
-      onToggle={() => { void toggle(); }}
-    />
+    <>
+      <Toggle
+        label={tr("Обновления")}
+        hint={
+          native
+            ? tr("Напомню о новой версии, даже когда игра закрыта")
+            : tr("Работает только в приложении на телефоне")
+        }
+        on={s.settings.notifyUpdates}
+        disabled={busy || !native}
+        onToggle={() => { void toggleUpdates(); }}
+      />
+      <Divider inset={14} />
+      <Toggle
+        label={tr("Боссы")}
+        hint={tr("Скажу, когда заступит новый воспитатель")}
+        on={s.settings.notifyBoss}
+        disabled={busy || !native}
+        onToggle={() => { void toggleBoss(); }}
+      />
+      <Divider inset={14} />
+      <div style={{ padding: "13px 14px" }}>
+        <div className="t-caption" style={{ marginBottom: 10, lineHeight: 1.55 }}>
+          {tr("Каждый вид уведомлений можно выключить прямо в телефоне: НОВИНКИ, ОБНОВЛЕНИЯ и БОССЫ — это отдельные каналы Android.")}
+        </div>
+        <Button
+          variant="secondary"
+          full
+          sound="click"
+          disabled={!native}
+          onClick={() => {
+            void (async () => {
+              const ok = await openSystemNotificationSettings();
+              if (!ok) {
+                toast({
+                  title: tr("Открой настройки телефона"),
+                  sub: tr("Приложения → ЧУБУГЕЙМ → Уведомления"),
+                  icon: "info",
+                });
+              }
+            })();
+          }}
+        >
+          <span className="inline-flex items-center" style={{ gap: 8 }}>
+            <Icon name="settings" size={14} />
+            {tr("Настроить в телефоне")}
+          </span>
+        </Button>
+      </div>
+    </>
   );
 }
 
@@ -553,9 +612,11 @@ type Diff = "chill" | "normal" | "insane";
 const DIFFS: {
   id: Diff; name: string; desc: string; color: string; icon: IconName;
 }[] = [
-  { id: "chill",  name: "ЧИЛЛ",   desc: "Медленно, для расслабона", color: "#59FF9E", icon: "clover" },
+  /* Тут нужны именно хексы: ниже к цвету дописывается альфа («…1a»),
+     а к var(--…) так дописать нельзя — получилась бы битая строка. */
+  { id: "chill",  name: "ЧИЛЛ",   desc: "Медленно, для расслабона", color: "#5CE39B", icon: "clover" },
   { id: "normal", name: "НОРМАС", desc: "Как задумано",             color: "#FFB020", icon: "bolt" },
-  { id: "insane", name: "АДСКИЙ", desc: "Быстро и злобно",          color: "#FF3B2F", icon: "fire" },
+  { id: "insane", name: "АДСКИЙ", desc: "Быстро и злобно",          color: "#FF6B5A", icon: "fire" },
 ];
 
 function DiffPicker({ value, onPick }: { value: Diff; onPick: (v: Diff) => void }) {

@@ -21,7 +21,7 @@ function HpBar({ v, max, color }: { v: number; max: number; color: string }) {
     <div
       style={{
         height: 8, borderRadius: 99, overflow: "hidden",
-        background: "rgba(255,255,255,0.10)",
+        background: "var(--surface-3)",
       }}
     >
       <motion.div
@@ -305,7 +305,7 @@ export default function BossFight({ onBack }: { onBack: () => void }) {
             style={{
               padding: 20, marginBottom: 12, textAlign: "center",
               border: active && !cleared
-                ? "1.5px solid rgba(255,90,60,0.5)"
+                ? "1.5px solid var(--danger-brd)"
                 : "1.5px solid var(--btn-brd)",
               background: active && !cleared
                 ? "radial-gradient(120% 90% at 50% 0%, rgba(255,90,60,0.13), transparent 70%)"
@@ -353,7 +353,7 @@ export default function BossFight({ onBack }: { onBack: () => void }) {
             <div style={{ marginTop: 16 }}>
               {cleared ? (
                 <div className="t-caption">
-                  Уже разобрались. Следующий через {mmss(nLeft)}
+                  {tr("Уже разобрались. Следующий через")} {mmss(nLeft)}
                 </div>
               ) : active ? (
                 <>
@@ -365,7 +365,7 @@ export default function BossFight({ onBack }: { onBack: () => void }) {
                     sound="power"
                   >{tr("В БОЙ")}</Tap>
                   <div className="t-caption" style={{ marginTop: 9 }}>
-                    смена заканчивается через {mmss(wLeft)}
+                    {tr("Дежурит весь час — успей до")} {mmss(wLeft)}
                   </div>
                 </>
               ) : (
@@ -413,9 +413,9 @@ export default function BossFight({ onBack }: { onBack: () => void }) {
                   transition={{ duration: 0.9, repeat: Infinity }}
                   style={{
                     fontSize: 8.5, padding: "3px 8px", borderRadius: 999,
-                    background: "rgba(255,90,60,0.18)",
-                    border: "1px solid rgba(255,90,60,0.55)",
-                    color: "#FF6B4D",
+                    background: "var(--danger-soft)",
+                    border: "1px solid var(--danger-brd)",
+                    color: "var(--danger)",
                   }}
                 >
                   {tr("В ЯРОСТИ")}
@@ -499,7 +499,7 @@ export default function BossFight({ onBack }: { onBack: () => void }) {
                 animate={{ opacity: 1, y: 0 }}
                 style={{
                   position: "relative", zIndex: 6, marginTop: 12,
-                  color: "#FF6B4D", fontSize: 11,
+                  color: "var(--danger)", fontSize: 11,
                 }}
               >
                 {tr("ЗАМАХНУЛСЯ — СТАВЬ БЛОК")}
@@ -530,7 +530,7 @@ export default function BossFight({ onBack }: { onBack: () => void }) {
               <span className="t-title-sm flex-1">{tr("Ты")}</span>
               <span className="t-num" style={{ fontSize: 12 }}>{Math.max(0, myHp)} / 100</span>
             </div>
-            <HpBar v={myHp} max={100} color="#59FF9E" />
+            <HpBar v={myHp} max={100} color="var(--ok)" />
           </Panel>
 
           <div className="flex" style={{ gap: 9 }}>
@@ -553,11 +553,11 @@ export default function BossFight({ onBack }: { onBack: () => void }) {
               className="t-title"
               style={{
                 fontSize: 14, padding: "20px 0", flex: 1,
-                background: blocking ? "rgba(89,255,158,0.2)" : undefined,
+                background: blocking ? "var(--ok-soft)" : undefined,
                 border: blocking
-                  ? "1.5px solid rgba(89,255,158,0.7)"
+                  ? "1.5px solid var(--ok)"
                   : windup && blockReady
-                    ? "1.5px solid rgba(255,90,60,0.7)"
+                    ? "1.5px solid var(--danger)"
                     : undefined,
                 opacity: blockReady ? 1 : 0.45,
               }}
@@ -588,7 +588,7 @@ export default function BossFight({ onBack }: { onBack: () => void }) {
           <Panel r="xl" strong style={{ padding: 24, textAlign: "center" }}>
             <div
               className="t-display"
-              style={{ fontSize: 30, color: phase === "win" ? "#59FF9E" : "#FF6B8A" }}
+              style={{ fontSize: 30, color: phase === "win" ? "var(--ok)" : "#FF6B8A" }}
             >
               {phase === "win" ? "ПОБЕДА" : tr("ОТЧИСЛЕН")}
             </div>

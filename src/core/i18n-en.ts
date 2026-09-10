@@ -937,4 +937,47 @@ export const EN_TEXT: Record<string, string> = {
   "л пути": "l of driving",
   "В ПУТИ": "ON THE ROAD",
   "останется": "will remain",
+  /* ── Обновления, уведомления, боссы (пакет 1.17.0) ── */
+  "ЗАГРУЗКА": "DOWNLOADING",
+  "Версия": "Version",
+  "СЕЙЧАС": "NOW",
+  "СТАНЕТ": "WILL BE",
+  "с": "s",
+  "Не закрывай приложение. Когда файл скачается, Android спросит разрешение на установку.":
+    "Keep the app open. Once the file is downloaded, Android will ask for permission to install.",
+  "Что нового в версиях": "What's new in each version",
+  "ИСТОРИЯ": "HISTORY",
+  "Что нового": "What's new",
+  "ПОЧИНКА": "FIX",
+  "изм.": "changes",
+  "Уведомления": "Notifications",
+  "Производительность": "Performance",
+  "Авто": "Auto",
+  "Красиво": "Pretty",
+  "Быстро": "Fast",
+  "Замеряю плавность первые секунды после запуска":
+    "Measuring smoothness during the first seconds after launch",
+  "Телефон не тянул полное оформление — эффекты отключены":
+    "Your phone could not handle the full look — effects are off",
+  "Телефон тянет всё — включено полное оформление":
+    "Your phone handles everything — full look enabled",
+  "Без размытия, теней и анимаций — максимум скорости":
+    "No blur, shadows or animations — maximum speed",
+  "Всё оформление включено": "All visual effects enabled",
+  "ЗАМЕРИТЬ ЗАНОВО": "MEASURE AGAIN",
+  "Больше не напоминаю об обновлениях": "I won't remind you about updates",
+  "Больше не напоминаю о боссах": "I won't remind you about bosses",
+  "Скажу, когда заступит босс": "I'll tell you when a boss shows up",
+  "Каждый час, пока не выключишь": "Every hour until you turn it off",
+  "Обновления": "Updates",
+  "Боссы": "Bosses",
+  "Скажу, когда заступит новый воспитатель": "I'll tell you when a new warden takes the shift",
+  "Каждый вид уведомлений можно выключить прямо в телефоне: НОВИНКИ, ОБНОВЛЕНИЯ и БОССЫ — это отдельные каналы Android.":
+    "Each kind of notification can be switched off right in your phone: NEWS, UPDATES and BOSSES are separate Android channels.",
+  "Открой настройки телефона": "Open your phone settings",
+  "Приложения → ЧУБУГЕЙМ → Уведомления": "Apps → CHUBGAMES → Notifications",
+  "Настроить в телефоне": "Configure on the phone",
+  "УСПЕТЬ ДО СМЕНЫ": "TIME LEFT ON SHIFT",
+  "Уже разобрались. Следующий через": "Already handled. Next one in",
+  "Дежурит весь час — успей до": "On shift for the whole hour — you have until",
 };
