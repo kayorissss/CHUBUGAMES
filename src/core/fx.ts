@@ -144,6 +144,14 @@ export const sfx = {
     );
   },
   swoosh: () => noise(0.13, 0.16, 1400),
+  /** Щелчок колеса — короткий сухой тик, зовётся на каждый пройденный сектор */
+  wheelTick: () => tone({ freq: 1500, to: 900, dur: 0.028, type: "square", vol: 0.11 }),
+  /** Колесо остановилось на выигрыше */
+  wheelWin: () => {
+    tone({ freq: 620, to: 1240, dur: 0.14, type: "triangle", vol: 0.3 });
+    tone({ freq: 940, to: 1860, dur: 0.2, type: "sine", vol: 0.24, delay: 0.09 });
+    tone({ freq: 1240, to: 2480, dur: 0.26, type: "sine", vol: 0.18, delay: 0.19 });
+  },
   click: () => tone({ freq: 380, dur: 0.035, type: "square", vol: 0.16 }),
 };
 

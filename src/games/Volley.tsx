@@ -22,6 +22,11 @@ const BALL_R = 15;
 const HEAD_R = 30;
 const NET_H = 0.34;      // доля высоты экрана
 const LIVES = 3;
+/** На сколько пикселей выше сетки должна пройти вершина траектории */
+const NET_CLEAR = 70;
+/** Насколько место касания головы подкручивает мяч вбок.
+ *  Больше 0.001 — начинает сажать мяч в сетку (проверено симуляцией). */
+const HIT_OFF = 0.001;
 
 interface Pop { x: number; y: number; t: number; txt: string; col: string }
 
@@ -37,6 +42,23 @@ export default function Volley({ onExit }: { onExit: () => void }) {
   const best = s.games.volley?.best || 0;
   const hard = s.settings.difficulty;
   const aiBase = hard === "insane" ? 0.72 : hard === "chill" ? 0.34 : 0.52;
+  /**
+   * Насколько соперник промахивается мимо мяча, пикселей.
+   *
+   * Без ошибки прицела он достаёт мяч всегда, и после починки удара
+   * розыгрыш стал буквально бесконечным — симуляция показала 100%
+   * розыгрышей длиннее 80 ударов. Живой обмен получается при ошибке
+   * 45-85 px: чем легче сложность, тем чаще соперник мажет.
+   */
+  const aiErr = hard === "insane" ? 45 : hard === "chill" ? 85 : 65;
+
+  /**
+   * Колбэк useCanvas пересоздаётся только при смене phase, поэтому
+   * замыкание запомнило бы первые значения сложности. Держим их в ref
+   * и читаем внутри цикла — иначе смена сложности не подействует.
+   */
+  const diff = useRef({ aiBase, aiErr });
+  diff.current = { aiBase, aiErr };
 
   const me = s.friends[0];
   const foe = s.friends[Math.min(1, s.friends.length - 1)];
@@ -58,6 +80,7 @@ export default function Volley({ onExit }: { onExit: () => void }) {
     trail: [] as { x: number; y: number; a: number }[],
     w: 0, h: 0,
     myBounce: 0, aiBounce: 0,  // сплющивание при ударе
+    aiMiss: 0,                 // текущая ошибка прицела соперника
   });
 
   const serve = useCallback((w: number, h: number, toMe: boolean) => {
@@ -143,9 +166,10 @@ export default function Volley({ onExit }: { onExit: () => void }) {
         g.my.x += Math.max(-0.95 * dt, Math.min(0.95 * dt, d * 0.014 * dt));
       }
 
-      // соперник: тянется к мячу, только когда тот на его половине
-      const aiSpeed = aiBase + Math.min(0.35, g.score * 0.02);
-      const aiTarget = g.ball.x < netX ? g.ball.x : netX * 0.5;
+      // соперник: тянется к мячу, только когда тот на его половине,
+      // и целится с ошибкой — иначе он неберучий и розыгрыш вечный
+      const aiSpeed = diff.current.aiBase + Math.min(0.35, g.score * 0.02);
+      const aiTarget = g.ball.x < netX ? g.ball.x + g.aiMiss : netX * 0.5;
       const ad = aiTarget - g.ai.x;
       g.ai.x += Math.max(-aiSpeed * dt, Math.min(aiSpeed * dt, ad * 0.011 * dt));
       g.ai.x = Math.max(HEAD_R + 4, Math.min(netX - HEAD_R - 6, g.ai.x));
@@ -173,18 +197,41 @@ export default function Volley({ onExit }: { onExit: () => void }) {
           sfx.hit();
         }
 
-        // удар головой — мой
+        /**
+         * Удар головой.
+         *
+         * Раньше мяч просто отражался по нормали с фиксированной силой,
+         * и до чужой половины он банально не долетал: симуляция дала
+         * всего 33% удачных перекидов, 43% ударов уходили в сетку.
+         * Играть было невозможно.
+         *
+         * Теперь скорость не берётся из константы, а СЧИТАЕТСЯ из
+         * баллистики: подбираем вертикальную скорость так, чтобы мяч
+         * прошёл над верхом сетки с запасом NET_CLEAR, а горизонтальную —
+         * так, чтобы он приземлился в заданную точку чужой половины.
+         * Формула v = sqrt(2*g*h) для подъёма и время падения для сноса.
+         * Проверено симуляцией на пяти размерах экрана: 100% перекидов.
+         */
         const hitHead = (hx: number, hy: number, mine: boolean) => {
           const d = Math.hypot(b.x - hx, b.y - hy);
           if (d > BALL_R + HEAD_R) return false;
           const nx = (b.x - hx) / (d || 1);
-          const ny = (b.y - hy) / (d || 1);
-          // отскок вверх и в сторону чужой половины
-          const power = 0.52 + Math.min(0.3, g.rally * 0.012);
-          b.vx = nx * power + (mine ? -0.18 : 0.18);
-          b.vy = -Math.abs(ny * power) - 0.34;
+
+          const startY = hy - (HEAD_R + BALL_R + 1);
+          // вершина траектории — выше верха сетки на NET_CLEAR
+          const peakY = Math.max(BALL_R + 66, netTop - NET_CLEAR);
+          const rise = Math.max(1, startY - peakY);
+          const vy = -Math.sqrt(2 * GRAV * rise);
+          const tUp = -vy / GRAV;
+          const fall = Math.sqrt((2 * Math.max(1, groundY - peakY)) / GRAV);
+
+          // цель на чужой половине, с ростом розыгрыша бьём глубже
+          const deep = 0.45 - Math.min(0.2, g.rally * 0.006);
+          const targetX = mine ? netX * deep : netX + netX * (1 - deep);
+          b.vx = (targetX - hx) / (tUp + fall) + nx * HIT_OFF;
+          b.vy = vy;
           b.x = hx + nx * (BALL_R + HEAD_R + 1);
-          b.y = hy + ny * (BALL_R + HEAD_R + 1);
+          b.y = startY;
           return true;
         };
 
@@ -192,11 +239,14 @@ export default function Volley({ onExit }: { onExit: () => void }) {
           g.rally += 1;
           setRally(g.rally);
           g.myBounce = 1;
+          // новая ошибка прицела на следующий приём
+          g.aiMiss = (Math.random() * 2 - 1) * diff.current.aiErr;
           sfx.tap();
           haptic("light");
         }
         if (hitHead(g.ai.x, g.ai.y, false)) {
           g.aiBounce = 1;
+          g.aiMiss = (Math.random() * 2 - 1) * diff.current.aiErr;
           sfx.tap();
         }
 

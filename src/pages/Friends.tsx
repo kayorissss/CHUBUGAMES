@@ -403,11 +403,11 @@ function Editor({ friend, isNew, onClose }: { friend: Friend; isNew: boolean; on
             />
 
             <div className="flex gap-2 mb-4">
-              <Tap onClick={() => fileRef.current?.click()} r="md" className="flex-1 py-2.5 t-title" style={{ fontSize: 11 }} sound="none">
+              <Tap onClick={() => fileRef.current?.click()} r="md" center className="flex-1 py-2.5 t-title" style={{ fontSize: 11 }} sound="none">
                 <span className="inline-flex items-center justify-center" style={{ gap: 6 }}>
                   <Icon name="eye" size={13} />{tr("ФОТО")}</span>
               </Tap>
-              <Tap onClick={randomize} r="md" className="flex-1 py-2.5 t-title" style={{ fontSize: 11 }} sound="none">
+              <Tap onClick={randomize} r="md" center className="flex-1 py-2.5 t-title" style={{ fontSize: 11 }} sound="none">
                 <span className="inline-flex items-center justify-center" style={{ gap: 6 }}>
                   <Icon name="dice" size={13} />{tr("СЛУЧАЙНО")}</span>
               </Tap>
@@ -517,8 +517,8 @@ function Editor({ friend, isNew, onClose }: { friend: Friend; isNew: boolean; on
                   <Icon name="trash" size={15} />
                 </Tap>
               )}
-              <Tap onClick={onClose} r="md" className="px-5 py-3.5 t-title" style={{ fontSize: 12 }}>{tr("Отмена")}</Tap>
-              <Tap onClick={save} accent r="md" className="flex-1 py-3.5 t-title" style={{ fontSize: 13 }} sound="none">{tr("СОХРАНИТЬ")}</Tap>
+              <Tap onClick={onClose} r="md" center className="px-5 py-3.5 t-title" style={{ fontSize: 12 }}>{tr("Отмена")}</Tap>
+              <Tap onClick={save} accent r="md" center className="flex-1 py-3.5 t-title" style={{ fontSize: 13 }} sound="none">{tr("СОХРАНИТЬ")}</Tap>
             </div>
           </div>
         </div>

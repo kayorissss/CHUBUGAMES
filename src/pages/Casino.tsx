@@ -11,13 +11,19 @@ import { RARITY_COLOR, RARITY_LABEL } from "../core/content";
 import {
   FREE_CHIPS, GAMBLE_CASES, SLOT_SYMBOLS, freeChipsIn, freeChipsReady,
   itemById, readGamble, rollItem, runBattle, slotPayout, spinReel,
-  upgradeChance, upgradeTargets, writeGamble,
+  writeGamble,
   type GambleCase, type GambleStore, type ItemDef, type SlotSymbol,
 } from "../core/gamble";
+import Wheel, { wheelStopFeedback } from "../ui/Wheel";
+import {
+  WHEEL_MULTS, ZONE_LABEL, buildWheel, spinTo, winChance, zonePayout,
+  type WheelZone,
+} from "../core/wheel";
 
-type Tab = "slots" | "cases" | "battle" | "upgrade" | "stuff";
+type Tab = "farm" | "slots" | "cases" | "battle" | "upgrade" | "stuff";
 
 const TABS: { id: Tab; name: string }[] = [
+  { id: "farm",    name: tr("ФЕРМА") },
   { id: "slots",   name: tr("СЛОТЫ") },
   { id: "cases",   name: tr("КЕЙСЫ") },
   { id: "battle",  name: tr("БАТЛ") },
@@ -165,6 +171,7 @@ export default function Casino({ onBack }: { onBack: () => void }) {
           exit={{ opacity: 0, y: -6 }}
           transition={{ duration: 0.18 }}
         >
+          {tab === "farm"    && <ChipFarm g={g} save={save} />}
           {tab === "slots"   && <Slots g={g} save={save} />}
           {tab === "cases"   && <Cases g={g} save={save} />}
           {tab === "battle"  && <Battle g={g} save={save} />}
@@ -720,34 +727,50 @@ function Battle({ g, save }: { g: GambleStore; save: (p: Partial<GambleStore>) =
 function Upgrade({ g, save }: { g: GambleStore; save: (p: Partial<GambleStore>) => void }) {
   const owned = Object.entries(g.items).filter(([, n]) => n > 0);
   const [fromId, setFromId] = useState<string | null>(owned[0]?.[0] ?? null);
-  const [toId, setToId] = useState<string | null>(null);
-  const [rolling, setRolling] = useState(false);
-  const [res, setRes] = useState<null | boolean>(null);
+  const [multId, setMultId] = useState(WHEEL_MULTS[1].id);
+  const [fast, setFast] = useState(false);
+  const [spinning, setSpinning] = useState(false);
+  const [angle, setAngle] = useState(0);
+  const [res, setRes] = useState<null | { zone: WheelZone; gained: number }>(null);
 
   const from = fromId ? itemById(fromId) : null;
-  const targets = from ? upgradeTargets(from.value) : [];
-  const to = toId ? itemById(toId) : null;
-  const chance = from && to ? upgradeChance(from.value, to.value) : 0;
+  const mult = WHEEL_MULTS.find((m) => m.id === multId) ?? WHEEL_MULTS[1];
+  const sectors = buildWheel(mult.mult);
+  const chance = winChance(mult.mult);
+
+  // Если предмет кончился, переключаемся на любой оставшийся
+  useEffect(() => {
+    if (fromId && !g.items[fromId]) setFromId(Object.keys(g.items)[0] ?? null);
+  }, [g.items, fromId]);
 
   const go = () => {
-    if (!from || !to || rolling) return;
-    setRolling(true);
+    if (!from || spinning) return;
     setRes(null);
+    const r = spinTo(sectors, mult.mult);
+    setAngle(r.angle);
+    setSpinning(true);
     sfx.click();
-    window.setTimeout(() => {
-      const ok = Math.random() < chance;
+
+    // Итог начисляем, когда колесо реально доехало — иначе награда
+    // прилетает раньше, чем видно результат.
+    const finish = () => {
+      const staked = from.value;
+      const gained = zonePayout(r.zone, staked, mult.mult);
       const items = { ...g.items };
       items[from.id] = (items[from.id] || 1) - 1;
       if (items[from.id] <= 0) delete items[from.id];
-      if (ok) items[to.id] = (items[to.id] || 0) + 1;
-      save({ items });
-      setRes(ok);
-      setRolling(false);
-      if (ok) { sfx.legend?.(); haptic("success"); }
-      else { sfx.gameOver?.(); haptic("error"); }
-      if (!items[from.id]) setFromId(Object.keys(items)[0] ?? null);
-    }, 1400);
+      // Выигрыш и утешительные выплаты приходят жетонами: подбирать
+      // предмет ровно нужной цены не всегда возможно.
+      save({ items, chips: g.chips + gained });
+      setRes({ zone: r.zone, gained });
+      setSpinning(false);
+      wheelStopFeedback(r.zone === "win");
+    };
+    return finish;
   };
+
+  const finishRef = useRef<null | (() => void)>(null);
+  const start = () => { finishRef.current = go() ?? null; };
 
   if (!owned.length) {
     return (
@@ -761,6 +784,14 @@ function Upgrade({ g, save }: { g: GambleStore; save: (p: Partial<GambleStore>) 
 
   return (
     <>
+      {/* Правила — коротко и сразу, чтобы было понятно, что происходит */}
+      <Panel r="lg" style={{ padding: 13, marginBottom: 12 }}>
+        <div className="t-label" style={{ marginBottom: 7, fontSize: 9.5 }}>{tr("КАК ЭТО РАБОТАЕТ")}</div>
+        <div className="t-caption" style={{ lineHeight: 1.6, fontSize: 11 }}>
+          {tr("Ставишь предмет и выбираешь множитель. Зелёный сверху — забрал, оранжевый по бокам — вернулась часть, красный снизу — сгорело. Чем жирнее множитель, тем тоньше зелёный.")}
+        </div>
+      </Panel>
+
       <Panel r="lg" style={{ padding: 15, marginBottom: 12 }}>
         <div className="t-label" style={{ marginBottom: 9 }}>{tr("Что ставим")}</div>
         <div className="flex flex-wrap" style={{ gap: 6, marginBottom: 16 }}>
@@ -772,13 +803,15 @@ function Upgrade({ g, save }: { g: GambleStore; save: (p: Partial<GambleStore>) 
               <button
                 key={id}
                 type="button"
-                onClick={() => { sfx.click(); setFromId(id); setToId(null); setRes(null); }}
+                disabled={spinning}
+                onClick={() => { sfx.click(); setFromId(id); setRes(null); }}
                 className="flex items-center"
                 style={{
                   gap: 7, padding: "8px 11px", borderRadius: "var(--r-sm)",
                   background: on ? "var(--surface)" : "var(--btn-bg)",
                   border: `1.5px solid ${on ? RARITY_COLOR[it.rarity] : "var(--btn-brd)"}`,
                   color: RARITY_COLOR[it.rarity],
+                  opacity: spinning ? 0.5 : 1,
                 }}
               >
                 <ItemIcon id={id} size={17} />
@@ -788,85 +821,336 @@ function Upgrade({ g, save }: { g: GambleStore; save: (p: Partial<GambleStore>) 
           })}
         </div>
 
-        {from && (
-          <>
-            <div className="t-label" style={{ marginBottom: 9 }}>{tr("Во что")}</div>
-            <div className="flex flex-wrap" style={{ gap: 6 }}>
-              {targets.slice(0, 8).map((it) => {
-                const on = toId === it.id;
-                return (
-                  <button
-                    key={it.id}
-                    type="button"
-                    onClick={() => { sfx.click(); setToId(it.id); setRes(null); }}
-                    className="flex items-center"
-                    style={{
-                      gap: 7, padding: "8px 11px", borderRadius: "var(--r-sm)",
-                      background: on ? "var(--surface)" : "var(--btn-bg)",
-                      border: `1.5px solid ${on ? RARITY_COLOR[it.rarity] : "var(--btn-brd)"}`,
-                      color: RARITY_COLOR[it.rarity],
-                    }}
-                  >
-                    <ItemIcon id={it.id} size={17} />
-                    <span className="t-num" style={{ fontSize: 10 }}>
-                      {(upgradeChance(from.value, it.value) * 100).toFixed(0)}%
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          </>
-        )}
+        <div className="t-label" style={{ marginBottom: 9 }}>{tr("Множитель")}</div>
+        <div className="flex flex-wrap" style={{ gap: 6 }}>
+          {WHEEL_MULTS.map((m) => {
+            const on = multId === m.id;
+            return (
+              <button
+                key={m.id}
+                type="button"
+                disabled={spinning}
+                onClick={() => { sfx.click(); setMultId(m.id); setRes(null); }}
+                style={{
+                  padding: "9px 13px", borderRadius: "var(--r-sm)",
+                  background: on ? "var(--acc)" : "var(--btn-bg)",
+                  color: on ? "var(--acc-ink)" : "var(--text-mute)",
+                  border: `1.5px solid ${on ? "var(--acc)" : "var(--btn-brd)"}`,
+                  opacity: spinning ? 0.5 : 1,
+                }}
+              >
+                <span className="t-num" style={{ fontSize: 12 }}>{m.label}</span>
+                <span className="t-label" style={{ fontSize: 8, display: "block", marginTop: 2, opacity: 0.75 }}>
+                  {(winChance(m.mult) * 100).toFixed(0)}%
+                </span>
+              </button>
+            );
+          })}
+        </div>
       </Panel>
 
-      {from && to && (
+      {from && (
         <Panel r="lg" style={{ padding: 15 }}>
-          <div className="flex items-center justify-center" style={{ gap: 14, marginBottom: 14 }}>
-            <span style={{ color: RARITY_COLOR[from.rarity] }}>
-              <ItemIcon id={from.id} size={38} />
+          <Wheel
+            sectors={sectors}
+            angle={angle}
+            spinning={spinning}
+            duration={fast ? 1200 : 4200}
+            onDone={() => finishRef.current?.()}
+            centerLabel={`${(chance * 100).toFixed(0)}%`}
+            centerSub={tr("ШАНС")}
+          />
+
+          <div
+            className="flex items-center justify-center"
+            style={{ gap: 8, marginTop: 12, marginBottom: 12 }}
+          >
+            <span style={{ color: RARITY_COLOR[from.rarity], lineHeight: 0 }}>
+              <ItemIcon id={from.id} size={26} />
             </span>
-            <Icon name="chevron" size={18} />
-            <motion.span
-              animate={rolling ? { rotate: 360 } : { rotate: 0 }}
-              transition={rolling ? { duration: 0.7, repeat: Infinity, ease: "linear" } : {}}
-              style={{ color: RARITY_COLOR[to.rarity], lineHeight: 0 }}
-            >
-              <ItemIcon id={to.id} size={38} />
-            </motion.span>
+            <Icon name="chevron" size={14} />
+            <span className="t-num acc-text" style={{ fontSize: 16 }}>{mult.label}</span>
           </div>
 
-          <div className="t-num text-center acc-text" style={{ fontSize: 30, marginBottom: 4 }}>
-            {(chance * 100).toFixed(0)}%
-          </div>
-          <div className="t-caption text-center" style={{ marginBottom: 14 }}>
-            шанс поднять до «{to.name}»
-          </div>
+          <AnimatePresence mode="wait">
+            {res && (
+              <motion.div
+                key={`${res.zone}-${res.gained}`}
+                initial={{ opacity: 0, y: 8, scale: 0.94 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0 }}
+                className="text-center"
+                style={{ marginBottom: 12 }}
+              >
+                <div
+                  className="t-title"
+                  style={{ fontSize: 15, color: res.zone === "win" ? "#59FF9E" : res.zone === "burn" ? "#FF6B8A" : "#FFB020" }}
+                >
+                  {tr(ZONE_LABEL[res.zone])}
+                </div>
+                {res.gained > 0 && (
+                  <div className="t-num acc-text" style={{ fontSize: 20, marginTop: 3 }}>
+                    +{fmt(res.gained)}
+                  </div>
+                )}
+              </motion.div>
+            )}
+          </AnimatePresence>
 
-          {res !== null && (
-            <motion.div
-              initial={{ opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="t-title text-center"
-              style={{
-                fontSize: 15, marginBottom: 12,
-                color: res ? "#59FF9E" : "#FF6B8A",
-              }}
-            >
-              {res ? "ПОДНЯЛ" : tr("СГОРЕЛО")}
-            </motion.div>
-          )}
+          {/* Быстрый режим — отдельным переключателем, как просили */}
+          <button
+            type="button"
+            onClick={() => { setFast((v) => !v); sfx.click(); }}
+            className="flex items-center justify-center w-full"
+            style={{
+              gap: 8, padding: "9px 0", marginBottom: 9,
+              borderRadius: "var(--r-sm)",
+              background: fast ? "var(--acc-soft)" : "var(--btn-bg)",
+              border: `1px solid ${fast ? "var(--acc)" : "var(--btn-brd)"}`,
+              color: fast ? "var(--acc)" : "var(--text-mute)",
+            }}
+          >
+            <Icon name="speed" size={14} />
+            <span className="t-label" style={{ fontSize: 10 }}>
+              {fast ? tr("БЫСТРЫЙ АПГРЕЙД") : tr("ОБЫЧНЫЙ АПГРЕЙД")}
+            </span>
+          </button>
 
           <Tap
-            onClick={go}
+            onClick={start}
             accent r="md" center
             className="w-full py-3.5 t-title"
-            style={{ fontSize: 14, opacity: rolling ? 0.5 : 1 }}
+            style={{ fontSize: 14, opacity: spinning ? 0.5 : 1 }}
             sound="power"
           >
-            {rolling ? "КРУТИМ…" : tr("АПГРЕЙД")}
+            {spinning ? tr("КРУТИТСЯ…") : tr("КРУТИТЬ")}
           </Tap>
         </Panel>
       )}
+    </>
+  );
+}
+
+/* ═══════════════════════════ ФЕРМА ЖЕТОНОВ ═══════════════════════════ */
+
+/**
+ * Мини-игра на жетоны: по столу разлетаются фишки, надо успевать
+ * ловить их пальцем, пока не вышло время.
+ *
+ * Зачем: раньше жетоны капали только по 60 штук раз в 20 минут, и
+ * проиграв их, оставалось только ждать. Теперь казино можно фармить.
+ *
+ * Заработок ограничен временем раунда, а не количеством нажатий, так
+ * что «настучать» бесконечно не выйдет: за 20 секунд физически
+ * успеваешь поймать ограниченное число фишек.
+ */
+
+const FARM_MS = 20000;
+const FARM_SPAWN_MS = 620;
+
+interface FarmChip {
+  id: number;
+  x: number;
+  y: number;
+  born: number;
+  life: number;
+  val: number;
+  gold: boolean;
+}
+
+function ChipFarm({ g, save }: { g: GambleStore; save: (p: Partial<GambleStore>) => void }) {
+  const [phase, setPhase] = useState<"idle" | "play" | "over">("idle");
+  const [chips, setChips] = useState<FarmChip[]>([]);
+  const [earned, setEarned] = useState(0);
+  const [left, setLeft] = useState(FARM_MS);
+  const [combo, setCombo] = useState(0);
+  const areaRef = useRef<HTMLDivElement>(null);
+  const nextId = useRef(1);
+  const endAt = useRef(0);
+  const lastSpawn = useRef(0);
+  const rafRef = useRef(0);
+  const comboRef = useRef(0);
+
+  const start = () => {
+    setChips([]); setEarned(0); setCombo(0); comboRef.current = 0;
+    setLeft(FARM_MS);
+    endAt.current = performance.now() + FARM_MS;
+    lastSpawn.current = 0;
+    setPhase("play");
+    sfx.power?.();
+  };
+
+  // Цикл игры: спавн фишек и их старение
+  useEffect(() => {
+    if (phase !== "play") return;
+    const loop = (now: number) => {
+      const remain = endAt.current - now;
+      setLeft(Math.max(0, remain));
+      if (remain <= 0) {
+        setPhase("over");
+        sfx.gameOver?.();
+        return;
+      }
+      // спавним новую фишку
+      if (now - lastSpawn.current > FARM_SPAWN_MS) {
+        lastSpawn.current = now;
+        const gold = Math.random() < 0.16;
+        setChips((cs) => [
+          ...cs.filter((c) => now - c.born < c.life),
+          {
+            id: nextId.current++,
+            x: 8 + Math.random() * 84,
+            y: 10 + Math.random() * 76,
+            born: now,
+            life: gold ? 1150 : 1700,
+            val: gold ? 25 : 8,
+            gold,
+          },
+        ]);
+      } else {
+        setChips((cs) => {
+          const alive = cs.filter((c) => now - c.born < c.life);
+          return alive.length === cs.length ? cs : alive;
+        });
+      }
+      rafRef.current = requestAnimationFrame(loop);
+    };
+    rafRef.current = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(rafRef.current);
+  }, [phase]);
+
+  // Награда начисляется один раз в конце раунда
+  const paid = useRef(false);
+  useEffect(() => {
+    if (phase !== "over" || paid.current) return;
+    paid.current = true;
+    if (earned > 0) {
+      save({ chips: g.chips + earned });
+      sfx.coin?.();
+    }
+  }, [phase, earned, g.chips, save]);
+
+  useEffect(() => { if (phase === "play") paid.current = false; }, [phase]);
+
+  const grab = (c: FarmChip) => {
+    comboRef.current += 1;
+    setCombo(comboRef.current);
+    // комбо добавляет до +50%
+    const bonus = 1 + Math.min(comboRef.current, 10) * 0.05;
+    setEarned((e) => e + Math.round(c.val * bonus));
+    setChips((cs) => cs.filter((x) => x.id !== c.id));
+    if (c.gold) { sfx.crit?.(); haptic("medium"); }
+    else { sfx.coin?.(); haptic("light"); }
+  };
+
+  const secs = (left / 1000).toFixed(1);
+
+  return (
+    <>
+      <Panel r="lg" style={{ padding: 13, marginBottom: 12 }}>
+        <div className="t-label" style={{ marginBottom: 7, fontSize: 9.5 }}>{tr("КАК ЭТО РАБОТАЕТ")}</div>
+        <div className="t-caption" style={{ lineHeight: 1.6, fontSize: 11 }}>
+          {tr("Двадцать секунд на то, чтобы ловить фишки пальцем. Золотая стоит дороже, но живёт меньше. Ловишь без промаха — растёт комбо и надбавка.")}
+        </div>
+      </Panel>
+
+      <Panel r="lg" style={{ padding: 14 }}>
+        <div className="flex items-center justify-between" style={{ marginBottom: 10 }}>
+          <div>
+            <div className="t-label" style={{ fontSize: 9 }}>{tr("НАЛОВИЛ")}</div>
+            <div className="t-num acc-text" style={{ fontSize: 22, lineHeight: 1.1 }}>{fmt(earned)}</div>
+          </div>
+          <div className="text-right">
+            <div className="t-label" style={{ fontSize: 9 }}>{tr("ВРЕМЯ")}</div>
+            <div
+              className="t-num"
+              style={{ fontSize: 22, lineHeight: 1.1, color: left < 5000 ? "#FF6B4D" : undefined }}
+            >
+              {phase === "play" ? secs : "20.0"}
+            </div>
+          </div>
+        </div>
+
+        <div
+          ref={areaRef}
+          style={{
+            position: "relative", width: "100%", height: 280,
+            borderRadius: "var(--r-md)",
+            background: "var(--surface-2)",
+            border: "1px solid var(--surface-brd)",
+            overflow: "hidden", touchAction: "none",
+          }}
+        >
+          {phase === "play" && chips.map((c) => (
+            <button
+              key={c.id}
+              type="button"
+              onPointerDown={(e) => { e.preventDefault(); grab(c); }}
+              style={{
+                position: "absolute",
+                left: `${c.x}%`, top: `${c.y}%`,
+                transform: "translate(-50%, -50%)",
+                width: c.gold ? 52 : 44, height: c.gold ? 52 : 44,
+                borderRadius: "50%",
+                background: c.gold ? "var(--acc)" : "var(--surface)",
+                border: `2.5px solid ${c.gold ? "#7a5200" : "var(--btn-brd)"}`,
+                color: c.gold ? "var(--acc-ink)" : "var(--text)",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                boxShadow: c.gold ? "0 4px 16px -4px var(--acc-glow)" : "none",
+              }}
+            >
+              <span className="t-num" style={{ fontSize: c.gold ? 13 : 11 }}>{c.val}</span>
+            </button>
+          ))}
+
+          {phase !== "play" && (
+            <div
+              className="absolute inset-0 flex flex-col items-center justify-center"
+              style={{ padding: 20, textAlign: "center" }}
+            >
+              {phase === "over" ? (
+                <>
+                  <div className="t-display" style={{ fontSize: 24 }}>{tr("ВРЕМЯ ВЫШЛО")}</div>
+                  <div className="t-num acc-text" style={{ fontSize: 34, marginTop: 6 }}>
+                    +{fmt(earned)}
+                  </div>
+                  <div className="t-caption" style={{ marginTop: 4 }}>{tr("жетонов на счёт")}</div>
+                </>
+              ) : (
+                <>
+                  <Icon name="coin" size={34} />
+                  <div className="t-title-sm" style={{ marginTop: 10 }}>{tr("ФЕРМА ЖЕТОНОВ")}</div>
+                  <div className="t-caption" style={{ marginTop: 6, lineHeight: 1.55 }}>
+                    {tr("Лови фишки пальцем. Бесплатно, играй сколько хочешь.")}
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
+          {phase === "play" && combo > 1 && (
+            <div
+              className="t-num"
+              style={{
+                position: "absolute", left: 10, bottom: 8, fontSize: 13,
+                color: "var(--acc)",
+              }}
+            >
+              x{(1 + Math.min(combo, 10) * 0.05).toFixed(2)}
+            </div>
+          )}
+        </div>
+
+        <Tap
+          onClick={start}
+          accent r="md" center
+          className="w-full py-3.5 t-title"
+          style={{ fontSize: 14, marginTop: 12, opacity: phase === "play" ? 0.5 : 1 }}
+          sound="power"
+        >
+          {phase === "play" ? tr("ЛОВИ!") : phase === "over" ? tr("ЕЩЁ РАЗ") : tr("НАЧАТЬ")}
+        </Tap>
+      </Panel>
     </>
   );
 }

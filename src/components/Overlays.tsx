@@ -1,12 +1,13 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { tr } from "../core/i18n";
-import { useGame } from "../core/store";
+import { useGame, useToasts } from "../core/store";
 import { Panel, Tap } from "../ui/Glass";
 import { fmt, fmtTime } from "../core/format";
 import Icon from "../ui/Icon";
 
 export function Toasts() {
-  const { toasts } = useGame();
+  // подписан только на список тостов, а не на всё состояние игры
+  const { toasts } = useToasts();
   return (
     <div
       className="fixed left-0 right-0 z-[90] flex flex-col items-center gap-2 px-4 pointer-events-none"

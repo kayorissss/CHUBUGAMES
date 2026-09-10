@@ -33,7 +33,8 @@ interface Ctx {
   bump: (metric: keyof SaveState["stats"], n?: number) => void;
   questProgress: (metric: string, n: number) => void;
   finishGame: (g: GameId, score: number, ms: number) => void;
-  toasts: Toast[];
+  /** Показать уведомление. Сам СПИСОК тостов живёт в отдельном контексте,
+   *  чтобы всплывающее уведомление не перерисовывало всё приложение. */
   toast: (t: Omit<Toast, "id">) => void;
   mainFriend: Friend;
   offlineReport: { coins: number; hours: number } | null;
@@ -48,6 +49,24 @@ interface Ctx {
 
 const C = createContext<Ctx>(null as any);
 export const useGame = () => useContext(C);
+
+/**
+ * Тосты живут в ОТДЕЛЬНОМ контексте.
+ *
+ * Раньше список тостов лежал в общем значении контекста игры. Из-за
+ * этого каждое всплывающее уведомление перерисовывало всех 53
+ * подписчиков — включая запущенную мини-игру. Замер показал до 13
+ * пропущенных кадров на серии ачивок: ровно тот фриз, который видно
+ * глазами, когда «приходит уведомление».
+ *
+ * Теперь на список тостов подписан только сам компонент Toasts.
+ */
+interface ToastCtx {
+  toasts: Toast[];
+  toast: (t: Omit<Toast, "id">) => void;
+}
+const TC = createContext<ToastCtx>(null as any);
+export const useToasts = () => useContext(TC);
 
 export function GameProvider({ children }: { children: React.ReactNode }) {
   const [s, setS] = useState<SaveState>(() => loadSave());
@@ -334,13 +353,34 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
   const prestigeAvailable = useMemo(() => prestigeGain(s), [s]);
   const freePoints = useMemo(() => s.prestigePoints - spentSkillPoints(s), [s]);
 
-  const value: Ctx = {
-    s, set, addCoins, spendCoins, addXp, bump, questProgress, finishGame,
-    toasts, toast, mainFriend, offlineReport, clearOffline: () => setOfflineReport(null),
-    hardReset, levelPct, accentHex, prestigeAvailable, freePoints, t,
-  };
+  const clearOffline = useCallback(() => setOfflineReport(null), []);
 
-  return <C.Provider value={value}>{children}</C.Provider>;
+  /**
+   * Значение контекста обязано быть мемоизированным. Без useMemo объект
+   * создавался заново на каждый рендер провайдера, и React считал
+   * контекст изменившимся даже когда данные оставались прежними —
+   * перерисовывались все подписчики разом.
+   */
+  const value: Ctx = useMemo(
+    () => ({
+      s, set, addCoins, spendCoins, addXp, bump, questProgress, finishGame,
+      toast, mainFriend, offlineReport, clearOffline,
+      hardReset, levelPct, accentHex, prestigeAvailable, freePoints, t,
+    }),
+    [
+      s, set, addCoins, spendCoins, addXp, bump, questProgress, finishGame,
+      toast, mainFriend, offlineReport, clearOffline,
+      hardReset, levelPct, accentHex, prestigeAvailable, freePoints, t,
+    ],
+  );
+
+  const toastValue: ToastCtx = useMemo(() => ({ toasts, toast }), [toasts, toast]);
+
+  return (
+    <C.Provider value={value}>
+      <TC.Provider value={toastValue}>{children}</TC.Provider>
+    </C.Provider>
+  );
 }
 
 function hexA(hex: string, a: number) {

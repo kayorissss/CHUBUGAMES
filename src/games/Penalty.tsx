@@ -314,14 +314,26 @@ export default function Penalty({ onExit }: { onExit: () => void }) {
     ctx.save();
     ctx.translate(g.kx, g.ky);
     ctx.rotate(((g.kx - (g.goalX + g.goalW / 2)) / g.goalW) * 0.9 * g.kDive);
-    drawHead(ctx, keeper.look, 0, 0, 27, { body: true, squish: kSquish, mouth: g.kDive * 0.7 });
-    // Руки: плечо -> локоть -> кисть с пальцами. Раньше это были две
-    // плоские капли по бокам, и понять, что это руки, было невозможно.
+    /**
+     * Руки рисуем ДО головы, чтобы они уходили за вратаря, а не лежали
+     * поверх лица.
+     *
+     * Плечо раньше стояло в точке y=12 при полувысоте головы 28.6 —
+     * это 42% высоты лица сверху, то есть руки росли прямо изо рта.
+     * Теперь крепление считается от геометрии тела: линия плеч у
+     * drawBody начинается на y = h*1.02, поэтому берём чуть ниже
+     * подбородка и разводим по ширине корпуса.
+     */
+    const HR = 27;                     // радиус головы вратаря
+    const HH = HR * 1.06;              // полувысота головы
+    const SHOULDER_Y = HH * 1.02 + 4;  // линия плеч, под подбородком
+    const SHOULDER_X = HR * 0.92;      // разведение плеч по корпусу
+
     for (const sx of [-1, 1]) {
       const reach = g.kDive;                     // 0 стоит, 1 в прыжке
-      const sh = { x: sx * 15, y: 12 };          // плечо
-      const el = { x: sx * (26 + reach * 12), y: 6 - reach * 14 };   // локоть
-      const wr = { x: sx * (34 + reach * 22), y: -6 - reach * 30 };  // кисть
+      const sh = { x: sx * SHOULDER_X, y: SHOULDER_Y };
+      const el = { x: sx * (SHOULDER_X + 14 + reach * 12), y: SHOULDER_Y - 10 - reach * 20 };
+      const wr = { x: sx * (SHOULDER_X + 24 + reach * 24), y: SHOULDER_Y - 24 - reach * 38 };
 
       // рукав
       ctx.strokeStyle = "#2e3540";
@@ -368,6 +380,10 @@ export default function Penalty({ onExit }: { onExit: () => void }) {
       ctx.stroke();
       ctx.restore();
     }
+
+    // Голова и корпус поверх рук — плечи перекрывают место крепления,
+    // и рука выглядит растущей из-за спины, а не приклеенной к лицу.
+    drawHead(ctx, keeper.look, 0, 0, HR, { body: true, squish: kSquish, mouth: g.kDive * 0.7 });
     ctx.restore();
 
     // мяч

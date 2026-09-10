@@ -447,9 +447,27 @@ export function GameOver({
             </Tap>
           )}
 
-          <div className="flex gap-2.5">
-            <Tap onClick={onExit} r="md" className="px-5 py-3.5 t-title" style={{ fontSize: 13 }} sound="swoosh">{tr("Выйти")}</Tap>
-            <Tap onClick={onRetry} accent r="md" className="flex-1 py-3.5 t-title" style={{ fontSize: 14 }} sound="power">{tr("ЕЩЁ РАЗ")}</Tap>
+          {/* Обе кнопки одной высоты и с центрированным текстом: раньше
+              «Ещё раз» была без center и надпись липла к левому краю. */}
+          <div className="flex" style={{ gap: 10 }}>
+            <Tap
+              onClick={onExit}
+              r="md" center
+              className="t-title"
+              style={{ fontSize: 13, flex: "0 0 34%", padding: "14px 0", lineHeight: 1.1 }}
+              sound="swoosh"
+            >
+              {tr("Выйти")}
+            </Tap>
+            <Tap
+              onClick={onRetry}
+              accent r="md" center
+              className="t-title"
+              style={{ fontSize: 14, flex: 1, padding: "14px 0", lineHeight: 1.1 }}
+              sound="power"
+            >
+              {tr("ЕЩЁ РАЗ")}
+            </Tap>
           </div>
         </Panel>
       </motion.div>
