@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useGame } from "../core/store";
+import { tr } from "../core/i18n";
 import {
   UPGRADES, upgradeCost, tapValue, autoRate, critChance, critMult,
   comboWindow, comboMax,
@@ -9,7 +10,8 @@ import { drawHead } from "../core/head";
 import { fmt } from "../core/format";
 import { sfx, haptic } from "../core/fx";
 import Icon from "../ui/Icon";
-import { Panel, Tap, Bar } from "../ui/Glass";
+import type { IconName } from "../ui/Icon";
+import { Bar } from "../ui/Glass";
 
 interface FloatTxt { id: number; x: number; y: number; txt: string; crit: boolean }
 
@@ -25,6 +27,8 @@ export default function Clicker({ onExit }: { onExit: () => void }) {
   const sessionTaps = useRef(0);
   const sessionStart = useRef(Date.now());
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  /** Сколько покупать за раз: 1 / 10 / максимум по деньгам */
+  const [buyQty, setBuyQty] = useState<1 | 10 | "max">(1);
   const anim = useRef({ squish: 0, tilt: 0, blink: 0, blinkT: 1200, mouth: 0.08, rings: [] as any[] });
   const photoRef = useRef<HTMLImageElement | null>(null);
 
@@ -215,7 +219,13 @@ export default function Clicker({ onExit }: { onExit: () => void }) {
     };
     raf = requestAnimationFrame(loop);
     return () => { cancelAnimationFrame(raf); ro.disconnect(); };
-  }, [mainFriend]);
+    /* ВАЖНО: `tab` в зависимостях.
+       Вкладка «АПГРЕЙДЫ» размонтирует <canvas>, а при возврате React
+       создаёт НОВЫЙ элемент. Раньше зависимостью был только mainFriend,
+       эффект не перезапускался, и цикл продолжал рисовать в старый,
+       уже оторванный от DOM канвас — герой пропадал до первого тапа.
+       Теперь при смене вкладки цикл пересоздаётся на актуальном канвасе. */
+  }, [mainFriend, tab]);
 
 
   useEffect(() => {
@@ -277,78 +287,107 @@ export default function Clicker({ onExit }: { onExit: () => void }) {
     [tv, cc, cm, cmax, cwin, set, addXp, questProgress, bump],
   );
 
-  const buy = (key: (typeof UPGRADES)[number]["key"], base: number, growth: number) => {
-    const lvl = s.clicker[key] as number;
-    const cost = upgradeCost(base, growth, key === "tapPower" ? lvl - 1 : lvl);
-    if (s.coins < cost) { sfx.error(); haptic("error"); return; }
-    sfx.buy();
-    haptic("success");
-    set((d) => {
-      d.coins -= cost;
-      (d.clicker[key] as number) += 1;
-    });
-    addXp(12);
-  };
-
-  const buyMax = (key: (typeof UPGRADES)[number]["key"], base: number, growth: number) => {
+  /**
+   * Сколько уровней реально можно купить и во сколько это обойдётся.
+   *
+   * Цена уровня растёт геометрически, поэтому «купить 10» — это не
+   * «цена × 10». Пользователь просил показывать ИТОГОВУЮ цену, а если
+   * денег не хватает на всю пачку — сколько получится взять сейчас.
+   */
+  const planBuy = useCallback((key: (typeof UPGRADES)[number]["key"], base: number, growth: number) => {
+    const startLvl = s.clicker[key] as number;
+    const limit = buyQty === "max" ? 500 : buyQty;
     let coins = s.coins;
-    let lvl = s.clicker[key] as number;
-    let bought = 0;
-    for (let i = 0; i < 200; i++) {
-      const cost = upgradeCost(base, growth, key === "tapPower" ? lvl - 1 : lvl);
-      if (coins < cost) break;
-      coins -= cost;
+    let lvl = startLvl;
+    let count = 0;
+    let total = 0;
+    for (let i = 0; i < limit; i++) {
+      const c = upgradeCost(base, growth, key === "tapPower" ? lvl - 1 : lvl);
+      if (coins < c) break;
+      coins -= c;
+      total += c;
       lvl++;
-      bought++;
+      count++;
     }
-    if (!bought) { sfx.error(); haptic("error"); return; }
+    // цена следующего уровня — показываем всегда, даже если денег нет
+    const nextCost = upgradeCost(base, growth, key === "tapPower" ? startLvl - 1 : startLvl);
+    return { count, total, nextCost, lvl };
+  }, [s.clicker, s.coins, buyQty]);
+
+  const buy = (key: (typeof UPGRADES)[number]["key"], base: number, growth: number) => {
+    const plan = planBuy(key, base, growth);
+    if (!plan.count) { sfx.error(); haptic("error"); return; }
     sfx.buy();
     haptic("success");
     set((d) => {
-      d.coins = coins;
-      (d.clicker[key] as number) = lvl;
+      d.coins -= plan.total;
+      (d.clicker[key] as number) = plan.lvl;
     });
-    addXp(12 * bought);
+    addXp(12 * plan.count);
   };
 
   return (
     <div className="absolute inset-0 flex flex-col" style={{ background: "var(--bg)" }}>
-      {/* шапка */}
-      <div className="px-3 pb-2 z-20" style={{ paddingTop: "calc(var(--sat) + 10px)" }}>
-        <div className="flex items-center gap-2">
-          <Tap onClick={onExit} r="md" className="px-3 py-2.5" sound="swoosh">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round">
+      {/* ── Шапка ──
+          Была: кнопка назад + стеклянная панель с монетами + два
+          крупных таба во всю ширину. Занимало четверть экрана, а
+          главное число тонуло среди мелких подписей. Стало: одна
+          строка «назад / монеты / доход» и компактный переключатель. */}
+      <div className="px-3 pb-2 z-20 shrink-0" style={{ paddingTop: "calc(var(--sat) + 8px)" }}>
+        <div className="flex items-stretch" style={{ gap: 6 }}>
+          <button
+            type="button"
+            onClick={() => { sfx.swoosh(); haptic("light"); onExit(); }}
+            className="hud-chip shrink-0 justify-center"
+            style={{ width: 44, padding: 0 }}
+            aria-label={tr("Выйти")}
+          >
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round">
               <path d="M15 18l-6-6 6-6" />
             </svg>
-          </Tap>
-          <Panel r="md" className="flex-1 px-4 py-2">
-            <div className="flex items-baseline gap-1.5">
-              <span className="t-num acc-text" style={{ fontSize: 24, lineHeight: 1 }}>{fmt(s.coins)}</span>
-              <span className="t-label" style={{ fontSize: 9 }}>CHUBCOINS</span>
-            </div>
-            <div className="flex items-center gap-3 mt-0.5" style={{ fontSize: 10, color: "var(--text-mute)" }}>
-              <span className="inline-flex items-center" style={{ gap: 5 }}><Icon name="tap" size={12} /> {fmt(tv)}/тап</span>
-              <span className="inline-flex items-center" style={{ gap: 5 }}><Icon name="gear" size={12} /> {fmt(ar)}/сек</span>
-              {cc > 0 && <span className="inline-flex items-center" style={{ gap: 5 }}><Icon name="bolt" size={12} /> {(cc * 100).toFixed(0)}%</span>}
-            </div>
-          </Panel>
+          </button>
+
+          <div className="hud-chip flex-1 min-w-0 justify-between" style={{ padding: "0 12px" }}>
+            <span className="flex items-center min-w-0" style={{ gap: 8 }}>
+              <Icon name="coin" size={17} accent />
+              <span className="t-num clip1" style={{ fontSize: 21, lineHeight: 1 }}>{fmt(s.coins)}</span>
+            </span>
+            <span className="flex flex-col items-end shrink-0" style={{ marginLeft: 10 }}>
+              <span className="t-num" style={{ fontSize: 11, lineHeight: 1.2, color: "var(--acc-text)" }}>
+                +{fmt(tv)}<span className="t-label" style={{ fontSize: 7.5, marginLeft: 2 }}>{tr("ТАП")}</span>
+              </span>
+              <span className="t-num" style={{ fontSize: 11, lineHeight: 1.2, color: "var(--ok)" }}>
+                +{fmt(ar)}<span className="t-label" style={{ fontSize: 7.5, marginLeft: 2 }}>{tr("СЕК")}</span>
+              </span>
+            </span>
+          </div>
         </div>
 
-        <div className="flex gap-2 mt-2">
-          <Tap
-            onClick={() => setTab("tap")} r="md" accent={tab === "tap"} center
-            className="flex-1 t-title-sm"
-            style={{ fontSize: 12.5, padding: "11px 10px", letterSpacing: "0.04em", fontWeight: 700 }}
-          >
-            ТАПАТЬ
-          </Tap>
-          <Tap
-            onClick={() => setTab("shop")} r="md" accent={tab === "shop"} center
-            className="flex-1 t-title-sm"
-            style={{ fontSize: 12.5, padding: "11px 10px", letterSpacing: "0.04em", fontWeight: 700 }}
-          >
-            АПГРЕЙДЫ
-          </Tap>
+        {/* Переключатель — сегментированный, а не две кнопки на всю ширину */}
+        <div
+          className="flex mt-2"
+          style={{
+            padding: 3, gap: 3, borderRadius: "var(--r-md)",
+            background: "var(--surface)", border: "1px solid var(--surface-brd)",
+          }}
+        >
+          {([["tap", tr("ТАПАТЬ")], ["shop", tr("АПГРЕЙДЫ")]] as const).map(([id, nm]) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => { sfx.click(); haptic("light"); setTab(id); }}
+              className="flex-1 t-label"
+              style={{
+                padding: "9px 0", borderRadius: "var(--r-sm)", fontSize: 10.5,
+                background: tab === id ? "var(--acc)" : "transparent",
+                color: tab === id ? "var(--acc-ink)" : "var(--text-mute)",
+                border: "none", letterSpacing: "0.08em",
+                transition: "background .16s, color .16s",
+              }}
+            >
+              {nm}
+            </button>
+          ))}
         </div>
       </div>
 
@@ -356,37 +395,56 @@ export default function Clicker({ onExit }: { onExit: () => void }) {
         <div className="flex-1 relative" onPointerDown={doTap} style={{ touchAction: "none" }}>
           <canvas ref={canvasRef} className="absolute inset-0 w-full h-full" />
 
-          {/* стадия эволюции */}
+          {/* ── Стадия эволюции ──
+              Была прижата к самому низу (bottom: 10) и налезала на
+              полоску жестов Android — на Xiaomi это выглядело как текст
+              прямо на системной панели. Теперь отступ считается от
+              безопасной зоны, а блок собран в одну аккуратную плашку. */}
           <div
-            className="absolute left-0 right-0 flex flex-col items-center pointer-events-none"
-            style={{ bottom: 10, padding: "0 28px" }}
+            className="absolute left-0 right-0 flex justify-center pointer-events-none"
+            style={{ bottom: "calc(var(--sab) + 16px)", padding: "0 16px" }}
           >
             <div
-              className="t-label"
-              style={{ color: stage.color, fontSize: 10, letterSpacing: "0.1em" }}
+              className="flex flex-col items-center"
+              style={{
+                width: "100%", maxWidth: 300, padding: "10px 14px",
+                borderRadius: "var(--r-md)",
+                background: "var(--surface-2)",
+                border: "1px solid var(--btn-brd)",
+              }}
             >
-              {stage.name}
-            </div>
-            {stage.next !== null && (
-              <>
-                <div
-                  style={{
-                    width: "100%", maxWidth: 210, height: 4, marginTop: 7,
-                    borderRadius: 999, background: "var(--track)", overflow: "hidden",
-                  }}
+              <div className="flex items-center justify-between w-full" style={{ gap: 10 }}>
+                <span
+                  className="t-label clip1"
+                  style={{ color: stage.color, fontSize: 10, letterSpacing: "0.1em" }}
                 >
+                  {tr(stage.name)}
+                </span>
+                <span className="t-num shrink-0" style={{ fontSize: 11, color: "var(--text-mute)" }}>
+                  {fmt(s.clicker.totalTaps)}
+                </span>
+              </div>
+              {stage.next !== null && (
+                <>
                   <div
                     style={{
-                      width: `${Math.min(100, (s.clicker.totalTaps / stage.next) * 100)}%`,
-                      height: "100%", background: stage.color, transition: "width 0.3s",
+                      width: "100%", height: 5, marginTop: 8,
+                      borderRadius: 999, background: "var(--n-400)", overflow: "hidden",
                     }}
-                  />
-                </div>
-                <div className="t-caption" style={{ marginTop: 5, fontSize: 10 }}>
-                  {fmt(s.clicker.totalTaps)} / {fmt(stage.next)} тапов до следующей формы
-                </div>
-              </>
-            )}
+                  >
+                    <div
+                      style={{
+                        width: `${Math.min(100, (s.clicker.totalTaps / stage.next) * 100)}%`,
+                        height: "100%", background: stage.color, transition: "width 0.3s",
+                      }}
+                    />
+                  </div>
+                  <div className="t-caption clip1" style={{ marginTop: 6, fontSize: 9.5, textAlign: "center" }}>
+                    {tr("до формы")} «{tr(nextStageName(stage))}»: {fmt(Math.max(0, stage.next - s.clicker.totalTaps))}
+                  </div>
+                </>
+              )}
+            </div>
           </div>
 
           {/* комбо */}
@@ -438,66 +496,123 @@ export default function Clicker({ onExit }: { onExit: () => void }) {
             ))}
           </AnimatePresence>
 
-          <div className="absolute left-0 right-0 bottom-4 text-center pointer-events-none">
-            <div className="t-label">тапай по морде • {fmt(s.clicker.totalTaps)} всего</div>
-          </div>
         </div>
       ) : (
-        <div className="flex-1 scroll px-3 pb-6">
+        <div className="flex-1 scroll px-3" style={{ paddingBottom: "calc(var(--sab) + 24px)" }}>
+          {/* Выбор размера покупки. Пользователь просил «выбор на сколько
+              прокачать сразу» и итоговую цену — вот он. */}
+          <div
+            className="flex items-center"
+            style={{
+              gap: 3, padding: 3, marginBottom: 10,
+              borderRadius: "var(--r-md)",
+              background: "var(--surface)", border: "1px solid var(--surface-brd)",
+            }}
+          >
+            <span className="t-label" style={{ fontSize: 8.5, padding: "0 8px" }}>{tr("БРАТЬ")}</span>
+            {([1, 10, "max"] as const).map((q) => (
+              <button
+                key={String(q)}
+                type="button"
+                onClick={() => { sfx.click(); haptic("light"); setBuyQty(q); }}
+                className="flex-1 t-label"
+                style={{
+                  padding: "8px 0", borderRadius: "var(--r-sm)", fontSize: 10, border: "none",
+                  background: buyQty === q ? "var(--acc)" : "transparent",
+                  color: buyQty === q ? "var(--acc-ink)" : "var(--text-mute)",
+                  transition: "background .16s, color .16s",
+                }}
+              >
+                {q === "max" ? tr("МАКС") : `×${q}`}
+              </button>
+            ))}
+          </div>
+
           {UPGRADES.map((u) => {
             const lvl = s.clicker[u.key] as number;
-            const idx = u.key === "tapPower" ? lvl - 1 : lvl;
-            const cost = upgradeCost(u.base, u.growth, idx);
-            const can = s.coins >= cost;
+            const plan = planBuy(u.key, u.base, u.growth);
+            const can = plan.count > 0;
             return (
-              <Panel key={u.key} r="lg" className="p-3.5 mb-2.5">
-                <div className="flex items-center gap-3">
-                  <div
-                    className="shrink-0 flex items-center justify-center"
+              <div
+                key={u.key}
+                className="mb-2.5"
+                style={{
+                  borderRadius: "var(--r-lg)",
+                  background: "var(--surface)",
+                  border: "1px solid var(--surface-brd)",
+                  overflow: "hidden",
+                }}
+              >
+                <div className="flex items-center p-3" style={{ gap: 11 }}>
+                  {/* Иконка была текстом: в UPGRADES лежит строка "fist",
+                      и она буквально печаталась в карточке. Теперь SVG. */}
+                  <span
+                    className="ico-box ico-box-acc shrink-0"
+                    style={{ width: 42, height: 42 }}
+                  >
+                    <Icon name={u.icon as IconName} size={20} />
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <div className="t-title clip1" style={{ fontSize: 14 }}>{tr(u.name)}</div>
+                    <div className="t-caption clip1" style={{ fontSize: 10.5, marginTop: 1 }}>
+                      {tr(u.desc)}
+                    </div>
+                  </div>
+                  <span
+                    className="shrink-0 t-num text-center"
                     style={{
-                      width: 46, height: 46, borderRadius: 14, fontSize: 22,
-                      background: "rgba(255,255,255,0.07)", border: "1px solid var(--glass-brd)",
+                      minWidth: 44, padding: "5px 8px", borderRadius: "var(--r-sm)",
+                      background: "var(--surface-3)", border: "1px solid var(--btn-brd)",
+                      fontSize: 13, color: "var(--acc-text)", lineHeight: 1.2,
                     }}
                   >
-                    {u.icon}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-baseline gap-2">
-                      <div className="t-title" style={{ fontSize: 15 }}>{u.name}</div>
-                      <div className="t-num acc-text" style={{ fontSize: 12 }}>ур. {lvl}</div>
-                    </div>
-                    <div style={{ fontSize: 11, color: "var(--text-mute)" }}>{u.desc}</div>
-                  </div>
+                    <span className="t-label block" style={{ fontSize: 7, letterSpacing: "0.08em" }}>
+                      {tr("УР.")}
+                    </span>
+                    {lvl}
+                  </span>
                 </div>
-                <div className="flex gap-2 mt-3">
-                  <Tap
-                    onClick={() => buy(u.key, u.base, u.growth)}
-                    disabled={!can}
-                    accent={can}
-                    r="sm"
-                    className="flex-1 py-2.5 t-num"
-                    style={{ fontSize: 13 }}
-                    sound="none"
-                  >
-                    <span className="inline-flex items-center" style={{ gap: 5 }}><Icon name="coin" size={12} /> {fmt(cost)}</span>
-                  </Tap>
-                  <Tap
-                    onClick={() => buyMax(u.key, u.base, u.growth)}
-                    disabled={!can}
-                    r="sm"
-                    className="px-4 py-2.5 t-title"
-                    style={{ fontSize: 12 }}
-                    sound="none"
-                  >
-                    MAX
-                  </Tap>
-                </div>
-              </Panel>
+
+                <button
+                  type="button"
+                  disabled={!can}
+                  onClick={() => buy(u.key, u.base, u.growth)}
+                  className="w-full flex items-center justify-between"
+                  style={{
+                    padding: "11px 13px",
+                    background: can ? "var(--acc)" : "var(--surface-2)",
+                    color: can ? "var(--acc-ink)" : "var(--text-mute)",
+                    border: "none",
+                    borderTop: "1px solid var(--surface-brd)",
+                    cursor: can ? "pointer" : "default",
+                    transition: "background .16s",
+                  }}
+                >
+                  <span className="t-label" style={{ fontSize: 10, letterSpacing: "0.08em" }}>
+                    {/* Если денег не хватает на всю пачку — честно пишем,
+                        сколько уровней получится взять прямо сейчас. */}
+                    {can
+                      ? `${tr("КУПИТЬ")} +${plan.count} ${tr("УР.")}`
+                      : tr("НЕ ХВАТАЕТ МОНЕТ")}
+                  </span>
+                  <span className="t-num inline-flex items-center" style={{ gap: 5, fontSize: 13 }}>
+                    <Icon name="coin" size={13} />
+                    {fmt(can ? plan.total : plan.nextCost)}
+                  </span>
+                </button>
+              </div>
             );
           })}
-          <div className="t-label text-center mt-4 px-6" style={{ lineHeight: 1.6 }}>
-            Пока приложение закрыто, «Холодильник» продолжает копить монеты.
-            Заходи почаще — заберёшь больше.
+
+          <div
+            className="t-caption"
+            style={{
+              marginTop: 14, padding: "11px 13px", lineHeight: 1.55, fontSize: 10.5,
+              borderRadius: "var(--r-md)",
+              background: "var(--surface)", border: "1px solid var(--surface-brd)",
+            }}
+          >
+            {tr("Пока приложение закрыто, «Холодильник» продолжает копить монеты. Заходи почаще — заберёшь больше.")}
           </div>
         </div>
       )}
@@ -611,6 +726,11 @@ const STAGES: { at: number; name: string; color: string }[] = [
   { at: 30000, name: "Крылатый", color: "#ffb020" },
   { at: 150000, name: "ИМБОВЫЙ", color: "#59ff9e" },
 ];
+
+/** Название следующей формы — для подписи прогресса */
+export function nextStageName(st: Stage): string {
+  return STAGES[Math.min(STAGES.length - 1, st.idx + 1)].name;
+}
 
 /** Стадия внешности по общему числу тапов */
 export function clickerStage(taps: number): Stage {

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence } from "framer-motion";
 import { useGame } from "../core/store";
 import { sfx, haptic } from "../core/fx";
-import { useCanvas, GameHUD, GameOver, Countdown } from "./shell";
+import { useCanvas, GameHUD, GameOver, Countdown, HudGauge, HudStat } from "./shell";
 import { drawHead } from "../core/head";
 import { tr } from "../core/i18n";
 
@@ -486,36 +486,10 @@ export default function MaksBeard({ onExit }: { onExit: () => void }) {
         best={best}
         onExit={onExit}
         extra={
-          <div className="flex items-center shrink-0" style={{ gap: 7 }}>
-            <div
-              className="t-label shrink-0"
-              style={{
-                padding: "8px 10px", borderRadius: "var(--r-md)",
-                background: "var(--btn-bg)", border: "1px solid rgba(255,255,255,0.16)",
-                fontSize: 8.5,
-              }}
-            >
-              {tr(ZONES[zone].name)} · {left}
-            </div>
-            <div
-              className="shrink-0"
-              style={{
-                width: 46, padding: "9px 7px", borderRadius: "var(--r-md)",
-                background: "var(--btn-bg)",
-                border: `1px solid ${rage > 60 ? "#FF6B4D" : "rgba(255,255,255,0.16)"}`,
-              }}
-            >
-              <div style={{ height: 5, borderRadius: 999, background: "rgba(255,255,255,0.12)", overflow: "hidden" }}>
-                <div
-                  style={{
-                    width: `${rage}%`, height: "100%",
-                    background: rage > 60 ? "#FF6B4D" : "#FFB020",
-                    transition: "width 0.15s",
-                  }}
-                />
-              </div>
-            </div>
-          </div>
+          <>
+            <HudStat label={tr(ZONES[zone].name)} value={left} min={54} />
+            <HudGauge label={tr("ЗЛОСТЬ")} pct={rage} tone={rage > 60 ? "danger" : "warn"} />
+          </>
         }
       />
 

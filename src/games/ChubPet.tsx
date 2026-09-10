@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useGame } from "../core/store";
 import { sfx, haptic } from "../core/fx";
-import { GameOver, GameHUD, Countdown } from "./shell";
+import { GameOver, GameHUD, Countdown, HudStat } from "./shell";
 import HeadView from "../ui/HeadView";
 import Icon, { type IconName } from "../ui/Icon";
 import { tr } from "../core/i18n";
@@ -196,18 +196,7 @@ export default function ChubPet({ onExit }: { onExit: () => void }) {
   return (
     <div className="absolute inset-0 flex flex-col" style={{ background: "var(--bg)" }}>
       <GameHUD score={Math.floor(score)} best={best} onExit={onExit} label={tr("ОЧКИ")}
-        extra={
-          <div
-            className="t-num shrink-0"
-            style={{
-              padding: "8px 11px", borderRadius: "var(--r-md)",
-              background: "var(--btn-bg)", border: "1px solid rgba(255,255,255,0.16)",
-              fontSize: 13,
-            }}
-          >
-            {tr("ур.")} {level}
-          </div>
-        }
+        extra={<HudStat label={tr("УРОВЕНЬ")} value={level} tone="acc" min={50} />}
       />
 
       <div

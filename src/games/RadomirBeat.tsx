@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useGame } from "../core/store";
+import { tr } from "../core/i18n";
 import { drawHead } from "../core/head";
-import { useCanvas, GameHUD, GameOver, Countdown } from "./shell";
+import { useCanvas, GameHUD, GameOver, Countdown, HudStat } from "./shell";
 import { haptic, sfx } from "../core/fx";
 import { startBeat, stopBeat } from "../core/music";
 import {
@@ -590,17 +591,8 @@ export default function RadomirBeat({ onExit }: { onExit: () => void }) {
         score={uiScore}
         best={s.games.radomir.best}
         onExit={onExit}
-        extra={
-          <div className="flex items-center shrink-0" style={{ gap: 5 }}>
-            <Icon name="heart" size={14} />
-            <span className="t-num" style={{ fontSize: 13 }}>{uiLives}</span>
-            {uiCombo > 1 && (
-              <span className="t-num" style={{ fontSize: 12, color: "var(--acc)", marginLeft: 4 }}>
-                {uiCombo}x
-              </span>
-            )}
-          </div>
-        }
+        extra={uiCombo > 1 ? <HudStat label={tr("СЕРИЯ")} value={`×${uiCombo}`} tone="acc" min={44} /> : undefined}
+        lives={{ value: uiLives, max: 5 }}
       />
 
       {/* Меню трека */}

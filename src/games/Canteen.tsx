@@ -240,21 +240,7 @@ export default function Canteen({ onExit }: { onExit: () => void }) {
         best={best}
         onExit={onExit}
         label="ОЧКИ"
-        extra={
-          <div
-            className="shrink-0 flex items-center"
-            style={{
-              gap: 4, padding: "9px 11px", borderRadius: "var(--r-md)",
-              background: "var(--btn-bg)", border: "1px solid var(--btn-brd)",
-            }}
-          >
-            {[0, 1, 2].map((i) => (
-              <span key={i} style={{ color: i < lives ? "#FF4D4D" : "var(--btn-brd)", lineHeight: 0 }}>
-                <Icon name="heart" size={13} />
-              </span>
-            ))}
-          </div>
-        }
+        lives={{ value: lives, max: 3 }}
       />
 
       {/* полоса времени */}

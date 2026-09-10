@@ -1,15 +1,18 @@
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { tr } from "../core/i18n";
 import { motion } from "framer-motion";
 import { Panel, Tap } from "../ui/Glass";
 import { fmt } from "../core/format";
 import Icon from "../ui/Icon";
+import type { IconName } from "../ui/Icon";
 import { useModes, MARATHON_ROUNDS, survivalMult } from "../core/modes";
 import { useGame } from "../core/store";
 import { canvasScaleCap, isLowFx } from "../core/perf";
-import RulesCard, { RulesButton } from "../ui/RulesCard";
+import RulesCard from "../ui/RulesCard";
+import { sfx, haptic } from "../core/fx";
 import type { GameId } from "../core/types";
-import { modalBackdrop, modalCard, springPop, EASE } from "../core/motion";
+import { modalBackdrop, modalCard, springPop, springTap, EASE } from "../core/motion";
 
 export function useCanvas(
   draw: (ctx: CanvasRenderingContext2D, w: number, h: number, dt: number, t: number) => void,
@@ -61,68 +64,195 @@ export function useCanvas(
   return ref;
 }
 
+/**
+ * Полоска жизней/патронов/попыток для HUD.
+ *
+ * До этого каждая игра рисовала жизни по-своему: где-то полупрозрачные
+ * сердечки на 11px, где-то точки, где-то `opacity: 0.2` — пользователь
+ * справедливо сказал, что «не видно сколько у тебя жизней». Теперь один
+ * компонент: потраченная жизнь не исчезает, а становится пустым контуром,
+ * так что общее количество видно всегда.
+ */
+export function Lives({
+  value, max = 3, icon = "heart", size = 15,
+}: { value: number; max?: number; icon?: IconName; size?: number }) {
+  return (
+    <div className="hud-chip shrink-0" style={{ gap: 3, padding: "0 9px" }}>
+      {Array.from({ length: max }).map((_, i) => {
+        const on = i < value;
+        return (
+          <motion.span
+            key={i}
+            animate={on ? { scale: 1 } : { scale: 0.86 }}
+            transition={springTap}
+            style={{
+              lineHeight: 0,
+              color: on ? "var(--danger)" : "var(--n-400)",
+              opacity: 1,
+              filter: on ? "drop-shadow(0 0 5px rgba(255,107,90,0.45))" : "none",
+            }}
+          >
+            <Icon name={icon} size={size} />
+          </motion.span>
+        );
+      })}
+    </div>
+  );
+}
+
+/** Показание в HUD: подпись сверху, значение снизу. Один вид на всё приложение. */
+export function HudStat({
+  label, value, tone = "plain", min = 46,
+}: {
+  label: string; value: React.ReactNode;
+  tone?: "plain" | "acc" | "ok" | "warn" | "danger";
+  min?: number;
+}) {
+  const col =
+    tone === "acc" ? "var(--acc-text)"
+      : tone === "ok" ? "var(--ok)"
+        : tone === "warn" ? "var(--warn)"
+          : tone === "danger" ? "var(--danger)"
+            : "var(--text)";
+  const brd =
+    tone === "plain" ? "var(--btn-brd)" : `color-mix(in srgb, ${col} 55%, var(--surface-3))`;
+  return (
+    <div
+      className="hud-chip shrink-0 flex-col"
+      style={{ minWidth: min, padding: "0 10px", borderColor: brd, gap: 0 }}
+    >
+      <span className="t-label" style={{ fontSize: 7.5, lineHeight: 1.1, letterSpacing: "0.07em" }}>
+        {label}
+      </span>
+      <span className="t-num" style={{ fontSize: 14, lineHeight: 1.15, color: col }}>
+        {value}
+      </span>
+    </div>
+  );
+}
+
+/** Полоска-индикатор в HUD (перегрев, ярость, дистанция) */
+export function HudGauge({
+  label, pct, tone = "acc", width = 48,
+}: { label: string; pct: number; tone?: "acc" | "ok" | "warn" | "danger"; width?: number }) {
+  const col =
+    tone === "ok" ? "var(--ok)" : tone === "warn" ? "var(--warn)"
+      : tone === "danger" ? "var(--danger)" : "var(--acc)";
+  return (
+    <div className="hud-chip shrink-0 flex-col" style={{ width, padding: "0 8px", gap: 3 }}>
+      <span className="t-label" style={{ fontSize: 7, lineHeight: 1, letterSpacing: "0.06em" }}>
+        {label}
+      </span>
+      <span style={{ width: "100%", height: 5, borderRadius: 999, background: "var(--n-400)", overflow: "hidden", display: "block" }}>
+        <span
+          style={{
+            display: "block", height: "100%", borderRadius: 999,
+            width: `${Math.max(0, Math.min(100, pct))}%`,
+            background: col, transition: "width 0.18s linear, background 0.2s",
+          }}
+        />
+      </span>
+    </div>
+  );
+}
+
+/**
+ * Верхняя панель игры.
+ *
+ * Три жалобы пользователя чинятся здесь разом, во всех 27 играх:
+ *
+ *  1. «Сверху интерфейс ужасен» — панель была набором разнокалиберных
+ *     плашек с произвольными цветами и рамками `rgba(255,255,255,0.16)`.
+ *     Теперь это одна цельная строка постоянной высоты 44px: назад,
+ *     счёт+рекорд, слот показаний, правила.
+ *  2. «Не видно сколько у тебя жизней» — под жизни выделен отдельный
+ *     слот `lives`, который рисуется компонентом Lives одинаково везде.
+ *  3. «Нажимая на i всё ломается» — РЕАЛЬНЫЙ БАГ: RulesCard с
+ *     `absolute inset-0` рендерился ВНУТРИ этой полоски высотой 40px,
+ *     то есть модалка правил растягивалась на 40 пикселей шапки, а не
+ *     на экран. Карточка вынесена в портал на body.
+ */
 export function GameHUD({
-  score, best, extra, onExit, label = tr("ОЧКИ"), rulesId,
+  score, best, extra, onExit, label = tr("ОЧКИ"), rulesId, lives, hideScore,
 }: {
   score: number; best: number; extra?: React.ReactNode; onExit: () => void; label?: string;
   /** Явный id игры для правил. Обычно не нужен — берётся из режима. */
   rulesId?: GameId;
+  /** Жизни: рисуются справа от счёта единым видом */
+  lives?: { value: number; max?: number; icon?: IconName };
+  /** Скрыть блок счёта (для игр, где счёта нет — например, доски) */
+  hideScore?: boolean;
 }) {
-  /**
-   * Кнопка правил живёт прямо в HUD, поэтому появляется сразу во всех
-   * играх: пользователь жаловался, что непонятно, что делать, а править
-   * 27 экранов по отдельности — верный способ где-нибудь забыть.
-   */
   const modes = useModes();
   const gid = rulesId ?? modes?.currentGame ?? null;
   const [rulesOpen, setRulesOpen] = useState(false);
 
   return (
-    <div
-      className="absolute left-0 right-0 z-20 flex items-center gap-2 px-3"
-      style={{ top: "calc(var(--sat) + 10px)" }}
-    >
-      {gid && (
-        <RulesCard id={gid} open={rulesOpen} onClose={() => setRulesOpen(false)} />
+    <>
+      {/* Модалка правил живёт в портале на body: внутри HUD она получала
+          `inset: 0` от полоски в 44px и превращалась в кашу. */}
+      {gid && createPortal(
+        <RulesCard id={gid} open={rulesOpen} onClose={() => setRulesOpen(false)} />,
+        document.body,
       )}
-      {/* Шапка игры непрозрачная: сквозь неё летели снаряды и цифры
-          становились нечитаемыми. Отсюда solid, а не стекло. */}
-      <Tap
-        onClick={onExit}
-        r="md"
-        solid
-        center
-        className="shrink-0 flex items-center justify-center"
-        style={{ width: 40, height: 40, padding: 0, background: "var(--surface-2)" }}
-        sound="swoosh"
-      >
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round">
-          <path d="M15 18l-6-6 6-6" />
-        </svg>
-      </Tap>
       <div
-        className="px-4 flex-1 flex items-center justify-between"
-        style={{
-          height: 40,
-          borderRadius: "var(--r-md)",
-          background: "var(--surface-2)",
-          border: "1px solid var(--btn-brd)",
-        }}
+        className="absolute left-0 right-0 z-20 flex items-stretch px-2.5"
+        style={{ top: "calc(var(--sat) + 8px)", gap: 6, height: HUD_H }}
       >
-        <div className="min-w-0">
-          <div className="t-label" style={{ fontSize: 8.5, lineHeight: 1.1 }}>{label}</div>
-          <div className="t-num" style={{ fontSize: 19, lineHeight: 1.05 }}>{fmt(score)}</div>
-        </div>
-        <div className="text-right shrink-0" style={{ marginLeft: 10 }}>
-          <div className="t-label" style={{ fontSize: 8.5, lineHeight: 1.1 }}>{tr("Рекорд")}</div>
-          <div className="t-num acc-text" style={{ fontSize: 14, lineHeight: 1.15 }}>{fmt(best)}</div>
-        </div>
+        <button
+          type="button"
+          onClick={() => { sfx.swoosh(); haptic("light"); onExit(); }}
+          className="hud-chip shrink-0 justify-center"
+          style={{ width: HUD_H, padding: 0 }}
+          aria-label={tr("Выйти")}
+        >
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M15 18l-6-6 6-6" />
+          </svg>
+        </button>
+
+        {!hideScore && (
+          <div className="hud-chip flex-1 min-w-0 justify-between" style={{ padding: "0 12px" }}>
+            <span className="min-w-0 flex flex-col" style={{ gap: 0 }}>
+              <span className="t-label clip1" style={{ fontSize: 7.5, lineHeight: 1.1, letterSpacing: "0.07em" }}>
+                {label}
+              </span>
+              <span className="t-num clip1" style={{ fontSize: 18, lineHeight: 1.1 }}>{fmt(score)}</span>
+            </span>
+            <span className="text-right shrink-0 flex flex-col" style={{ marginLeft: 8, gap: 0 }}>
+              <span className="t-label" style={{ fontSize: 7.5, lineHeight: 1.1, letterSpacing: "0.07em" }}>
+                {tr("РЕКОРД")}
+              </span>
+              <span className="t-num" style={{ fontSize: 13, lineHeight: 1.1, color: "var(--acc-text)" }}>
+                {fmt(best)}
+              </span>
+            </span>
+          </div>
+        )}
+
+        {lives && <Lives value={lives.value} max={lives.max} icon={lives.icon} />}
+        {extra}
+
+        {gid && (
+          <button
+            type="button"
+            onClick={() => { sfx.click(); haptic("light"); setRulesOpen(true); }}
+            className="hud-chip shrink-0 justify-center"
+            style={{ width: HUD_H, padding: 0, color: "var(--acc-text)" }}
+            aria-label={tr("Правила")}
+          >
+            <Icon name="info" size={18} />
+          </button>
+        )}
       </div>
-      {gid && <RulesButton onClick={() => setRulesOpen(true)} />}
-      {extra}
-    </div>
+    </>
   );
 }
+
+/** Высота шапки игры и отступ, с которого можно рисовать контент под ней. */
+export const HUD_H = 44;
+export const HUD_PAD = "calc(var(--sat) + 62px)";
+
 
 export function GameOver({
   score, best, coins, xp, onRetry, onExit, title = tr("ВСЁ"), sub, onRevive,

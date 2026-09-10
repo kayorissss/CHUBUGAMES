@@ -1,20 +1,22 @@
-import { motion } from "framer-motion";
 import { tr } from "../core/i18n";
-import { sfx } from "../core/fx";
-import Icon from "../ui/Icon";
-import { EASE, listItem } from "../core/motion";
-import { isLowFx } from "../core/perf";
+import GameIntro, { IntroGroup, IntroOption } from "./GameIntro";
 
 /**
- * Меню настольной игры: соперник, уровень, старт.
+ * Меню настольной игры: соперник, сторона, уровень, старт.
  *
- * Общее для шахмат, шашек и нард — пользователь жаловался, что экраны
- * выбора выглядят криво. Здесь единая сетка отступов, крупный заголовок
- * с декоративной подложкой и аккуратные карточки выбора без «резких»
- * появлений: блоки въезжают каскадом.
+ * Общее для шахмат, шашек и нард. Пользователь жаловался на все три
+ * экрана отдельно и об одном и том же: «выбор сложности стрёмный»,
+ * «НАЧАТЬ ПАРТИЮ не понятно где, оно сливается с фоном», «скудновато
+ * начало». Поэтому меню переехало на общий каркас GameIntro: кнопка
+ * старта закреплена внизу крупной акцентной плашкой и не уезжает со
+ * скроллом, «Выйти» рядом с ней настоящей кнопкой, а выбранный вариант
+ * заливается акцентом целиком, а не обводится еле заметной рамкой.
+ *
+ * Добавлен выбор стороны — раньше играть можно было только белыми.
  */
 
 export type VsMode = "bot" | "duo";
+export type Side = "w" | "b";
 
 export interface LevelDef {
   id: 1 | 2 | 3;
@@ -23,7 +25,8 @@ export interface LevelDef {
 }
 
 export default function BoardMenu({
-  title, subtitle, icon, vs, onVs, level, onLevel, levels, onStart, accentPieces,
+  title, subtitle, icon, vs, onVs, level, onLevel, levels, onStart, onExit,
+  side, onSide, sideLabels, accentPieces,
 }: {
   title: string;
   subtitle: string;
@@ -34,91 +37,92 @@ export default function BoardMenu({
   onLevel: (l: 1 | 2 | 3) => void;
   levels: LevelDef[];
   onStart: () => void;
+  onExit: () => void;
+  /** Выбор стороны. Если не передан — блок не показывается. */
+  side?: Side;
+  onSide?: (s: Side) => void;
+  /** Как называются стороны в этой игре */
+  sideLabels?: [string, string];
   /** декоративная строка фигур под заголовком */
   accentPieces?: React.ReactNode;
 }) {
-  const low = isLowFx();
-  const fade = (i: number) =>
-    low ? {} : {
-      initial: { opacity: 0, y: 12 },
-      animate: { opacity: 1, y: 0 },
-      transition: { delay: 0.05 + i * 0.05, duration: 0.32, ease: EASE },
-    };
+  const [lightName, darkName] = sideLabels ?? [tr("БЕЛЫЕ"), tr("ЧЁРНЫЕ")];
 
   return (
-    <div
-      className="flex-1 flex flex-col justify-center overflow-y-auto"
-      style={{ padding: "calc(var(--sat) + 74px) 20px calc(var(--sab) + 26px)" }}
+    <GameIntro
+      title={title}
+      subtitle={subtitle}
+      icon={icon}
+      startLabel={tr("НАЧАТЬ ПАРТИЮ")}
+      onStart={onStart}
+      onExit={onExit}
     >
-      {/* Шапка */}
-      <motion.div {...fade(0)} style={{ textAlign: "center", marginBottom: 18 }}>
+      {accentPieces && (
         <div
+          className="flex items-center justify-center"
           style={{
-            width: 62, height: 62, margin: "0 auto 12px",
-            borderRadius: 18,
-            background: "var(--acc-soft)",
-            border: "1px solid var(--acc)",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            color: "var(--acc)",
+            marginBottom: 16, padding: "14px 0",
+            borderRadius: "var(--r-md)",
+            background: "var(--surface)",
+            border: "1px solid var(--surface-brd)",
           }}
         >
-          <Icon name={icon} size={30} />
+          {accentPieces}
         </div>
-        <div className="t-display" style={{ fontSize: 23, lineHeight: 1.15 }}>{title}</div>
-        <div
-          className="t-body"
-          style={{ fontSize: 12, opacity: 0.58, marginTop: 6, lineHeight: 1.5 }}
-        >
-          {subtitle}
-        </div>
-        {accentPieces && <div style={{ marginTop: 12 }}>{accentPieces}</div>}
-      </motion.div>
+      )}
 
-      {/* Соперник */}
-      <motion.div {...fade(1)}>
-        <div className="t-label" style={{ fontSize: 9.5, opacity: 0.55, marginBottom: 8 }}>
-          {tr("СОПЕРНИК")}
+      <IntroGroup label={tr("СОПЕРНИК")}>
+        <div className="flex" style={{ gap: 8 }}>
+          <IntroOption
+            label={tr("ПРОТИВ БОТА")}
+            active={vs === "bot"}
+            onClick={() => onVs("bot")}
+          />
+          <IntroOption
+            label={tr("С ДРУГОМ")}
+            active={vs === "duo"}
+            onClick={() => onVs("duo")}
+          />
         </div>
-        <div className="flex" style={{ gap: 8, marginBottom: 16 }}>
-          {([["bot", "ПРОТИВ БОТА"], ["duo", "С ДРУГОМ"]] as [VsMode, string][]).map(([id, nm]) => {
-            const on = vs === id;
-            return (
-              <button
-                key={id}
-                onClick={() => { onVs(id); sfx.click(); }}
-                style={{
-                  flex: 1, padding: "12px 0", borderRadius: "var(--r-md)",
-                  background: on ? "var(--acc)" : "var(--surface)",
-                  color: on ? "var(--acc-ink)" : "var(--text-mute)",
-                  border: `1px solid ${on ? "var(--acc)" : "var(--surface-brd)"}`,
-                }}
-              >
-                <span className="t-label" style={{ fontSize: 10.5 }}>{tr(nm)}</span>
-              </button>
-            );
-          })}
-        </div>
-      </motion.div>
+      </IntroGroup>
 
-      {/* Уровень — только против бота */}
-      {vs === "bot" && (
-        <motion.div variants={listItem} initial={low ? false : "initial"} animate="animate">
-          <div className="t-label" style={{ fontSize: 9.5, opacity: 0.55, marginBottom: 8 }}>
-            {tr("СЛОЖНОСТЬ")}
+      {/* Сторона: только против бота — вдвоём цвет определяется очередью */}
+      {side && onSide && vs === "bot" && (
+        <IntroGroup label={tr("ИГРАЮ ЗА")}>
+          <div className="flex" style={{ gap: 8 }}>
+            <IntroOption
+              label={lightName}
+              desc={tr("ходишь первым")}
+              active={side === "w"}
+              onClick={() => onSide("w")}
+            />
+            <IntroOption
+              label={darkName}
+              desc={tr("соперник начинает")}
+              active={side === "b"}
+              onClick={() => onSide("b")}
+            />
           </div>
+        </IntroGroup>
+      )}
+
+      {vs === "bot" ? (
+        <IntroGroup label={tr("СЛОЖНОСТЬ")}>
           {levels.map((l) => {
             const on = level === l.id;
             return (
               <button
                 key={l.id}
-                onClick={() => { onLevel(l.id); sfx.click(); }}
-                className="flex items-center"
+                type="button"
+                onClick={() => onLevel(l.id)}
+                className="flex items-center w-full"
                 style={{
-                  width: "100%", textAlign: "left", marginBottom: 8, gap: 12,
-                  padding: "12px 14px", borderRadius: "var(--r-md)",
-                  background: on ? "var(--acc-soft)" : "var(--surface)",
-                  border: `1px solid ${on ? "var(--acc)" : "var(--surface-brd)"}`,
-                  color: "var(--text)",
+                  textAlign: "left", marginBottom: 8, gap: 12,
+                  padding: "13px 14px", borderRadius: "var(--r-md)",
+                  background: on ? "var(--acc)" : "var(--surface-2)",
+                  border: `1px solid ${on ? "var(--acc)" : "var(--btn-brd)"}`,
+                  color: on ? "var(--acc-ink)" : "var(--text)",
+                  transition: "background .16s, border-color .16s, color .16s",
                 }}
               >
                 {/* индикатор силы: три полоски */}
@@ -128,21 +132,25 @@ export default function BoardMenu({
                       key={k}
                       style={{
                         width: 4, height: 6 + k * 6, borderRadius: 2,
-                        background: k < l.id ? (on ? "var(--acc)" : "var(--text-mute)") : "var(--btn-brd)",
+                        background: k < l.id
+                          ? (on ? "var(--acc-ink)" : "var(--acc)")
+                          : (on ? "color-mix(in srgb, var(--acc-ink) 30%, transparent)" : "var(--btn-brd)"),
                       }}
                     />
                   ))}
                 </span>
                 <span style={{ flex: 1, minWidth: 0 }}>
-                  <span
-                    className="t-label"
-                    style={{ fontSize: 11.5, display: "block", color: on ? "var(--acc)" : undefined }}
-                  >
+                  <span className="t-title-sm block clip1" style={{ fontSize: 12.5 }}>
                     {tr(l.name)}
                   </span>
                   <span
-                    className="t-body"
-                    style={{ fontSize: 10.5, opacity: 0.58, display: "block", marginTop: 2 }}
+                    className="block clip1"
+                    style={{
+                      fontSize: 10.5, marginTop: 2,
+                      color: on
+                        ? "color-mix(in srgb, var(--acc-ink) 72%, transparent)"
+                        : "var(--text-mute)",
+                    }}
                   >
                     {tr(l.sub)}
                   </span>
@@ -150,31 +158,19 @@ export default function BoardMenu({
               </button>
             );
           })}
-        </motion.div>
-      )}
-
-      {vs === "duo" && (
+        </IntroGroup>
+      ) : (
         <div
           style={{
             padding: "12px 14px", borderRadius: "var(--r-md)",
             background: "var(--surface)", border: "1px solid var(--surface-brd)",
-            marginBottom: 8,
           }}
         >
-          <div className="t-body" style={{ fontSize: 11.5, opacity: 0.72, lineHeight: 1.55 }}>
+          <div className="t-body" style={{ fontSize: 11.5, lineHeight: 1.55 }}>
             {tr("Играете по очереди на одном телефоне. Приложение подскажет, чей ход.")}
           </div>
         </div>
       )}
-
-      <motion.button
-        {...fade(3)}
-        onClick={onStart}
-        className="btn-acc t-label"
-        style={{ width: "100%", marginTop: 14, padding: "15px 0", borderRadius: "var(--r-md)", fontSize: 13 }}
-      >
-        {tr("НАЧАТЬ ПАРТИЮ")}
-      </motion.button>
-    </div>
+    </GameIntro>
   );
 }

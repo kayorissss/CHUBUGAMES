@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { AnimatePresence } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import { useGame } from "../core/store";
+import { tr } from "../core/i18n";
 import { sfx, haptic } from "../core/fx";
-import { useCanvas, GameHUD, GameOver, Countdown } from "./shell";
-import { hexRgb, shade } from "../core/head";
+import { useCanvas, GameHUD, GameOver, Countdown, HudStat } from "./shell";
+import { shade } from "../core/head";
+import Icon from "../ui/Icon";
 
 /**
  * БАШНЯ ЛЁХИ — складывай бургеры друг на друга.
@@ -21,9 +23,29 @@ interface Layer {
   entered?: boolean;
 }
 
+/**
+ * Темп башни выставлен по эталону жанра, а не на глаз.
+ *
+ * Замерено у Tower Blocks / Ketchapp Stack (движок отдаётся несжатым,
+ * числа читаются прямо из game.js): блок стартует на 156 px/s, прибавляет
+ * 7.8 px/s за слой и упирается в потолок 600 px/s на 57-м слое; допуск
+ * идеального попадания — 5 px.
+ *
+ * Что было у нас: старт 310 px/s (ВДВОЕ быстрее эталона), потолок 780 px/s
+ * и выход на него уже к 30-му слою. Отсюда «слишком быстро, не нормально
+ * настроена система». Теперь как в эталоне, но скорость задаётся в долях
+ * ширины экрана: на 412-пиксельном телефоне блок не должен пролетать
+ * тот же путь заметно быстрее, чем на 320-пиксельном.
+ */
+const REF_W = 375;                        // ширина, на которой мерили эталон
+const SPD_0 = 156 / 1000 / REF_W;         // долей ширины в мс
+const SPD_STEP = 7.8 / 1000 / REF_W;
+const SPD_MAX = 600 / 1000 / REF_W;
+
 const BASE_W = 0.62;   // доля ширины экрана
 const LAYER_H = 26;
-const PERFECT = 6;
+/** Допуск идеала: 5 px эталона + 2 px на палец вместо мыши */
+const PERFECT = 7;
 
 /** Сколько слоёв в одном этаже — дальше меняется оформление и темп */
 const FLOOR_SIZE = 8;
@@ -49,14 +71,15 @@ export default function BurgerStack({ onExit }: { onExit: () => void }) {
   const [result, setResult] = useState({ score: 0, coins: 0, xp: 0 });
 
   const best = s.games.stack?.best || 0;
-  const speedBase =
-    s.settings.difficulty === "insane" ? 0.42 : s.settings.difficulty === "chill" ? 0.22 : 0.31;
+  /** Множитель темпа от сложности. Эталон = «нормально». */
+  const speedK =
+    s.settings.difficulty === "insane" ? 1.22 : s.settings.difficulty === "chill" ? 0.82 : 1;
 
   const G = useRef({
     layers: [] as Layer[],
     cur: null as Layer | null,
     dir: 1,
-    speed: speedBase,
+    speed: 0.16,   // перезаписывается в reset() под ширину экрана
     camY: 0,
     running: false,
     score: 0,
@@ -76,7 +99,7 @@ export default function BurgerStack({ onExit }: { onExit: () => void }) {
     g.layers = [{ x: (w - bw) / 2, w: bw, y: 0, hue: 0 }];
     g.cur = { x: 0, w: bw, y: 1, hue: 1, entered: true };
     g.dir = 1;
-    g.speed = speedBase;
+    g.speed = SPD_0 * speedK * w;   // px/мс на этом экране
     g.camY = 0;
     g.score = 0;
     g.combo = 0;
@@ -90,7 +113,7 @@ export default function BurgerStack({ onExit }: { onExit: () => void }) {
     g.startT = Date.now();
     setScore(0);
     setCombo(0);
-  }, [speedBase]);
+  }, [speedK]);
 
   const restart = useCallback(() => {
     G.current.running = false;
@@ -176,8 +199,9 @@ export default function BurgerStack({ onExit }: { onExit: () => void }) {
     setScore(Math.floor(g.score));
     setCombo(g.combo);
 
-    // следующий слой: заезжает то слева, то справа
-    g.speed = Math.min(0.78, g.speed + 0.011);
+    // следующий слой: заезжает то слева, то справа.
+    // Прибавка и потолок — в долях ширины, как в эталоне жанра.
+    g.speed = Math.min(SPD_MAX * speedK * g.wid, g.speed + SPD_STEP * speedK * g.wid);
     const fromLeft = Math.random() < 0.5;
     g.dir = fromLeft ? 1 : -1;
     const nextY = cur.y + 1;
@@ -185,7 +209,9 @@ export default function BurgerStack({ onExit }: { onExit: () => void }) {
     const fl = floorOf(nextY);
     if (fl > g.floor) {
       g.floor = fl;
-      g.speed = Math.min(0.9, g.speed + 0.05);
+      /* На новом этаже больше не подкручиваем скорость отдельно: раньше
+         +0.05 за этаж поверх обычной прибавки и выбрасывало кривую за
+         пределы человеческой точности уже к третьему этажу. */
       g.floorFlash = 1;
       setFloor(fl);
       sfx.achieve?.();
@@ -197,7 +223,7 @@ export default function BurgerStack({ onExit }: { onExit: () => void }) {
       y: nextY,
       hue: cur.hue + 1,
     };
-  }, [end]);
+  }, [end, speedK]);
 
   const canvasRef = useCanvas(
     (ctx, w, h, dt) => {
@@ -327,13 +353,8 @@ export default function BurgerStack({ onExit }: { onExit: () => void }) {
 
       ctx.restore();
 
-      // подсказка
-      if (g.running && g.layers.length < 3) {
-        ctx.fillStyle = "rgba(255,255,255,0.4)";
-        ctx.font = "600 13px Inter, system-ui, sans-serif";
-        ctx.textAlign = "center";
-        ctx.fillText("Тапни, чтобы уронить слой", w / 2, h - 26);
-      }
+      /* Подсказка рисуется НЕ текстом на канвасе (он не переводится,
+         не масштабируется и тонет в фоне), а плашкой в разметке — см. ниже. */
     },
     [phase],
   );
@@ -347,8 +368,6 @@ export default function BurgerStack({ onExit }: { onExit: () => void }) {
       G.current.running = true;
     }
   }, [phase, reset]);
-
-  const rgb = hexRgb("#ffb020");
 
   return (
     <div className="absolute inset-0" style={{ background: "var(--bg)" }}>
@@ -364,36 +383,53 @@ export default function BurgerStack({ onExit }: { onExit: () => void }) {
         score={score}
         best={best}
         onExit={onExit}
-        label="ЭТАЖИ"
-        extra={
-          <div className="flex items-center shrink-0" style={{ gap: 7 }}>
-            <div
-              className="t-label shrink-0"
-              style={{
-                padding: "8px 11px", borderRadius: "var(--r-md)",
-                background: "var(--btn-bg)",
-                border: `1px solid ${FLOORS[floor].tint}66`,
-                color: FLOORS[floor].tint, fontSize: 9.5,
-              }}
-            >
-              {FLOORS[floor].name}
-            </div>
-            {combo > 1 ? (
-            <div
-              className="t-num shrink-0"
-              style={{
-                padding: "8px 11px", borderRadius: "var(--r-md)",
-                background: `rgba(${rgb},0.16)`,
-                border: `1px solid rgba(${rgb},0.5)`,
-                color: "var(--acc)", fontSize: 14,
-              }}
-            >
-              ×{combo}
-            </div>
-            ) : null}
-          </div>
-        }
+        label={tr("СЛОИ")}
+        extra={combo > 1 ? <HudStat label={tr("СЕРИЯ")} value={`×${combo}`} tone="acc" min={44} /> : undefined}
       />
+
+      {/* Этаж — отдельной строкой под шапкой. Раньше «СТОЛОВАЯ» висела
+          в шапке безо всякого пояснения и читалась как случайное слово. */}
+      <div
+        className="absolute flex items-center justify-center pointer-events-none"
+        style={{ top: "calc(var(--sat) + 58px)", left: 0, right: 0, zIndex: 20, gap: 7 }}
+      >
+        <span
+          className="t-label"
+          style={{
+            fontSize: 9, padding: "5px 10px", borderRadius: "var(--r-sm)",
+            background: "var(--surface-2)", border: `1px solid ${FLOORS[floor].tint}`,
+            color: FLOORS[floor].tint, letterSpacing: "0.1em",
+          }}
+        >
+          {tr("ЭТАЖ")} {floor + 1} · {tr(FLOORS[floor].name)}
+        </span>
+      </div>
+
+      {/* Подсказка: непрозрачная плашка над зоной пальца, уходит после
+          третьего слоя. Раньше это был серый текст прямо на канвасе. */}
+      <AnimatePresence>
+        {phase === "play" && score < 3 && (
+          <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 12 }}
+            className="absolute flex justify-center pointer-events-none"
+            style={{ left: 0, right: 0, bottom: "calc(var(--sab) + 88px)", zIndex: 20 }}
+          >
+            <span
+              className="t-title-sm flex items-center"
+              style={{
+                gap: 8, padding: "10px 16px", borderRadius: "var(--r-md)",
+                background: "var(--surface-2)", border: "1px solid var(--btn-brd)",
+                fontSize: 12.5,
+              }}
+            >
+              <Icon name="tap" size={15} accent />
+              {tr("Тапни, когда слой над башней")}
+            </span>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <AnimatePresence>
         {phase === "count" && <Countdown n={cd} />}
@@ -407,8 +443,8 @@ export default function BurgerStack({ onExit }: { onExit: () => void }) {
           xp={result.xp}
           onRetry={restart}
           onExit={onExit}
-          title="УПАЛО"
-          sub="Башня Лёхи не выдержала"
+          title={tr("УПАЛО")}
+          sub={tr("Башня Лёхи не выдержала")}
         />
       )}
     </div>

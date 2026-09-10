@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence } from "framer-motion";
 import { useGame } from "../core/store";
 import { sfx, haptic } from "../core/fx";
-import { useCanvas, GameHUD, GameOver, Countdown } from "./shell";
+import { useCanvas, GameHUD, GameOver, Countdown, HudGauge } from "./shell";
 import { drawHead } from "../core/head";
 import { tr } from "../core/i18n";
 
@@ -444,54 +444,17 @@ export default function MotoArtyom({ onExit }: { onExit: () => void }) {
         score={score}
         best={best}
         onExit={onExit}
-        extra={
-          <div className="flex items-center shrink-0" style={{ gap: 7 }}>
-            <div
-              className="shrink-0"
-              style={{
-                width: 44, padding: "9px 7px", borderRadius: "var(--r-md)",
-                background: "var(--btn-bg)",
-                border: `1px solid ${heat > 75 ? "#FF6B4D" : "rgba(255,255,255,0.16)"}`,
-              }}
-            >
-              <div style={{ height: 5, borderRadius: 999, background: "rgba(255,255,255,0.12)", overflow: "hidden" }}>
-                <div
-                  style={{
-                    width: `${heat}%`, height: "100%",
-                    background: heat > 75 ? "#FF6B4D" : "#FFB020",
-                  }}
-                />
-              </div>
-            </div>
-            <div
-              className="shrink-0 flex items-center"
-              style={{
-                padding: "9px 10px", borderRadius: "var(--r-md)",
-                background: "var(--btn-bg)", border: "1px solid rgba(255,255,255,0.16)",
-                gap: 4,
-              }}
-            >
-              {Array.from({ length: 3 }).map((_, i) => (
-                <span
-                  key={i}
-                  style={{
-                    width: 7, height: 7, borderRadius: 999, display: "block",
-                    background: i < lives ? "#FF6B4D" : "rgba(255,255,255,0.18)",
-                  }}
-                />
-              ))}
-            </div>
-          </div>
-        }
+        extra={<HudGauge label={tr("ЖАР")} pct={heat} tone={heat > 75 ? "danger" : "warn"} />}
+        lives={{ value: lives, max: 3 }}
       />
 
-      {/* прогресс трассы */}
+      {/* Прогресс трассы — под шапкой, непрозрачной подложкой */}
       <div
         className="absolute"
-        style={{ left: 16, right: 16, top: "calc(var(--sat) + 64px)", zIndex: 20 }}
+        style={{ left: 12, right: 12, top: "calc(var(--sat) + 58px)", zIndex: 20 }}
       >
-        <div style={{ height: 5, borderRadius: 999, background: "rgba(255,255,255,0.12)", overflow: "hidden" }}>
-          <div style={{ width: `${pct}%`, height: "100%", background: "var(--acc)" }} />
+        <div style={{ height: 6, borderRadius: 999, background: "var(--n-300)", overflow: "hidden", border: "1px solid var(--n-400)" }}>
+          <div style={{ width: `${pct}%`, height: "100%", background: "var(--acc)", transition: "width .2s linear" }} />
         </div>
       </div>
 

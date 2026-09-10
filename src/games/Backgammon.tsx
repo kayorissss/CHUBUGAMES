@@ -2,7 +2,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { useGame } from "../core/store";
 import { sfx, haptic } from "../core/fx";
-import { GameHUD, GameOver } from "./shell";
+import { GameHUD, GameOver, HudStat } from "./shell";
+import GameIntro, { IntroGroup, IntroRules } from "../ui/GameIntro";
 import { tr } from "../core/i18n";
 import { Die } from "../ui/BoardPiece";
 import { isLowFx } from "../core/perf";
@@ -221,49 +222,27 @@ export default function Backgammon({ onExit }: { onExit: () => void }) {
 
   if (phase === "menu") {
     return (
-      <div className="absolute inset-0 flex flex-col" style={{ background: "var(--bg)" }}>
-        <GameHUD score={0} best={best} onExit={onExit} label={tr("ОЧКИ")} />
-        <div
-          className="flex-1 flex flex-col justify-center"
-          style={{ padding: "calc(var(--sat) + 74px) 20px calc(var(--sab) + 26px)" }}
-        >
-          <div className="t-display" style={{ fontSize: 26, marginBottom: 6, textAlign: "center" }}>
-            {tr("НАРДЫ С АРТУРОМ")}
-          </div>
-          <div
-            className="t-body"
-            style={{ fontSize: 12.5, opacity: 0.62, marginBottom: 20, textAlign: "center", lineHeight: 1.5 }}
-          >
-            {tr("Длинные нарды. Артур Тигранович играет в них с детства, так что не расслабляйся.")}
-          </div>
-          <div
-            style={{
-              padding: "13px 15px", borderRadius: "var(--r-md)",
-              background: "var(--surface)", border: "1px solid var(--surface-brd)",
-              marginBottom: 16,
-            }}
-          >
-            <div className="t-label" style={{ fontSize: 10, marginBottom: 8 }}>{tr("КОРОТКО О ПРАВИЛАХ")}</div>
-            {[
-              "С головы берёшь одну фишку за ход",
-              "Дубль даёт четыре хода",
-              "На пункт с чужой фишкой встать нельзя",
-              "Выводить можно, когда все фишки дома",
-            ].map((line) => (
-              <div key={line} className="t-body" style={{ fontSize: 11.5, opacity: 0.66, lineHeight: 1.6 }}>
-                — {tr(line)}
-              </div>
-            ))}
-          </div>
-          <button
-            onClick={start}
-            className="btn-acc t-label"
-            style={{ width: "100%", padding: "15px 0", borderRadius: "var(--r-md)", fontSize: 13 }}
-          >
-            {tr("НАЧАТЬ ПАРТИЮ")}
-          </button>
-        </div>
-      </div>
+      <GameIntro
+        title={tr("НАРДЫ С АРТУРОМ")}
+        subtitle={tr("Длинные нарды. Артур Тигранович играет в них с детства, так что не расслабляйся.")}
+        icon="dice"
+        startLabel={tr("НАЧАТЬ ПАРТИЮ")}
+        onStart={start}
+        onExit={onExit}
+      >
+        <IntroGroup label={tr("КАК ХОДИТЬ")}>
+          <IntroRules
+            lines={[
+              "Бросай кубики кнопкой внизу. Выпали разные числа — два хода, дубль — четыре.",
+              "Тапни свою фишку: подсветятся пункты, куда она может встать.",
+              "С головы (крайний пункт) за ход берётся только одна фишка.",
+              "На пункт, занятый фишками Артура, встать нельзя — даже одной.",
+              "Когда все двенадцать фишек дома — последние шесть пунктов — начинаешь выводить их с доски.",
+              "Кто первым вывел все фишки, тот и выиграл.",
+            ]}
+          />
+        </IntroGroup>
+      </GameIntro>
     );
   }
 
@@ -280,16 +259,12 @@ export default function Backgammon({ onExit }: { onExit: () => void }) {
         onExit={onExit}
         label={tr("ВЫВЕДЕНО")}
         extra={
-          <div
-            className="t-label shrink-0"
-            style={{
-              padding: "8px 10px", borderRadius: "var(--r-md)",
-              background: "var(--btn-bg)", border: "1px solid rgba(255,255,255,0.16)",
-              color: thinking ? "var(--acc)" : "#fff", fontSize: 9.5, minWidth: 66, textAlign: "center",
-            }}
-          >
-            {thinking ? tr("ХОД АРТУРА") : tr("ТВОЙ ХОД")}
-          </div>
+          <HudStat
+            label={tr("ХОД")}
+            value={<span style={{ fontSize: 10 }}>{thinking ? tr("АРТУР") : tr("ТВОЙ")}</span>}
+            tone={thinking ? "warn" : "ok"}
+            min={62}
+          />
         }
       />
 

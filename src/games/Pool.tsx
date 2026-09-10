@@ -2,7 +2,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence } from "framer-motion";
 import { useGame } from "../core/store";
 import { sfx, haptic } from "../core/fx";
-import { useCanvas, GameHUD, GameOver } from "./shell";
+import { useCanvas, GameHUD, GameOver, HudStat } from "./shell";
+import GameIntro, { IntroGroup, IntroOption, IntroRules } from "../ui/GameIntro";
 import { tr } from "../core/i18n";
 import { isLowFx } from "../core/perf";
 import {
@@ -53,7 +54,6 @@ export default function Pool({ onExit }: { onExit: () => void }) {
   const [phase, setPhase] = useState<"menu" | "play" | "over">("menu");
   const [mode, setMode] = useState<Mode>("bot");
   const [rules, setRules] = useState<PoolMode>("nine");
-  const [showRules, setShowRules] = useState(false);
 
   const [score, setScore] = useState(0);
   const [shots, setShots] = useState(SOLO_SHOTS);
@@ -624,111 +624,72 @@ export default function Pool({ onExit }: { onExit: () => void }) {
 
   if (phase === "menu") {
     return (
-      <div className="absolute inset-0 flex flex-col" style={{ background: "var(--bg)" }}>
-        <GameHUD score={0} best={best} onExit={onExit} label={tr("ОЧКИ")} />
-        <div
-          className="flex-1 flex flex-col justify-center overflow-y-auto"
-          style={{ padding: "calc(var(--sat) + 74px) 20px calc(var(--sab) + 26px)" }}
-        >
-          <div className="t-display" style={{ fontSize: 25, marginBottom: 4, textAlign: "center" }}>
-            {tr("БИЛЬЯРД В ПОДВАЛЕ")}
-          </div>
-          <div className="t-body" style={{ fontSize: 12, opacity: 0.6, marginBottom: 18, textAlign: "center", lineHeight: 1.5 }}>
-            {tr("По официальным правилам. Фолы, группы, чёрный шар — всё как надо.")}
-          </div>
-
-          <div className="t-label" style={{ fontSize: 10, marginBottom: 8 }}>{tr("РЕЖИМ")}</div>
+      <GameIntro
+        title={tr("БИЛЬЯРД В ПОДВАЛЕ")}
+        subtitle={tr("По официальным правилам. Фолы, группы, чёрный шар — всё как надо.")}
+        icon="target"
+        startLabel={tr("НАЧАТЬ ПАРТИЮ")}
+        onStart={() => start(mode, rules)}
+        onExit={onExit}
+      >
+        <IntroGroup label={tr("С КЕМ ИГРАЕМ")}>
           {([
             ["solo", "ОДИН", "Тренировка без соперника"],
             ["bot", "ПРОТИВ БОТА", "Он целится и бьёт по-настоящему"],
             ["duo", "С ДРУГОМ", "По очереди на одном телефоне"],
           ] as [Mode, string, string][]).map(([id, nm, ds]) => (
-            <button
+            <IntroOption
               key={id}
-              onClick={() => { setMode(id); sfx.click(); }}
-              style={{
-                width: "100%", textAlign: "left", marginBottom: 8,
-                padding: "12px 14px", borderRadius: "var(--r-md)",
-                background: mode === id ? "var(--acc-soft)" : "var(--surface)",
-                border: `1px solid ${mode === id ? "var(--acc)" : "var(--surface-brd)"}`,
-                color: "var(--text)",
-              }}
-            >
-              <div className="t-label" style={{ fontSize: 11.5, color: mode === id ? "var(--acc)" : undefined }}>{tr(nm)}</div>
-              <div className="t-body" style={{ fontSize: 10.5, opacity: 0.6, marginTop: 2 }}>{tr(ds)}</div>
-            </button>
+              wide
+              label={tr(nm)}
+              desc={tr(ds)}
+              active={mode === id}
+              onClick={() => setMode(id)}
+            />
           ))}
+        </IntroGroup>
 
-          <div className="t-label" style={{ fontSize: 10, margin: "12px 0 8px" }}>{tr("ПРАВИЛА")}</div>
-          <div className="flex" style={{ gap: 8, marginBottom: 14 }}>
-            {([["nine", "9 ШАРОВ"], ["eight", "ВОСЬМЁРКА"]] as [PoolMode, string][]).map(([id, nm]) => (
-              <button
-                key={id}
-                onClick={() => { setRules(id); sfx.click(); }}
-                style={{
-                  flex: 1, padding: "11px 0", borderRadius: "var(--r-md)",
-                  background: rules === id ? "var(--acc)" : "var(--btn-bg)",
-                  color: rules === id ? "var(--acc-ink)" : "var(--text-mute)",
-                  border: `1px solid ${rules === id ? "var(--acc)" : "var(--btn-brd)"}`,
-                }}
-              >
-                <span className="t-label" style={{ fontSize: 10.5 }}>{tr(nm)}</span>
-              </button>
-            ))}
+        <IntroGroup label={tr("ПРАВИЛА ПАРТИИ")}>
+          <div className="flex" style={{ gap: 8 }}>
+            <IntroOption
+              label={tr("9 ШАРОВ")}
+              desc={tr("быстрая, по номерам")}
+              active={rules === "nine"}
+              onClick={() => setRules("nine")}
+            />
+            <IntroOption
+              label={tr("ВОСЬМЁРКА")}
+              desc={tr("сплошные против полосатых")}
+              active={rules === "eight"}
+              onClick={() => setRules("eight")}
+            />
           </div>
+        </IntroGroup>
 
-          <button
-            onClick={() => { setShowRules((v) => !v); sfx.click(); }}
-            className="t-label"
-            style={{
-              width: "100%", padding: "10px 0", marginBottom: 10,
-              borderRadius: "var(--r-md)", background: "var(--btn-bg)",
-              border: "1px solid var(--btn-brd)", color: "var(--text-mute)", fontSize: 10,
-            }}
-          >
-            {showRules ? tr("СКРЫТЬ ПРАВИЛА") : tr("ПОКАЗАТЬ ПРАВИЛА")}
-          </button>
-
-          {showRules && (
-            <div
-              style={{
-                padding: "12px 14px", borderRadius: "var(--r-md)",
-                background: "var(--surface)", border: "1px solid var(--surface-brd)",
-                marginBottom: 14,
-              }}
-            >
-              {(rules === "nine"
+        {/* Правила показываем сразу, а не за кнопкой «показать»:
+            пользователь писал «правила что за, вдруг человек не знает». */}
+        <IntroGroup label={tr("ЧТО НУЖНО ЗНАТЬ")}>
+          <IntroRules
+            lines={
+              rules === "nine"
                 ? [
-                  "На столе биток и шары с 1 по 9",
-                  "Первым касанием бей в САМЫЙ МЛАДШИЙ шар",
-                  "Забил девятку чисто — сразу выиграл",
-                  "Забил любой шар — бьёшь ещё раз",
-                  "Фол: биток в лузу, не тот шар, никто не дошёл до борта",
+                  "На столе биток и шары с 1 по 9.",
+                  "Первым касанием бей в САМЫЙ МЛАДШИЙ шар на столе.",
+                  "Забил девятку чисто — сразу выиграл.",
+                  "Забил любой шар — бьёшь ещё раз.",
+                  "Фол: биток в лузу, попал не в тот шар или никто не дошёл до борта.",
                 ]
                 : [
-                  "Шары 1-7 сплошные, 9-15 полосатые, 8 чёрный",
-                  "Пока никто не забил, группы не закреплены",
-                  "Забил свой — группа твоя, бьёшь дальше",
-                  "Выбей всю группу, потом клади чёрный",
-                  "Чёрный раньше времени или с фолом — поражение",
+                  "Шары 1-7 сплошные, 9-15 полосатые, 8 чёрный.",
+                  "Пока никто не забил, группы не закреплены.",
+                  "Забил свой — группа твоя, бьёшь дальше.",
+                  "Выбей всю группу, и только потом клади чёрный.",
+                  "Чёрный раньше времени или с фолом — сразу поражение.",
                 ]
-              ).map((line) => (
-                <div key={line} className="t-body" style={{ fontSize: 11, opacity: 0.7, lineHeight: 1.65 }}>
-                  — {tr(line)}
-                </div>
-              ))}
-            </div>
-          )}
-
-          <button
-            onClick={() => start(mode, rules)}
-            className="btn-acc t-label"
-            style={{ width: "100%", padding: "15px 0", borderRadius: "var(--r-md)", fontSize: 13 }}
-          >
-            {tr("НАЧАТЬ ПАРТИЮ")}
-          </button>
-        </div>
-      </div>
+            }
+          />
+        </IntroGroup>
+      </GameIntro>
     );
   }
 
@@ -756,20 +717,12 @@ export default function Pool({ onExit }: { onExit: () => void }) {
         best={best}
         onExit={onExit}
         extra={
-          <div className="flex items-center shrink-0" style={{ gap: 7 }}>
-            <div
-              className="t-label shrink-0"
-              style={{
-                padding: "8px 10px", borderRadius: "var(--r-md)",
-                background: "var(--btn-bg)",
-                border: `1px solid ${turn === "me" ? "var(--acc)" : "rgba(255,255,255,0.16)"}`,
-                color: turn === "me" ? "var(--acc)" : "#fff", fontSize: 9,
-                maxWidth: 96, textAlign: "center",
-              }}
-            >
-              {turnLabel}
-            </div>
-          </div>
+          <HudStat
+            label={tr("ХОД")}
+            value={<span style={{ fontSize: 9.5 }}>{turnLabel}</span>}
+            tone={turn === "me" ? "ok" : "warn"}
+            min={68}
+          />
         }
       />
 

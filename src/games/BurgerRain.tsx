@@ -626,32 +626,7 @@ export default function BurgerRain({ onExit }: { onExit: () => void }) {
         score={uiScore}
         best={s.games.burger.best}
         onExit={onExit}
-        extra={
-          /* Жизни. Панель непрозрачная — сквозь стекло летели бургеры
-             и сердечки было не разобрать. */
-          <div
-            className="shrink-0 flex items-center justify-center"
-            style={{
-              gap: 4, height: 40, padding: "0 11px",
-              borderRadius: "var(--r-md)",
-              background: "var(--surface-2)",
-              border: "1px solid var(--btn-brd)",
-            }}
-          >
-            {[0, 1, 2].map((i) => (
-              <span
-                key={i}
-                style={{
-                  lineHeight: 0,
-                  color: i < uiLives ? "var(--danger)" : "var(--surface-3)",
-                  transition: "color 0.2s",
-                }}
-              >
-                <Icon name="heart" size={14} />
-              </span>
-            ))}
-          </div>
-        }
+        lives={{ value: uiLives, max: 3 }}
       />
 
       {/* активные бонусы */}

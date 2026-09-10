@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useGame } from "../core/store";
 import { sfx, haptic } from "../core/fx";
-import { GameOver, GameHUD, Countdown } from "./shell";
+import { GameOver, GameHUD, Countdown, HudStat } from "./shell";
 import Icon from "../ui/Icon";
 import { tr } from "../core/i18n";
 
@@ -259,28 +259,10 @@ export default function Europa({ onExit }: { onExit: () => void }) {
     <div className="absolute inset-0 flex flex-col" style={{ background: "var(--bg)" }}>
       <GameHUD score={score} best={best} onExit={onExit} label={tr("ОЧКИ")}
         extra={
-          <div className="flex items-center shrink-0" style={{ gap: 7 }}>
-            <div
-              className="t-num shrink-0"
-              style={{
-                padding: "8px 10px", borderRadius: "var(--r-md)",
-                background: "var(--btn-bg)", border: "1px solid rgba(255,216,107,0.4)",
-                color: "#FFD86B", fontSize: 12,
-              }}
-            >
-              {gold}
-            </div>
-            <div
-              className="t-label shrink-0"
-              style={{
-                padding: "9px 10px", borderRadius: "var(--r-md)",
-                background: "var(--btn-bg)", border: "1px solid rgba(255,255,255,0.16)",
-                fontSize: 9,
-              }}
-            >
-              {turn}/{MAX_TURNS}
-            </div>
-          </div>
+          <>
+            <HudStat label={tr("ЗОЛОТО")} value={gold} tone="warn" min={48} />
+            <HudStat label={tr("ХОД")} value={`${turn}/${MAX_TURNS}`} min={48} />
+          </>
         }
       />
 

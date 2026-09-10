@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence } from "framer-motion";
 import { useGame } from "../core/store";
 import { sfx, haptic } from "../core/fx";
-import { useCanvas, GameHUD, GameOver, Countdown } from "./shell";
+import { useCanvas, GameHUD, GameOver, Countdown, HudStat } from "./shell";
 import { drawHead } from "../core/head";
 import { tr } from "../core/i18n";
 
@@ -386,32 +386,15 @@ export default function KirillHands({ onExit }: { onExit: () => void }) {
         best={best}
         onExit={onExit}
         extra={
-          <div className="flex items-center shrink-0" style={{ gap: 7 }}>
-            {combo > 1 && (
-              <div
-                className="t-num shrink-0"
-                style={{
-                  padding: "8px 10px", borderRadius: "var(--r-md)",
-                  background: "rgba(255,216,107,0.14)",
-                  border: "1px solid rgba(255,216,107,0.5)",
-                  color: "#FFD86B", fontSize: 12,
-                }}
-              >
-                ×{combo}
-              </div>
-            )}
-            <div
-              className="t-num shrink-0"
-              style={{
-                padding: "8px 10px", borderRadius: "var(--r-md)",
-                background: "var(--btn-bg)",
-                border: `1px solid ${items <= 2 ? "#FF6B4D" : "rgba(255,255,255,0.16)"}`,
-                color: items <= 2 ? "#FF6B4D" : "#fff", fontSize: 12,
-              }}
-            >
-              {items}/{ITEMS.length}
-            </div>
-          </div>
+          <>
+            {combo > 1 && <HudStat label={tr("СЕРИЯ")} value={`×${combo}`} tone="warn" min={44} />}
+            <HudStat
+              label={tr("ОСТАЛОСЬ")}
+              value={`${items}/${ITEMS.length}`}
+              tone={items <= 2 ? "danger" : "plain"}
+              min={50}
+            />
+          </>
         }
       />
 

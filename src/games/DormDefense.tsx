@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { AnimatePresence } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import { useGame } from "../core/store";
+import { tr } from "../core/i18n";
 import { sfx, haptic } from "../core/fx";
-import { useCanvas, GameHUD, GameOver, Countdown } from "./shell";
+import { useCanvas, GameHUD, GameOver, Countdown, HudStat } from "./shell";
 import { drawHead } from "../core/head";
-import Icon from "../ui/Icon";
 import type { Friend } from "../core/types";
 
 /**
@@ -476,45 +476,27 @@ export default function DormDefense({ onExit }: { onExit: () => void }) {
         score={score}
         best={best}
         onExit={onExit}
-        label="ОЧКИ"
-        extra={
-          <div
-            className="shrink-0 flex items-center"
-            style={{
-              gap: 4, padding: "9px 11px", borderRadius: "var(--r-md)",
-              background: "var(--btn-bg)", border: "1px solid var(--btn-brd)",
-            }}
-          >
-            <span style={{ color: lives > 2 ? "#FF4D4D" : "#FF8A3C", lineHeight: 0 }}>
-              <Icon name="heart" size={13} />
-            </span>
-            <span className="t-num" style={{ fontSize: 13 }}>{lives}</span>
-          </div>
-        }
+        label={tr("ОЧКИ")}
+        extra={<HudStat label={tr("ВОЛНА")} value={wave} tone="acc" min={46} />}
+        lives={{ value: lives, max: 5 }}
       />
 
-      {/* волна и комбо */}
-      <div
-        className="absolute flex items-center justify-center"
-        style={{
-          top: "calc(var(--sat) + 74px)", left: 0, right: 0,
-          gap: 10, zIndex: 20, pointerEvents: "none",
-        }}
-      >
-        <span className="t-label" style={{ fontSize: 9.5 }}>ВОЛНА {wave}</span>
+      {/* Серия — отдельной плашкой под шапкой, чтобы не спорила с ней за место */}
+      <AnimatePresence>
         {combo >= 3 && (
-          <span
-            className="t-num"
-            style={{
-              fontSize: 11,
-              color: "#FFB020",
-              textShadow: "0 0 12px rgba(255,176,32,0.5)",
-            }}
+          <motion.div
+            initial={{ opacity: 0, y: -8, scale: 0.9 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -8, scale: 0.9 }}
+            className="absolute flex items-center justify-center pointer-events-none"
+            style={{ top: "calc(var(--sat) + 60px)", left: 0, right: 0, zIndex: 20 }}
           >
-            СЕРИЯ {combo}
-          </span>
+            <span className="tag tag-acc" style={{ fontSize: 10 }}>
+              {tr("СЕРИЯ")} {combo}
+            </span>
+          </motion.div>
         )}
-      </div>
+      </AnimatePresence>
 
       <AnimatePresence>
         {phase === "count" && <Countdown n={cd} />}

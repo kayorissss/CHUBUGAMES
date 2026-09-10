@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence } from "framer-motion";
 import { useGame } from "../core/store";
 import { sfx, haptic } from "../core/fx";
-import { useCanvas, GameHUD, GameOver, Countdown } from "./shell";
+import { useCanvas, GameHUD, GameOver, Countdown, HudStat } from "./shell";
 import { tr } from "../core/i18n";
 
 /**
@@ -440,33 +440,10 @@ export default function Basket({ onExit }: { onExit: () => void }) {
         best={best}
         onExit={onExit}
         extra={
-          <div className="flex items-center shrink-0" style={{ gap: 7 }}>
-            <div
-              className="t-num shrink-0"
-              style={{
-                padding: "8px 11px", borderRadius: "var(--r-md)",
-                background: "var(--btn-bg)",
-                border: `1px solid ${secs <= 8 ? "#FF6B4D" : "rgba(255,255,255,0.16)"}`,
-                color: secs <= 8 ? "#FF6B4D" : "#fff", fontSize: 14, minWidth: 44,
-                textAlign: "center",
-              }}
-            >
-              {secs}
-            </div>
-            {combo > 1 ? (
-              <div
-                className="t-num shrink-0"
-                style={{
-                  padding: "8px 11px", borderRadius: "var(--r-md)",
-                  background: "rgba(89,255,158,0.14)",
-                  border: "1px solid rgba(89,255,158,0.5)",
-                  color: "#59FF9E", fontSize: 14,
-                }}
-              >
-                ×{combo}
-              </div>
-            ) : null}
-          </div>
+          <>
+            {combo > 1 && <HudStat label={tr("СЕРИЯ")} value={`×${combo}`} tone="ok" min={44} />}
+            <HudStat label={tr("ВРЕМЯ")} value={secs} tone={secs <= 8 ? "danger" : "plain"} min={48} />
+          </>
         }
       />
 

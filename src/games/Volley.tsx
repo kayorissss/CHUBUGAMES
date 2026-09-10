@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence } from "framer-motion";
 import { useGame } from "../core/store";
 import { sfx, haptic } from "../core/fx";
-import { useCanvas, GameHUD, GameOver, Countdown } from "./shell";
+import { useCanvas, GameHUD, GameOver, Countdown, HudStat } from "./shell";
 import { drawHead } from "../core/head";
 import { tr } from "../core/i18n";
 
@@ -393,41 +393,8 @@ export default function Volley({ onExit }: { onExit: () => void }) {
         best={best}
         onExit={onExit}
         label={tr("ОЧКИ")}
-        extra={
-          <div className="flex items-center shrink-0" style={{ gap: 7 }}>
-            {rally > 2 ? (
-              <div
-                className="t-num shrink-0"
-                style={{
-                  padding: "8px 10px", borderRadius: "var(--r-md)",
-                  background: "var(--btn-bg)", border: "1px solid rgba(255,255,255,0.16)",
-                  color: "#fff", fontSize: 13,
-                }}
-              >
-                ×{rally}
-              </div>
-            ) : null}
-            <div
-              className="shrink-0 flex items-center"
-              style={{
-                padding: "9px 11px", borderRadius: "var(--r-md)",
-                background: "var(--btn-bg)", border: "1px solid rgba(255,255,255,0.16)",
-                gap: 4,
-              }}
-            >
-              {Array.from({ length: LIVES }).map((_, i) => (
-                <span
-                  key={i}
-                  style={{
-                    width: 8, height: 8, borderRadius: 999,
-                    background: i < lives ? "#FF6B4D" : "rgba(255,255,255,0.18)",
-                    display: "block",
-                  }}
-                />
-              ))}
-            </div>
-          </div>
-        }
+        extra={rally > 2 ? <HudStat label={tr("РОЗЫГРЫШ")} value={`×${rally}`} tone="ok" min={50} /> : undefined}
+        lives={{ value: lives, max: LIVES }}
       />
 
       <AnimatePresence>{phase === "count" && <Countdown n={cd} />}</AnimatePresence>

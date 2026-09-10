@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useGame } from "../core/store";
 import { sfx, haptic } from "../core/fx";
-import { GameOver, GameHUD, Countdown } from "./shell";
+import { GameOver, GameHUD, Countdown, HudStat } from "./shell";
 import Icon from "../ui/Icon";
 import { tr } from "../core/i18n";
 
@@ -245,29 +245,15 @@ export default function FuelHunt({ onExit }: { onExit: () => void }) {
     <div className="absolute inset-0 flex flex-col" style={{ background: "var(--bg)" }}>
       <GameHUD score={score} best={best} onExit={onExit} label={tr("ОЧКИ")}
         extra={
-          <div className="flex items-center shrink-0" style={{ gap: 7 }}>
-            <div
-              className="t-num shrink-0"
-              style={{
-                padding: "8px 10px", borderRadius: "var(--r-md)",
-                background: "var(--btn-bg)",
-                border: `1px solid ${fuel < 12 ? "#FF6B4D" : "rgba(255,255,255,0.16)"}`,
-                color: fuel < 12 ? "#FF6B4D" : "#fff", fontSize: 12,
-              }}
-            >
-              {Math.max(0, Math.round(fuel))} {tr("л")}
-            </div>
-            <div
-              className="t-num shrink-0"
-              style={{
-                padding: "8px 10px", borderRadius: "var(--r-md)",
-                background: "var(--btn-bg)", border: "1px solid rgba(255,255,255,0.16)",
-                fontSize: 12,
-              }}
-            >
-              {money} ₽
-            </div>
-          </div>
+          <>
+            <HudStat
+              label={tr("БЕНЗИН")}
+              value={`${Math.max(0, Math.round(fuel))} ${tr("л")}`}
+              tone={fuel < 12 ? "danger" : "ok"}
+              min={52}
+            />
+            <HudStat label={tr("ДЕНЬГИ")} value={`${money} ₽`} tone="warn" min={54} />
+          </>
         }
       />
 

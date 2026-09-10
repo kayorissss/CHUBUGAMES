@@ -5,7 +5,6 @@ import { drawHead } from "../core/head";
 import { sfx, haptic } from "../core/fx";
 import Icon from "../ui/Icon";
 import { GameHUD, GameOver, Countdown } from "./shell";
-import { Panel } from "../ui/Glass";
 import type { Friend } from "../core/types";
 
 const HOLES = 9;
@@ -183,18 +182,7 @@ export default function WhackFriend({ onExit }: { onExit: () => void }) {
     <div className="absolute inset-0 flex flex-col" style={{ background: "var(--bg)" }}>
       <GameHUD
         score={score} best={s.games.whack.best} onExit={onExit}
-        extra={
-          <Panel r="md" className="px-3 py-2 shrink-0 text-center">
-            <div className="t-num" style={{ fontSize: 15 }}>{Math.ceil(timeLeft / 1000)}с</div>
-            <div className="flex items-center" style={{ gap: 3 }}>
-              {[0, 1, 2].map((i) => (
-                <span key={i} style={{ opacity: i < lives ? 1 : 0.2, lineHeight: 0, color: "#ff5a6a" }}>
-                  <Icon name="heart" size={11} />
-                </span>
-              ))}
-            </div>
-          </Panel>
-        }
+        lives={{ value: lives, max: 3 }}
       />
 
       <div className="flex-1 flex flex-col items-center justify-center px-4" style={{ paddingTop: 70 }}>

@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence } from "framer-motion";
 import { useGame } from "../core/store";
+import { tr } from "../core/i18n";
 import { drawHead } from "../core/head";
-import { useCanvas, GameHUD, GameOver, Countdown } from "./shell";
+import { useCanvas, GameHUD, GameOver, Countdown, HudGauge } from "./shell";
 import AdModal from "../ui/AdModal";
 import { hasAds, noteRevive } from "../core/ads";
 import { sfx, haptic } from "../core/fx";
-import Icon from "../ui/Icon";
 
 /**
  * ПОБЕГ ОТ ШИТОВА — раннер в духе оффлайн-динозаврика.
@@ -456,29 +456,11 @@ export default function ShitovRun({ onExit }: { onExit: () => void }) {
         onExit={onExit}
         label="МЕТРЫ"
         extra={
-          <div
-            className="shrink-0 flex flex-col items-center justify-center"
-            style={{
-              width: 46, padding: "6px 0", borderRadius: "var(--r-sm)",
-              background: "var(--btn-bg)", border: "1px solid var(--btn-brd)",
-            }}
-          >
-            <Icon name="skull" size={13} />
-            <div
-              style={{
-                width: 26, height: 4, borderRadius: 999, marginTop: 4,
-                background: "var(--track)", overflow: "hidden",
-              }}
-            >
-              <div
-                style={{
-                  width: `${Math.round(uiGap * 100)}%`, height: "100%",
-                  background: uiGap < 0.3 ? "#ff6a4d" : "var(--acc)",
-                  transition: "width 0.2s",
-                }}
-              />
-            </div>
-          </div>
+          <HudGauge
+            label={tr("ОТРЫВ")}
+            pct={uiGap * 100}
+            tone={uiGap < 0.3 ? "danger" : "ok"}
+          />
         }
       />
 

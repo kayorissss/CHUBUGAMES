@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useGame } from "../core/store";
 import { sfx, haptic } from "../core/fx";
-import { GameHUD, GameOver } from "./shell";
+import { GameHUD, GameOver, HudStat } from "./shell";
 import { tr } from "../core/i18n";
 import { ChessPiece } from "../ui/BoardPiece";
 import { isLowFx } from "../core/perf";
@@ -53,6 +53,7 @@ export default function Chess({ onExit }: { onExit: () => void }) {
   const { s, addCoins, addXp, finishGame, questProgress } = useGame();
   const [level, setLevel] = useState<1 | 2 | 3>(2);
   const [vs, setVs] = useState<VsMode>("bot");
+  const [side, setSide] = useState<"w" | "b">("w");
   const [phase, setPhase] = useState<"menu" | "play" | "over">("menu");
   const [pos, setPos] = useState<Position>(() => CH.initialPosition());
   const [sel, setSel] = useState<number | null>(null);
@@ -77,7 +78,9 @@ export default function Chess({ onExit }: { onExit: () => void }) {
    * считается тот, чей сейчас ход — иначе доска заблокируется на
    * чёрных, ожидая бота, которого нет.
    */
-  const human: "w" | "b" = vs === "duo" ? pos.turn : "w";
+  /** За кого играет живой человек. Раньше всегда «белые» — чёрными
+      сыграть было нельзя вообще. */
+  const human: "w" | "b" = vs === "duo" ? pos.turn : side;
   const lowFx = isLowFx();
 
   const best = s.games.chess?.best || 0;
@@ -206,7 +209,7 @@ export default function Chess({ onExit }: { onExit: () => void }) {
     const c = Math.floor(((clientX - r.left) / r.width) * 8);
     const rw = Math.floor(((clientY - r.top) / r.height) * 8);
     if (c < 0 || c > 7 || rw < 0 || rw > 7) return null;
-    return rw * 8 + c;
+    return fromView(rw * 8 + c);
   };
 
   const onDown = (e: React.PointerEvent) => {
@@ -255,6 +258,12 @@ export default function Chess({ onExit }: { onExit: () => void }) {
     if (m) doMove(pos, m);
   };
 
+  /* Доска разворачивается, когда играешь чёрными: свои фигуры должны
+     быть внизу, иначе играть неудобно, а рокировка выглядит зеркальной.
+     Индекс 0 в позиции — это a8, поэтому переворот — это 63 - i. */
+  const flipped = vs === "bot" && side === "b";
+  const fromView = (i: number) => (flipped ? 63 - i : i);
+
   const targets = new Set(moves.map((m) => m.to));
   const dragPiece = drag ? pos.board[drag.from] : null;
 
@@ -273,6 +282,9 @@ export default function Chess({ onExit }: { onExit: () => void }) {
           onLevel={setLevel}
           levels={LEVELS}
           onStart={start}
+          onExit={onExit}
+          side={side}
+          onSide={setSide}
           accentPieces={
             <div className="flex items-center justify-center" style={{ gap: 6 }}>
               {(["k", "q", "r", "b", "n", "p"] as PieceKind[]).map((k) => (
@@ -295,18 +307,18 @@ export default function Chess({ onExit }: { onExit: () => void }) {
         onExit={onExit}
         label={tr("УРОВЕНЬ")}
         extra={
-          <div
-            className="t-label shrink-0"
-            style={{
-              padding: "8px 10px", borderRadius: "var(--r-md)",
-              background: "var(--btn-bg)", border: "1px solid rgba(255,255,255,0.16)",
-              color: thinking ? "var(--acc)" : "#fff", fontSize: 9.5, minWidth: 66, textAlign: "center",
-            }}
-          >
-            {vs === "duo"
-              ? (pos.turn === "w" ? tr("ХОД БЕЛЫХ") : tr("ХОД ЧЁРНЫХ"))
-              : thinking ? tr("ДУМАЕТ") : tr("ТВОЙ ХОД")}
-          </div>
+          <HudStat
+            label={tr("ХОД")}
+            value={
+              <span style={{ fontSize: 10 }}>
+                {vs === "duo"
+                  ? (pos.turn === "w" ? tr("БЕЛЫЕ") : tr("ЧЁРНЫЕ"))
+                  : thinking ? tr("ШИТОВ") : tr("ТВОЙ")}
+              </span>
+            }
+            tone={thinking ? "warn" : "ok"}
+            min={62}
+          />
         }
       />
 
@@ -325,14 +337,22 @@ export default function Chess({ onExit }: { onExit: () => void }) {
           onPointerCancel={onUp}
           style={{
             width: "100%", aspectRatio: "1", touchAction: "none",
-            display: "grid", gridTemplateColumns: "repeat(8, 1fr)",
+            /* gridTemplateRows обязателен.
+               Без него строки сжимались по содержимому, и доска выходила
+               «кривая, суженная»: клетки становились прямоугольными, а
+               подсветки с borderRadius 50% — овальными. */
+            display: "grid",
+            gridTemplateColumns: "repeat(8, 1fr)",
+            gridTemplateRows: "repeat(8, 1fr)",
             borderRadius: "var(--r-md)", overflow: "hidden",
-            border: "1px solid var(--surface-brd)",
+            border: "2px solid var(--board-brd)",
             userSelect: "none", WebkitUserSelect: "none",
           }}
         >
-          {Array.from({ length: 64 }, (_, i) => {
-            const r = Math.floor(i / 8), c = i % 8;
+          {Array.from({ length: 64 }, (_, vi) => {
+            // vi — клетка на экране, i — та же клетка в позиции
+            const i = fromView(vi);
+            const r = Math.floor(vi / 8), c = vi % 8;
             const dark = (r + c) % 2 === 1;
             const pc = pos.board[i];
             const isSel = sel === i;
@@ -344,10 +364,10 @@ export default function Chess({ onExit }: { onExit: () => void }) {
 
             return (
               <div
-                key={i}
+                key={vi}
                 style={{
                   position: "relative",
-                  background: dark ? "#3a3a44" : "#8f8f9c",
+                  background: dark ? "var(--board-dark)" : "var(--board-light)",
                   display: "flex", alignItems: "center", justifyContent: "center",
                 }}
               >

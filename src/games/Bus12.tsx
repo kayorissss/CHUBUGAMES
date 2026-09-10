@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence } from "framer-motion";
 import { useGame } from "../core/store";
 import { sfx, haptic } from "../core/fx";
-import { useCanvas, GameHUD, GameOver, Countdown } from "./shell";
+import { useCanvas, GameHUD, GameOver, Countdown, HudGauge, HudStat } from "./shell";
 import { drawHead } from "../core/head";
 import { tr } from "../core/i18n";
 
@@ -479,30 +479,10 @@ export default function Bus12({ onExit }: { onExit: () => void }) {
         onExit={onExit}
         label={tr("ОЧКИ")}
         extra={
-          <div className="flex items-center shrink-0" style={{ gap: 7 }}>
-            <div
-              className="t-label shrink-0"
-              style={{
-                padding: "8px 10px", borderRadius: "var(--r-md)",
-                background: "var(--btn-bg)",
-                border: `1px solid ${doorOpen ? "#59FF9E" : "rgba(255,255,255,0.16)"}`,
-                color: doorOpen ? "#59FF9E" : "#fff", fontSize: 9,
-              }}
-            >
-              {stop}/{STOPS}
-            </div>
-            <div
-              className="t-num shrink-0"
-              style={{
-                padding: "8px 11px", borderRadius: "var(--r-md)",
-                background: "var(--btn-bg)",
-                border: `1px solid ${patience < 35 ? "#FF6B4D" : "rgba(255,255,255,0.16)"}`,
-                color: patience < 35 ? "#FF6B4D" : "#fff", fontSize: 13,
-              }}
-            >
-              {Math.max(0, Math.round(patience))}
-            </div>
-          </div>
+          <>
+            <HudStat label={tr("ОСТАНОВКА")} value={`${stop}/${STOPS}`} tone={doorOpen ? "ok" : "plain"} min={52} />
+            <HudGauge label={tr("НЕРВЫ")} pct={patience} tone={patience < 35 ? "danger" : "acc"} />
+          </>
         }
       />
 

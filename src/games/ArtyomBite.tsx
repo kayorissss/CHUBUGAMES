@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence } from "framer-motion";
 import { useGame } from "../core/store";
+import { tr } from "../core/i18n";
 import { drawHead } from "../core/head";
-import { useCanvas, GameHUD, GameOver, Countdown } from "./shell";
+import { useCanvas, GameHUD, GameOver, Countdown, HudStat } from "./shell";
 import { sfx, haptic } from "../core/fx";
-import Icon from "../ui/Icon";
+import GameIntro, { IntroRules } from "../ui/GameIntro";
 
 /**
  * ЗУБЫ АРТЁМА — игра на нервах.
@@ -43,7 +44,7 @@ export default function ArtyomBite({ onExit }: { onExit: () => void }) {
   const [uiLives, setUiLives] = useState(3);
   const [uiHold, setUiHold] = useState(false);
   const [uiCharge, setUiCharge] = useState(0);
-  const [uiRage, setUiRage] = useState("");
+  const [uiRound, setUiRound] = useState(1);
   const [result, setResult] = useState({ score: 0, coins: 0, xp: 0 });
 
   const G = useRef({
@@ -70,6 +71,13 @@ export default function ArtyomBite({ onExit }: { onExit: () => void }) {
     rage: 0, // 0..1 краснота от злости
     rageLine: "",
     rageT: 0,
+    /* Маты, вылетающие изо рта. Пользователь просил, чтобы они
+       разлетались влево и вправо, а не висели одной плашкой по центру:
+       ось x — доля ширины, vx — скорость в долях ширины за мс. */
+    curses: [] as {
+      txt: string; x: number; y: number; vx: number; vy: number;
+      life: number; max: number; rot: number; vr: number; size: number;
+    }[],
   });
 
   const reset = useCallback(() => {
@@ -79,8 +87,8 @@ export default function ArtyomBite({ onExit }: { onExit: () => void }) {
     g.approach = 0; g.windup = 0; g.attackIn = 0; g.biting = 0;
     g.mouth = 0; g.shake = 0; g.flash = 0; g.round = 0; g.combo = 0;
     g.pops = []; g.bites = 0; g.safeReleases = 0;
-    g.rage = 0; g.rageLine = ""; g.rageT = 0;
-    setUiScore(0); setUiLives(3); setUiHold(false); setUiCharge(0); setUiRage("");
+    g.rage = 0; g.rageLine = ""; g.rageT = 0; g.curses = [];
+    setUiScore(0); setUiLives(3); setUiHold(false); setUiCharge(0); setUiRound(1);
   }, []);
 
   const start = useCallback(() => {
@@ -121,6 +129,7 @@ export default function ArtyomBite({ onExit }: { onExit: () => void }) {
   /* ---------- новый подход Артёма ---------- */
   const newRound = (g: typeof G.current) => {
     g.round += 1;
+    setUiRound(g.round);
     g.approach = 0;
     g.biting = 0;
     // с каждым раундом окно реакции сжимается, но не до невозможного
@@ -162,11 +171,20 @@ export default function ArtyomBite({ onExit }: { onExit: () => void }) {
       sfx.coin?.();
       haptic("light");
 
-      // Артём не успел — краснеет и орёт
+      // Артём не успел — краснеет и орёт. Мат вылетает изо рта в сторону.
       g.rage = Math.min(1, g.rage + 0.42);
-      g.rageLine = RAGE_LINES[Math.floor(Math.random() * RAGE_LINES.length)];
-      g.rageT = 1500;
-      setUiRage(g.rageLine);
+      const line = RAGE_LINES[Math.floor(Math.random() * RAGE_LINES.length)];
+      const dir = Math.random() < 0.5 ? -1 : 1;
+      g.curses.push({
+        txt: line,
+        x: 0.5, y: 0,                     // y проставится в цикле от позиции рта
+        vx: dir * (0.00042 + Math.random() * 0.00022),
+        vy: -0.00016 - Math.random() * 0.00012,
+        life: 1400, max: 1400,
+        rot: dir * 0.1, vr: dir * 0.00022,
+        size: 15 + Math.random() * 7,
+      });
+      if (g.curses.length > 5) g.curses.shift();
     }
     g.charge = 0;
     g.approach = 0;
@@ -241,11 +259,18 @@ export default function ArtyomBite({ onExit }: { onExit: () => void }) {
       if (g.biting > 0) g.biting -= dt;
 
       // ярость спадает
-      if (g.rageT > 0) {
-        g.rageT -= dt;
-        if (g.rageT <= 0) { g.rageLine = ""; setUiRage(""); }
-      }
       g.rage = Math.max(0, g.rage - dt * 0.00022);
+
+      // маты разлетаются
+      for (let i = g.curses.length - 1; i >= 0; i--) {
+        const c = g.curses[i];
+        c.life -= dt;
+        c.x += c.vx * dt;
+        c.y += c.vy * dt;
+        c.vy += dt * 0.0000009;          // чуть проседают к концу полёта
+        c.rot += c.vr * dt;
+        if (c.life <= 0) g.curses.splice(i, 1);
+      }
 
       for (let i = g.pops.length - 1; i >= 0; i--) {
         g.pops[i].life -= dt;
@@ -278,7 +303,11 @@ export default function ArtyomBite({ onExit }: { onExit: () => void }) {
     // Артём приближается сверху
     const artY = H * 0.26 + g.approach * (fingerY - H * 0.26 - headR * 0.9);
     const bite = g.biting > 0 ? Math.sin((1 - g.biting / 320) * Math.PI) : 0;
+    /* body: true — иначе от Артёма видно только голову на тонкой шее,
+       и он висит в воздухе «как груша». drawHead умеет рисовать плечи
+       и одежду, этим тут просто не пользовались. */
     drawHead(ctx, artyom.look, W / 2, artY + bite * 26, headR, {
+      body: true,
       mouth: Math.max(g.mouth, bite),
       angry: Math.min(1, 0.3 + g.approach * 0.6 + g.rage * 0.6),
       cheeks: 0,
@@ -344,6 +373,34 @@ export default function ArtyomBite({ onExit }: { onExit: () => void }) {
     ctx.globalAlpha = 1;
     ctx.restore();
 
+    /* Маты вылетают изо рта Артёма влево и вправо. Рисуем поверх всего,
+       с обводкой — на светлом фоне парты без неё текст пропадал. */
+    ctx.save();
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    for (const c of g.curses) {
+      const k = c.life / c.max;
+      // старт от рта: если мат только родился, привязываем y к голове
+      if (c.y === 0) c.y = (artY + headR * 0.42) / H;
+      const px = c.x * W;
+      const py = c.y * H;
+      ctx.save();
+      ctx.translate(px, py);
+      ctx.rotate(c.rot);
+      const grow = 1 + (1 - k) * 0.25;
+      ctx.globalAlpha = Math.min(1, k * 2.2);
+      ctx.font = `900 ${c.size * grow}px Inter, system-ui, sans-serif`;
+      ctx.lineJoin = "round";
+      ctx.lineWidth = 5;
+      ctx.strokeStyle = "rgba(10,6,8,0.85)";
+      ctx.strokeText(c.txt, 0, 0);
+      ctx.fillStyle = "#ff8a72";
+      ctx.fillText(c.txt, 0, 0);
+      ctx.restore();
+    }
+    ctx.globalAlpha = 1;
+    ctx.restore();
+
     if (g.flash > 0.02) {
       ctx.fillStyle = `rgba(255,60,40,${g.flash * 0.3})`;
       ctx.fillRect(0, 0, W, H);
@@ -364,15 +421,8 @@ export default function ArtyomBite({ onExit }: { onExit: () => void }) {
         score={uiScore}
         best={s.games.bite.best}
         onExit={onExit}
-        extra={
-          <div className="flex shrink-0" style={{ gap: 4 }}>
-            {[0, 1, 2].map((i) => (
-              <span key={i} style={{ opacity: i < uiLives ? 1 : 0.22, lineHeight: 0 }}>
-                <Icon name="tooth" size={16} />
-              </span>
-            ))}
-          </div>
-        }
+        lives={{ value: uiLives, max: 3, icon: "tooth" }}
+        extra={<HudStat label={tr("ПОДХОД")} value={uiRound} min={48} />}
       />
 
       {/* Подсказка и накопитель */}
@@ -401,112 +451,34 @@ export default function ArtyomBite({ onExit }: { onExit: () => void }) {
 
       <AnimatePresence>
         {phase === "rules" && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="absolute inset-0 z-30 flex items-center justify-center"
-            style={{ background: "rgba(6,6,9,0.9)", padding: 20 }}
+          <GameIntro
+            title={tr("ЗУБЫ АРТЁМА")}
+            subtitle={tr("Игра на нервах. Защищаться не надо — надо рисковать.")}
+            icon="tooth"
+            startLabel={tr("ПОЕХАЛИ")}
+            onStart={start}
+            onExit={onExit}
           >
-            <motion.div
-              initial={{ y: 24, scale: 0.96 }}
-              animate={{ y: 0, scale: 1 }}
-              className="w-full"
-              style={{
-                maxWidth: 350,
-                background: "var(--surface)",
-                border: "1px solid var(--surface-brd)",
-                borderRadius: "var(--r-xl)",
-                padding: 20,
-              }}
-            >
-              <div className="t-title" style={{ marginBottom: 4 }}>ЗУБЫ АРТЁМА</div>
-              <div className="t-caption" style={{ marginBottom: 16 }}>
-                Игра на нервах. Защищаться не надо — надо рисковать.
-              </div>
-
-              {[
-                ["1", "Держи палец на экране — счётчик очков растёт, пока держишь."],
-                ["2", "Артём подкрадывается и щёлкает зубами. Иногда вместо укуса тычет гелевой ручкой — это не больно, но пугает."],
-                ["3", "Убери палец до укуса — очки за подход зачислены. Убрал рано — очков мало, но живой."],
-                ["4", "Не успел — минус зуб. Их всего три."],
-              ].map(([n, txt]) => (
-                <div key={n} className="flex" style={{ gap: 11, marginBottom: 11 }}>
-                  <div
-                    className="t-num shrink-0 flex items-center justify-center"
-                    style={{
-                      width: 22, height: 22, borderRadius: "var(--r-xs)",
-                      background: "var(--acc)", color: "var(--acc-ink)", fontSize: 11,
-                    }}
-                  >
-                    {n}
-                  </div>
-                  <div className="t-body" style={{ lineHeight: 1.45 }}>{txt}</div>
-                </div>
-              ))}
-
-              <div
-                className="t-caption"
-                style={{
-                  marginTop: 14, padding: "10px 12px",
-                  borderRadius: "var(--r-md)", background: "var(--btn-bg)", lineHeight: 1.5,
-                }}
-              >
-                Чем дольше держишь — тем больше очков и тем выше шанс остаться без зуба.
-                Жадность наказуема.
-              </div>
-
-              <button
-                type="button"
-                onClick={() => { sfx.power?.(); haptic("medium"); start(); }}
-                className="w-full t-title-sm"
-                style={{
-                  marginTop: 16, padding: "13px 0", borderRadius: "var(--r-md)",
-                  background: "var(--acc)", color: "var(--acc-ink)", fontWeight: 700,
-                }}
-              >
-                ПОНЯЛ, ПОЕХАЛИ
-              </button>
-              <button
-                type="button"
-                onClick={onExit}
-                className="w-full t-caption"
-                style={{ marginTop: 10, padding: 6 }}
-              >
-                Выйти
-              </button>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Артём матерится, когда не успел укусить */}
-      <AnimatePresence>
-        {phase === "play" && uiRage && (
-          <motion.div
-            key={uiRage}
-            initial={{ opacity: 0, y: 8, scale: 0.9 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.94 }}
-            transition={{ type: "spring", stiffness: 480, damping: 26 }}
-            className="absolute left-0 right-0 flex justify-center pointer-events-none"
-            style={{ top: "calc(var(--sat) + 108px)", padding: "0 24px" }}
-          >
+            <IntroRules
+              lines={[
+                "Держи палец на экране — счётчик очков растёт, пока держишь.",
+                "Артём подкрадывается и щёлкает зубами. Иногда вместо укуса тычет гелевой ручкой — это не больно, но пугает.",
+                "Убери палец до укуса — очки за подход зачислены. Убрал рано — очков мало, но живой.",
+                "Не успел — минус зуб. Их всего три.",
+              ]}
+            />
             <div
-              className="t-title-sm text-center"
+              className="t-caption"
               style={{
-                padding: "8px 14px",
-                borderRadius: "var(--r-md)",
-                background: "rgba(190,40,30,0.92)",
-                border: "1px solid rgba(255,120,100,0.6)",
-                color: "#fff",
-                fontSize: 13,
-                maxWidth: 300,
+                marginTop: 12, padding: "11px 13px", lineHeight: 1.5,
+                borderRadius: "var(--r-md)", background: "var(--warn-soft)",
+                border: "1px solid color-mix(in srgb, var(--warn) 40%, transparent)",
+                color: "var(--warn)",
               }}
             >
-              {uiRage}
+              {tr("Чем дольше держишь — тем больше очков и тем выше шанс остаться без зуба. Жадность наказуема.")}
             </div>
-          </motion.div>
+          </GameIntro>
         )}
       </AnimatePresence>
 
@@ -527,18 +499,6 @@ export default function ArtyomBite({ onExit }: { onExit: () => void }) {
         )}
       </AnimatePresence>
 
-      {phase === "play" && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          className="absolute pointer-events-none"
-          style={{ top: "calc(var(--sat) + 72px)", left: 0, right: 0, textAlign: "center" }}
-        >
-          <span className="t-label" style={{ opacity: 0.6 }}>
-            подход {G.current.round}
-          </span>
-        </motion.div>
-      )}
     </div>
   );
 }

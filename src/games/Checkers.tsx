@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { useGame } from "../core/store";
 import { sfx, haptic } from "../core/fx";
-import { GameHUD, GameOver } from "./shell";
+import { GameHUD, GameOver, HudStat } from "./shell";
 import { tr } from "../core/i18n";
 import { CheckerPiece } from "../ui/BoardPiece";
 import { isLowFx } from "../core/perf";
@@ -38,6 +38,7 @@ export default function Checkers({ onExit }: { onExit: () => void }) {
   const { s, addCoins, addXp, finishGame, questProgress } = useGame();
   const [level, setLevel] = useState<1 | 2 | 3>(2);
   const [vs, setVs] = useState<VsMode>("bot");
+  const [side, setSide] = useState<CK.Color>("w");
   const [phase, setPhase] = useState<"menu" | "play" | "over">("menu");
   const [pos, setPos] = useState<Position>(() => CK.initialPosition());
   const [sel, setSel] = useState<number | null>(null);
@@ -56,7 +57,8 @@ export default function Checkers({ onExit }: { onExit: () => void }) {
   const ended = useRef(false);
   const nMoves = useRef(0);
   /** С другом ходят оба цвета живыми людьми */
-  const human: CK.Color = vs === "duo" ? pos.turn : "w";
+  /** За кого играет человек. Раньше жёстко «белые». */
+  const human: CK.Color = vs === "duo" ? pos.turn : side;
   const lowFx = isLowFx();
 
   const best = s.games.checkers?.best || 0;
@@ -190,7 +192,7 @@ export default function Checkers({ onExit }: { onExit: () => void }) {
     const c = Math.floor(((cx - r.left) / r.width) * 8);
     const rw = Math.floor(((cy - r.top) / r.height) * 8);
     if (c < 0 || c > 7 || rw < 0 || rw > 7) return null;
-    return rw * 8 + c;
+    return fromView(rw * 8 + c);
   };
 
   const selectAt = (sq: number) => {
@@ -245,6 +247,10 @@ export default function Checkers({ onExit }: { onExit: () => void }) {
     });
   };
 
+  /* Играя чёрными, разворачиваем доску: свои шашки внизу и идут вверх. */
+  const flipped = vs === "bot" && side === "b";
+  const fromView = (i: number) => (flipped ? 63 - i : i);
+
   const targets = new Set(moves.map((m) => m.to));
   const dragPiece = drag ? pos.board[drag.from] : null;
 
@@ -262,6 +268,9 @@ export default function Checkers({ onExit }: { onExit: () => void }) {
           onLevel={setLevel}
           levels={LEVELS}
           onStart={start}
+          onExit={onExit}
+          side={side}
+          onSide={setSide}
           accentPieces={
             <div className="flex items-center justify-center" style={{ gap: 8 }}>
               <CheckerPiece color="w" king={false} size={28} />
@@ -283,18 +292,18 @@ export default function Checkers({ onExit }: { onExit: () => void }) {
         onExit={onExit}
         label={tr("СЪЕДЕНО")}
         extra={
-          <div
-            className="t-label shrink-0"
-            style={{
-              padding: "8px 10px", borderRadius: "var(--r-md)",
-              background: "var(--btn-bg)", border: "1px solid rgba(255,255,255,0.16)",
-              color: thinking ? "var(--acc)" : "#fff", fontSize: 9.5, minWidth: 66, textAlign: "center",
-            }}
-          >
-            {vs === "duo"
-              ? (pos.turn === "w" ? tr("ХОД БЕЛЫХ") : tr("ХОД ЧЁРНЫХ"))
-              : thinking ? tr("ДУМАЕТ") : tr("ТВОЙ ХОД")}
-          </div>
+          <HudStat
+            label={tr("ХОД")}
+            value={
+              <span style={{ fontSize: 10 }}>
+                {vs === "duo"
+                  ? (pos.turn === "w" ? tr("БЕЛЫЕ") : tr("ЧЁРНЫЕ"))
+                  : thinking ? tr("СТАС") : tr("ТВОЙ")}
+              </span>
+            }
+            tone={thinking ? "warn" : "ok"}
+            min={62}
+          />
         }
       />
 
@@ -322,14 +331,21 @@ export default function Checkers({ onExit }: { onExit: () => void }) {
           onPointerCancel={onUp}
           style={{
             width: "100%", aspectRatio: "1", touchAction: "none",
-            display: "grid", gridTemplateColumns: "repeat(8, 1fr)",
+            /* gridTemplateRows обязателен.
+               Без него строки сжимались по содержимому, и доска выходила
+               «кривая, суженная»: клетки становились прямоугольными, а
+               подсветки с borderRadius 50% — овальными. */
+            display: "grid",
+            gridTemplateColumns: "repeat(8, 1fr)",
+            gridTemplateRows: "repeat(8, 1fr)",
             borderRadius: "var(--r-md)", overflow: "hidden",
-            border: "1px solid var(--surface-brd)",
+            border: "2px solid var(--board-brd)",
             userSelect: "none", WebkitUserSelect: "none",
           }}
         >
-          {Array.from({ length: 64 }, (_, i) => {
-            const r = Math.floor(i / 8), c = i % 8;
+          {Array.from({ length: 64 }, (_, vi) => {
+            const i = fromView(vi);
+            const r = Math.floor(vi / 8), c = vi % 8;
             const dark = (r + c) % 2 === 1;
             const pc = pos.board[i];
             const isSel = sel === i;
@@ -341,10 +357,10 @@ export default function Checkers({ onExit }: { onExit: () => void }) {
 
             return (
               <div
-                key={i}
+                key={vi}
                 style={{
                   position: "relative",
-                  background: dark ? "#3a3a44" : "#8f8f9c",
+                  background: dark ? "var(--board-dark)" : "var(--board-light)",
                   display: "flex", alignItems: "center", justifyContent: "center",
                 }}
               >
@@ -359,11 +375,14 @@ export default function Checkers({ onExit }: { onExit: () => void }) {
                     }}
                   />
                 )}
+                {/* Чем можно ходить. Раньше это было кольцо `inset: 2`
+                    по прямоугольной клетке — оно выходило овальным и
+                    «сужденным». Теперь аккуратная рамка по клетке. */}
                 {canMove && !isSel && (
                   <div
                     style={{
-                      position: "absolute", inset: 2, borderRadius: "50%",
-                      border: `2px solid ${mustCapture ? "rgba(255,107,77,0.85)" : "rgba(89,255,158,0.5)"}`,
+                      position: "absolute", inset: 0,
+                      boxShadow: `inset 0 0 0 3px ${mustCapture ? "var(--danger)" : "var(--ok)"}`,
                     }}
                   />
                 )}
@@ -382,18 +401,25 @@ export default function Checkers({ onExit }: { onExit: () => void }) {
           })}
         </div>
 
-        <div className="flex items-center justify-between" style={{ marginTop: 10, padding: "0 2px" }}>
-          <div className="t-body" style={{ fontSize: 11, opacity: 0.62 }}>
-            {tr("Твои")}: {CK.countPieces(pos, "w")}
+        {/* Счёт шашек. Подписи привязаны к стороне игрока, а не к цвету:
+            играя чёрными, «Твои» должно считать чёрные. */}
+        <div className="flex items-center" style={{ marginTop: 10, gap: 8 }}>
+          <div className="flex-1 flex items-center justify-center" style={{ gap: 7, padding: "8px 10px", borderRadius: "var(--r-sm)", background: "var(--surface-2)", border: "1px solid var(--btn-brd)" }}>
+            <CheckerPiece color={human} king={false} size={16} />
+            <span className="t-label" style={{ fontSize: 9 }}>{tr("ТВОИ")}</span>
+            <span className="t-num" style={{ fontSize: 13 }}>{CK.countPieces(pos, human)}</span>
           </div>
-          <div className="t-body" style={{ fontSize: 11, opacity: 0.62 }}>
-            {tr("Стас")}: {CK.countPieces(pos, "b")}
+          <div className="flex-1 flex items-center justify-center" style={{ gap: 7, padding: "8px 10px", borderRadius: "var(--r-sm)", background: "var(--surface-2)", border: "1px solid var(--btn-brd)" }}>
+            <CheckerPiece color={human === "w" ? "b" : "w"} king={false} size={16} />
+            <span className="t-label" style={{ fontSize: 9 }}>
+              {vs === "duo" ? tr("СОПЕРНИК") : tr("СТАС")}
+            </span>
+            <span className="t-num" style={{ fontSize: 13 }}>
+              {CK.countPieces(pos, human === "w" ? "b" : "w")}
+            </span>
           </div>
         </div>
-        <div
-          className="t-body"
-          style={{ fontSize: 11, opacity: 0.5, textAlign: "center", marginTop: 6, lineHeight: 1.45 }}
-        >
+        <div className="t-caption" style={{ textAlign: "center", marginTop: 8, lineHeight: 1.45 }}>
           {tr("Веди шашку пальцем или тапни клетку")}
         </div>
       </div>

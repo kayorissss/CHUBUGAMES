@@ -127,6 +127,13 @@
   --info: #6bb8ff;
   --info-soft: rgba(107, 184, 255, 0.14);
 
+  /* Доски настольных игр. Были вписаны прямо в компоненты хексами и не
+     менялись со светлой темой; заодно контраст тёмной и светлой клетки
+     был чрезмерным (#3a3a44 против #8f8f9c). */
+  --board-light: #b9b4a8;
+  --board-dark: #6b6558;
+  --board-brd: #4a463d;
+
   --toast-bg: #23232c;
   --toast-brd: #3b3b47;
   --nav-bg: #16161c;
@@ -199,6 +206,10 @@ html.light {
 
   --acc-text: color-mix(in srgb, var(--acc) 72%, #000000);
   --acc-line: color-mix(in srgb, var(--acc) 55%, var(--surface-3));
+
+  --board-light: #e6dfd0;
+  --board-dark: #9c9280;
+  --board-brd: #b4ab98;
 
   --toast-bg: #ffffff;
   --toast-brd: #d2d2dc;
@@ -450,6 +461,30 @@ body {
 .btn-flat:active { background: var(--btn-bg-hi); }
 .btn-acc:disabled,
 .btn-flat:disabled { opacity: 0.42; cursor: default; }
+
+/* ---------- Шапка игры ----------
+   Один вид плашки на все 27 игр. Раньше каждая игра лепила свою:
+   разная высота, разные цвета рамок (rgba(255,255,255,0.16) поверх
+   светлого игрового поля просто исчезала), где-то стекло, где-то
+   заливка. Отсюда «сверху интерфейс ужасен» в каждом пункте списка.
+   Плашка непрозрачная, высота фиксированная, рамка видимая. */
+.hud-chip {
+  display: flex;
+  align-items: center;
+  height: 44px;
+  box-sizing: border-box;
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+  border: 1px solid var(--btn-brd);
+  color: var(--text);
+  box-shadow: 0 6px 18px -12px rgba(0, 0, 0, 0.9);
+  white-space: nowrap;
+}
+.hud-chip.flex-col {
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
 
 /* ---------- Фоновые «пятна света» ---------- */
 .aurora {
