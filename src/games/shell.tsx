@@ -7,6 +7,8 @@ import Icon from "../ui/Icon";
 import { useModes, MARATHON_ROUNDS, survivalMult } from "../core/modes";
 import { useGame } from "../core/store";
 import { canvasScaleCap, isLowFx } from "../core/perf";
+import RulesCard, { RulesButton } from "../ui/RulesCard";
+import type { GameId } from "../core/types";
 import { modalBackdrop, modalCard, springPop, EASE } from "../core/motion";
 
 export function useCanvas(
@@ -60,15 +62,29 @@ export function useCanvas(
 }
 
 export function GameHUD({
-  score, best, extra, onExit, label = tr("ОЧКИ"),
+  score, best, extra, onExit, label = tr("ОЧКИ"), rulesId,
 }: {
   score: number; best: number; extra?: React.ReactNode; onExit: () => void; label?: string;
+  /** Явный id игры для правил. Обычно не нужен — берётся из режима. */
+  rulesId?: GameId;
 }) {
+  /**
+   * Кнопка правил живёт прямо в HUD, поэтому появляется сразу во всех
+   * играх: пользователь жаловался, что непонятно, что делать, а править
+   * 27 экранов по отдельности — верный способ где-нибудь забыть.
+   */
+  const modes = useModes();
+  const gid = rulesId ?? modes?.currentGame ?? null;
+  const [rulesOpen, setRulesOpen] = useState(false);
+
   return (
     <div
       className="absolute left-0 right-0 z-20 flex items-center gap-2 px-3"
       style={{ top: "calc(var(--sat) + 10px)" }}
     >
+      {gid && (
+        <RulesCard id={gid} open={rulesOpen} onClose={() => setRulesOpen(false)} />
+      )}
       <Tap onClick={onExit} r="md" className="px-3 py-2.5 shrink-0" sound="swoosh">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round">
           <path d="M15 18l-6-6 6-6" />
@@ -84,6 +100,7 @@ export function GameHUD({
           <div className="t-num acc-text" style={{ fontSize: 15, lineHeight: 1.2 }}>{fmt(best)}</div>
         </div>
       </Panel>
+      {gid && <RulesButton onClick={() => setRulesOpen(true)} />}
       {extra}
     </div>
   );

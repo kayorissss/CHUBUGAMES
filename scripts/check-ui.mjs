@@ -419,5 +419,23 @@ ok(vol21.includes('aiMiss'), 'волейбол: у соперника есть �
 const pen21 = fs.readFileSync('src/games/Penalty.tsx', 'utf8');
 ok(pen21.includes('SHOULDER_Y'), 'вратарь: руки крепятся к плечам');
 
+
+console.log('\n[22] Правила есть в каждой игре');
+const rul22 = fs.readFileSync('src/core/rules.ts', 'utf8');
+const meta22 = fs.readFileSync('src/core/content.ts', 'utf8');
+const ids22 = [...meta22.matchAll(/id: "(\w+)" as const/g)].map((m) => m[1]);
+ok(ids22.length === 27, `в игре 27 мини-игр (нашли ${ids22.length})`);
+for (const id of ids22) ok(new RegExp(`^  ${id}: \\{`, 'm').test(rul22), `${id}: правила описаны`);
+ok(fs.existsSync('src/ui/RulesCard.tsx'), 'карточка правил есть');
+const shell22 = fs.readFileSync('src/games/shell.tsx', 'utf8');
+ok(shell22.includes('RulesButton'), 'кнопка правил встроена в HUD всех игр');
+ok(rul22.includes('goal') && rul22.includes('control') && rul22.includes('tips'),
+  'у правил есть цель, управление и подсказки');
+// правила должны переводиться
+const en22 = fs.readFileSync('src/core/i18n-en.ts', 'utf8');
+for (const key of ['КАК ИГРАТЬ', 'ЦЕЛЬ', 'УПРАВЛЕНИЕ', 'ВАЖНО']) {
+  ok(en22.includes(`"${key}":`), `переведено: ${key}`);
+}
+
 console.log(fails===0?'\n✅ ВСЕ ПРОВЕРКИ ВЁРСТКИ ПРОЙДЕНЫ\n':`\n❌ ПРОВАЛЕНО: ${fails}\n`);
 process.exit(fails?1:0);
