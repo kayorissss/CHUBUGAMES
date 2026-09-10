@@ -33,7 +33,22 @@ const COOL_OVER = 0.020;      // остывание при заглохшем м
 const DECAY = 0.0015;         // потеря скорости на выбеге
 const OVERHEAT_MS = 4000;     // сколько мотор молчит после перегрева
 
-interface Obstacle { at: number; kind: "hole" | "cone" | "wire" }
+/**
+ * Препятствие на трассе.
+ *
+ * `lane` — на какой из трёх полос оно стоит. Раньше полос не было
+ * вовсе: препятствие занимало всю дорогу, объехать его было физически
+ * нельзя, и оставалось только терять жизнь. Нитки в финале по-прежнему
+ * тянутся через всю дорогу (lane = -1) — от них спасает только приседание.
+ */
+interface Obstacle { at: number; kind: "hole" | "cone" | "wire"; lane: number }
+
+/** Три полосы: 0 верхняя, 1 средняя, 2 нижняя */
+const LANES = 3;
+/** Расстояние между полосами по вертикали, px */
+const LANE_GAP = 30;
+/** Скорость перестроения между полосами */
+const LANE_SPEED = 0.006;
 
 export default function MotoArtyom({ onExit }: { onExit: () => void }) {
   const { s, addCoins, addXp, finishGame, questProgress } = useGame();
@@ -60,6 +75,8 @@ export default function MotoArtyom({ onExit }: { onExit: () => void }) {
     score: 0,
     obs: [] as Obstacle[],
     hitCd: 0,
+    lane: 1,          // текущая полоса
+    laneY: 1,         // плавная позиция между полосами
     startT: 0,
     shake: 0,
     wheelPh: 0,
@@ -74,15 +91,22 @@ export default function MotoArtyom({ onExit }: { onExit: () => void }) {
     g.gas = false; g.speed = 0; g.dist = 0; g.heat = 0;
     g.overheat = 0; g.duck = 0; g.lives = 3; g.score = 0;
     g.hitCd = 0; g.shake = 0; g.wheelPh = 0; g.pops = [];
+    g.lane = 1; g.laneY = 1;
     g.startT = Date.now();
 
     // расставляем препятствия; нитки — только в финальной зоне
     const obs: Obstacle[] = [];
     for (let at = 900; at < ROAD_LEN * WIRE_ZONE; at += 420 + Math.random() * 460) {
-      obs.push({ at, kind: Math.random() < 0.5 ? "hole" : "cone" });
+      // Занимаем одну или две полосы, но НИКОГДА все три: иначе проезд
+      // был бы невозможен и игрок терял бы жизнь без вариантов.
+      const blocked = Math.random() < 0.32 ? 2 : 1;
+      const lanes = [0, 1, 2].sort(() => Math.random() - 0.5).slice(0, blocked);
+      for (const lane of lanes) {
+        obs.push({ at, kind: Math.random() < 0.5 ? "hole" : "cone", lane });
+      }
     }
     for (let at = ROAD_LEN * WIRE_ZONE; at < ROAD_LEN - 260; at += 300 + Math.random() * 220) {
-      obs.push({ at, kind: "wire" });
+      obs.push({ at, kind: "wire", lane: -1 });   // нитка через всю дорогу
     }
     g.obs = obs;
     setDist(0); setHeat(0); setScore(0); setLives(3);
@@ -120,11 +144,15 @@ export default function MotoArtyom({ onExit }: { onExit: () => void }) {
 
   /* газ по удержанию, свайп вниз — пригнуться */
   const startY = useRef(0);
+  const startX = useRef(0);
+  const swiped = useRef(false);
   const onDown = useCallback((e: React.PointerEvent) => {
     const g = G.current;
     if (!g.running) return;
     const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
     startY.current = e.clientY - r.top;
+    startX.current = e.clientX - r.left;
+    swiped.current = false;
     g.gas = true;
   }, []);
 
@@ -133,6 +161,19 @@ export default function MotoArtyom({ onExit }: { onExit: () => void }) {
     if (!g.running) return;
     const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
     const y = e.clientY - r.top;
+    const x = e.clientX - r.left;
+    // свайп вбок — смена полосы, по одной за жест
+    if (!swiped.current && Math.abs(x - startX.current) > 34
+        && Math.abs(x - startX.current) > Math.abs(y - startY.current)) {
+      swiped.current = true;
+      const dir = x > startX.current ? 1 : -1;
+      const next = Math.max(0, Math.min(LANES - 1, g.lane + dir));
+      if (next !== g.lane) {
+        g.lane = next;
+        sfx.swoosh();
+        haptic("light");
+      }
+    }
     // свайп вниз больше 40 px — пригнуться
     if (y - startY.current > 40 && g.duck <= 0) {
       g.duck = 700;
@@ -149,7 +190,7 @@ export default function MotoArtyom({ onExit }: { onExit: () => void }) {
     if (!g.w) reset(w, h);
     g.w = w; g.h = h;
 
-    const roadY = h * 0.62;      // линия дороги
+    const roadY = h * 0.62;      // линия центральной полосы
     const bikeX = w * 0.3;
 
     if (g.running) {
@@ -177,6 +218,11 @@ export default function MotoArtyom({ onExit }: { onExit: () => void }) {
       if (g.duck > 0) g.duck -= dt;
       if (g.hitCd > 0) g.hitCd -= dt;
       g.wheelPh += g.speed * dt * 0.02;
+      // байк переезжает между полосами плавно, а не телепортом
+      const dLane = g.lane - g.laneY;
+      if (Math.abs(dLane) > 0.001) {
+        g.laneY += Math.sign(dLane) * Math.min(Math.abs(dLane), LANE_SPEED * dt);
+      }
 
       /* едем */
       g.dist += g.speed * dt * 0.42;
@@ -191,6 +237,8 @@ export default function MotoArtyom({ onExit }: { onExit: () => void }) {
         const rel = o.at - g.dist;
         if (Math.abs(rel) < 26 && g.hitCd <= 0) {
           const ducked = g.duck > 0;
+          // препятствие на другой полосе просто проезжаем мимо
+          if (o.lane >= 0 && Math.abs(g.laneY - o.lane) > 0.45) continue;
           const bad = o.kind === "wire" ? !ducked : true;
           if (o.kind === "wire" && ducked) continue;
           if (bad) {
@@ -237,13 +285,17 @@ export default function MotoArtyom({ onExit }: { onExit: () => void }) {
     // дорога
     ctx.fillStyle = "#23262c";
     ctx.fillRect(0, roadY, w, h - roadY);
-    ctx.strokeStyle = "rgba(255,255,255,0.30)";
-    ctx.lineWidth = 4;
-    ctx.setLineDash([34, 26]);
+    // разметка между тремя полосами
+    ctx.strokeStyle = "rgba(255,255,255,0.26)";
+    ctx.lineWidth = 3;
+    ctx.setLineDash([30, 24]);
     ctx.lineDashOffset = -g.dist * 0.9;
-    ctx.beginPath();
-    ctx.moveTo(0, roadY + 44); ctx.lineTo(w, roadY + 44);
-    ctx.stroke();
+    for (let k = 0; k < LANES - 1; k++) {
+      const ly = laneToY(roadY, k + 0.5);
+      ctx.beginPath();
+      ctx.moveTo(0, ly); ctx.lineTo(w, ly);
+      ctx.stroke();
+    }
     ctx.setLineDash([]);
 
     // препятствия
@@ -251,21 +303,25 @@ export default function MotoArtyom({ onExit }: { onExit: () => void }) {
       const rel = o.at - g.dist;
       if (rel < -80 || rel > w + 120) continue;
       const ox = bikeX + rel;
+      const oy = o.lane >= 0 ? laneToY(roadY, o.lane) : roadY;
       if (o.kind === "hole") {
         ctx.fillStyle = "#0a0b0d";
         ctx.beginPath();
-        ctx.ellipse(ox, roadY + 30, 26, 9, 0, 0, Math.PI * 2);
+        ctx.ellipse(ox, oy + 6, 24, 8, 0, 0, Math.PI * 2);
         ctx.fill();
+        ctx.strokeStyle = "rgba(255,255,255,0.18)";
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
       } else if (o.kind === "cone") {
         ctx.fillStyle = "#ff7a2a";
         ctx.beginPath();
-        ctx.moveTo(ox, roadY - 4);
-        ctx.lineTo(ox - 12, roadY + 26);
-        ctx.lineTo(ox + 12, roadY + 26);
+        ctx.moveTo(ox, oy - 24);
+        ctx.lineTo(ox - 11, oy + 6);
+        ctx.lineTo(ox + 11, oy + 6);
         ctx.closePath();
         ctx.fill();
         ctx.fillStyle = "#fff";
-        ctx.fillRect(ox - 8, roadY + 8, 16, 5);
+        ctx.fillRect(ox - 7, oy - 10, 14, 5);
       } else {
         // нитка поперёк на уровне шеи
         ctx.strokeStyle = "#e8e8f0";
@@ -284,7 +340,8 @@ export default function MotoArtyom({ onExit }: { onExit: () => void }) {
 
     // мотоцикл + Артём
     const duck = g.duck > 0;
-    const by = roadY - 4;
+    // байк стоит на своей полосе; laneY меняется плавно при перестроении
+    const by = laneToY(roadY, g.laneY) - 26;
     ctx.save();
     ctx.translate(bikeX, by);
     // колёса
@@ -454,4 +511,9 @@ export default function MotoArtyom({ onExit }: { onExit: () => void }) {
       )}
     </div>
   );
+}
+
+/** Экранная Y-координата полосы: 0 дальняя, 2 ближняя */
+function laneToY(roadY: number, lane: number): number {
+  return roadY + (lane - 1) * LANE_GAP + 22;
 }

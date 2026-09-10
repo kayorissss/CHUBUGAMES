@@ -919,4 +919,6 @@ export const EN_TEXT: Record<string, string> = {
   "ПО ГОРИЗОНТАЛИ": "ACROSS",
   "ПО ВЕРТИКАЛИ": "DOWN",
   "букв": "letters",
+  "Три полосы: свайп влево или вправо перестраивает байк": "Three lanes: swipe left or right to change lane",
+  "Все три полосы разом не перекрыты — проезд есть всегда": "All three lanes are never blocked at once — there is always a way through",
 };

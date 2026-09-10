@@ -26,9 +26,24 @@ interface Hand {
   mine: boolean;     // своя рука — не бить
   slap: number;      // анимация отдёргивания
   dead: boolean;
+  /**
+   * Что делает рука прямо сейчас.
+   *
+   * Раньше рука доходила до сумки, вещь молча списывалась, а рука
+   * просто исчезала — со стороны казалось, что руки «стоят и мешают».
+   * Теперь у кражи три фазы: тянется, хватает вещь (короткая пауза с
+   * рывком) и уносит её обратно за край экрана вместе с добычей.
+   */
+  state: "reach" | "grab" | "carry";
+  /** сколько осталось держать паузу захвата, мс */
+  grabT: number;
+  /** какую вещь утащила — рисуем её в кулаке */
+  loot: string | null;
 }
 
 const ITEMS = ["ТЕЛЕФОН", "КОШЕЛЁК", "НАУШНИКИ", "ЗАРЯДКА", "ТЕТРАДЬ", "КЛЮЧИ"];
+/** Пауза захвата: последний шанс успеть ударить по руке */
+const GRAB_MS = 420;
 
 export default function KirillHands({ onExit }: { onExit: () => void }) {
   const { s, addCoins, addXp, finishGame, questProgress } = useGame();
@@ -120,7 +135,7 @@ export default function KirillHands({ onExit }: { onExit: () => void }) {
         if (hnd.mine) {
           // своя рука — штраф
           hnd.slap = 300;
-          hnd.dead = true;
+          hnd.state = "carry";   // отдёрнулась и уходит
           g.combo = 0;
           g.score = Math.max(0, g.score - 60);
           g.shake = 12;
@@ -131,7 +146,7 @@ export default function KirillHands({ onExit }: { onExit: () => void }) {
           g.pops.push({ x: tip.x, y: tip.y - 22, t: 1, txt: tr("СВОЯ РУКА!"), col: "#FF6B4D" });
         } else {
           hnd.slap = 320;
-          hnd.dead = true;
+          hnd.state = "carry";   // получила по рукам и убирается ни с чем
           g.combo += 1;
           const bonus = 25 + Math.min(g.combo, 10) * 6;
           g.score += bonus;
@@ -174,33 +189,62 @@ export default function KirillHands({ onExit }: { onExit: () => void }) {
           mine,
           slap: 0,
           dead: false,
+          state: "reach",
+          grabT: 0,
+          loot: null,
         });
       }
 
       for (const hnd of g.hands) {
-        if (hnd.slap > 0) { hnd.slap -= dt; hnd.reach = Math.max(0, hnd.reach - dt * 0.004); continue; }
-        if (hnd.dead) continue;
-        hnd.reach += hnd.speed * dt;
-        if (hnd.reach >= 1) {
-          hnd.dead = true;
-          if (hnd.mine) continue;         // своя рука просто убирается
-          g.items -= 1;
-          g.combo = 0;
-          setCombo(0);
-          setItems(g.items);
-          g.shake = 16;
-          g.bagPulse = 1;
-          sfx.hit();
-          haptic("error");
-          g.pops.push({
-            x: w / 2, y: h * 0.52 - 40, t: 1,
-            txt: `−${tr(ITEMS[Math.max(0, g.items)] || "ВЕЩЬ")}`,
-            col: "#FF6B4D",
-          });
-          if (g.items <= 0) { end(); return; }
+        if (hnd.slap > 0) {
+          hnd.slap -= dt;
+          hnd.reach = Math.max(0, hnd.reach - dt * 0.004);
+          if (hnd.slap <= 0 && hnd.reach <= 0.02) hnd.dead = true;
+          continue;
         }
+
+        if (hnd.state === "reach") {
+          hnd.reach += hnd.speed * dt;
+          if (hnd.reach >= 1) {
+            hnd.reach = 1;
+            if (hnd.mine) { hnd.state = "carry"; hnd.loot = null; continue; }
+            // хватает вещь: короткая пауза, за которую ещё можно ударить
+            hnd.state = "grab";
+            hnd.grabT = GRAB_MS;
+            g.bagPulse = 1;
+            sfx.tap();
+          }
+          continue;
+        }
+
+        if (hnd.state === "grab") {
+          hnd.grabT -= dt;
+          if (hnd.grabT <= 0) {
+            // вещь ушла — теперь рука уносит её
+            hnd.state = "carry";
+            hnd.loot = ITEMS[Math.max(0, g.items - 1)] || "ВЕЩЬ";
+            g.items -= 1;
+            g.combo = 0;
+            setCombo(0);
+            setItems(g.items);
+            g.shake = 16;
+            sfx.hit();
+            haptic("error");
+            g.pops.push({
+              x: w / 2, y: h * 0.52 - 40, t: 1,
+              txt: `−${tr(hnd.loot)}`,
+              col: "#FF6B4D",
+            });
+            if (g.items <= 0) { end(); return; }
+          }
+          continue;
+        }
+
+        // carry: уползает обратно вместе с добычей
+        hnd.reach -= hnd.speed * dt * 1.5;
+        if (hnd.reach <= 0) hnd.dead = true;
       }
-      g.hands = g.hands.filter((x) => !(x.dead && x.slap <= 0 && x.reach <= 0.02));
+      g.hands = g.hands.filter((x) => !x.dead);
       if (!g.running) return;
     }
 
