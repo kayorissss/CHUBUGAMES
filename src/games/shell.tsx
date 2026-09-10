@@ -6,6 +6,7 @@ import { fmt } from "../core/format";
 import Icon from "../ui/Icon";
 import { useModes, MARATHON_ROUNDS, survivalMult } from "../core/modes";
 import { useGame } from "../core/store";
+import { canvasScaleCap } from "../core/perf";
 
 export function useCanvas(
   draw: (ctx: CanvasRenderingContext2D, w: number, h: number, dt: number, t: number) => void,
@@ -21,7 +22,9 @@ export function useCanvas(
     let raf = 0;
     let last = performance.now();
     let alive = true;
-    const dpr = Math.min(2.5, window.devicePixelRatio || 1);
+    // На слабом телефоне рисуем в меньшем разрешении: разницы на глаз
+    // почти нет, а пикселей на кадр — вдвое меньше.
+    const dpr = Math.min(canvasScaleCap(), window.devicePixelRatio || 1);
 
     const resize = () => {
       const r = c.getBoundingClientRect();

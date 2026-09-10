@@ -61,9 +61,9 @@ console.log('\n[6] Сборка офлайн');
 const dist=fs.readFileSync('dist/index.html','utf8');
 ok((dist.match(/data:font\/woff2/g)||[]).length===4,'шрифты вшиты в HTML (не грузятся из сети)');
 ok(!/fonts\.googleapis|fonts\.gstatic/.test(dist),'нет обращений к Google Fonts');
-// Порог поднят с 900 КБ: 4 спорт-игры и переработанный главный экран
-// добавили ~45 КБ. Всё в одном файле — приложение обязано работать офлайн.
-ok(fs.statSync('dist/index.html').size < 1000*1024,`размер ${(fs.statSync('dist/index.html').size/1024).toFixed(0)} КБ — в пределах нормы`);
+// Порог: 8 новых игр добавили ~50 КБ (сейчас ~976 КБ). Всё лежит в одном
+// файле — приложение обязано открываться офлайн, без подгрузки чанков.
+ok(fs.statSync('dist/index.html').size < 1200*1024,`размер ${(fs.statSync('dist/index.html').size/1024).toFixed(0)} КБ — в пределах нормы`);
 
 console.log('\n[7] Обновление приложения');
 const upd=fs.readFileSync('src/core/updater.ts','utf8');
@@ -89,7 +89,7 @@ console.log('\n[8] Контент про друзей');
 const cnt=fs.readFileSync('src/core/content.ts','utf8');
 for(const id of ['lyoha','vanya','maks','seryoga','artyom','radomir','kudrya','shitov'])
   ok(cnt.includes(`id: "${id}"`),`друг ${id} есть в игре`);
-ok((cnt.match(/unlockLvl: 0/g)||[]).length===16,'все 16 мини-игр открыты сразу');
+ok((cnt.match(/unlockLvl: 0/g)||[]).length===24,'все 24 мини-игры открыты сразу');
 const sav=fs.readFileSync('src/core/save.ts','utf8');
 ok(/unlockedGames = ALL_GAMES\.slice\(\)/.test(sav)&&/ALL_GAMES: GameId\[\]/.test(sav),'старые сохранения тоже получают все игры');
 ok(sav.includes('if (!have.has(f.id))'),'новые друзья досыпаются в старые сохранения');
@@ -262,6 +262,63 @@ const stg2=fs.readFileSync('src/pages/Settings.tsx','utf8');
 ok(stg2.includes('notifyUpdates'),'тумблер уведомлений хранит своё состояние');
 const ty=fs.readFileSync('src/core/types.ts','utf8');
 ok(ty.includes('notifyUpdates'),'настройка уведомлений есть в типах сохранения');
+
+/* ─────────── [19] Восемь новых игр и оптимизация ─────────── */
+console.log('\n[19] Новые игры и производительность');
+
+const sv19 = {
+  crossword: 'src/games/Crossword.tsx',
+  bus: 'src/games/Bus12.tsx',
+  pet: 'src/games/ChubPet.tsx',
+  beard: 'src/games/MaksBeard.tsx',
+  moto: 'src/games/MotoArtyom.tsx',
+  fuel: 'src/games/FuelHunt.tsx',
+  hands: 'src/games/KirillHands.tsx',
+  europa: 'src/games/Europa.tsx',
+};
+for (const [id, path] of Object.entries(sv19)) {
+  ok(fs.existsSync(path), `игра ${id}: файл на месте`);
+}
+
+// Каждая игра обязана быть прописана во всех шести местах, иначе она
+// не появится в списке или сломает миграцию сохранения.
+const ty19 = fs.readFileSync('src/core/types.ts', 'utf8');
+const sav19 = fs.readFileSync('src/core/save.ts', 'utf8');
+const cnt19 = fs.readFileSync('src/core/content.ts', 'utf8');
+const mod19 = fs.readFileSync('src/core/modes.tsx', 'utf8');
+const app19 = fs.readFileSync('src/App.tsx', 'utf8');
+for (const id of Object.keys(sv19)) {
+  ok(ty19.includes(`"${id}"`), `${id}: есть в GameId`);
+  ok(sav19.includes(`${id}: emptyGame()`), `${id}: есть в новом сохранении`);
+  ok(new RegExp(`"${id}",`).test(sav19), `${id}: есть в ALL_GAMES (миграция)`);
+  ok(cnt19.includes(`id: "${id}" as const`), `${id}: есть в списке игр`);
+  ok(new RegExp(`${id}: \\d+`).test(mod19), `${id}: есть цель для испытания`);
+  ok(app19.includes(`game === "${id}"`), `${id}: открывается из меню`);
+}
+
+// Ни одна игра не должна быть заперта за уровнем.
+ok((cnt19.match(/unlockLvl: 0/g) || []).length === 24, 'все 24 игры открыты сразу');
+
+// Эмодзи запрещены во всём приложении.
+const emo19 = /[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/u;
+for (const [id, path] of Object.entries(sv19)) {
+  ok(!emo19.test(fs.readFileSync(path, 'utf8')), `${id}: без эмодзи`);
+}
+
+// Оптимизация под слабые телефоны.
+const perf19 = fs.readFileSync('src/core/perf.ts', 'utf8');
+ok(perf19.includes('canvasScaleCap'), 'есть ограничение плотности пикселей');
+ok(perf19.includes('detectWeak'), 'слабый телефон определяется автоматически');
+ok(perf19.includes('low-fx'), 'есть облегчённый режим оформления');
+const css19 = fs.readFileSync('src/index.css', 'utf8');
+ok(css19.includes('html.low-fx'), 'в стилях есть блок облегчённого режима');
+ok(/html\.low-fx[\s\S]{0,900}backdrop-filter:\s*none/.test(css19), 'размытие отключается на слабых');
+const shell19 = fs.readFileSync('src/games/shell.tsx', 'utf8');
+ok(shell19.includes('canvasScaleCap'), 'канвас игр учитывает слабый телефон');
+const app19b = fs.readFileSync('src/App.tsx', 'utf8');
+ok(app19b.includes('applyPerfMode'), 'режим производительности применяется при запуске');
+const set19 = fs.readFileSync('src/pages/Settings.tsx', 'utf8');
+ok(set19.includes('writePerfMode'), 'в настройках можно переключить производительность');
 
 console.log(fails===0?'\n✅ ВСЕ ПРОВЕРКИ ВЁРСТКИ ПРОЙДЕНЫ\n':`\n❌ ПРОВАЛЕНО: ${fails}\n`);
 process.exit(fails?1:0);

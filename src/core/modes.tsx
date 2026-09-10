@@ -76,6 +76,8 @@ const CHALLENGE_TARGET: Record<GameId, number> = {
   burger: 40, clicker: 900, bite: 18, dino: 550, radomir: 320, merge: 700,
   whack: 26, stack: 14, sort: 30, memory: 9, flap: 12, defend: 24,
   basket: 22, volley: 5, penalty: 6, pool: 90,
+  crossword: 300, bus: 600, pet: 700, beard: 500,
+  moto: 400, fuel: 350, hands: 300, europa: 600,
 };
 
 function hash(seed: string) {

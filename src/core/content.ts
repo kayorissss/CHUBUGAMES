@@ -428,4 +428,12 @@ export const GAME_META = [
   { id: "volley" as const, name: "ВОЛЕЙБОЛ НА ПАРЕ", tag: "Спорт", desc: "Веди пальцем и отбивай головой. Уронил трижды — конец.", unlockLvl: 0, icon: "medal" as IconName },
   { id: "penalty" as const, name: "ПЕНАЛЬТИ ЗА ГАРАЖАМИ", tag: "Спорт", desc: "Бей свайпом мимо вратаря. Девятка — двойные очки.", unlockLvl: 0, icon: "flag" as IconName },
   { id: "pool" as const, name: "БИЛЬЯРД В ПОДВАЛЕ", tag: "Спорт", desc: "Тяни кий и забивай. Каждый шар возвращает удар.", unlockLvl: 0, icon: "dice" as IconName },
+  { id: "crossword" as const, name: "КРОССВОРД БОБКОВОЙ", tag: "Слова", desc: "Убеди Бобкову, что кроссворд твой. Она подозревает.", unlockLvl: 0, icon: "brain" as IconName },
+  { id: "bus" as const, name: "АВТОБУС №12", tag: "Квест", desc: "Пробейся к дверям через толпу с бабульками. Шесть остановок.", unlockLvl: 0, icon: "users" as IconName },
+  { id: "pet" as const, name: "ЧУБУ-ТАМАГОЧИ", tag: "Уход", desc: "Корми, мой, стирай и сажай на унитаз. Не дай похудеть.", unlockLvl: 0, icon: "heart" as IconName },
+  { id: "beard" as const, name: "ОЩИПАТЬ МАКСА", tag: "Терпение", desc: "Борода, грудь, руки. Тяни волосок и не спеши — он злится.", unlockLvl: 0, icon: "sparkle" as IconName },
+  { id: "moto" as const, name: "МОТО АРТЁМА", tag: "Гонка", desc: "Держи газ, следи за перегревом. На финише — нитки под шею.", unlockLvl: 0, icon: "speed" as IconName },
+  { id: "fuel" as const, name: "ГДЕ БЕНЗИН", tag: "Стратегия", desc: "Объезжай заправки на остатке. В РФ сейчас беда с ним.", unlockLvl: 0, icon: "bolt" as IconName },
+  { id: "hands" as const, name: "КИРИЛЛ ХУДОЙ", tag: "Реакция", desc: "Лезет в портфель. Бей по рукам, но свою не задень.", unlockLvl: 0, icon: "fist" as IconName },
+  { id: "europa" as const, name: "ЧУБУПА УНИВЕРСАЛИС 4", tag: "Стратегия", desc: "Захвати весь колледж за 30 ходов. Деканат так просто не сдастся.", unlockLvl: 0, icon: "flag" as IconName },
 ];

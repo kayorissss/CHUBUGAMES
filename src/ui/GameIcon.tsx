@@ -170,6 +170,87 @@ export default function GameIcon({
         </svg>
       );
 
+    // Кроссворд: сетка с заполненной клеткой
+    case "crossword":
+      return (
+        <svg {...p} fill="none">
+          <rect x="5" y="5" width="22" height="22" rx="3" stroke="currentColor" strokeWidth="2.2" />
+          <path d="M12.3 5v22M19.7 5v22M5 12.3h22M5 19.7h22" stroke="currentColor" strokeWidth="1.6" opacity="0.5" />
+          <rect x="12.3" y="12.3" width="7.4" height="7.4" fill={acc} />
+        </svg>
+      );
+
+    // Автобус
+    case "bus":
+      return (
+        <svg {...p} fill="none">
+          <rect x="5" y="6" width="22" height="16" rx="3" stroke="currentColor" strokeWidth="2.2" />
+          <path d="M5 13h22" stroke="currentColor" strokeWidth="1.8" />
+          <circle cx="10" cy="25" r="2.3" fill={acc} />
+          <circle cx="22" cy="25" r="2.3" fill={acc} />
+          <path d="M9 17h3M20 17h3" stroke={acc} strokeWidth="2" strokeLinecap="round" />
+        </svg>
+      );
+
+    // Тамагочи: сердце в корпусе
+    case "pet":
+      return (
+        <svg {...p} fill="none">
+          <rect x="6" y="4" width="20" height="24" rx="6" stroke="currentColor" strokeWidth="2.2" />
+          <path d="M16 21c-3-2.4-5-4.3-5-6.5A2.6 2.6 0 0116 13a2.6 2.6 0 015 1.5c0 2.2-2 4.1-5 6.5z" fill={acc} />
+        </svg>
+      );
+
+    // Пинцет и волосок
+    case "beard":
+      return (
+        <svg {...p} fill="none">
+          <path d="M10 4l4 13M22 4l-4 13" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
+          <path d="M14 17h4v4a2 2 0 01-4 0v-4z" stroke="currentColor" strokeWidth="2.2" strokeLinejoin="round" />
+          <path d="M16 25c-2 1.5-3 2.5-3 4" stroke={acc} strokeWidth="2.2" strokeLinecap="round" />
+        </svg>
+      );
+
+    // Мотоцикл
+    case "moto":
+      return (
+        <svg {...p} fill="none">
+          <circle cx="8" cy="21" r="5" stroke="currentColor" strokeWidth="2.2" />
+          <circle cx="24" cy="21" r="5" stroke="currentColor" strokeWidth="2.2" />
+          <path d="M8 21l5-7h7l4 7" stroke={acc} strokeWidth="2.2" strokeLinejoin="round" strokeLinecap="round" />
+          <path d="M19 10h4" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
+        </svg>
+      );
+
+    // Канистра-колонка
+    case "fuel":
+      return (
+        <svg {...p} fill="none">
+          <rect x="6" y="6" width="13" height="21" rx="2.5" stroke="currentColor" strokeWidth="2.2" />
+          <path d="M9 12h7" stroke={acc} strokeWidth="2.2" strokeLinecap="round" />
+          <path d="M19 11h4a2 2 0 012 2v7a2 2 0 01-2 2" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
+        </svg>
+      );
+
+    // Кулак по руке
+    case "hands":
+      return (
+        <svg {...p} fill="none">
+          <path d="M6 17v-3a2 2 0 014 0v-1a2 2 0 014 0v1a2 2 0 014 0v5a7 7 0 01-7 7 7 7 0 01-7-7v-2z" stroke="currentColor" strokeWidth="2.2" strokeLinejoin="round" />
+          <path d="M22 6l4 4M26 6l-4 4" stroke={acc} strokeWidth="2.4" strokeLinecap="round" />
+        </svg>
+      );
+
+    // Флаг на карте
+    case "europa":
+      return (
+        <svg {...p} fill="none">
+          <path d="M9 27V6" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
+          <path d="M9 6h13l-3 4.5L22 15H9z" fill={acc} />
+          <path d="M14 27h12" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" opacity="0.5" />
+        </svg>
+      );
+
     default:
       return (
         <svg {...p} fill="none">

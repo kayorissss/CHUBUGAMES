@@ -3,7 +3,8 @@ export type Rarity = "common" | "rare" | "epic" | "legend";
 export type GameId =
   | "burger" | "clicker" | "bite" | "dino" | "radomir" | "merge" | "whack"
   | "stack" | "sort" | "memory" | "flap" | "defend"
-  | "basket" | "volley" | "penalty" | "pool";
+  | "basket" | "volley" | "penalty" | "pool"
+  | "crossword" | "bus" | "pet" | "beard" | "moto" | "fuel" | "hands" | "europa";
 
 /**
  * 0 лысый, 1 короткие, 2 шапка волос, 3 ирокез, 4 кудри-облако,

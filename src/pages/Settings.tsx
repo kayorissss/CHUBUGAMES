@@ -11,6 +11,7 @@ import {
   notifyGranted,
 } from "../core/notify";
 import { saveFileNative } from "../core/exportSave";
+import { applyPerfMode, detectWeak, readPerfMode, writePerfMode, type PerfMode } from "../core/perf";
 import { tr } from "../core/i18n";
 import Icon, { type IconName } from "../ui/Icon";
 import { ACCENTS } from "../core/content";
@@ -27,6 +28,7 @@ export default function Settings({
 }) {
   const { s, set, hardReset, toast, t } = useGame();
   const [confirmReset, setConfirmReset] = useState(false);
+  const [perf, setPerf] = useState<PerfMode>(() => readPerfMode());
   const fileRef = useRef<HTMLInputElement>(null);
 
   const exportSave = async () => {
@@ -146,6 +148,31 @@ export default function Settings({
           on={s.settings.fx}
           onToggle={() => set((d) => { d.settings.fx = !d.settings.fx; })}
         />
+        <Divider inset={14} />
+        <div style={{ padding: "13px 14px" }}>
+          <Seg
+            label={tr("Производительность")}
+            value={perf}
+            opts={[["auto", tr("Авто")], ["high", tr("Красиво")], ["low", tr("Быстро")]]}
+            onPick={(v) => {
+              const m = v as PerfMode;
+              setPerf(m);
+              writePerfMode(m);
+              applyPerfMode(m);
+              sfx.click();
+            }}
+          />
+          <div className="t-caption" style={{ padding: "0 0 2px" }}>
+            {perf === "auto"
+              ? detectWeak()
+                ? tr("Телефон определён как слабый — размытие отключено")
+                : tr("Телефон тянет всё — включено полное оформление")
+              : perf === "low"
+                ? tr("Без размытия и фоновых пятен — меньше нагрузка")
+                : tr("Всё оформление включено")}
+          </div>
+        </div>
+
         <Divider inset={14} />
         <Seg
           label={t("settings.language")}

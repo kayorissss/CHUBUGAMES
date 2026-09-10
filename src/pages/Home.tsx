@@ -454,15 +454,15 @@ export default function Home({
                         background: "var(--btn-bg)", letterSpacing: "0.07em",
                       }}
                     >
-                      {g.tag}
+                      {tr(g.tag)}
                     </span>
                   </div>
-                  <div className="t-title-sm clip1">{unlocked ? g.name : "?????"}</div>
+                  <div className="t-title-sm clip1">{unlocked ? tr(g.name) : "?????"}</div>
                   <div
                     className="t-caption clip2"
                     style={{ marginTop: 4, flex: 1 }}
                   >
-                    {unlocked ? g.desc : `Уровень ${g.unlockLvl}`}
+                    {unlocked ? tr(g.desc) : `${tr("Уровень")} ${g.unlockLvl}`}
                   </div>
                   {unlocked && (
                     <div

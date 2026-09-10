@@ -10,6 +10,7 @@ import { Toasts, OfflineModal } from "./components/Overlays";
 import UpdateBanner from "./ui/UpdateBanner";
 import WhatsNew from "./ui/WhatsNew";
 import { initNotificationsOnFirstRun, syncInstalledVersion } from "./core/notify";
+import { applyPerfMode } from "./core/perf";
 import Icon from "./ui/Icon";
 import Home from "./pages/Home";
 import { ModesProvider } from "./core/modes";
@@ -33,6 +34,14 @@ import Basket from "./games/Basket";
 import Volley from "./games/Volley";
 import Penalty from "./games/Penalty";
 import Pool from "./games/Pool";
+import Crossword from "./games/Crossword";
+import Bus12 from "./games/Bus12";
+import ChubPet from "./games/ChubPet";
+import MaksBeard from "./games/MaksBeard";
+import MotoArtyom from "./games/MotoArtyom";
+import FuelHunt from "./games/FuelHunt";
+import KirillHands from "./games/KirillHands";
+import Europa from "./games/Europa";
 import Canteen from "./games/Canteen";
 import WhoWasIt from "./games/WhoWasIt";
 import RadomirFlight from "./games/RadomirFlight";
@@ -123,6 +132,10 @@ function Shell() {
 
   // Сообщаем фоновой проверке, какая версия стоит сейчас, — иначе она
   // не поймёт, что вышло обновление, пока игра закрыта.
+  // Слабые телефоны определяем до первой отрисовки — иначе человек
+  // успевает увидеть лаги на главном экране.
+  useEffect(() => { applyPerfMode(); }, []);
+
   useEffect(() => { void syncInstalledVersion(); }, []);
 
   // При первом запуске система сама спросит про уведомления — тумблер в
@@ -238,6 +251,14 @@ function Shell() {
             {game === "volley" && <Volley onExit={() => setGame(null)} />}
             {game === "penalty" && <Penalty onExit={() => setGame(null)} />}
             {game === "pool" && <Pool onExit={() => setGame(null)} />}
+            {game === "crossword" && <Crossword onExit={() => setGame(null)} />}
+            {game === "bus" && <Bus12 onExit={() => setGame(null)} />}
+            {game === "pet" && <ChubPet onExit={() => setGame(null)} />}
+            {game === "beard" && <MaksBeard onExit={() => setGame(null)} />}
+            {game === "moto" && <MotoArtyom onExit={() => setGame(null)} />}
+            {game === "fuel" && <FuelHunt onExit={() => setGame(null)} />}
+            {game === "hands" && <KirillHands onExit={() => setGame(null)} />}
+            {game === "europa" && <Europa onExit={() => setGame(null)} />}
           </motion.div>
         )}
       </AnimatePresence>

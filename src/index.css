@@ -410,6 +410,23 @@ body {
 html.no-fx .aurora span { animation: none !important; }
 html.no-fx .glass { backdrop-filter: none; -webkit-backdrop-filter: none; background: var(--n-200); }
 
+/* ---------- Облегчённый режим для слабых телефонов ----------
+   backdrop-filter пересчитывает размытие по всей площади под элементом
+   каждый кадр. На бюджетном GPU (Realme C3 и подобные) это главный
+   источник лагов — панелей на экране десятки. Убираем размытие, оставляя
+   непрозрачный фон: выглядит почти так же, но рисуется мгновенно.       */
+html.low-fx .glass,
+html.low-fx [style*="backdrop-filter"],
+html.low-fx [style*="backdropFilter"] {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+html.low-fx .glass { background: var(--n-200); }
+/* Три плавающих пятна фона крутятся вечно и занимают весь экран */
+html.low-fx .aurora span { animation: none !important; opacity: 0.5; }
+/* Тяжёлые тени по всей площади заменяем простой рамкой */
+html.low-fx .glass { box-shadow: none; }
+
 /* ---------- Прочее ---------- */
 .scroll {
   overflow-y: auto;
