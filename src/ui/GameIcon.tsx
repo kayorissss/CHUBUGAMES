@@ -251,6 +251,40 @@ export default function GameIcon({
         </svg>
       );
 
+    // Шахматный конь
+    case "chess":
+      return (
+        <svg {...p} fill="none">
+          <path
+            d="M11 26h13c.3-3-.3-5.6-1.6-7.9-1.1-2-2.4-3.5-3.4-4.4l1.2-2.2c.3-.6.1-1.3-.5-1.6l-1.7-1-.9 1.5-1.4-.9.6-1c.3-.6.1-1.3-.5-1.6-.6-.3-1.3-.1-1.6.5l-.9 1.5c-2.4.4-4.4 1.8-5.6 3.9-.7 1.2-1.1 2.4-1.3 3.5-.1.7.4 1.4 1.1 1.5.4 0 .8-.1 1.1-.4l2.2-2 1.3 1.2-2.8 3c-1.2 1.3-1.5 3.4-1.5 6.4z"
+            fill={acc}
+          />
+          <path d="M8 28h18" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" />
+        </svg>
+      );
+
+    // Две шашки стопкой
+    case "checkers":
+      return (
+        <svg {...p} fill="none">
+          <ellipse cx="16" cy="21" rx="10" ry="5" fill={acc} />
+          <ellipse cx="16" cy="15" rx="10" ry="5" stroke="currentColor" strokeWidth="2.2" />
+          <path d="M6 15v6M26 15v6" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
+        </svg>
+      );
+
+    // Треугольники нард и кубик
+    case "nards":
+      return (
+        <svg {...p} fill="none">
+          <path d="M5 6l3.5 10L12 6z" fill={acc} />
+          <path d="M13 6l3.5 10L20 6z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+          <rect x="18" y="17" width="9" height="9" rx="2" stroke="currentColor" strokeWidth="2" />
+          <circle cx="22.5" cy="21.5" r="1.4" fill={acc} />
+          <path d="M5 26h9" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
+        </svg>
+      );
+
     default:
       return (
         <svg {...p} fill="none">

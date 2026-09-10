@@ -11,7 +11,7 @@ import {
   notifyGranted,
 } from "../core/notify";
 import { saveFileNative } from "../core/exportSave";
-import { applyPerfMode, detectWeak, readPerfMode, writePerfMode, type PerfMode } from "../core/perf";
+import { isLowFx, measuredVerdict, readPerfMode, remeasure, writePerfMode, type PerfMode } from "../core/perf";
 import { tr } from "../core/i18n";
 import Icon, { type IconName } from "../ui/Icon";
 import { ACCENTS } from "../core/content";
@@ -157,20 +157,40 @@ export default function Settings({
             onPick={(v) => {
               const m = v as PerfMode;
               setPerf(m);
-              writePerfMode(m);
-              applyPerfMode(m);
+              writePerfMode(m);   // сам применит класс и сбросит замер
               sfx.click();
             }}
           />
           <div className="t-caption" style={{ padding: "0 0 2px" }}>
             {perf === "auto"
-              ? detectWeak()
-                ? tr("Телефон определён как слабый — размытие отключено")
-                : tr("Телефон тянет всё — включено полное оформление")
+              ? measuredVerdict() === null
+                ? tr("Замеряю плавность первые секунды после запуска")
+                : isLowFx()
+                  ? tr("Телефон не тянул полное оформление — эффекты отключены")
+                  : tr("Телефон тянет всё — включено полное оформление")
               : perf === "low"
-                ? tr("Без размытия и фоновых пятен — меньше нагрузка")
+                ? tr("Без размытия, теней и анимаций — максимум скорости")
                 : tr("Всё оформление включено")}
           </div>
+          {perf === "auto" && (
+            <button
+              type="button"
+              onClick={() => {
+                remeasure();
+                sfx.click();
+                // Замер идёт при следующем запуске: сейчас просто сбросили
+                setPerf("auto");
+              }}
+              className="t-label"
+              style={{
+                marginTop: 10, width: "100%", padding: "10px 8px",
+                borderRadius: "var(--r-sm)", background: "var(--btn-bg)",
+                border: "1px solid var(--btn-brd)", color: "var(--text)", fontSize: 9,
+              }}
+            >
+              {tr("ЗАМЕРИТЬ ЗАНОВО")}
+            </button>
+          )}
         </div>
 
         <Divider inset={14} />

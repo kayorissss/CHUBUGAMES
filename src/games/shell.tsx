@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { tr } from "../core/i18n";
 import { motion } from "framer-motion";
 import { Panel, Tap } from "../ui/Glass";
@@ -6,7 +6,8 @@ import { fmt } from "../core/format";
 import Icon from "../ui/Icon";
 import { useModes, MARATHON_ROUNDS, survivalMult } from "../core/modes";
 import { useGame } from "../core/store";
-import { canvasScaleCap } from "../core/perf";
+import { canvasScaleCap, isLowFx } from "../core/perf";
+import { modalBackdrop, modalCard, springPop, EASE } from "../core/motion";
 
 export function useCanvas(
   draw: (ctx: CanvasRenderingContext2D, w: number, h: number, dt: number, t: number) => void,
@@ -367,23 +368,24 @@ export function GameOver({
 
   return (
     <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
+      variants={modalBackdrop}
+      initial="initial"
+      animate="animate"
       className="absolute inset-0 z-40 flex items-center justify-center px-6"
-      style={{ background: "rgba(4,4,6,0.72)", backdropFilter: "blur(18px)" }}
+      style={{ background: "rgba(4,4,6,0.82)", backdropFilter: "blur(18px)" }}
     >
       <motion.div
-        initial={{ scale: 0.86, y: 30, opacity: 0 }}
-        animate={{ scale: 1, y: 0, opacity: 1 }}
-        transition={{ type: "spring", stiffness: 320, damping: 26 }}
+        variants={modalCard}
+        initial="initial"
+        animate="animate"
         className="w-full max-w-sm"
       >
         <Panel r="xl" strong className="p-6 text-center">
           {isRecord && (
             <motion.div
-              initial={{ scale: 0 }}
-              animate={{ scale: 1 }}
-              transition={{ delay: 0.2, type: "spring", stiffness: 400 }}
+              initial={{ scale: 0, rotate: -8 }}
+              animate={{ scale: 1, rotate: 0 }}
+              transition={{ delay: 0.24, ...springPop }}
               className="inline-block px-3 py-1 rounded-full mb-3 t-label"
               style={{ background: "var(--acc)", color: "var(--acc-ink)", fontSize: 10 }}
             >
@@ -395,21 +397,35 @@ export function GameOver({
 
           <div className="my-5">
             <div className="t-label mb-1">{tr("Результат")}</div>
-            <div className="t-num acc-text" style={{ fontSize: 52, lineHeight: 1 }}>{fmt(score)}</div>
+            <CountUp value={score} className="t-num acc-text" style={{ fontSize: 52, lineHeight: 1 }} />
             <div className="text-xs mt-1" style={{ color: "var(--text-mute)" }}>
               рекорд {fmt(Math.max(best, score))}
             </div>
           </div>
 
           <div className="flex gap-2 mb-5">
-            <Panel r="md" className="flex-1 py-2.5">
-              <div className="t-num" style={{ fontSize: 17 }}>+{fmt(coins)}</div>
-              <div className="t-label" style={{ fontSize: 9 }}>{tr("монет")}</div>
-            </Panel>
-            <Panel r="md" className="flex-1 py-2.5">
-              <div className="t-num" style={{ fontSize: 17 }}>+{fmt(xp)}</div>
-              <div className="t-label" style={{ fontSize: 9 }}>{tr("опыта")}</div>
-            </Panel>
+            <motion.div
+              className="flex-1"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.3, duration: 0.3, ease: EASE }}
+            >
+              <Panel r="md" className="py-2.5">
+                <div className="t-num" style={{ fontSize: 17 }}>+{fmt(coins)}</div>
+                <div className="t-label" style={{ fontSize: 9 }}>{tr("монет")}</div>
+              </Panel>
+            </motion.div>
+            <motion.div
+              className="flex-1"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.38, duration: 0.3, ease: EASE }}
+            >
+              <Panel r="md" className="py-2.5">
+                <div className="t-num" style={{ fontSize: 17 }}>+{fmt(xp)}</div>
+                <div className="t-label" style={{ fontSize: 9 }}>{tr("опыта")}</div>
+              </Panel>
+            </motion.div>
           </div>
 
           {onRevive && (
@@ -442,17 +458,62 @@ export function GameOver({
 }
 
 export function Countdown({ n }: { n: number }) {
+  const low = isLowFx();
   return (
     <motion.div
       key={n}
       initial={{ scale: 2.2, opacity: 0 }}
       animate={{ scale: 1, opacity: 1 }}
       exit={{ scale: 0.5, opacity: 0 }}
+      transition={{ duration: 0.32, ease: EASE }}
       className="absolute inset-0 z-30 flex items-center justify-center pointer-events-none"
     >
+      {/* Расходящееся кольцо задаёт ритм отсчёта. На слабых телефонах не
+          рисуем: это лишний перерисовываемый слой на весь экран. */}
+      {!low && (
+        <motion.div
+          initial={{ scale: 0.6, opacity: 0.5 }}
+          animate={{ scale: 1.7, opacity: 0 }}
+          transition={{ duration: 0.7, ease: "easeOut" }}
+          style={{
+            position: "absolute", width: 190, height: 190, borderRadius: "50%",
+            border: "2px solid var(--acc)",
+          }}
+        />
+      )}
       <div className="t-display acc-text" style={{ fontSize: 110, textShadow: "0 0 60px var(--acc-glow)" }}>
         {n > 0 ? n : "GO"}
       </div>
     </motion.div>
   );
+}
+
+/**
+ * Число, которое набегает до значения.
+ *
+ * Итог забега приятнее читать, когда счёт «докручивается», а не падает
+ * готовым. Считаем через requestAnimationFrame по времени, а не по
+ * шагам: иначе на слабом телефоне анимация растянется во времени.
+ */
+export function CountUp({
+  value, className, style, ms = 620,
+}: { value: number; className?: string; style?: React.CSSProperties; ms?: number }) {
+  const [shown, setShown] = useState(isLowFx() ? value : 0);
+
+  useEffect(() => {
+    if (isLowFx()) { setShown(value); return; }
+    let raf = 0;
+    const t0 = performance.now();
+    const tick = (now: number) => {
+      const k = Math.min(1, (now - t0) / ms);
+      // та же кривая, что и у остальных анимаций
+      const e = 1 - Math.pow(1 - k, 3);
+      setShown(Math.round(value * e));
+      if (k < 1) raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [value, ms]);
+
+  return <div className={className} style={style}>{fmt(shown)}</div>;
 }

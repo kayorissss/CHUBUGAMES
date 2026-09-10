@@ -89,7 +89,7 @@ console.log('\n[8] Контент про друзей');
 const cnt=fs.readFileSync('src/core/content.ts','utf8');
 for(const id of ['lyoha','vanya','maks','seryoga','artyom','radomir','kudrya','shitov'])
   ok(cnt.includes(`id: "${id}"`),`друг ${id} есть в игре`);
-ok((cnt.match(/unlockLvl: 0/g)||[]).length===24,'все 24 мини-игры открыты сразу');
+ok((cnt.match(/unlockLvl: 0/g)||[]).length===27,'все 27 мини-игр открыты сразу');
 const sav=fs.readFileSync('src/core/save.ts','utf8');
 ok(/unlockedGames = ALL_GAMES\.slice\(\)/.test(sav)&&/ALL_GAMES: GameId\[\]/.test(sav),'старые сохранения тоже получают все игры');
 ok(sav.includes('if (!have.has(f.id))'),'новые друзья досыпаются в старые сохранения');
@@ -297,7 +297,7 @@ for (const id of Object.keys(sv19)) {
 }
 
 // Ни одна игра не должна быть заперта за уровнем.
-ok((cnt19.match(/unlockLvl: 0/g) || []).length === 24, 'все 24 игры открыты сразу');
+ok((cnt19.match(/unlockLvl: 0/g) || []).length === 27, 'все 27 игр открыты сразу');
 
 // Эмодзи запрещены во всём приложении.
 const emo19 = /[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/u;
@@ -319,6 +319,64 @@ const app19b = fs.readFileSync('src/App.tsx', 'utf8');
 ok(app19b.includes('applyPerfMode'), 'режим производительности применяется при запуске');
 const set19 = fs.readFileSync('src/pages/Settings.tsx', 'utf8');
 ok(set19.includes('writePerfMode'), 'в настройках можно переключить производительность');
+
+
+console.log('\n[20] Настольные игры: шахматы, шашки, нарды');
+const bd20 = {
+  chess: 'src/games/Chess.tsx',
+  checkers: 'src/games/Checkers.tsx',
+  nards: 'src/games/Backgammon.tsx',
+};
+const ty20 = fs.readFileSync('src/core/types.ts', 'utf8');
+const sv20 = fs.readFileSync('src/core/save.ts', 'utf8');
+const cn20 = fs.readFileSync('src/core/content.ts', 'utf8');
+const md20 = fs.readFileSync('src/core/modes.tsx', 'utf8');
+const ap20 = fs.readFileSync('src/App.tsx', 'utf8');
+const gi20 = fs.readFileSync('src/ui/GameIcon.tsx', 'utf8');
+
+for (const [id, path] of Object.entries(bd20)) {
+  ok(fs.existsSync(path), `${id}: экран игры есть`);
+  ok(ty20.includes(`"${id}"`), `${id}: объявлен в GameId`);
+  ok(new RegExp(`"${id}"`).test(sv20), `${id}: попадает в старые сохранения`);
+  ok(cn20.includes(`id: "${id}"`), `${id}: есть в списке игр`);
+  ok(new RegExp(`${id}: \\d+`).test(md20), `${id}: есть цель для испытания`);
+  ok(ap20.includes(`game === "${id}"`), `${id}: открывается из меню`);
+  ok(gi20.includes(`case "${id}"`), `${id}: своя иконка`);
+  const src = fs.readFileSync(path, 'utf8');
+  ok(!/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/u.test(src), `${id}: без эмодзи`);
+  ok(src.includes('var(--sab)'), `${id}: управление не упирается в нижний край`);
+  ok(src.includes('finishGame'), `${id}: результат идёт в общий прогресс`);
+}
+
+// Движки правил — отдельные модули, чтобы их можно было тестировать.
+for (const f of ['src/core/chess.ts', 'src/core/checkers.ts', 'src/core/backgammon.ts']) {
+  ok(fs.existsSync(f), `движок ${f.split('/').pop()} на месте`);
+}
+const ch20 = fs.readFileSync('src/core/chess.ts', 'utf8');
+ok(ch20.includes('castle'), 'шахматы: рокировка реализована');
+ok(ch20.includes('ep?'), 'шахматы: взятие на проходе реализовано');
+ok(ch20.includes('promo'), 'шахматы: превращение пешки реализовано');
+ok(/halfmove >= 100/.test(ch20), 'шахматы: правило 50 ходов');
+const ck20 = fs.readFileSync('src/core/checkers.ts', 'utf8');
+ok(ck20.includes('hasCapture'), 'шашки: взятие обязательно');
+ok(ck20.includes('captureChains'), 'шашки: цепочки взятий');
+const bg20 = fs.readFileSync('src/core/backgammon.ts', 'utf8');
+ok(bg20.includes('violatesSix'), 'нарды: правило шести');
+ok(bg20.includes('headLimit'), 'нарды: ограничение на голову');
+ok(bg20.includes('return out.length ? out : raw'), 'нарды: партия не может заклиниться');
+
+// Управление пальцем — пользователь просил вести, а не только тапать.
+for (const id of ['chess', 'checkers']) {
+  const src = fs.readFileSync(bd20[id], 'utf8');
+  ok(src.includes('onPointerMove'), `${id}: фигуру можно вести пальцем`);
+  ok(src.includes('touchAction'), `${id}: жесты браузера не мешают`);
+}
+
+// Переводы новых строк.
+const en20 = fs.readFileSync('src/core/i18n-en.ts', 'utf8');
+for (const key of ['ШАХМАТЫ С ШИТОВЫМ', 'ШАШКИ У СТАСА', 'НАРДЫ С АРТУРОМ', 'ВЫВЕСТИ', 'Настольные']) {
+  ok(en20.includes(`"${key}":`), `перевод есть: ${key}`);
+}
 
 console.log(fails===0?'\n✅ ВСЕ ПРОВЕРКИ ВЁРСТКИ ПРОЙДЕНЫ\n':`\n❌ ПРОВАЛЕНО: ${fails}\n`);
 process.exit(fails?1:0);

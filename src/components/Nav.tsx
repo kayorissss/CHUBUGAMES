@@ -1,4 +1,5 @@
 import { motion } from "framer-motion";
+import { springSoft } from "../core/motion";
 import { sfx, haptic } from "../core/fx";
 import { useGame } from "../core/store";
 
@@ -95,7 +96,7 @@ export default function Nav({ tab, onTab }: { tab: Tab; onTab: (t: Tab) => void 
               {active && (
                 <motion.div
                   layoutId="navpill"
-                  transition={{ type: "spring", stiffness: 520, damping: 36 }}
+                  transition={springSoft}
                   className="absolute"
                   style={{
                     inset: "-1px 4px", borderRadius: 13, background: "var(--acc)",
@@ -103,7 +104,10 @@ export default function Nav({ tab, onTab }: { tab: Tab; onTab: (t: Tab) => void 
                   }}
                 />
               )}
-              <motion.div animate={{ scale: active ? 1.06 : 1, y: active ? -1 : 0 }}>
+              <motion.div
+                animate={{ scale: active ? 1.08 : 1, y: active ? -1.5 : 0 }}
+                transition={springSoft}
+              >
                 {item.icon(active)}
               </motion.div>
               <span

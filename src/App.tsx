@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, motion, MotionConfig } from "framer-motion";
 import { GameProvider, useGame } from "./core/store";
 import { Aurora } from "./ui/Glass";
 import Nav, { type Tab } from "./components/Nav";
@@ -10,7 +10,7 @@ import { Toasts, OfflineModal } from "./components/Overlays";
 import UpdateBanner from "./ui/UpdateBanner";
 import WhatsNew from "./ui/WhatsNew";
 import { initNotificationsOnFirstRun, syncInstalledVersion } from "./core/notify";
-import { applyPerfMode } from "./core/perf";
+import { applyPerfMode, isLowFx, measurePerfOnce } from "./core/perf";
 import Icon from "./ui/Icon";
 import Home from "./pages/Home";
 import { ModesProvider } from "./core/modes";
@@ -42,6 +42,10 @@ import MotoArtyom from "./games/MotoArtyom";
 import FuelHunt from "./games/FuelHunt";
 import KirillHands from "./games/KirillHands";
 import Europa from "./games/Europa";
+import Chess from "./games/Chess";
+import Checkers from "./games/Checkers";
+import Backgammon from "./games/Backgammon";
+import { pageVariants, subPageVariants, gameVariants } from "./core/motion";
 import Canteen from "./games/Canteen";
 import WhoWasIt from "./games/WhoWasIt";
 import RadomirFlight from "./games/RadomirFlight";
@@ -123,6 +127,8 @@ function Shell() {
   const [game, setGame] = useState<GameId | null>(null);
   // отдельные подстраницы поверх вкладок
   const [sub, setSub] = useState<SubPage | null>(null);
+  // Влияет на анимации: в облегчённом режиме их выключаем целиком
+  const [lowFx, setLowFx] = useState(() => isLowFx());
 
   useEffect(() => {
     const unlock = () => unlockAudio();
@@ -130,11 +136,13 @@ function Shell() {
     return () => window.removeEventListener("pointerdown", unlock);
   }, []);
 
-  // Сообщаем фоновой проверке, какая версия стоит сейчас, — иначе она
-  // не поймёт, что вышло обновление, пока игра закрыта.
-  // Слабые телефоны определяем до первой отрисовки — иначе человек
-  // успевает увидеть лаги на главном экране.
-  useEffect(() => { applyPerfMode(); }, []);
+  // Слабые телефоны: сначала быстрая догадка по железу (чтобы первые
+  // секунды не лагали), потом честный замер FPS — он и решает.
+  // Гадать по числу ядер бесполезно: у Realme C3 их восемь.
+  useEffect(() => {
+    applyPerfMode();
+    measurePerfOnce((weak) => setLowFx(weak));
+  }, []);
 
   useEffect(() => { void syncInstalledVersion(); }, []);
 
@@ -185,17 +193,18 @@ function Shell() {
       currentGame={game}
       bestOf={(g) => s.games[g]?.best ?? 0}
     >
+    <MotionConfig reducedMotion={lowFx ? "always" : "never"}>
     <div className="h-full w-full relative overflow-hidden" style={{ background: "var(--bg)" }}>
-      {s.settings.fx && <Aurora />}
+      {s.settings.fx && !lowFx && <Aurora />}
 
       <div className="relative h-full" style={{ zIndex: 1 }}>
         <AnimatePresence mode="wait">
           <motion.div
             key={tab}
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -8 }}
-            transition={{ duration: 0.22, ease: "easeOut" }}
+            variants={pageVariants}
+            initial="initial"
+            animate="animate"
+            exit="exit"
             className="h-full"
           >
             {pages[tab]}
@@ -208,10 +217,10 @@ function Shell() {
         {sub && (
           <motion.div
             key={sub}
-            initial={{ opacity: 0, x: 26 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: 26 }}
-            transition={{ duration: 0.2, ease: "easeOut" }}
+            variants={subPageVariants}
+            initial="initial"
+            animate="animate"
+            exit="exit"
             className="absolute inset-0"
             style={{ zIndex: 40, background: "var(--bg)" }}
           >
@@ -229,10 +238,10 @@ function Shell() {
         {game && (
           <motion.div
             key={game}
-            initial={{ opacity: 0, scale: 1.05 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.96 }}
-            transition={{ duration: 0.25 }}
+            variants={gameVariants}
+            initial="initial"
+            animate="animate"
+            exit="exit"
             className="fixed inset-0 z-[60]"
           >
             {game === "burger" && <BurgerRain onExit={() => setGame(null)} />}
@@ -259,6 +268,9 @@ function Shell() {
             {game === "fuel" && <FuelHunt onExit={() => setGame(null)} />}
             {game === "hands" && <KirillHands onExit={() => setGame(null)} />}
             {game === "europa" && <Europa onExit={() => setGame(null)} />}
+            {game === "chess" && <Chess onExit={() => setGame(null)} />}
+            {game === "checkers" && <Checkers onExit={() => setGame(null)} />}
+            {game === "nards" && <Backgammon onExit={() => setGame(null)} />}
           </motion.div>
         )}
       </AnimatePresence>
@@ -270,6 +282,7 @@ function Shell() {
 
       <AnimatePresence>{splash && <Splash done={() => setSplash(false)} />}</AnimatePresence>
     </div>
+    </MotionConfig>
     </ModesProvider>
   );
 }

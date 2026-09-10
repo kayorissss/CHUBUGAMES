@@ -3,6 +3,7 @@ import { tr } from "../core/i18n";
 import { AnimatePresence, motion } from "framer-motion";
 import { useGame } from "../core/store";
 import { GAME_META } from "../core/content";
+import { EASE } from "../core/motion";
 import { fmt } from "../core/format";
 import { autoRate } from "../core/save";
 import { Card, Tap, Bar, SectionTitle, Screen } from "../ui/Glass";
@@ -421,7 +422,10 @@ export default function Home({
             <motion.div
               initial={{ opacity: 0, y: 14 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: i * 0.04, duration: 0.26 }}
+              /* Каскад ограничен: игр уже 27, и при 0.04 c на карточку
+                 последняя выезжала бы через секунду с лишним — сетка
+                 успевала надоесть раньше, чем достраивалась. */
+              transition={{ delay: Math.min(i, 8) * 0.035, duration: 0.3, ease: EASE }}
             >
               <Tap
                 onClick={() => unlocked && onPlay(g.id)}

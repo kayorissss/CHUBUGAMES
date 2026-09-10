@@ -411,21 +411,71 @@ html.no-fx .aurora span { animation: none !important; }
 html.no-fx .glass { backdrop-filter: none; -webkit-backdrop-filter: none; background: var(--n-200); }
 
 /* ---------- Облегчённый режим для слабых телефонов ----------
-   backdrop-filter пересчитывает размытие по всей площади под элементом
-   каждый кадр. На бюджетном GPU (Realme C3 и подобные) это главный
-   источник лагов — панелей на экране десятки. Убираем размытие, оставляя
-   непрозрачный фон: выглядит почти так же, но рисуется мгновенно.       */
+
+   Здесь собрано всё, что роняет FPS на бюджетном GPU. Порядок важен:
+   правила должны перебивать инлайновые стили, поэтому !important.
+
+   1) backdrop-filter пересчитывает размытие по всей площади под
+      элементом каждый кадр. Панелей на экране десятки — это главный
+      источник лагов. React пишет инлайновый стиль как backdrop-filter
+      (в DOM всегда kebab-case), поэтому селектор именно такой.
+   2) Три пятна .aurora висят на весь экран с blur(70px) и крутятся
+      бесконечно. Даже без анимации размытие в 70px на полэкрана
+      слишком дорого — убираем пятна целиком, оставляя ровный фон.
+   3) Мягкие тени в 40px рисуются по всей площади карточки.
+   4) Любые бесконечные CSS-анимации (блики, пульсации) останавливаем.  */
+
+/* Надёжнее всего убить размытие в корне: .glass читает радиус из
+   переменной, так что нулевой радиус выключает эффект независимо от
+   того, какой префикс свойства понимает конкретный WebView.
+   (Минификатор схлопывает backdrop-filter и -webkit-backdrop-filter в
+   одно правило, поэтому полагаться только на них нельзя.)             */
+html.low-fx {
+  --glass-blur: 0px;
+  --glass-shadow: none;
+}
+
 html.low-fx .glass,
 html.low-fx [style*="backdrop-filter"],
 html.low-fx [style*="backdropFilter"] {
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
 }
-html.low-fx .glass { background: var(--n-200); }
-/* Три плавающих пятна фона крутятся вечно и занимают весь экран */
-html.low-fx .aurora span { animation: none !important; opacity: 0.5; }
-/* Тяжёлые тени по всей площади заменяем простой рамкой */
-html.low-fx .glass { box-shadow: none; }
+
+/* Панели становятся непрозрачными — заодно текст читается лучше */
+html.low-fx .glass {
+  background: var(--n-200) !important;
+  box-shadow: none !important;
+}
+
+/* Пятна фона убираем полностью: blur(70px) на весь экран не тянет никто */
+html.low-fx .aurora {
+  display: none !important;
+}
+
+/* Бесконечные блики и пульсации выключаем */
+html.low-fx .shimmer {
+  animation: none !important;
+  background: none !important;
+}
+
+/* Тяжёлые свечения и размытия в произвольных местах */
+html.low-fx [style*="filter: blur"],
+html.low-fx [style*="filter:blur"] {
+  filter: none !important;
+}
+
+/* Плавные переходы оставляем короткими: длинные на слабом GPU дёргаются */
+html.low-fx * {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.12s !important;
+}
+
+/* Нажатие кнопки должно остаться отзывчивым */
+html.low-fx .press {
+  transition-duration: 0.1s !important;
+}
 
 /* ---------- Прочее ---------- */
 .scroll {

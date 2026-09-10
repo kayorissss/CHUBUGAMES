@@ -30,6 +30,7 @@ export const ALL_GAMES: GameId[] = [
   "stack", "sort", "memory", "flap", "defend",
   "basket", "volley", "penalty", "pool",
   "crossword", "bus", "pet", "beard", "moto", "fuel", "hands", "europa",
+  "chess", "checkers", "nards",
 ];
 
 export function freshSave(): SaveState {
@@ -57,6 +58,7 @@ export function freshSave(): SaveState {
       crossword: emptyGame(), bus: emptyGame(), pet: emptyGame(),
       beard: emptyGame(), moto: emptyGame(), fuel: emptyGame(),
       hands: emptyGame(), europa: emptyGame(),
+      chess: emptyGame(), checkers: emptyGame(), nards: emptyGame(),
     },
     friends: DEFAULT_FRIENDS.map((f) => ({ ...f, look: { ...f.look }, stats: { ...f.stats } })),
     mainFriendId: "lyoha",
