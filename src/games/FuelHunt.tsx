@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useGame } from "../core/store";
 import { sfx, haptic } from "../core/fx";
-import { GameOver, GameHUD, Countdown, HudStat } from "./shell";
+import { GameOver, GameHUD, HudStat } from "./shell";
 import Icon from "../ui/Icon";
 import { tr } from "../core/i18n";
 
@@ -76,7 +76,6 @@ function makeStations(round: number): Station[] {
 export default function FuelHunt({ onExit }: { onExit: () => void }) {
   const { s, addCoins, addXp, finishGame, questProgress } = useGame();
   const [phase, setPhase] = useState<"count" | "play" | "over">("count");
-  const [cd, setCd] = useState(3);
   const [fuel, setFuel] = useState(START_FUEL);
   const [money, setMoney] = useState(START_MONEY);
   const [got, setGot] = useState(0);
@@ -96,13 +95,16 @@ export default function FuelHunt({ onExit }: { onExit: () => void }) {
   const scoreRef = useRef(0);
   scoreRef.current = score;
 
-  useEffect(() => {
-    if (phase !== "count") return;
-    if (cd < 0) { startT.current = Date.now(); setPhase("play"); return; }
+  /*
+   * Пользователь просил «убрать таймер в начале»: отсчёт 3-2-1 здесь был
+   * бессмысленным — игра пошаговая, никто никуда не бежит. Вместо него
+   * показываем брифинг с правилами, и партия стартует по кнопке.
+   */
+  const beginRun = useCallback(() => {
+    startT.current = Date.now();
     sfx.click();
-    const t = setTimeout(() => setCd((c) => c - 1), 700);
-    return () => clearTimeout(t);
-  }, [phase, cd]);
+    setPhase("play");
+  }, []);
 
   const say = useCallback((txt: string, ok: boolean) => {
     setLog((l) => [{ txt, ok }, ...l].slice(0, 5));
@@ -235,7 +237,7 @@ export default function FuelHunt({ onExit }: { onExit: () => void }) {
     ended.current = false;
     setFuel(START_FUEL); setMoney(START_MONEY); setGot(0); setRound(0);
     setStations(makeStations(0)); setLog([]); setScore(0); setWon(false);
-    setDriving(false); setTrip(null); setCd(3); setPhase("count");
+    setDriving(false); setTrip(null); setPhase("count");
   };
 
   const goalPct = Math.min(100, (got / GOAL) * 100);
@@ -388,15 +390,45 @@ export default function FuelHunt({ onExit }: { onExit: () => void }) {
                   )}
                 </div>
 
-                <div className="flex items-center" style={{ gap: 12, marginBottom: 10 }}>
+                <div className="flex items-center" style={{ gap: 12, marginBottom: 8 }}>
                   <span className="t-caption" style={{ color: far ? "var(--danger)" : "var(--text-mute)" }}>
-                    {tr("дорога")} {st.dist} {tr("л")}
+                    {tr("дорога")} −{st.dist} {tr("л")}
                   </span>
                   <span className="t-caption" style={{ color: "var(--text-mute)" }}>
                     {st.price} ₽/{tr("л")}
                   </span>
                   <span className="t-caption" style={{ color: "var(--text-mute)" }}>
                     {tr("очередь")} {st.queue} {tr("мин")}
+                  </span>
+                </div>
+
+                {/*
+                  «Непонятно сколько денег» — считаем прямо на карточке,
+                  сколько литров ты вообще способен купить на текущие
+                  деньги по этому ценнику. Голый ₽/л ни о чём не говорил.
+                */}
+                <div
+                  className="flex items-center"
+                  style={{
+                    gap: 6, marginBottom: 10, padding: "6px 9px",
+                    borderRadius: "var(--r-xs)",
+                    background: "var(--fill-1)",
+                  }}
+                >
+                  <span className="t-label" style={{ fontSize: 8, color: "var(--text-mute)" }}>
+                    {tr("ХВАТИТ НА")}
+                  </span>
+                  <span
+                    className="t-num"
+                    style={{
+                      fontSize: 11.5,
+                      color: Math.floor(money / st.price) >= 10 ? "var(--ok)" : "var(--gold)",
+                    }}
+                  >
+                    {Math.floor(money / st.price)} {tr("л")}
+                  </span>
+                  <span className="t-caption flex-1 text-right" style={{ fontSize: 9.5 }}>
+                    {tr("осталось налить")} {Math.max(0, GOAL - got)} {tr("л")}
                   </span>
                 </div>
 
@@ -457,7 +489,81 @@ export default function FuelHunt({ onExit }: { onExit: () => void }) {
         )}
       </div>
 
-      <AnimatePresence>{phase === "count" && <Countdown n={cd} />}</AnimatePresence>
+      <AnimatePresence>
+        {phase === "count" && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="absolute inset-0 flex flex-col justify-center"
+            style={{
+              zIndex: 80, background: "var(--scrim)",
+              padding: "calc(var(--sat) + 74px) 20px calc(var(--sab) + 30px)",
+            }}
+          >
+            <div
+              style={{
+                padding: "18px 16px", borderRadius: "var(--r-xl)",
+                background: "var(--surface)", border: "1px solid var(--surface-brd)",
+              }}
+            >
+              <div className="t-h2" style={{ marginBottom: 4 }}>{tr("ГДЕ БЕНЗИН")}</div>
+              <div className="t-caption" style={{ marginBottom: 14, lineHeight: 1.4 }}>
+                {tr("В стране дефицит. Твоя задача — залить полный бак, пока не встал посреди дороги.")}
+              </div>
+
+              {[
+                { n: "1", t: tr("Залей {goal} л в бак — это победа").replace("{goal}", String(GOAL)) },
+                { n: "2", t: tr("Дорога до каждой заправки жрёт бензин: цифра «−N л» на карточке") },
+                { n: "3", t: tr("Половина заправок сухие. Звонок-разведка стоит {c} ₽, зато не поедешь зря").replace("{c}", String(SCOUT_COST)) },
+                { n: "4", t: tr("Кончился бензин или деньги — проиграл") },
+              ].map((r) => (
+                <div key={r.n} className="flex" style={{ gap: 10, marginBottom: 9 }}>
+                  <span
+                    className="t-num"
+                    style={{
+                      fontSize: 11, width: 22, height: 22, flexShrink: 0,
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      borderRadius: "var(--r-xs)",
+                      background: "var(--acc)", color: "var(--acc-ink)",
+                    }}
+                  >
+                    {r.n}
+                  </span>
+                  <span className="t-caption flex-1" style={{ fontSize: 11, lineHeight: 1.4 }}>
+                    {r.t}
+                  </span>
+                </div>
+              ))}
+
+              <div
+                className="flex"
+                style={{
+                  gap: 10, marginTop: 14, paddingTop: 12,
+                  borderTop: "1px solid var(--surface-brd)",
+                }}
+              >
+                <div className="flex-1">
+                  <div className="t-label" style={{ fontSize: 8.5 }}>{tr("В БАКЕ")}</div>
+                  <div className="t-num" style={{ fontSize: 15 }}>{START_FUEL} {tr("л")}</div>
+                </div>
+                <div className="flex-1">
+                  <div className="t-label" style={{ fontSize: 8.5 }}>{tr("НА РУКАХ")}</div>
+                  <div className="t-num" style={{ fontSize: 15 }}>{START_MONEY} ₽</div>
+                </div>
+              </div>
+
+              <button
+                className="btn-acc w-full"
+                style={{ marginTop: 14, height: 46, borderRadius: "var(--r-md)" }}
+                onClick={beginRun}
+              >
+                <span className="t-label" style={{ fontSize: 11 }}>{tr("ПОЕХАЛИ")}</span>
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {phase === "over" && (
         <GameOver
