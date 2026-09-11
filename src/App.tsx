@@ -20,6 +20,7 @@ import {
 import { upcomingBosses } from "./core/bosses";
 import { applyPerfMode, isLowFx, measurePerfOnce } from "./core/perf";
 import { initDesktopKeys, initStage, isDesktop } from "./core/desktop";
+import PcBoot from "./ui/PcBoot";
 import Home from "./pages/Home";
 import { ModesProvider } from "./core/modes";
 import Casino from "./pages/Casino";
@@ -220,6 +221,9 @@ function Shell() {
    * нет, поэтому вешаем Escape на тот же стек слоёв (core/nav.ts).
    * Класс на <html> позволяет прятать чисто мобильные элементы.
    */
+  /** Заставка показывается один раз за запуск программы */
+  const [pcBoot, setPcBoot] = useState(() => isDesktop());
+
   useEffect(() => {
     if (!isDesktop()) return;
     document.documentElement.classList.add("is-desktop");
@@ -303,6 +307,9 @@ function Shell() {
     >
     <MotionConfig reducedMotion={lowFx ? "always" : "never"}>
     <div className="h-full w-full relative overflow-hidden" style={{ background: "var(--bg)" }}>
+      {/* Заставка запуска — только в десктопной сборке */}
+      {pcBoot && <PcBoot onDone={() => setPcBoot(false)} />}
+
       {s.settings.fx && !lowFx && <Aurora />}
 
       <div className="relative h-full" style={{ zIndex: 1 }}>

@@ -110,11 +110,23 @@ function createWindow() {
    * окна. Именно из-за неверного предположения об обратном в прошлой
    * версии пришлось ограничивать ширину.
    */
+  /*
+   * Размер окна под монитор.
+   *
+   * Раньше окно открывалось вертикальным (480x900) — это выглядело как
+   * телефон на рабочем столе. Интерфейс теперь альбомный, поэтому берём
+   * рабочую область монитора и занимаем её почти целиком, оставляя
+   * поля. На маленьких экранах окно просто разворачивается.
+   */
+  const area = screen.getPrimaryDisplay().workAreaSize;
+  const winW = Math.min(1600, Math.round(area.width * 0.86));
+  const winH = Math.min(980, Math.round(area.height * 0.88));
+
   win = new BrowserWindow({
-    width: 480,
-    height: 900,
-    minWidth: 320,
-    minHeight: 480,
+    width: winW,
+    height: winH,
+    minWidth: 900,
+    minHeight: 560,
     backgroundColor: "#08080A",
     autoHideMenuBar: true,
     show: false,
@@ -135,7 +147,11 @@ function createWindow() {
   Menu.setApplicationMenu(null);
 
   // Показываем окно, когда страница отрисована: без белой вспышки
-  win.once("ready-to-show", () => win.show());
+  win.once("ready-to-show", () => {
+    // На небольшом мониторе разворачиваем сразу — иначе поля съедают экран
+    if (area.width <= 1440) win.maximize();
+    win.show();
+  });
 
   /*
    * Если страница почему-то не загрузилась, окно не должно остаться

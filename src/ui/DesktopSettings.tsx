@@ -7,8 +7,8 @@ import { fmt } from "../core/format";
 import { sfx, haptic } from "../core/fx";
 import { isDesktop } from "../core/desktop";
 import {
-  STAGE_PRESETS, applyStage, readStage, writeStage, presetOf,
-  type StageMode, type StageSettings,
+  applyStage, readStage, writeStage,
+  type UiScaleMode, type StageSettings,
 } from "../core/stage";
 
 /**
@@ -27,10 +27,9 @@ type Upd =
   | { state: "ready"; portable: boolean }
   | { state: "error"; error: string };
 
-const MODES: { id: StageMode; label: string; hint: string }[] = [
-  { id: "fit", label: "Вписать", hint: "Видно всю игру целиком" },
-  { id: "fill", label: "Во весь экран", hint: "Занять всю высоту монитора" },
-  { id: "actual", label: "Вручную", hint: "Свой масштаб, Ctrl и +/−" },
+const MODES: { id: UiScaleMode; label: string; hint: string }[] = [
+  { id: "auto", label: "Авто", hint: "Крупность подбирается по размеру окна" },
+  { id: "manual", label: "Вручную", hint: "Свой масштаб, Ctrl и +/−" },
 ];
 
 export default function DesktopSettings() {
@@ -60,8 +59,6 @@ export default function DesktopSettings() {
     sfx.click();
     haptic("light");
   };
-
-  const p = presetOf(st.preset);
 
   const check = async () => {
     if (!api?.checkUpdate) return;
@@ -123,11 +120,11 @@ export default function DesktopSettings() {
         </div>
 
         {/* Ручной масштаб */}
-        {st.mode === "actual" && (
+        {st.mode === "manual" && (
           <div className="flex items-center" style={{ gap: 8, marginBottom: 12 }}>
             <button
               type="button"
-              onClick={() => save({ zoom: Math.max(0.4, +(st.zoom - 0.1).toFixed(2)) })}
+              onClick={() => save({ zoom: Math.max(0.8, +(st.zoom - 0.05).toFixed(2)) })}
               className="t-num"
               style={{
                 width: 34, height: 34, borderRadius: "var(--r-sm)",
@@ -139,7 +136,7 @@ export default function DesktopSettings() {
             </span>
             <button
               type="button"
-              onClick={() => save({ zoom: Math.min(3, +(st.zoom + 0.1).toFixed(2)) })}
+              onClick={() => save({ zoom: Math.min(1.6, +(st.zoom + 0.05).toFixed(2)) })}
               className="t-num"
               style={{
                 width: 34, height: 34, borderRadius: "var(--r-sm)",
@@ -148,37 +145,6 @@ export default function DesktopSettings() {
             >+</button>
           </div>
         )}
-
-        {/* Разрешение сцены */}
-        <div className="t-label" style={{ fontSize: 8.5, marginBottom: 7 }}>
-          {tr("РАЗРЕШЕНИЕ")}
-        </div>
-        {STAGE_PRESETS.map((x) => (
-          <button
-            key={x.id}
-            type="button"
-            onClick={() => save({ preset: x.id })}
-            className="flex items-center w-full"
-            style={{
-              gap: 9, padding: "10px 11px", marginBottom: 5,
-              borderRadius: "var(--r-sm)",
-              background: st.preset === x.id ? "var(--acc-soft)" : "var(--surface-2)",
-              border: `1px solid ${st.preset === x.id ? "var(--acc)" : "var(--surface-brd)"}`,
-            }}
-          >
-            <span
-              className="t-body flex-1 text-left"
-              style={{ fontSize: 11.5, color: st.preset === x.id ? "var(--acc)" : "var(--text)" }}
-            >
-              {tr(x.label)}
-            </span>
-            {st.preset === x.id && (
-              <span style={{ color: "var(--acc)", lineHeight: 0 }}>
-                <Icon name="check" size={13} />
-              </span>
-            )}
-          </button>
-        ))}
 
         {/* Действия с окном */}
         <div className="flex" style={{ gap: 7, marginTop: 10 }}>
@@ -194,19 +160,18 @@ export default function DesktopSettings() {
             {full ? tr("ОКОННЫЙ РЕЖИМ") : tr("ПОЛНЫЙ ЭКРАН")}
           </Tap>
           <Tap
-            onClick={() => api?.resizeTo?.(p.w, p.h)}
+            onClick={() => api?.resizeTo?.(1440, 900)}
             r="sm" center className="t-label flex-1"
             style={{ padding: "10px 0", fontSize: 9.5 }}
             sound="click"
           >
-            {tr("ОКНО ПО РАЗМЕРУ")}
+            {tr("СБРОСИТЬ ОКНО")}
           </Tap>
         </div>
 
         {screenInfo && (
           <div className="t-caption" style={{ marginTop: 9, fontSize: 9.5 }}>
-            {tr("Монитор")}: {screenInfo.width} × {screenInfo.height} ·{" "}
-            {tr("сцена")} {p.w} × {p.h} · F11 — {tr("полный экран")}
+            {tr("Монитор")}: {screenInfo.width} × {screenInfo.height} · F11 — {tr("полный экран")}
           </div>
         )}
       </Panel>

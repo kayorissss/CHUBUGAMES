@@ -340,8 +340,8 @@ const pre = fs.readFileSync('desktop/preload.cjs', 'utf8');
 ok(!/require\("(?!electron)/.test(pre),
   'preload не тянет модули, недоступные в песочнице');
 const stg23 = fs.readFileSync('src/core/stage.ts', 'utf8');
-ok(stg23.includes('STAGE_PRESETS') && stg23.includes('computeScale'),
-  'есть выбор разрешения и расчёт масштаба сцены');
+ok(stg23.includes('autoScale') && stg23.includes('computeScale'),
+  'крупность интерфейса на ПК подстраивается под окно');
 // ПК-версия больше не «телефон по центру монитора»: интерфейс альбомный,
 // главный экран раскладывается гридом на зоны.
 const cssPc23 = fs.readFileSync('src/index.css', 'utf8');

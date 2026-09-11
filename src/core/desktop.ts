@@ -90,11 +90,11 @@ export function initDesktopKeys(): () => void {
      */
     if (e.ctrlKey && (e.key === "=" || e.key === "+" || e.key === "-" || e.key === "0")) {
       const st = readStage();
-      if (st.mode !== "actual") return;
+      if (st.mode !== "manual") return;
       e.preventDefault();
       const next = e.key === "0"
         ? 1
-        : Math.max(0.4, Math.min(3, st.zoom + (e.key === "-" ? -0.1 : 0.1)));
+        : Math.max(0.8, Math.min(1.6, st.zoom + (e.key === "-" ? -0.05 : 0.05)));
       writeStage({ ...st, zoom: next });
       applyStage({ ...st, zoom: next });
       return;
