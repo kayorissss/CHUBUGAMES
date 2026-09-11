@@ -1127,4 +1127,7 @@ export const EN_TEXT: Record<string, string> = {
   "ДРУЖБА": "FRIENDSHIP",
   "Лучшие друзья навсегда": "Best friends forever",
   "ИСТОРИИ": "STORIES",
+  "По порядку": "Default order",
+  "По рекорду": "By best score",
+  "завалил": "defeated",
 };

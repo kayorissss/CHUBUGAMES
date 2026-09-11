@@ -261,8 +261,20 @@ ok(home18.includes('nextBoss'), 'видно, кто заступит следу�
 ok(!home18.includes('ModesPanel'), 'режимы и испытание убраны с главной');
 ok(fs.readFileSync('src/pages/Progress.tsx', 'utf8').includes('ModesPanel'),
   'режимы и испытание переехали в «Прогресс»');
-ok(home18.indexOf('Сводка') === -1 || home18.indexOf('Stat icon') < home18.indexOf('GAME_META.map'),
+// Сетка игр рисуется из sortedGames (закреплённые сверху + сортировка),
+// раньше это был прямой GAME_META.map.
+ok(home18.indexOf('Сводка') === -1 || home18.indexOf('Stat icon') < home18.indexOf('sortedGames.map'),
   'сводка поднята над сеткой игр');
+ok(home18.includes('sortedGames') && home18.includes('favGames'),
+  'игры можно закрепить и отсортировать');
+ok(fs.readFileSync('src/ui/Glass.tsx', 'utf8').includes('onLongPress'),
+  'у кнопок есть долгое нажатие');
+ok(fs.readFileSync('src/pages/Home.tsx', 'utf8').includes('ChestCard'),
+  'ежечасный сундук на главном экране');
+ok(fs.readFileSync('src/core/mastery.ts', 'utf8').includes('masteryBonus'),
+  'мастерство игр влияет на награду');
+ok(fs.readFileSync('src/core/friendship.ts', 'utf8').includes('STORY_TIERS'),
+  'у друзей есть истории по уровням дружбы');
 
 const bf18 = fs.readFileSync('src/pages/BossFight.tsx', 'utf8');
 ok(bf18.includes('setWindup'), 'босс замахивается перед ударом');

@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import type { ReactNode, CSSProperties } from "react";
+import { useEffect, useRef, type ReactNode, type CSSProperties } from "react";
 import { sfx, haptic } from "../core/fx";
 
 type R = "xs" | "sm" | "md" | "lg" | "xl" | "pill";
@@ -148,7 +148,7 @@ export function Button({
 
 /** Кликабельная область произвольного вида (карточка-кнопка) */
 export function Tap({
-  children, onClick, className = "", style, disabled, r = "md",
+  children, onClick, onLongPress, className = "", style, disabled, r = "md",
   accent, sound = "click", strong, solid, center,
 }: {
   children?: ReactNode; onClick?: () => void; className?: string;
@@ -156,16 +156,48 @@ export function Tap({
   strong?: boolean; solid?: boolean; sound?: keyof typeof sfx | "none";
   /** выравнивать содержимое по центру (для кнопок-табов) */
   center?: boolean;
+  /**
+   * Долгое нажатие (500 мс). Используется, чтобы закрепить игру в сетке.
+   * Обычный клик после долгого нажатия не срабатывает — иначе закрепление
+   * тут же запускало бы игру.
+   */
+  onLongPress?: () => void;
 }) {
   const base = solid ? "solid" : "glass";
+  const lpTimer = useRef<number | null>(null);
+  const lpFired = useRef(false);
+
+  const startLp = () => {
+    if (disabled || !onLongPress) return;
+    lpFired.current = false;
+    lpTimer.current = window.setTimeout(() => {
+      lpFired.current = true;
+      onLongPress();
+    }, 500);
+  };
+  const cancelLp = () => {
+    if (lpTimer.current) {
+      clearTimeout(lpTimer.current);
+      lpTimer.current = null;
+    }
+  };
+  useEffect(() => cancelLp, []);
+
   return (
     <motion.button
       type="button"
       disabled={disabled}
       whileTap={disabled ? undefined : { scale: 0.975 }}
       transition={{ type: "spring", stiffness: 700, damping: 30 }}
+      onPointerDown={startLp}
+      onPointerUp={cancelLp}
+      onPointerLeave={cancelLp}
+      onPointerCancel={cancelLp}
+      onContextMenu={(e) => { if (onLongPress) e.preventDefault(); }}
       onClick={() => {
         if (disabled) return;
+        // после долгого нажатия обычный клик игнорируем
+        if (lpFired.current) { lpFired.current = false; return; }
         if (sound !== "none") (sfx as any)[sound]?.();
         haptic("light");
         onClick?.();

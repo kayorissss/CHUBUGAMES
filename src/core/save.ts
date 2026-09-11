@@ -75,6 +75,8 @@ export function freshSave(): SaveState {
       notifyUpdates: false,
       notifyBoss: false,
       notifyNews: false,
+      favGames: [],
+      gameSort: "default",
     },
     unlockedGames: ALL_GAMES.slice(),
     stats: {

@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { tr } from "../core/i18n";
 import ChestCard from "../ui/ChestCard";
 import { AnimatePresence, motion } from "framer-motion";
@@ -8,7 +8,7 @@ import { GAME_META } from "../core/content";
 import { EASE } from "../core/motion";
 import { fmt } from "../core/format";
 import { autoRate } from "../core/save";
-import { Card, Tap, Bar, SectionTitle, Screen } from "../ui/Glass";
+import { Card, Tap, Bar, Chip, SectionTitle, Screen } from "../ui/Glass";
 import HeadView from "../ui/HeadView";
 import GameIcon from "../ui/GameIcon";
 import Icon, { type IconName } from "../ui/Icon";
@@ -36,7 +36,31 @@ export default function Home({
   onOpenProfile?: () => void;
   onOpen?: (page: SubPage) => void;
 }) {
-  const { s, levelPct, addCoins, toast } = useGame();
+  const { s, set, levelPct, addCoins, toast } = useGame();
+
+  /**
+   * Порядок игр в сетке.
+   *
+   * Закреплённые (долгий тап по карточке) всегда идут первыми, дальше —
+   * выбранная сортировка. Игр 27, и мотать до любимой каждый раз было
+   * утомительно.
+   */
+  const sortedGames = useMemo(() => {
+    const fav = s.settings.favGames || [];
+    const mode = s.settings.gameSort || "default";
+    const list = GAME_META.map((g, i) => ({ g, i }));
+    list.sort((a, b) => {
+      const fa = fav.includes(a.g.id) ? 0 : 1;
+      const fb = fav.includes(b.g.id) ? 0 : 1;
+      if (fa !== fb) return fa - fb;
+      const sa = s.games[a.g.id], sb = s.games[b.g.id];
+      if (mode === "best") return (sb?.best || 0) - (sa?.best || 0);
+      if (mode === "plays") return (sb?.plays || 0) - (sa?.plays || 0);
+      if (mode === "recent") return (sb?.recent?.[0]?.t || 0) - (sa?.recent?.[0]?.t || 0);
+      return a.i - b.i;
+    });
+    return list.map((x) => x.g);
+  }, [s.settings.favGames, s.settings.gameSort, s.games]);
   const rate = autoRate(s);
   const [showAd, setShowAd] = useState(false);
   const [adLeft, setAdLeft] = useState(() => bonusesLeft());
@@ -425,11 +449,36 @@ export default function Home({
         )}
       </AnimatePresence>
 
+      {/*
+        СОРТИРОВКА И ИЗБРАННОЕ.
+        Игр 27, и мотать до нужной каждый раз было долго. Закреплённые
+        (долгий тап по карточке) всегда идут первыми.
+      */}
+      <div className="flex items-center" style={{ gap: 7, marginBottom: 10, flexWrap: "wrap" }}>
+        {([
+          { k: "default" as const, l: tr("По порядку") },
+          { k: "best" as const, l: tr("По рекорду") },
+          { k: "plays" as const, l: tr("По забегам") },
+          { k: "recent" as const, l: tr("Недавние") },
+        ]).map((o) => (
+          <Chip
+            key={o.k}
+            active={(s.settings.gameSort || "default") === o.k}
+            onClick={() => {
+              sfx.click();
+              set((d) => { d.settings.gameSort = o.k; });
+            }}
+          >
+            {o.l}
+          </Chip>
+        ))}
+      </div>
+
       {/* Сетка игр */}
       <SectionTitle right={<span className="t-num" style={{ fontSize: 11, color: "var(--text-mute)" }}>{s.unlockedGames.length}/{GAME_META.length}</span>}>{tr("Все игры")}</SectionTitle>
 
       <div className="grid grid-cols-2" style={{ gap: 12, marginBottom: 22 }}>
-        {GAME_META.map((g, i) => {
+        {sortedGames.map((g, i) => {
           const unlocked = s.unlockedGames.includes(g.id);
           const st = s.games[g.id];
           // Поддержку показываем ровно после «Башни Лёхи»: это конец
@@ -447,6 +496,17 @@ export default function Home({
             >
               <Tap
                 onClick={() => unlocked && onPlay(g.id)}
+                onLongPress={() => {
+                  if (!unlocked) return;
+                  haptic("medium");
+                  sfx.tap?.();
+                  set((d) => {
+                    const cur = d.settings.favGames || [];
+                    d.settings.favGames = cur.includes(g.id)
+                      ? cur.filter((x) => x !== g.id)
+                      : [...cur, g.id];
+                  });
+                }}
                 disabled={!unlocked}
                 solid
                 r="lg"
@@ -469,14 +529,21 @@ export default function Home({
                         </svg>
                       )}
                     </span>
-                    <span
-                      className="t-label"
-                      style={{
-                        fontSize: 8.5, padding: "3px 7px", borderRadius: 999,
-                        background: "var(--btn-bg)", letterSpacing: "0.07em",
-                      }}
-                    >
-                      {tr(g.tag)}
+                    <span className="flex items-center" style={{ gap: 5 }}>
+                      {(s.settings.favGames || []).includes(g.id) && (
+                        <span style={{ color: "var(--gold)", lineHeight: 0 }}>
+                          <Icon name="star" size={12} />
+                        </span>
+                      )}
+                      <span
+                        className="t-label"
+                        style={{
+                          fontSize: 8.5, padding: "3px 7px", borderRadius: 999,
+                          background: "var(--btn-bg)", letterSpacing: "0.07em",
+                        }}
+                      >
+                        {tr(g.tag)}
+                      </span>
                     </span>
                   </div>
                   <div className="t-title-sm clip1">{unlocked ? tr(g.name) : "?????"}</div>

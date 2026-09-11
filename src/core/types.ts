@@ -116,6 +116,10 @@ export interface Settings {
   notifyBoss: boolean;
   /** Канал НОВИНКИ: ежедневки и события */
   notifyNews: boolean;
+  /** Закреплённые игры — показываются первыми в сетке */
+  favGames?: string[];
+  /** Порядок игр в сетке */
+  gameSort?: "default" | "best" | "recent" | "plays";
 }
 
 export interface SaveState {
