@@ -3,7 +3,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { useGame } from "../core/store";
 import { sfx, haptic } from "../core/fx";
 import { GameOver, GameHUD, Countdown, HudStat } from "./shell";
-import HeadView from "../ui/HeadView";
+import type { FriendLook } from "../core/types";
 import Icon, { type IconName } from "../ui/Icon";
 import { tr } from "../core/i18n";
 
@@ -55,6 +55,163 @@ const THIN_AT = 30;
 const GAIN_RATE = 0.42;     // кг/с при перекорме
 const LOSE_RATE = 0.9;      // кг/с при голоде
 const HUGE_AT = 95;         // с этого веса нужны два унитаза
+
+/**
+ * Фигура подопечного целиком.
+ *
+ * Жалобы пользователя: «показывать изменения на персонаже (толстеет /
+ * худеет / грязный / одежда)», «человек целиком», «персонаж двигается
+ * от действий». Раньше здесь была ОДНА ГОЛОВА (HeadView), растянутая
+ * по горизонтали через scaleX — ни тела, ни одежды, ни грязи.
+ *
+ * Теперь рисуем человека: голова, шея, торс, руки, ноги. Ширина торса
+ * и бёдер считается из веса, футболка меняет цвет по шкале одежды,
+ * грязь проступает пятнами при низкой чистоте, а поза зависит от того,
+ * что сейчас делаем.
+ */
+function PetBody({
+  look, weight, clean, laundry, toilet, busy, size = 150,
+}: {
+  look: FriendLook;
+  weight: number;
+  clean: number;
+  laundry: number;
+  toilet: number;
+  busy: Need | null;
+  size?: number;
+}) {
+  // 60 кг -> худой, 70 -> обычный, 110 -> очень толстый
+  const k = Math.max(0, Math.min(1, (weight - 55) / 60));
+  const torsoW = 26 + k * 30;        // ширина торса
+  const hipW = 22 + k * 26;
+  const headR = 15 + k * 3.2;
+
+  // одежда: чистая футболка -> насыщенный цвет, грязная -> серо-бурая
+  const shirtFresh = Math.max(0, Math.min(1, laundry / 100));
+  const shirt = laundry > 55 ? "#4a7fd4" : laundry > 25 ? "#6b6f52" : "#5a5040";
+  const pants = laundry > 40 ? "#33384a" : "#3a3630";
+
+  // грязь: чем ниже чистота, тем больше пятен
+  const dirt = Math.max(0, Math.min(1, (60 - clean) / 60));
+  // припёрло: поза «ноги вместе», лёгкий наклон
+  const urgent = toilet < 30;
+
+  const cx = 50;
+  return (
+    <svg width={size} height={size * 1.18} viewBox="0 0 100 118">
+      {/* тень */}
+      <ellipse cx={cx} cy="113" rx={hipW * 0.9} ry="4" fill="var(--n-000)" opacity="0.4" />
+
+      {/* ноги */}
+      <path
+        d={`M${cx - hipW * 0.42} 82 L${cx - (urgent ? hipW * 0.16 : hipW * 0.34)} 110`}
+        stroke={pants} strokeWidth={9 + k * 4} strokeLinecap="round"
+      />
+      <path
+        d={`M${cx + hipW * 0.42} 82 L${cx + (urgent ? hipW * 0.16 : hipW * 0.34)} 110`}
+        stroke={pants} strokeWidth={9 + k * 4} strokeLinecap="round"
+      />
+      {/* стопы */}
+      <ellipse cx={cx - (urgent ? hipW * 0.16 : hipW * 0.34)} cy="111" rx="6" ry="2.8" fill="var(--n-200)" />
+      <ellipse cx={cx + (urgent ? hipW * 0.16 : hipW * 0.34)} cy="111" rx="6" ry="2.8" fill="var(--n-200)" />
+
+      {/* торс: с весом становится бочкой */}
+      <path
+        d={`M${cx - torsoW / 2} 48
+            Q${cx} 44 ${cx + torsoW / 2} 48
+            L${cx + hipW / 2} 84
+            Q${cx} 88 ${cx - hipW / 2} 84 Z`}
+        fill={shirt}
+      />
+      {/* живот-«пузо» отдельной дугой, когда разъелся */}
+      {k > 0.45 && (
+        <ellipse cx={cx} cy={72} rx={torsoW * 0.42} ry={10 + k * 7} fill="var(--n-000)" opacity="0.12" />
+      )}
+
+      {/* пятна грязи на футболке */}
+      {dirt > 0.15 && (
+        <>
+          <ellipse cx={cx - torsoW * 0.24} cy="60" rx={3 + dirt * 4} ry={2.4 + dirt * 3} fill="#4a3a22" opacity={0.3 + dirt * 0.5} />
+          <ellipse cx={cx + torsoW * 0.2} cy="70" rx={2.6 + dirt * 4} ry={2 + dirt * 3} fill="#4a3a22" opacity={0.25 + dirt * 0.5} />
+        </>
+      )}
+      {dirt > 0.6 && (
+        <ellipse cx={cx + torsoW * 0.1} cy="53" rx="3.4" ry="2.6" fill="#3d3018" opacity="0.6" />
+      )}
+
+      {/* руки: при мытье подняты, при еде — ко рту */}
+      {busy === "clean" ? (
+        <>
+          <path d={`M${cx - torsoW / 2 + 2} 52 Q${cx - torsoW * 0.8} 40 ${cx - torsoW * 0.66} 28`} stroke={shirt} strokeWidth="7" strokeLinecap="round" fill="none" />
+          <path d={`M${cx + torsoW / 2 - 2} 52 Q${cx + torsoW * 0.8} 40 ${cx + torsoW * 0.66} 28`} stroke={shirt} strokeWidth="7" strokeLinecap="round" fill="none" />
+        </>
+      ) : busy === "food" ? (
+        <>
+          <path d={`M${cx - torsoW / 2 + 2} 54 Q${cx - torsoW * 0.5} 48 ${cx - 8} 38`} stroke={shirt} strokeWidth="7" strokeLinecap="round" fill="none" />
+          <path d={`M${cx + torsoW / 2 - 2} 54 Q${cx + torsoW * 0.5} 62 ${cx + torsoW * 0.62} 74`} stroke={shirt} strokeWidth="7" strokeLinecap="round" fill="none" />
+        </>
+      ) : (
+        <>
+          <path d={`M${cx - torsoW / 2 + 2} 52 Q${cx - torsoW * 0.72} 64 ${cx - torsoW * 0.62} 78`} stroke={shirt} strokeWidth="7" strokeLinecap="round" fill="none" />
+          <path d={`M${cx + torsoW / 2 - 2} 52 Q${cx + torsoW * 0.72} 64 ${cx + torsoW * 0.62} 78`} stroke={shirt} strokeWidth="7" strokeLinecap="round" fill="none" />
+        </>
+      )}
+
+      {/* шея */}
+      <rect x={cx - 4} y={40} width="8" height="9" rx="3" fill={look.skin} />
+
+      {/* голова */}
+      <circle cx={cx} cy={40 - headR} r={headR} fill={look.skin} />
+      {/* волосы */}
+      <path
+        d={`M${cx - headR} ${40 - headR - 1} Q${cx} ${40 - headR * 2.4} ${cx + headR} ${40 - headR - 1} Z`}
+        fill={look.hair}
+      />
+      {/* глаза: при нужде — зажмуренные */}
+      {urgent || (busy && busy === "toilet") ? (
+        <>
+          <path d={`M${cx - 5.4} ${40 - headR} q2.4 -2 4.8 0`} stroke="#1a1a1f" strokeWidth="1.3" fill="none" strokeLinecap="round" />
+          <path d={`M${cx + 0.6} ${40 - headR} q2.4 -2 4.8 0`} stroke="#1a1a1f" strokeWidth="1.3" fill="none" strokeLinecap="round" />
+        </>
+      ) : (
+        <>
+          <circle cx={cx - 4.4} cy={40 - headR} r="1.7" fill="#1a1a1f" />
+          <circle cx={cx + 4.4} cy={40 - headR} r="1.7" fill="#1a1a1f" />
+        </>
+      )}
+      {/* рот: настроение по худшей шкале */}
+      {busy === "food" ? (
+        <ellipse cx={cx} cy={40 - headR + 5.6} rx="3.4" ry="2.8" fill="#5a2a2a" />
+      ) : Math.min(clean, laundry, toilet) < 30 ? (
+        <path d={`M${cx - 4} ${40 - headR + 7} q4 -3.4 8 0`} stroke="#5a2a2a" strokeWidth="1.5" fill="none" strokeLinecap="round" />
+      ) : (
+        <path d={`M${cx - 4} ${40 - headR + 5} q4 3.4 8 0`} stroke="#5a2a2a" strokeWidth="1.5" fill="none" strokeLinecap="round" />
+      )}
+
+      {/* мушки над головой, когда совсем грязный */}
+      {dirt > 0.55 && (
+        <>
+          <circle cx={cx - headR - 5} cy={40 - headR * 2 - 2} r="1.3" fill="#2f2f38" />
+          <circle cx={cx + headR + 4} cy={40 - headR * 2 + 3} r="1.1" fill="#2f2f38" />
+        </>
+      )}
+
+      {/* капли воды при мытье */}
+      {busy === "clean" && (
+        <>
+          <circle cx={cx - 16} cy={26} r="2" fill="#8fd3ff" opacity="0.85" />
+          <circle cx={cx + 14} cy={20} r="1.6" fill="#8fd3ff" opacity="0.7" />
+          <circle cx={cx + 2} cy={16} r="1.8" fill="#8fd3ff" opacity="0.8" />
+        </>
+      )}
+
+      {/* свежая футболка блестит после стирки */}
+      {busy === "laundry" && shirtFresh > 0.2 && (
+        <path d={`M${cx - torsoW * 0.3} 56 L${cx - torsoW * 0.1} 52`} stroke="#ffffff" strokeWidth="2" opacity="0.6" strokeLinecap="round" />
+      )}
+    </svg>
+  );
+}
 
 export default function ChubPet({ onExit }: { onExit: () => void }) {
   const { s, addCoins, addXp, finishGame, questProgress } = useGame();
@@ -195,8 +352,21 @@ export default function ChubPet({ onExit }: { onExit: () => void }) {
 
   return (
     <div className="absolute inset-0 flex flex-col" style={{ background: "var(--bg)" }}>
+      {/* Вес переехал в шапку: пользователь просил «кг в нормальное место».
+          Раньше он висел отдельной строкой под персонажем и читался как
+          часть картинки, а не как показатель. */}
       <GameHUD score={Math.floor(score)} best={best} onExit={onExit} label={tr("ОЧКИ")}
-        extra={<HudStat label={tr("УРОВЕНЬ")} value={level} tone="acc" min={50} />}
+        extra={
+          <>
+            <HudStat label={tr("УРОВЕНЬ")} value={level} tone="acc" min={50} />
+            <HudStat
+              label={tr("ВЕС, КГ")}
+              value={weight.toFixed(1)}
+              tone={weight >= HUGE_AT ? "danger" : weight <= THIN_AT + 10 ? "warn" : "plain"}
+              min={62}
+            />
+          </>
+        }
       />
 
       <div
@@ -212,34 +382,64 @@ export default function ChubPet({ onExit }: { onExit: () => void }) {
             marginBottom: 14,
           }}
         >
+          {/*
+            Персонаж двигается от действий (просьба пользователя):
+              • кормим — подпрыгивает и жуёт;
+              • моем — трясётся, руки подняты, летят капли;
+              • стираем — крутится, как в барабане;
+              • на унитаз — семенит мелкой дрожью;
+              • плохо по шкале — качается из стороны в сторону;
+              • всё хорошо — спокойно дышит.
+            Ширину больше не подделываем через scaleX: тело само
+            становится шире, потому что рисуется от веса.
+          */}
           <motion.div
             animate={
-              busy
-                ? { scale: [1, 1.08, 1], rotate: [0, -4, 4, 0] }
-                : bars[worst.id] < 25
-                  ? { x: [0, -4, 4, 0] }
-                  : { y: [0, -5, 0] }
+              busy === "food" ? { y: [0, -8, 0], scaleY: [1, 0.94, 1] }
+              : busy === "clean" ? { x: [0, -5, 5, -3, 0], rotate: [0, -3, 3, 0] }
+              : busy === "laundry" ? { rotate: [0, -8, 8, 0] }
+              : busy === "toilet" ? { x: [0, -2.5, 2.5, -2.5, 0] }
+              : bars[worst.id] < 25 ? { rotate: [0, -4, 4, 0] }
+              : { y: [0, -5, 0] }
             }
-            transition={{ duration: busy ? 0.5 : 2.6, repeat: Infinity, ease: "easeInOut" }}
-            style={{
-              // толстеет на глазах: масштаб по весу
-              transform: `scaleX(${(0.86 + weight / 200).toFixed(3)})`,
+            transition={{
+              duration: busy === "toilet" ? 0.26 : busy ? 0.6 : 2.8,
+              repeat: Infinity,
+              ease: "easeInOut",
             }}
+            style={{ transformOrigin: "50% 90%" }}
           >
-            <HeadView friend={pet} size={118} />
+            <PetBody
+              look={pet.look}
+              weight={weight}
+              clean={bars.clean}
+              laundry={bars.laundry}
+              toilet={bars.toilet}
+              busy={busy}
+              size={150}
+            />
           </motion.div>
 
-          <div className="flex items-center" style={{ gap: 9, marginTop: 12 }}>
-            <span className="t-num" style={{ fontSize: 22 }}>{weight.toFixed(1)}</span>
-            <span className="t-label" style={{ fontSize: 9 }}>{tr("КГ")}</span>
+          <div className="flex items-center" style={{ gap: 8, marginTop: 12 }}>
             <span
               className="t-label"
               style={{
-                fontSize: 8.5, padding: "3px 9px", borderRadius: 999,
+                fontSize: 9, padding: "5px 11px", borderRadius: "var(--r-sm)",
                 background: "var(--btn-bg)", border: "1px solid var(--btn-brd)",
               }}
             >
               {tr(mood)}
+            </span>
+            {/* короткая расшифровка, что сейчас видно на персонаже */}
+            <span className="t-caption clip1" style={{ fontSize: 10 }}>
+              {busy
+                ? tr("ДЕЛАЮ…")
+                : bars.clean < 35 ? tr("Грязный")
+                : bars.laundry < 35 ? tr("Одежда несвежая")
+                : bars.toilet < 30 ? tr("Приспичило")
+                : weight >= HUGE_AT ? tr("Разъелся")
+                : weight <= THIN_AT + 8 ? tr("Отощал")
+                : tr("Всё в порядке")}
             </span>
           </div>
 

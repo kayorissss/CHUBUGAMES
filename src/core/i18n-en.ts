@@ -1018,4 +1018,12 @@ export const EN_TEXT: Record<string, string> = {
   "Введите ответ": "Enter the answer",
   "Предыдущий вопрос": "Previous clue",
   "Следующий вопрос": "Next clue",
+  "ВЕС, КГ": "WEIGHT, KG",
+  "Грязный": "Filthy",
+  "Одежда несвежая": "Clothes are stale",
+  "Приспичило": "Needs the toilet",
+  "Разъелся": "Stuffed himself",
+  "Отощал": "Wasting away",
+  "Всё в порядке": "All good",
+  "КАБИНА": "CAB",
 };
