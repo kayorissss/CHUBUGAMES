@@ -1558,6 +1558,77 @@ html.is-desktop .pc-sub {
   z-index: 8;
 }
 
+/* ============================================================
+   СТРАНИЦЫ РАЗДЕЛОВ НА ПК: ДВЕ КОЛОНКИ И ПАНЕЛЬ ВКЛАДОК
+
+   Телефонный вариант — один длинный столбец карточек — на мониторе
+   выглядел «накиданно»: пол-экрана пустого, между секциями дыры. Здесь
+   те же блоки раскладываются в две колонки, а ряд вкладок превращается
+   в компактную панель-сегмент.
+
+   Приём тот же, что и на главной: контейнеры на телефоне display:contents,
+   поэтому DOM один и правки карточек приходят в обе оболочки сами.
+   ============================================================ */
+.pc-cols,
+.pc-col {
+  display: contents;
+}
+html.is-desktop .pc-cols {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 1.6rem;
+  align-items: start;
+}
+html.is-desktop .pc-col {
+  display: block;
+  min-width: 0;
+}
+/* последняя карточка колонки не добавляет лишний низ — иначе колонки
+   кажутся разной длины из-за отступа, а не содержимого */
+html.is-desktop .pc-col > :last-child {
+  margin-bottom: 0 !important;
+}
+/* колонки скроллятся как страница, а не каждая сама по себе: на
+   настройках это два экрана,отдельный скролл тут только мешает */
+html.is-desktop .pc-cols + *,
+html.is-desktop .pc-cols {
+  padding-bottom: 0.4rem;
+}
+
+/* Ряд вкладок (Прогресс, Магазин, Казино, Сеть): на ПК это панель,
+   а не тянущаяся на всю ширину полоска чипов */
+html.is-desktop .pc-tabs-row {
+  display: inline-flex !important;
+  align-items: center;
+  width: auto !important;
+  gap: 0.3rem !important;
+  padding: 0.34rem !important;
+  margin: 0.15rem 0 1.15rem !important;
+  background: var(--surface);
+  border: 1px solid var(--surface-brd);
+  border-radius: var(--r-lg);
+  box-shadow: 0 12px 30px -24px rgba(0, 0, 0, 0.9);
+  overflow: visible !important;
+}
+html.is-desktop .pc-tabs-row .chip,
+html.is-desktop .pc-tabs-row button {
+  border-radius: var(--r-sm) !important;
+  white-space: nowrap;
+}
+
+/* Читалка фанфиков: строка в 1400 px не читается физически. Колонка
+   ограничена measure, текст крупнее, поля шире. */
+html.is-desktop .pc-reader {
+  max-width: 54rem;
+}
+html.is-desktop .pc-reader .pc-page-body {
+  padding: 1.5rem 0 3.5rem !important;
+}
+html.is-desktop .pc-reader .pc-page-body > * {
+  padding-left: var(--pc-pad);
+  padding-right: var(--pc-pad);
+}
+
 /* фокус с клавиатуры: на ПК без него невозможно пользоваться табом */
 html.is-desktop :focus-visible {
   outline: 2px solid color-mix(in srgb, var(--acc) 78%, #fff);

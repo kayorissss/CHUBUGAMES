@@ -136,6 +136,12 @@ export default function Settings({
 
   return (
     <Screen title={t("settings.title")}>
+      {/* На ПК страницы-списки раскладываются в две колонки: один столб
+          карточек на мониторе выглядел «накиданным», а половина экрана
+          пустовала. На телефоне контейнеры display:contents — вёрстка не
+          меняется. */}
+      <div className="pc-cols">
+      <div className="pc-col">
       {/* На ПК — свой блок: масштаб, разрешение сцены и обновление через exe */}
       {isDesktop() ? (
         <>
@@ -259,6 +265,8 @@ export default function Settings({
         />
       </Card>
 
+      </div>
+      <div className="pc-col">
       <SectionTitle>{tr("Инструменты")}</SectionTitle>
       <Card r="lg" style={{ padding: 0, marginBottom: 22, overflow: "hidden" }}>
         <NavRow
@@ -355,6 +363,9 @@ export default function Settings({
         </div>
         <div className="t-caption" style={{ marginTop: 10, lineHeight: 1.5 }}>{tr("Все друзья, шутки и головы — реальные. Претензии тоже принимаются в телеграм.")}</div>
       </Card>
+
+      </div>
+      </div>
 
       <div className="text-center" style={{ paddingBlock: 18 }}>
         <div className="t-display-sm" style={{ color: "var(--n-400)" }}>CHUBUGAMES</div>

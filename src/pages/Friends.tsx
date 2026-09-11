@@ -76,6 +76,10 @@ export default function Friends() {
         >{tr("СВОЙ")}</Button>
       }
     >
+      {/* ПК: карточка главного босса и список друзей стоят рядом, а не
+          друг под другом — иначе на мониторе список уезжал за прокрутку */}
+      <div className="pc-cols">
+      <div className="pc-col">
         <SectionTitle>{tr("Главный босс")}</SectionTitle>
         <Card r="xl" className="relative overflow-hidden" style={{ padding: 16, marginBottom: 22 }}>
           <div className="flex items-center" style={{ gap: 15 }}>
@@ -152,6 +156,8 @@ export default function Friends() {
           </div>
         </Card>
 
+      </div>
+      <div className="pc-col">
         <SectionTitle>{tr("Все друзья")}</SectionTitle>
         <div className="grid grid-cols-2" style={{ gap: 12 }}>
           {s.friends.map((f) => {
@@ -215,6 +221,9 @@ export default function Friends() {
           боссом и загрузить настоящее фото.
           Всё хранится только на твоём телефоне.
         </div>
+
+      </div>
+      </div>
 
       <AnimatePresence>
         {editing && (

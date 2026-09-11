@@ -173,7 +173,7 @@ export default function Casino({ onBack }: { onBack: () => void }) {
       </Panel>
 
       {/* Вкладки */}
-      <div className="flex" style={{ gap: 6, marginBottom: 14, overflowX: "auto" }}>
+      <div className="flex pc-tabs-row" style={{ gap: 6, marginBottom: 14, overflowX: "auto" }}>
         {TABS.map((t) => (
           <button
             key={t.id}

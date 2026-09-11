@@ -23,7 +23,7 @@ export default function ProgressPage() {
   return (
     <Screen title={tr("ПРОГРЕСС")}>
       <div
-        className="flex overflow-x-auto scroll"
+        className="flex overflow-x-auto scroll pc-tabs-row"
         style={{ gap: 8, marginBottom: 18, paddingBottom: 2 }}
       >
         <Chip active={tab === "daily"} onClick={() => setTab("daily")}>{tr("Ежедневки")}</Chip>

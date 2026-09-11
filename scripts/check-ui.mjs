@@ -454,6 +454,23 @@ ok(cssPc23.includes('html.graphite'),
   'тема «графит» описана в палитре, а не только в настройке');
 ok(fs.readFileSync('src/App.tsx', 'utf8').includes('chub:nav'),
   'разделы переключаются с клавиатуры');
+// Страницы разделов на ПК: не один длинный столбец, а две колонки,
+// вкладки — компактной панелью, читалка — с нормальной длиной строки.
+const pagesCss = fs.readFileSync('src/index.css', 'utf8');
+ok(/\.pc-cols,[\s\S]{0,30}\.pc-col\s*\{\s*display: contents;/.test(pagesCss),
+  'две колонки не трогают телефонную вёрстку (контейнеры display:contents)');
+ok(fs.readFileSync('src/pages/Settings.tsx', 'utf8').includes('pc-cols'),
+  'настройки на ПК раскладываются в две колонки');
+ok(fs.readFileSync('src/pages/Friends.tsx', 'utf8').includes('pc-col'),
+  'друзья: карточка босса и список стоят рядом');
+ok(['Progress', 'Shop', 'Casino', 'Network'].every((pg) =>
+    fs.readFileSync(`src/pages/${pg}.tsx`, 'utf8').includes('pc-tabs-row')),
+  'ряды вкладок на ПК — панель, а не тянущаяся на всю ширину полоска');
+ok(fs.readFileSync('src/pages/Fanfic.tsx', 'utf8').includes('pc-reader'),
+  'читалка фанфиков ограничена по ширине строки');
+const glass23 = fs.readFileSync('src/ui/Glass.tsx', 'utf8');
+ok(glass23.includes('className = ""') && glass23.includes('pc-page'),
+  'Screen умеет свой класс — страницы просят особый режим раскладки');
 const wfDesk = fs.readFileSync('.github/workflows/build-desktop.yml', 'utf8');
 ok(wfDesk.includes('Remove outdated assets'),
   'сборка ПК чистит устаревшие exe из релиза');

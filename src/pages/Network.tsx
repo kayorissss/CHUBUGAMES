@@ -41,7 +41,7 @@ export default function Network({ onBack }: { onBack: () => void }) {
     >
       {/* Вкладки */}
       <div
-        className="flex"
+        className="flex pc-tabs-row"
         style={{
           gap: 4, padding: 4, marginBottom: 16,
           background: "var(--btn-bg)", border: "1px solid var(--btn-brd)",

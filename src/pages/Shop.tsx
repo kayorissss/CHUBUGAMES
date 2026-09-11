@@ -57,7 +57,7 @@ export default function Shop() {
       }
     >
       {/* Вкладки: крупные, с иконкой и подписью — сразу видно, где находишься */}
-      <div className="flex" style={{ gap: 8, marginBottom: 16 }}>
+      <div className="flex pc-tabs-row" style={{ gap: 8, marginBottom: 16 }}>
         {SHOP_TABS.map((t) => {
           const on = tab === t.id;
           return (

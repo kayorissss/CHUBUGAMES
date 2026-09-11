@@ -307,13 +307,15 @@ export function SectionTitle({
 
 /** Каркас экрана: единые поля, отступ сверху и запас под таб-бар */
 export function Screen({
-  title, right, children, scroll = true, sub,
+  title, right, children, scroll = true, sub, className = "",
 }: {
   title?: string; right?: ReactNode; children: ReactNode;
   scroll?: boolean; sub?: string;
+  /** дополнительный класс страницы: pc-cols / pc-reader и т. п. (см. index.css) */
+  className?: string;
 }) {
   return (
-    <div className="h-full flex flex-col pc-page">
+    <div className={`h-full flex flex-col pc-page ${className}`}>
       {title && (
         <div
           className="flex items-center justify-between gap-3 shrink-0 pc-page-head"
