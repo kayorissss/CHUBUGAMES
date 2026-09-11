@@ -83,7 +83,8 @@ export default function Friends() {
               transition={{ repeat: Infinity, duration: 3.2, ease: "easeInOut" }}
               className="shrink-0"
             >
-              <HeadView friend={mainFriend} size={76} />
+              {/* gear: на главном друге видно купленные в казино украшения */}
+              <HeadView friend={mainFriend} size={76} gear />
             </motion.div>
             <div className="flex-1 min-w-0">
               <div className="t-display-sm clip1">{mainFriend.name}</div>

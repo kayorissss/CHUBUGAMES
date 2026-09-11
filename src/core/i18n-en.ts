@@ -1075,4 +1075,5 @@ export const EN_TEXT: Record<string, string> = {
   "Чужая провинция: жми НАПАСТЬ, удар пойдёт по красной стрелке": "Enemy province: hit ATTACK, the strike follows the red arrow",
   "куда можно напасть": "where you can attack",
   "провинций": "provinces",
+  "Надетые украшения видно на главном друге во вкладке «Друзья».": "Equipped cosmetics show up on your main friend in the Friends tab.",
 };

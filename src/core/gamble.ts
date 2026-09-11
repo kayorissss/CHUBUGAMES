@@ -80,20 +80,38 @@ export const GAMBLE_CASES: GambleCase[] = [
   },
 ];
 
-/** Случайная редкость по шансам кейса */
-export function rollRarity(c: GambleCase): Rarity {
-  const r = Math.random();
-  let acc = 0;
-  for (const k of ["legend", "epic", "rare", "common"] as Rarity[]) {
-    acc += c.odds[k];
-    if (r < acc) return k;
+/**
+ * Случайная редкость по шансам кейса.
+ *
+ * `luck` — бонус удачи главного друга (bossStats().luckBonus, 0..0.1).
+ * Он ДОЛЖЕН влиять на дропы: в карточке друга написано «+N% к редким
+ * дропам», но раньше это число никуда не передавалось и было враньём.
+ *
+ * Как применяем: шансы legend/epic/rare умножаются на (1 + luck), а
+ * недостача добирается из common. Сумма всегда остаётся равной 1, и
+ * common не может уйти в минус.
+ */
+export function rollRarity(c: GambleCase, luck = 0): Rarity {
+  const k = Math.max(0, Math.min(1, luck));
+  const legend = c.odds.legend * (1 + k);
+  const epic = c.odds.epic * (1 + k);
+  const rare = c.odds.rare * (1 + k);
+  const common = Math.max(0, 1 - legend - epic - rare);
+  const table: Array<[Rarity, number]> = [
+    ["legend", legend], ["epic", epic], ["rare", rare], ["common", common],
+  ];
+  const total = table.reduce((a, [, v]) => a + v, 0);
+  let r = Math.random() * total;
+  for (const [name, v] of table) {
+    r -= v;
+    if (r < 0) return name;
   }
   return "common";
 }
 
-/** Выпадение предмета из кейса */
-export function rollItem(c: GambleCase): ItemDef {
-  const rarity = rollRarity(c);
+/** Выпадение предмета из кейса (luck — бонус удачи главного друга) */
+export function rollItem(c: GambleCase, luck = 0): ItemDef {
+  const rarity = rollRarity(c, luck);
   const pool = ITEMS.filter((i) => i.rarity === rarity);
   return pool[Math.floor(Math.random() * pool.length)];
 }

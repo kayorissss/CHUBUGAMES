@@ -7,6 +7,7 @@ import ItemIcon from "../ui/ItemIcon";
 import { sfx, haptic } from "../core/fx";
 import { fmt } from "../core/format";
 import { useGame } from "../core/store";
+import { bossStats } from "../core/save";
 import { RARITY_COLOR, RARITY_LABEL } from "../core/content";
 import {
   FREE_CHIPS, GAMBLE_CASES, SLOT_SYMBOLS, freeChipsIn, freeChipsReady,
@@ -469,15 +470,22 @@ function Slots({ g, save }: { g: GambleStore; save: (p: Partial<GambleStore>) =>
 /* ═══════════════════════════ КЕЙСЫ ═══════════════════════════ */
 
 function Cases({ g, save }: { g: GambleStore; save: (p: Partial<GambleStore>) => void }) {
+  /*
+   * Удача главного друга реально влияет на дроп. В карточке друга давно
+   * написано «+N% к редким дропам», но число никуда не передавалось —
+   * теперь оно идёт в rollItem и двигает шансы rare/epic/legend.
+   */
+  const { s: save0 } = useGame();
+  const luck = bossStats(save0).luckBonus;
   const [opening, setOpening] = useState<GambleCase | null>(null);
   const [got, setGot] = useState<ItemDef | null>(null);
   const [roll, setRoll] = useState<ItemDef[]>([]);
 
   const open = (c: GambleCase) => {
     if (g.chips < c.price || opening) return;
-    const prize = rollItem(c);
+    const prize = rollItem(c, luck);
     // лента прокрутки: случайные предметы, приз — предпоследний
-    const strip = Array.from({ length: 26 }, () => rollItem(c));
+    const strip = Array.from({ length: 26 }, () => rollItem(c, luck));
     strip[22] = prize;
     setRoll(strip);
     setOpening(c);
@@ -1487,6 +1495,16 @@ function Stuff({ g, save }: { g: GambleStore; save: (p: Partial<GambleStore>) =>
 
   return (
     <>
+      {/*
+        Подсказка, что надетое реально видно на герое. Раньше «надеть»
+        ничего не меняло: предмет помечался, но на голове не появлялся.
+      */}
+      <Panel r="lg" style={{ padding: "10px 12px", marginBottom: 8 }}>
+        <div className="t-caption" style={{ fontSize: 10.5, lineHeight: 1.4 }}>
+          {tr("Надетые украшения видно на главном друге во вкладке «Друзья».")}
+        </div>
+      </Panel>
+
       {owned.map(([id, n]) => {
         const it = itemById(id);
         if (!it) return null;
