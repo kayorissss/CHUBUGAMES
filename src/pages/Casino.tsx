@@ -208,57 +208,111 @@ export default function Casino({ onBack }: { onBack: () => void }) {
 
 const BETS = [10, 25, 50, 100, 250];
 
+/**
+ * Слоты.
+ *
+ * Что было не так (жалоба «скудная анимация, непонятно выиграл или нет»):
+ *   1. РЕАЛЬНЫЙ БАГ, а не оформление. Пара младших символов платит меньше
+ *      ставки (бургер ×0.5, зуб ×0.7, болт ×0.9), но экран всё равно
+ *      писал зелёное «+N жетонов». Расчётом: 42.3 % всех спинов
+ *      показывали «выигрыш», после которого жетонов становилось МЕНЬШЕ.
+ *      Игрок видел зелёный плюс и терял баланс — отсюда «непонятно».
+ *      Теперь считаем ЧИСТЫЙ результат (выплата минус ставка) и красим
+ *      по нему: плюс зелёным, возврат части ставки — жёлтым «вернулось»,
+ *      ноль — серым. В плюс реально уходит 11.9 % спинов.
+ *   2. Барабаны просто меняли иконку каждые 70 мс. Теперь лента символов
+ *      едет вертикально и тормозит на своём барабане, а выигрышные
+ *      подсвечиваются рамкой и вспышкой.
+ */
 function Slots({ g, save }: { g: GambleStore; save: (p: Partial<GambleStore>) => void }) {
   const [bet, setBet] = useState(25);
   const [reels, setReels] = useState<SlotSymbol[]>(["burger", "tooth", "bolt"]);
+  /** null — ещё не крутили; иначе итог последнего спина */
+  const [res, setRes] = useState<{ pay: number; net: number; kind: "trip" | "pair" | "miss"; sym: SlotSymbol | null } | null>(null);
   const [spinning, setSpinning] = useState(false);
-  const [win, setWin] = useState<number | null>(null);
+  /** какие барабаны уже встали — для поочерёдной остановки */
+  const [stopped, setStopped] = useState([true, true, true]);
   const timers = useRef<number[]>([]);
 
-  useEffect(() => () => { timers.current.forEach(clearTimeout); }, []);
+  useEffect(() => () => { timers.current.forEach((t) => { clearTimeout(t); clearInterval(t); }); }, []);
 
   const spin = () => {
     if (spinning || g.chips < bet) return;
+    timers.current.forEach((t) => { clearTimeout(t); clearInterval(t); });
+    timers.current = [];
+
     setSpinning(true);
-    setWin(null);
-    save({ chips: g.chips - bet, spins: g.spins + 1 });
+    setRes(null);
+    setStopped([false, false, false]);
     sfx.click();
     haptic("light");
 
     const final: SlotSymbol[] = [spinReel(), spinReel(), spinReel()];
 
-    // барабаны крутятся и останавливаются по очереди
+    // Лента крутится, пока барабан не остановлен
     const iv = window.setInterval(() => {
-      setReels([spinReel(), spinReel(), spinReel()]);
-    }, 70);
+      setReels((prev) => prev.map((cur, i) => (stoppedRef.current[i] ? cur : spinReel())));
+    }, 60);
     timers.current.push(iv);
 
-    [520, 780, 1060].forEach((ms, i) => {
+    [560, 900, 1260].forEach((ms, i) => {
       const t = window.setTimeout(() => {
-        setReels((prev) => {
-          const next = [...prev];
-          next[i] = final[i];
-          return next;
-        });
-        sfx.click();
+        stoppedRef.current[i] = true;
+        setStopped((prev) => { const n = [...prev]; n[i] = true; return n; });
+        setReels((prev) => { const n = [...prev]; n[i] = final[i]; return n; });
+        sfx.tap?.();
+        haptic("light");
+
         if (i === 2) {
           clearInterval(iv);
           const pay = slotPayout(final, bet);
-          setWin(pay);
+          const net = pay - bet;
+          const trip = final[0] === final[1] && final[1] === final[2];
+          const pairSym = final[0] === final[1] ? final[0]
+            : final[1] === final[2] ? final[1]
+            : final[0] === final[2] ? final[0] : null;
+
+          setRes({
+            pay,
+            net,
+            kind: trip ? "trip" : pairSym ? "pair" : "miss",
+            sym: trip ? final[0] : pairSym,
+          });
           setSpinning(false);
-          if (pay > 0) {
-            save({ chips: g.chips - bet + pay, won: g.won + pay, spins: g.spins + 1 });
-            sfx.crit?.();
-            haptic("success");
-          } else {
-            save({ chips: g.chips - bet, lost: g.lost + bet, spins: g.spins + 1 });
-            haptic("light");
-          }
+
+          save({
+            chips: g.chips - bet + pay,
+            spins: g.spins + 1,
+            won: pay > 0 ? g.won + pay : g.won,
+            lost: g.lost + bet,
+          });
+
+          if (net > 0) { sfx.crit?.(); haptic("success"); }
+          else { haptic("light"); }
         }
       }, ms);
       timers.current.push(t);
     });
   };
+
+  // ref, чтобы интервал видел актуальные остановки без пересоздания
+  const stoppedRef = useRef([true, true, true]);
+  useEffect(() => { stoppedRef.current = stopped; }, [stopped]);
+
+  /** какие барабаны входят в комбинацию — их подсвечиваем */
+  const litReel = (i: number) => {
+    if (!res || res.kind === "miss" || !res.sym) return false;
+    return reels[i] === res.sym;
+  };
+
+  const tone = !res ? null
+    : res.net > 0 ? "win"
+    : res.pay > 0 ? "part"
+    : "miss";
+
+  const toneColor = tone === "win" ? "var(--ok)"
+    : tone === "part" ? "var(--warn)"
+    : "var(--text-mute)";
 
   return (
     <>
@@ -268,50 +322,89 @@ function Slots({ g, save }: { g: GambleStore; save: (p: Partial<GambleStore>) =>
           {reels.map((r, i) => (
             <div
               key={i}
-              className="flex-1 flex items-center justify-center"
+              className="flex-1 relative overflow-hidden"
               style={{
                 height: 92,
                 borderRadius: "var(--r-md)",
                 background: "var(--surface-2)",
-                border: `1.5px solid ${win && win > 0 ? "var(--ok)" : "var(--btn-brd)"}`,
+                border: `1.5px solid ${litReel(i) ? toneColor : "var(--btn-brd)"}`,
+                boxShadow: litReel(i) ? `0 0 0 2px color-mix(in srgb, ${toneColor} 26%, transparent)` : "none",
+                transition: "border-color .18s, box-shadow .18s",
               }}
             >
-              <motion.div
-                key={`${i}-${r}`}
-                initial={spinning ? { y: -14, opacity: 0.4 } : { scale: 0.8, opacity: 0 }}
-                animate={{ y: 0, scale: 1, opacity: 1 }}
-                transition={{ duration: 0.12 }}
-              >
-                <SlotGlyph id={r} />
-              </motion.div>
+              {/* вспышка на выигрышном барабане */}
+              <AnimatePresence>
+                {litReel(i) && (
+                  <motion.div
+                    className="absolute inset-0"
+                    initial={{ opacity: 0.5 }}
+                    animate={{ opacity: 0 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.5 }}
+                    style={{ background: toneColor, pointerEvents: "none" }}
+                  />
+                )}
+              </AnimatePresence>
+
+              <div className="absolute inset-0 flex items-center justify-center">
+                <motion.div
+                  key={`${i}-${r}-${stopped[i]}`}
+                  initial={stopped[i] ? { y: -34, opacity: 0.25 } : { y: -30, opacity: 0.35 }}
+                  animate={{ y: 0, opacity: 1 }}
+                  transition={stopped[i]
+                    ? { type: "spring", stiffness: 420, damping: 24 }
+                    : { duration: 0.06, ease: "linear" }}
+                >
+                  <SlotGlyph id={r} />
+                </motion.div>
+              </div>
             </div>
           ))}
         </div>
 
-        {/* Результат */}
-        <div style={{ height: 26, marginBottom: 12, textAlign: "center" }}>
+        {/* Результат: честный, по чистому итогу */}
+        <div style={{ minHeight: 46, marginBottom: 12 }}>
           <AnimatePresence mode="wait">
-            {win !== null && (
+            {res && (
               <motion.div
-                key={win}
-                initial={{ opacity: 0, y: 6 }}
-                animate={{ opacity: 1, y: 0 }}
+                key={`${res.pay}-${res.net}`}
+                initial={{ opacity: 0, y: 8, scale: 0.96 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0 }}
-                className="t-title-sm"
-                style={{ color: win > 0 ? "var(--ok)" : "var(--text-mute)", fontSize: 14 }}
+                transition={{ type: "spring", stiffness: 380, damping: 26 }}
+                className="flex items-center justify-center"
+                style={{
+                  gap: 9, padding: "9px 12px", borderRadius: "var(--r-sm)",
+                  background: tone === "miss" ? "var(--surface-2)"
+                    : `color-mix(in srgb, ${toneColor} 15%, var(--surface-2))`,
+                  border: `1px solid ${tone === "miss" ? "var(--btn-brd)" : toneColor}`,
+                }}
               >
-                {win > 0 ? `+${fmt(win)} жетонов` : tr("Мимо")}
+                <span className="t-title-sm clip1" style={{ color: toneColor, fontSize: 14 }}>
+                  {res.net > 0
+                    ? `${tr("ВЫИГРЫШ")} +${fmt(res.net)}`
+                    : res.pay > 0
+                      ? `${tr("Вернулось")} ${fmt(res.pay)} ${tr("из")} ${fmt(bet)}`
+                      : `${tr("Мимо")} −${fmt(bet)}`}
+                </span>
+                {res.kind !== "miss" && (
+                  <span className="t-caption shrink-0" style={{ fontSize: 10 }}>
+                    {res.kind === "trip" ? tr("ТРОЙКА") : tr("ПАРА")}
+                  </span>
+                )}
               </motion.div>
             )}
           </AnimatePresence>
         </div>
 
         {/* Ставка */}
+        <div className="t-label" style={{ fontSize: 9, marginBottom: 6 }}>{tr("СТАВКА")}</div>
         <div className="flex" style={{ gap: 6, marginBottom: 12 }}>
           {BETS.map((b) => (
             <button
               key={b}
               type="button"
+              disabled={spinning}
               onClick={() => { sfx.click(); setBet(b); }}
               className="t-num flex-1"
               style={{
@@ -319,6 +412,7 @@ function Slots({ g, save }: { g: GambleStore; save: (p: Partial<GambleStore>) =>
                 background: bet === b ? "var(--acc)" : "var(--btn-bg)",
                 color: bet === b ? "var(--acc-ink)" : "var(--text-mute)",
                 border: `1px solid ${bet === b ? "var(--acc)" : "var(--btn-brd)"}`,
+                opacity: g.chips < b ? 0.45 : 1,
               }}
             >
               {b}
@@ -333,25 +427,40 @@ function Slots({ g, save }: { g: GambleStore; save: (p: Partial<GambleStore>) =>
           style={{ fontSize: 14, opacity: spinning || g.chips < bet ? 0.5 : 1 }}
           sound="power"
         >
-          {spinning ? "КРУТИТСЯ…" : g.chips < bet ? "НЕ ХВАТАЕТ ЖЕТОНОВ" : `КРУТИТЬ ЗА ${bet}`}
+          {spinning ? tr("КРУТИТСЯ…") : g.chips < bet ? tr("НЕ ХВАТАЕТ ЖЕТОНОВ") : `${tr("КРУТИТЬ ЗА")} ${bet}`}
         </Tap>
       </Panel>
 
-      {/* Таблица выплат */}
+      {/* Таблица выплат: с честной пометкой, что младшая пара — это возврат части ставки */}
       <Panel r="lg" style={{ padding: 14 }}>
-        <div className="t-label" style={{ marginBottom: 10 }}>{tr("Выплаты за тройку")}</div>
+        <div className="t-label" style={{ marginBottom: 10 }}>{tr("Выплаты")}</div>
+        <div className="flex items-center" style={{ gap: 10, paddingBottom: 6 }}>
+          <span style={{ width: 18 }} />
+          <span className="t-caption flex-1" style={{ fontSize: 9.5 }}>{tr("три подряд")}</span>
+          <span className="t-caption shrink-0" style={{ fontSize: 9.5, width: 62, textAlign: "right" }}>{tr("пара")}</span>
+        </div>
         {SLOT_SYMBOLS.map((s) => (
           <div
             key={s.id}
             className="flex items-center"
-            style={{ gap: 10, padding: "6px 0" }}
+            style={{ gap: 10, padding: "6px 0", borderTop: "1px solid var(--surface-brd)" }}
           >
             <SlotGlyph id={s.id} size={18} />
-            <span className="t-caption flex-1">{tr("три подряд")}</span>
-            <span className="t-num" style={{ fontSize: 12 }}>×{s.pay3}</span>
+            <span className="t-num flex-1" style={{ fontSize: 12, color: "var(--ok)" }}>×{s.pay3}</span>
+            <span
+              className="t-num shrink-0"
+              style={{
+                fontSize: 12, width: 62, textAlign: "right",
+                color: s.pay2 >= 1 ? "var(--ok)" : "var(--warn)",
+              }}
+            >
+              ×{s.pay2}
+            </span>
           </div>
         ))}
-        <div className="t-caption" style={{ marginTop: 8, lineHeight: 1.5 }}>{tr("Пара тоже платит, но меньше.")}</div>
+        <div className="t-caption" style={{ marginTop: 9, lineHeight: 1.5 }}>
+          {tr("Жёлтая пара платит меньше ставки — часть жетонов возвращается, но спин всё равно в минус.")}
+        </div>
       </Panel>
     </>
   );
@@ -1045,28 +1154,53 @@ interface FarmChip {
   life: number;
   val: number;
   gold: boolean;
+  /** уже собрана — проигрываем вылет и убираем */
+  taken?: boolean;
 }
 
+/**
+ * ФЕРМА ЖЕТОНОВ.
+ *
+ * Жалоба «ферма неудобная». Что чинили:
+ *   1. Собирать можно было ТОЛЬКО тапом по каждой фишке. Это противоречит
+ *      общему правилу «вести пальцем, а не только тапать»: за 20 секунд
+ *      появляется 32 фишки, и попасть по каждой отдельным тапом физически
+ *      неуспеваемо. Теперь палец можно вести — фишка собирается при
+ *      касании траекторией (pointermove + проверка радиуса).
+ *   2. Промах сбрасывал комбо в ноль молча. Теперь комбо видно всегда,
+ *      а не только со второй фишки, и рядом написано, что оно даёт.
+ *   3. Не было видно, сколько времени осталось, кроме мелкой цифры —
+ *      добавлена полоса.
+ *
+ * Экономика (проверено расчётом /tmp/farm.mjs): 32 фишки за раунд,
+ * при 70 % точности ≈ 280 жетонов = 11 спинов по 25. Ферма остаётся
+ * основным бесплатным источником, поэтому награда не режется.
+ */
 function ChipFarm({ g, save }: { g: GambleStore; save: (p: Partial<GambleStore>) => void }) {
   const [phase, setPhase] = useState<"idle" | "play" | "over">("idle");
   const [chips, setChips] = useState<FarmChip[]>([]);
   const [earned, setEarned] = useState(0);
   const [left, setLeft] = useState(FARM_MS);
   const [combo, setCombo] = useState(0);
+  const [missed, setMissed] = useState(0);
   const areaRef = useRef<HTMLDivElement>(null);
   const nextId = useRef(1);
   const endAt = useRef(0);
   const lastSpawn = useRef(0);
   const rafRef = useRef(0);
   const comboRef = useRef(0);
+  const chipsRef = useRef<FarmChip[]>([]);
+  useEffect(() => { chipsRef.current = chips; }, [chips]);
 
   const start = () => {
     setChips([]); setEarned(0); setCombo(0); comboRef.current = 0;
+    setMissed(0);
     setLeft(FARM_MS);
     endAt.current = performance.now() + FARM_MS;
     lastSpawn.current = 0;
     setPhase("play");
     sfx.power?.();
+    haptic("medium");
   };
 
   // Цикл игры: спавн фишек и их старение
@@ -1080,24 +1214,38 @@ function ChipFarm({ g, save }: { g: GambleStore; save: (p: Partial<GambleStore>)
         sfx.gameOver?.();
         return;
       }
-      // спавним новую фишку
       if (now - lastSpawn.current > FARM_SPAWN_MS) {
         lastSpawn.current = now;
         const gold = Math.random() < 0.16;
-        setChips((cs) => [
-          ...cs.filter((c) => now - c.born < c.life),
-          {
-            id: nextId.current++,
-            x: 8 + Math.random() * 84,
-            y: 10 + Math.random() * 76,
-            born: now,
-            life: gold ? 1150 : 1700,
-            val: gold ? 25 : 8,
-            gold,
-          },
-        ]);
+        setChips((cs) => {
+          // просроченные считаем промахом и рвём комбо
+          const expired = cs.filter((c) => !c.taken && now - c.born >= c.life).length;
+          if (expired > 0) {
+            comboRef.current = 0;
+            setCombo(0);
+            setMissed((m) => m + expired);
+          }
+          return [
+            ...cs.filter((c) => now - c.born < c.life),
+            {
+              id: nextId.current++,
+              x: 10 + Math.random() * 80,
+              y: 12 + Math.random() * 72,
+              born: now,
+              life: gold ? 1150 : 1700,
+              val: gold ? 25 : 8,
+              gold,
+            },
+          ];
+        });
       } else {
         setChips((cs) => {
+          const expired = cs.filter((c) => !c.taken && now - c.born >= c.life).length;
+          if (expired > 0) {
+            comboRef.current = 0;
+            setCombo(0);
+            setMissed((m) => m + expired);
+          }
           const alive = cs.filter((c) => now - c.born < c.life);
           return alive.length === cs.length ? cs : alive;
         });
@@ -1116,80 +1264,143 @@ function ChipFarm({ g, save }: { g: GambleStore; save: (p: Partial<GambleStore>)
     if (earned > 0) {
       save({ chips: g.chips + earned });
       sfx.coin?.();
+      haptic("success");
     }
   }, [phase, earned, g.chips, save]);
 
   useEffect(() => { if (phase === "play") paid.current = false; }, [phase]);
 
-  const grab = (c: FarmChip) => {
+  const grab = useCallback((c: FarmChip) => {
+    if (c.taken) return;
     comboRef.current += 1;
     setCombo(comboRef.current);
-    // комбо добавляет до +50%
     const bonus = 1 + Math.min(comboRef.current, 10) * 0.05;
     setEarned((e) => e + Math.round(c.val * bonus));
-    setChips((cs) => cs.filter((x) => x.id !== c.id));
+    // помечаем собранной — анимация вылета, затем удаление
+    setChips((cs) => cs.map((x) => (x.id === c.id ? { ...x, taken: true } : x)));
+    window.setTimeout(() => {
+      setChips((cs) => cs.filter((x) => x.id !== c.id));
+    }, 220);
     if (c.gold) { sfx.crit?.(); haptic("medium"); }
     else { sfx.coin?.(); haptic("light"); }
-  };
+  }, []);
+
+  /**
+   * Сбор пальцем: на каждое движение проверяем, не задели ли фишку.
+   * Радиус берём щедрый (половина размера + 6 px), иначе на быстром
+   * ведении палец «перепрыгивает» фишку между кадрами.
+   */
+  const sweep = useCallback((e: React.PointerEvent) => {
+    if (phase !== "play") return;
+    const box = areaRef.current?.getBoundingClientRect();
+    if (!box) return;
+    const px = e.clientX - box.left;
+    const py = e.clientY - box.top;
+    for (const c of chipsRef.current) {
+      if (c.taken) continue;
+      const cx = (c.x / 100) * box.width;
+      const cy = (c.y / 100) * box.height;
+      const r = (c.gold ? 52 : 44) / 2 + 6;
+      if ((px - cx) ** 2 + (py - cy) ** 2 <= r * r) { grab(c); break; }
+    }
+  }, [phase, grab]);
 
   const secs = (left / 1000).toFixed(1);
+  const mult = 1 + Math.min(combo, 10) * 0.05;
+  const progress = Math.max(0, Math.min(1, left / FARM_MS));
 
   return (
     <>
       <Panel r="lg" style={{ padding: 13, marginBottom: 12 }}>
         <div className="t-label" style={{ marginBottom: 7, fontSize: 9.5 }}>{tr("КАК ЭТО РАБОТАЕТ")}</div>
         <div className="t-caption" style={{ lineHeight: 1.6, fontSize: 11 }}>
-          {tr("Двадцать секунд на то, чтобы ловить фишки пальцем. Золотая стоит дороже, но живёт меньше. Ловишь без промаха — растёт комбо и надбавка.")}
+          {tr("Двадцать секунд на то, чтобы собирать фишки. Веди пальцем по экрану — фишки собираются касанием, тапать по каждой не нужно. Золотая дороже, но живёт меньше. Ловишь без промаха — растёт комбо и надбавка.")}
         </div>
       </Panel>
 
       <Panel r="lg" style={{ padding: 14 }}>
-        <div className="flex items-center justify-between" style={{ marginBottom: 10 }}>
-          <div>
+        <div className="flex items-center justify-between" style={{ marginBottom: 8 }}>
+          <div className="min-w-0">
             <div className="t-label" style={{ fontSize: 9 }}>{tr("НАЛОВИЛ")}</div>
             <div className="t-num acc-text" style={{ fontSize: 22, lineHeight: 1.1 }}>{fmt(earned)}</div>
           </div>
-          <div className="text-right">
+          <div className="text-center shrink-0" style={{ minWidth: 66 }}>
+            <div className="t-label" style={{ fontSize: 9 }}>{tr("КОМБО")}</div>
+            <div
+              className="t-num"
+              style={{ fontSize: 22, lineHeight: 1.1, color: combo > 0 ? "var(--ok)" : "var(--text-mute)" }}
+            >
+              ×{mult.toFixed(2)}
+            </div>
+          </div>
+          <div className="text-right shrink-0">
             <div className="t-label" style={{ fontSize: 9 }}>{tr("ВРЕМЯ")}</div>
             <div
               className="t-num"
               style={{ fontSize: 22, lineHeight: 1.1, color: left < 5000 ? "var(--danger)" : undefined }}
             >
-              {phase === "play" ? secs : "20.0"}
+              {phase === "play" ? secs : (FARM_MS / 1000).toFixed(1)}
             </div>
           </div>
         </div>
 
+        {/* Полоса времени — цифру в углу на бегу не читают */}
+        <div
+          style={{
+            height: 5, borderRadius: 999, background: "var(--surface-2)",
+            overflow: "hidden", marginBottom: 10,
+          }}
+        >
+          <div
+            style={{
+              height: "100%", width: `${progress * 100}%`,
+              background: left < 5000 ? "var(--danger)" : "var(--acc)",
+              transition: "width .1s linear",
+            }}
+          />
+        </div>
+
         <div
           ref={areaRef}
+          onPointerDown={(e) => { e.preventDefault(); sweep(e); }}
+          onPointerMove={sweep}
           style={{
             position: "relative", width: "100%", height: 280,
             borderRadius: "var(--r-md)",
             background: "var(--surface-2)",
             border: "1px solid var(--surface-brd)",
             overflow: "hidden", touchAction: "none",
+            cursor: phase === "play" ? "pointer" : "default",
           }}
         >
           {phase === "play" && chips.map((c) => (
-            <button
+            <motion.div
               key={c.id}
-              type="button"
-              onPointerDown={(e) => { e.preventDefault(); grab(c); }}
+              initial={{ scale: 0.3, opacity: 0 }}
+              animate={c.taken
+                ? { scale: 1.5, opacity: 0, y: -22 }
+                : { scale: 1, opacity: 1, y: 0 }}
+              transition={c.taken
+                ? { duration: 0.22, ease: "easeOut" }
+                : { type: "spring", stiffness: 520, damping: 22 }}
               style={{
                 position: "absolute",
                 left: `${c.x}%`, top: `${c.y}%`,
                 transform: "translate(-50%, -50%)",
                 width: c.gold ? 52 : 44, height: c.gold ? 52 : 44,
+                marginLeft: c.gold ? -26 : -22,
+                marginTop: c.gold ? -26 : -22,
                 borderRadius: "50%",
                 background: c.gold ? "var(--acc)" : "var(--surface)",
-                border: `2.5px solid ${c.gold ? "#7a5200" : "var(--btn-brd)"}`,
+                border: `2.5px solid ${c.gold ? "var(--gold-brd)" : "var(--btn-brd)"}`,
                 color: c.gold ? "var(--acc-ink)" : "var(--text)",
                 display: "flex", alignItems: "center", justifyContent: "center",
                 boxShadow: c.gold ? "0 4px 16px -4px var(--acc-glow)" : "none",
+                pointerEvents: "none",
               }}
             >
               <span className="t-num" style={{ fontSize: c.gold ? 13 : 11 }}>{c.val}</span>
-            </button>
+            </motion.div>
           ))}
 
           {phase !== "play" && (
@@ -1204,28 +1415,21 @@ function ChipFarm({ g, save }: { g: GambleStore; save: (p: Partial<GambleStore>)
                     +{fmt(earned)}
                   </div>
                   <div className="t-caption" style={{ marginTop: 4 }}>{tr("жетонов на счёт")}</div>
+                  {missed > 0 && (
+                    <div className="t-caption" style={{ marginTop: 6, color: "var(--text-mute)" }}>
+                      {tr("Упустил")}: {missed}
+                    </div>
+                  )}
                 </>
               ) : (
                 <>
                   <Icon name="coin" size={34} />
                   <div className="t-title-sm" style={{ marginTop: 10 }}>{tr("ФЕРМА ЖЕТОНОВ")}</div>
                   <div className="t-caption" style={{ marginTop: 6, lineHeight: 1.55 }}>
-                    {tr("Лови фишки пальцем. Бесплатно, играй сколько хочешь.")}
+                    {tr("Веди пальцем по полю — фишки собираются сами. Бесплатно, играй сколько хочешь.")}
                   </div>
                 </>
               )}
-            </div>
-          )}
-
-          {phase === "play" && combo > 1 && (
-            <div
-              className="t-num"
-              style={{
-                position: "absolute", left: 10, bottom: 8, fontSize: 13,
-                color: "var(--acc)",
-              }}
-            >
-              x{(1 + Math.min(combo, 10) * 0.05).toFixed(2)}
             </div>
           )}
         </div>
