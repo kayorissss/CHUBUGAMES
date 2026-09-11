@@ -431,7 +431,11 @@ ok(/onRetry[\s\S]{0,120}center/.test(shell21), 'кнопка «Ещё раз» �
 // Волейбол и вратарь
 const vol21 = fs.readFileSync('src/games/Volley.tsx', 'utf8');
 ok(vol21.includes('NET_CLEAR'), 'волейбол: удар считается через баллистику');
-ok(vol21.includes('aiMiss'), 'волейбол: у соперника есть ошибка прицела');
+// Соперник больше не тянется к мячу каждый кадр (так розыгрыш был вечным):
+// он получает цель в момент удара игрока и бежит туда с задержкой и ошибкой.
+ok(vol21.includes('aiErr') && vol21.includes('aiReact') && vol21.includes('aiTarget'),
+  'волейбол: у соперника есть ошибка прицела и задержка реакции');
+ok(vol21.includes('flightOk'), 'волейбол: траектория удара проверяется прогоном');
 const pen21 = fs.readFileSync('src/games/Penalty.tsx', 'utf8');
 ok(pen21.includes('SHOULDER_Y'), 'вратарь: руки крепятся к плечам');
 
