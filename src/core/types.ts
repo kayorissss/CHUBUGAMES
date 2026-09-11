@@ -59,6 +59,18 @@ export interface GameStats {
   plays: number;
   totalScore: number;
   timeMs: number;
+  /** Когда поставлен текущий рекорд, мс. 0 — рекорда ещё не было */
+  bestAt?: number;
+  /** Пять последних результатов, свежие в начале: {очки, когда} */
+  recent?: { s: number; t: number }[];
+  /**
+   * МАСТЕРСТВО игры: очки копятся за каждый забег, уровень даёт прибавку
+   * к монетам именно в этой игре. Считается формулой из masteryLevel().
+   */
+  mx?: number;
+  /** Лучший результат испытания дня и дата этого испытания (YYYY-MM-DD) */
+  dcBest?: number;
+  dcDay?: string;
 }
 
 export interface ClickerState {

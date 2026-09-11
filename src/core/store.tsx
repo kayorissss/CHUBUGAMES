@@ -14,7 +14,8 @@ import { refreshPalette } from "./palette";
 import { today, daysBetween } from "./format";
 import { sfx, haptic, setSound, setHaptics } from "./fx";
 import { pickQuests } from "./save";
-import { makeT, setLang } from "./i18n";
+import { makeT, setLang, tr } from "./i18n";
+import { applyRun, masteryBonus, masteryLevel } from "./mastery";
 import type { IconName } from "../ui/Icon";
 
 export interface Toast {
@@ -210,9 +211,21 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
     [toast],
   );
 
+  /**
+   * Последняя выплата монет — нужна, чтобы начислить бонус мастерства.
+   *
+   * Награду считает каждая игра сама (27 разных формул), а мастерство
+   * знает только finishGame. Дублировать множитель в 27 файлах — верный
+   * способ где-нибудь его забыть, поэтому запоминаем сумму последней
+   * выплаты: игры вызывают addCoins и сразу finishGame, и там мы
+   * доначисляем недостающую часть.
+   */
+  const lastPay = useRef<{ n: number; t: number }>({ n: 0, t: 0 });
+
   const addCoins = useCallback(
     (n: number) => {
       if (n <= 0) return;
+      lastPay.current = { n, t: Date.now() };
       set((d) => {
         d.coins += n;
         d.totalCoinsEver += n;
@@ -311,18 +324,52 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
   const finishGame = useCallback(
     (g: GameId, score: number, ms: number) => {
       set((d) => {
-        const gs = d.games[g];
-        gs.plays += 1;
-        gs.totalScore += score;
-        gs.timeMs += ms;
-        const isRecord = score > gs.best;
-        if (isRecord) gs.best = score;
+        const before = d.games[g];
+        const isRecord = score > before.best;
+        const beforeMx = masteryLevel(before.mx || 0);
+        /*
+         * Статистику считает applyRun: он же ведёт историю последних
+         * результатов, дату рекорда и очки мастерства. Раньше здесь
+         * руками менялись четыре поля, и добавить пятое означало
+         * править каждое место вызова.
+         */
+        d.games[g] = applyRun(before, score, ms);
+        const afterMx = masteryLevel(d.games[g].mx || 0);
+
+        /*
+         * Бонус мастерства к монетам. Игра уже выплатила базовую сумму
+         * через addCoins мгновением раньше — доначисляем разницу.
+         * Окно в 120 мс отсекает случайные совпадения: если игра монет
+         * не платила, бонусу неоткуда взяться.
+         */
+        const mult = masteryBonus(before.mx || 0);
+        const pay = lastPay.current;
+        if (mult > 1 && pay.n > 0 && Date.now() - pay.t < 120) {
+          const extra = Math.floor(pay.n * (mult - 1));
+          if (extra > 0) {
+            d.coins += extra;
+            d.totalCoinsEver += extra;
+          }
+        }
+        lastPay.current = { n: 0, t: 0 };
         checkAch(d);
         if (isRecord && score > 0) {
           setTimeout(() => {
             sfx.legend();
             toast({ title: "НОВЫЙ РЕКОРД", sub: `${score.toLocaleString("ru-RU")} очков`, icon: "medal", tone: "gold" });
           }, 400);
+        }
+        // Повышение мастерства — отдельный повод для радости
+        if (afterMx > beforeMx) {
+          setTimeout(() => {
+            sfx.levelUp?.();
+            toast({
+              title: `${tr("МАСТЕРСТВО")} ${afterMx}`,
+              sub: `${GAME_META.find((m) => m.id === g)?.name || g} · +${Math.round((masteryBonus(d.games[g].mx || 0) - 1) * 100)}% ${tr("монет")}`,
+              icon: "medal",
+              tone: "gold",
+            });
+          }, isRecord ? 1400 : 400);
         }
       });
       questProgress("plays", 1);

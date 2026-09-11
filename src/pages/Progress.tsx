@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { tr } from "../core/i18n";
+import MasteryView from "../ui/MasteryView";
 import { motion } from "framer-motion";
 import { useGame } from "../core/store";
 import {
@@ -15,7 +16,7 @@ import Icon, { type IconName } from "../ui/Icon";
 import { sfx, haptic } from "../core/fx";
 import { freshSave } from "../core/save";
 
-type Tab = "daily" | "season" | "skills" | "ach" | "stats";
+type Tab = "daily" | "season" | "mastery" | "skills" | "ach" | "stats";
 
 export default function ProgressPage() {
   const [tab, setTab] = useState<Tab>("daily");
@@ -27,12 +28,14 @@ export default function ProgressPage() {
       >
         <Chip active={tab === "daily"} onClick={() => setTab("daily")}>{tr("Ежедневки")}</Chip>
         <Chip active={tab === "season"} onClick={() => setTab("season")}>{tr("Сезон")}</Chip>
+        <Chip active={tab === "mastery"} onClick={() => setTab("mastery")}>{tr("Мастерство")}</Chip>
         <Chip active={tab === "skills"} onClick={() => setTab("skills")}>{tr("Навыки")}</Chip>
         <Chip active={tab === "ach"} onClick={() => setTab("ach")}>{tr("Ачивки")}</Chip>
         <Chip active={tab === "stats"} onClick={() => setTab("stats")}>{tr("Статистика")}</Chip>
       </div>
       {tab === "daily" && <Daily />}
       {tab === "season" && <Season />}
+      {tab === "mastery" && <MasteryView />}
       {tab === "skills" && <Skills />}
       {tab === "ach" && <Achievements />}
       {tab === "stats" && <Stats />}
