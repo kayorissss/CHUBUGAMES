@@ -136,6 +136,21 @@ jobs:
           } > DESKTOP_BODY.md
           cat DESKTOP_BODY.md
 
+      # Старые сборки накапливались в релизе: после пяти версий там лежало
+      # десять файлов, и было неочевидно, какой качать. Оставляем только
+      # свежие — их имена содержат текущую версию.
+      - name: Remove outdated assets
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release view desktop --json assets -q '.assets[].name' 2>/dev/null | while read -r a; do
+            case "$a" in
+              *"$APP_VER"*) echo "оставляем $a" ;;
+              *.exe) echo "удаляем устаревший $a"; gh release delete-asset desktop "$a" -y || true ;;
+            esac
+          done
+
       - name: Publish EXE to Releases
         uses: softprops/action-gh-release@v2
         with:
