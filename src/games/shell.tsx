@@ -7,6 +7,7 @@ import { fmt } from "../core/format";
 import Icon from "../ui/Icon";
 import type { IconName } from "../ui/Icon";
 import { useModes, MARATHON_ROUNDS, survivalMult } from "../core/modes";
+import ModeBadge from "../ui/ModeBadge";
 import { useGame } from "../core/store";
 import { canvasScaleCap, isLowFx } from "../core/perf";
 import RulesCard from "../ui/RulesCard";
@@ -195,6 +196,9 @@ export function GameHUD({
         <RulesCard id={gid} open={rulesOpen} onClose={() => setRulesOpen(false)} />,
         document.body,
       )}
+      {/* Плашка активного режима: видно, где ты и что нужно набрать */}
+      <ModeBadge />
+
       <div
         className="absolute left-0 right-0 z-20 flex items-stretch px-2.5"
         style={{ top: "calc(var(--sat) + 8px)", gap: 6, height: HUD_H }}

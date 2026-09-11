@@ -154,9 +154,20 @@ export const SPRINT_MS = 2 * 60 * 1000;
 
 /** Порог, ниже которого раунд выживания считается проваленным */
 export function survivalTarget(cleared: number, best: number): number {
-  // Цель растёт вместе с серией, но всегда отталкивается от личного рекорда:
-  // новичку хватит четверти рекорда, к десятой игре нужно почти повторить его.
+  /*
+   * Цель раунда выживания.
+   *
+   * Считается от личного рекорда: новичку хватит четверти, к десятому
+   * раунду нужно почти повторить рекорд.
+   *
+   * ВАЖНО про нулевой рекорд. Раньше формула возвращала 1 очко для игры,
+   * в которую человек ещё не играл, — такой раунд проходился сам собой,
+   * и «выживание» превращалось в бесплатный множитель наград. Теперь
+   * для незнакомой игры берём мягкий фиксированный минимум: сыграть
+   * по-настоящему придётся, но и нечестной сложности не будет.
+   */
   const k = 0.25 + Math.min(cleared, 10) * 0.07;
+  if (best <= 0) return Math.max(1, Math.round(3 + cleared * 2));
   return Math.max(1, Math.floor(best * k));
 }
 
@@ -167,8 +178,20 @@ export function survivalMult(cleared: number): number {
   return 1 + Math.min(cleared, 12) * 0.35;
 }
 
+/**
+ * Игры, которые НЕЛЬЗЯ ставить в режимы.
+ *
+ * «Чубкликер» — бесконечная фармилка: у неё нет экрана итогов, значит
+ * раунд никогда не завершится и режим повиснет навсегда. Раньше она
+ * лежала в общем пуле, и марафон намертво застревал, если выпадала.
+ */
+export const MODE_BLOCKLIST: GameId[] = ["clicker"];
+
+/** Игры, пригодные для марафона, выживания и спринта */
+export const MODE_POOL: GameId[] = ALL_GAMES.filter((g) => !MODE_BLOCKLIST.includes(g));
+
 export function marathonQueue(): GameId[] {
-  const pool = [...ALL_GAMES];
+  const pool = [...MODE_POOL];
   const out: GameId[] = [];
   for (let i = 0; i < MARATHON_ROUNDS && pool.length; i++) {
     out.push(pool.splice(Math.floor(Math.random() * pool.length), 1)[0]);
@@ -308,7 +331,7 @@ export function ModesProvider({
   /* ───────────────────────── Выживание ───────────────────────── */
 
   const pickGame = useCallback((exclude?: GameId): GameId => {
-    const pool = ALL_GAMES.filter((g) => g !== exclude);
+    const pool = MODE_POOL.filter((g) => g !== exclude);
     return pool[Math.floor(Math.random() * pool.length)];
   }, []);
 
@@ -372,12 +395,46 @@ export function ModesProvider({
         });
         return { ...r, score: total, finished: true };
       }
-      // время ещё есть — сразу перезапускаем ту же игру
+      /*
+       * Время ещё есть — перезапускаем ту же игру.
+       *
+       * Раньше пауза была 30 мс: React не всегда успевал размонтировать
+       * прошлый экран, и игра иногда не перезапускалась вовсе. 220 мс
+       * гарантируют размонтирование и заодно дают увидеть, что раунд
+       * засчитан.
+       */
       switchRef.current(null);
-      setTimeout(() => switchRef.current(r.game), 30);
+      setTimeout(() => switchRef.current(r.game), 220);
       return { ...r, score: total };
     });
   }, []);
+
+  /*
+   * ТАЙМЕР СПРИНТА.
+   *
+   * Раньше время проверялось только в reportSprint, то есть в момент,
+   * когда игра сама закончилась. В бесконечных играх (тамагочи, доски)
+   * этот момент не наступал никогда, и двухминутный спринт длился
+   * сколько угодно. Теперь секунду за секундой проверяем срок и
+   * закрываем раунд принудительно.
+   */
+  useEffect(() => {
+    if (!sprint || sprint.finished) return;
+    const iv = setInterval(() => {
+      setSprint((r) => {
+        if (!r || r.finished) return r;
+        if (Date.now() < r.endsAt) return { ...r };   // тик для перерисовки
+        setStore((prev) => {
+          const next: Store = { ...prev, sprintBest: Math.max(prev.sprintBest, r.score) };
+          write(next);
+          return next;
+        });
+        switchRef.current(null);
+        return { ...r, finished: true };
+      });
+    }, 1000);
+    return () => clearInterval(iv);
+  }, [sprint?.finished, sprint?.endsAt]);
 
   const closeSprint = useCallback(() => {
     setSprint(null);
