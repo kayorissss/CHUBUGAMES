@@ -1,5 +1,6 @@
 import { Fragment, useEffect, useState } from "react";
 import { tr } from "../core/i18n";
+import ChestCard from "../ui/ChestCard";
 import { AnimatePresence, motion } from "framer-motion";
 import { useGame } from "../core/store";
 import { sfx, haptic } from "../core/fx";
@@ -131,6 +132,9 @@ export default function Home({
         <Stat icon="tap" v={fmt(s.stats.tapsTotal)} l={tr("тапов")} />
         <Stat icon="coin" v={fmt(s.totalCoinsEver)} l={tr("монет всего")} accent />
       </div>
+
+      {/* Ежечасный сундук — повод заглянуть между парами */}
+      <ChestCard />
 
       {/* Босс — главная плашка экрана */}
       {onOpen && (

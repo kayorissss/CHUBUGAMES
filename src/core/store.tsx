@@ -16,6 +16,9 @@ import { sfx, haptic, setSound, setHaptics } from "./fx";
 import { pickQuests } from "./save";
 import { makeT, setLang, tr } from "./i18n";
 import { applyRun, masteryBonus, masteryLevel } from "./mastery";
+import {
+  readFriendship, writeFriendship, friendLevel, friendBonus, FR_PER_RUN,
+} from "./friendship";
 import type { IconName } from "../ui/Icon";
 
 export interface Toast {
@@ -342,7 +345,9 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
          * Окно в 120 мс отсекает случайные совпадения: если игра монет
          * не платила, бонусу неоткуда взяться.
          */
-        const mult = masteryBonus(before.mx || 0);
+        const frNow = readFriendship().fp[d.mainFriendId] || 0;
+        // мастерство игры и дружба с главным другом складываются
+        const mult = masteryBonus(before.mx || 0) + friendBonus(frNow) - 1;
         const pay = lastPay.current;
         if (mult > 1 && pay.n > 0 && Date.now() - pay.t < 120) {
           const extra = Math.floor(pay.n * (mult - 1));
@@ -352,6 +357,29 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
           }
         }
         lastPay.current = { n: 0, t: 0 };
+
+        /*
+         * ДРУЖБА с главным другом растёт за каждый забег. Хранится
+         * отдельным ключом, поэтому меняем её здесь же, а не через set.
+         */
+        const fs0 = readFriendship();
+        const fid = d.mainFriendId;
+        const wasLvl = friendLevel(fs0.fp[fid] || 0);
+        const nowFp = (fs0.fp[fid] || 0) + FR_PER_RUN;
+        writeFriendship({ ...fs0, fp: { ...fs0.fp, [fid]: nowFp } });
+        const newLvl = friendLevel(nowFp);
+        if (newLvl > wasLvl) {
+          const fname = d.friends.find((f) => f.id === fid)?.name || fid;
+          setTimeout(() => {
+            sfx.achieve?.();
+            toast({
+              title: `${tr("ДРУЖБА")} ${newLvl}`,
+              sub: `${fname} · +${Math.round((friendBonus(nowFp) - 1) * 100)}% ${tr("монет")}`,
+              icon: "heart",
+              tone: "gold",
+            });
+          }, 900);
+        }
         checkAch(d);
         if (isRecord && score > 0) {
           setTimeout(() => {

@@ -1120,5 +1120,11 @@ export const EN_TEXT: Record<string, string> = {
   "ПОСЛЕДНИЕ": "LATEST",
   "монет в этой игре": "coins in this game",
   "МАСТЕРСТВО": "MASTERY",
-  "монет": "coins",
+  "СУНДУК ОТКРЫТ": "CHEST OPENED",
+  "Ежечасный сундук": "Hourly chest",
+  "будет через": "ready in",
+  "ЖДЁМ": "WAIT",
+  "ДРУЖБА": "FRIENDSHIP",
+  "Лучшие друзья навсегда": "Best friends forever",
+  "ИСТОРИИ": "STORIES",
 };

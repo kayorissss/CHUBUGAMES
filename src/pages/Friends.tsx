@@ -6,6 +6,7 @@ import { bossStats } from "../core/save";
 import { RARITY_COLOR, RARITY_LABEL } from "../core/content";
 import { Card, Tap, Button, Bar, SectionTitle, Screen } from "../ui/Glass";
 import HeadView from "../ui/HeadView";
+import FriendshipCard from "../ui/FriendshipCard";
 import Icon from "../ui/Icon";
 import { sfx, haptic } from "../core/fx";
 import type { Friend, FriendLook, Rarity } from "../core/types";
@@ -112,6 +113,9 @@ export default function Friends() {
           >
             «{mainFriend.quote}»
           </div>
+
+          {/* Дружба: уровень, прибавка к монетам и истории друга */}
+          <FriendshipCard friendId={mainFriend.id} name={mainFriend.name} />
 
           <div
             className="grid grid-cols-2"
