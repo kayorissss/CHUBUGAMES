@@ -994,4 +994,6 @@ export const EN_TEXT: Record<string, string> = {
   "Жёлтая пара платит меньше ставки — часть жетонов возвращается, но спин всё равно в минус.": "A yellow pair pays less than your bet \u2014 some chips come back, but the spin is still a loss.",
   "Двадцать секунд на то, чтобы собирать фишки. Веди пальцем по экрану — фишки собираются касанием, тапать по каждой не нужно. Золотая дороже, но живёт меньше. Ловишь без промаха — растёт комбо и надбавка.": "Twenty seconds to collect chips. Drag your finger across the screen \u2014 chips are picked up on touch, no need to tap each one. Gold is worth more but lives shorter. No misses means a growing combo and bonus.",
   "Веди пальцем по полю — фишки собираются сами. Бесплатно, играй сколько хочешь.": "Drag your finger across the field \u2014 chips collect themselves. Free, play as much as you want.",
+  "Тема куплена": "Theme purchased",
+  "Цвет кнопок, полосок и подсветки во всём приложении": "Colour of buttons, bars and glow across the app",
 };

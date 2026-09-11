@@ -32,7 +32,7 @@ const SHOP_TABS: {
   {
     id: "themes", label: "Темы", icon: "sparkle",
     title: "Цвет интерфейса",
-    hint: "Акцентный цвет кнопок, полосок и подсветки",
+    hint: "Цвет кнопок, полосок и подсветки во всём приложении",
   },
 ];
 
@@ -629,21 +629,82 @@ function Skins() {
   );
 }
 
+/**
+ * Превью скина.
+ *
+ * Было: палочный человечек — кружок-голова, прямоугольник-тело и
+ * линии-конечности strokeWidth 4.4. Ровно то, что пользователь называл
+ * «как рисовал ребёнок»: руки той же толщины, что ноги, шеи нет,
+ * плечи отсутствуют. Стало: фигура с плечами, сужающимся торсом,
+ * настоящими кистями и стопами, тенью под ногами и бликом на теле,
+ * чтобы «Сталь» и «Золотой» читались как металл.
+ */
 function HeroPreview({ skin }: { skin: (typeof HERO_SKINS)[number] }) {
+  const id = skin.id;
   return (
     <svg width="52" height="62" viewBox="0 0 52 62">
-      {skin.hat === 2 && <path d="M14 12 L18 2 L22 9 L26 0 L30 9 L34 2 L38 12 Z" fill={skin.accentPart} />}
-      {skin.hat === 1 && <><ellipse cx="26" cy="13" rx="13" ry="8" fill={skin.accentPart} /><ellipse cx="19" cy="15" rx="16" ry="2.4" fill={skin.accentPart} /></>}
-      {skin.hat === 3 && <><rect x="18" y="0" width="16" height="14" fill={skin.accentPart} /><ellipse cx="26" cy="14" rx="17" ry="2.6" fill={skin.accentPart} /></>}
-      {skin.hat === 4 && <ellipse cx="26" cy="6" rx="10" ry="3" fill="none" stroke={skin.accentPart} strokeWidth="2.6" />}
-      <circle cx="26" cy="21" r="10" fill={skin.body} />
-      <circle cx="22.5" cy="20" r="1.7" fill="#0d0d12" />
-      <circle cx="29.5" cy="20" r="1.7" fill="#0d0d12" />
-      <rect x="16" y="31" width="20" height="19" rx="7" fill={skin.body} />
-      <line x1="16" y1="35" x2="8" y2="43" stroke={skin.body} strokeWidth="4.4" strokeLinecap="round" />
-      <line x1="36" y1="35" x2="44" y2="43" stroke={skin.body} strokeWidth="4.4" strokeLinecap="round" />
-      <line x1="21" y1="50" x2="19" y2="60" stroke={skin.accentPart} strokeWidth="5" strokeLinecap="round" />
-      <line x1="31" y1="50" x2="33" y2="60" stroke={skin.accentPart} strokeWidth="5" strokeLinecap="round" />
+      <defs>
+        <linearGradient id={`sk-${id}`} x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stopColor={skin.body} />
+          <stop offset="55%" stopColor={skin.body} />
+          <stop offset="100%" stopColor="var(--n-000)" stopOpacity="0.34" />
+        </linearGradient>
+      </defs>
+
+      {/* тень — фигура перестаёт «висеть в воздухе» */}
+      <ellipse cx="26" cy="60" rx="12" ry="2.2" fill="var(--n-000)" opacity="0.34" />
+
+      {/* ноги: бедро шире голени */}
+      <path d="M22 47 L20.4 58" stroke={skin.accentPart} strokeWidth="6" strokeLinecap="round" />
+      <path d="M30 47 L31.6 58" stroke={skin.accentPart} strokeWidth="6" strokeLinecap="round" />
+      {/* стопы */}
+      <ellipse cx="19.6" cy="59" rx="3.6" ry="1.8" fill="var(--n-200)" />
+      <ellipse cx="32.4" cy="59" rx="3.6" ry="1.8" fill="var(--n-200)" />
+
+      {/* торс с плечами */}
+      <path
+        d="M18.5 34 Q26 30.6 33.5 34 L35 45.6 Q26 48.6 17 45.6 Z"
+        fill={`url(#sk-${id})`}
+        stroke="var(--n-000)"
+        strokeOpacity="0.24"
+        strokeWidth="0.8"
+      />
+
+      {/* руки с кистями — тоньше ног, как у человека */}
+      <path d="M18.6 35.4 Q13 39 11.4 44.4" stroke={skin.body} strokeWidth="4" strokeLinecap="round" fill="none" />
+      <path d="M33.4 35.4 Q39 39 40.6 44.4" stroke={skin.body} strokeWidth="4" strokeLinecap="round" fill="none" />
+      <circle cx="10.9" cy="45.8" r="2.5" fill={skin.body} />
+      <circle cx="41.1" cy="45.8" r="2.5" fill={skin.body} />
+
+      {/* шея */}
+      <rect x="23.6" y="28.4" width="4.8" height="4.2" rx="1.8" fill={skin.body} opacity="0.85" />
+
+      {/* голова */}
+      <circle cx="26" cy="21" r="9.4" fill={skin.body} />
+      <path d="M17.6 18 Q26 10.6 34.4 18" fill="var(--n-900)" opacity="0.09" />
+      <ellipse cx="22.6" cy="20.6" rx="1.5" ry="1.8" fill="#0d0d12" />
+      <ellipse cx="29.4" cy="20.6" rx="1.5" ry="1.8" fill="#0d0d12" />
+      <path d="M23.4 25 Q26 26.6 28.6 25" stroke="#0d0d12" strokeWidth="1.1" strokeLinecap="round" fill="none" opacity="0.6" />
+
+      {/* головные уборы поверх головы */}
+      {skin.hat === 2 && (
+        <path d="M14.5 12.6 L18.4 3.4 L22.2 9.6 L26 1.4 L29.8 9.6 L33.6 3.4 L37.5 12.6 Z" fill={skin.accentPart} stroke="var(--n-000)" strokeOpacity="0.2" strokeWidth="0.7" />
+      )}
+      {skin.hat === 1 && (
+        <>
+          <path d="M15.4 13.4 Q26 4.6 36.6 13.4 Z" fill={skin.accentPart} />
+          <ellipse cx="19.5" cy="14.2" rx="15" ry="2.3" fill={skin.accentPart} />
+        </>
+      )}
+      {skin.hat === 3 && (
+        <>
+          <rect x="18.6" y="1.4" width="14.8" height="12" rx="1.6" fill={skin.accentPart} />
+          <ellipse cx="26" cy="13.6" rx="16" ry="2.4" fill={skin.accentPart} />
+        </>
+      )}
+      {skin.hat === 4 && (
+        <ellipse cx="26" cy="7" rx="9.4" ry="2.8" fill="none" stroke={skin.accentPart} strokeWidth="2.4" />
+      )}
     </svg>
   );
 }
@@ -661,11 +722,11 @@ function Themes() {
     set((d) => { d.ownedThemes.push(id); d.settings.accent = id; });
     sfx.legend();
     haptic("success");
-    toast({ title: tr("Акцент куплен"), sub: name, icon: "sparkle", tone: "gold" });
+    toast({ title: tr("Тема куплена"), sub: name, icon: "sparkle", tone: "gold" });
   };
   return (
     <>
-      <SectionTitle>{tr("Акцентный цвет")}</SectionTitle>
+      <SectionTitle>{tr("Темы")}</SectionTitle>
       <div className="grid grid-cols-2" style={{ gap: 12 }}>
         {ACCENTS.map((a) => {
           const owned = s.ownedThemes.includes(a.id);
