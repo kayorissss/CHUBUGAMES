@@ -6,11 +6,16 @@ Android (APK), Windows (exe) и PWA в браузере.
 
 ## СКАЧАТЬ
 
-| Куда | Файл | Ссылка |
+| Куда | Что качать | Ссылка |
 |---|---|---|
-| **Компьютер, обычный способ** | `CHUBUGAMES-1.25.0-setup.exe` — устанавливается как программа, обновляется кнопкой внутри | **[СКАЧАТЬ ДЛЯ ПК](https://github.com/kayorissss/CHUBUGAMES/releases/download/desktop/CHUBUGAMES-1.25.0-setup.exe)** |
-| **Компьютер, без установки** | `CHUBUGAMES-1.25.0-portable.exe` — один файл, можно носить на флешке | [Portable-версия](https://github.com/kayorissss/CHUBUGAMES/releases/download/desktop/CHUBUGAMES-1.25.0-portable.exe) |
-| **Телефон (Android)** | `CHUBUGAMES.apk` — всегда последняя сборка под тегом `latest` | [Скачать APK](https://github.com/kayorissss/CHUBUGAMES/releases/download/latest/CHUBUGAMES.apk) |
+| **Компьютер, обычный способ** | `CHUBUGAMES-<версия>-setup.exe` — устанавливается как программа, обновляется кнопкой внутри | **[СКАЧАТЬ ДЛЯ ПК](https://github.com/kayorissss/CHUBUGAMES/releases/tag/desktop)** |
+| **Компьютер, без установки** | `CHUBUGAMES-<версия>-portable.exe` — один файл, можно носить на флешке | **[Portable-версия](https://github.com/kayorissss/CHUBUGAMES/releases/tag/desktop)** |
+| **Телефон (Android)** | `CHUBUGAMES.apk` — всегда последняя сборка (тег `latest`) | **[Скачать APK](https://github.com/kayorissss/CHUBUGAMES/releases/tag/latest)** |
+
+Ссылки ведут на страницу релиза, а не на файл напрямую: имя файла содержит версию
+(`CHUBUGAMES-1.24.0-setup.exe`, `CHUBUGAMES-1.25.0-setup.exe`, …), и любая прямая ссылка
+протухает ровно в момент выхода новой сборки — а такой ссылкой пользуются люди из чужих
+инструкций. На странице релиза всегда лежит актуальный файл, а рядом — размер и SHA-256.
 
 **Чем отличаются две версии для ПК?** Игра внутри одинаковая. `setup` ставится в систему,
 кладёт ярлык и умеет обновляться сам; `portable` ничего не устанавливает и запускается откуда угодно.

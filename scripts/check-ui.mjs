@@ -99,6 +99,11 @@ ok(/setup-android-signing/.test(wf2),'APK подписывается посто�
 ok(/REQUEST_INSTALL_PACKAGES/.test(wf2),'разрешение на установку обновлений выдано');
 ok(/printf 'version: %s/.test(wf2) && /body_path: RELEASE_BODY\.md/.test(wf2),'релиз публикует номер версии для проверки обновлений');
 ok(fs.existsSync('RELEASE_NOTES.md'),'описание релиза лежит в репозитории (не хардкод в workflow)');
+const rm=fs.readFileSync('README.md','utf8');
+ok(!/releases\/(download|tag)\/[^)\s]*\d+\.\d+\.\d+/.test(rm),
+  'в README нет ссылок на файл с версией в имени — такие ссылки рвутся на каждом релизе');
+ok(/releases\/tag\/desktop/.test(rm) && /releases\/tag\/latest/.test(rm),
+  'README ведёт на страницы релизов, где всегда лежит актуальный файл');
 const VER=fs.readFileSync('src/core/version.ts','utf8').match(/APP_VERSION\s*=\s*"([0-9.]+)"/)[1];
 ok(new RegExp('### Что нового в '+VER.replace(/\./g,'\\.')).test(fs.readFileSync('RELEASE_NOTES.md','utf8')),'описание релиза совпадает с версией '+VER);
 ok(fs.existsSync('public/ads/promo1.mp4'),'рекламный ролик на месте');
