@@ -1,19 +1,56 @@
 name: Build Desktop (Windows EXE)
 
+# См. комментарий в build-apk.yml: проверка и публикация разделены.
+# Пуш в ветку — только проверка и артефакт; релиз — тег v<версия> или
+# ручной запуск с флагом publish.
 on:
   push:
-    branches: [main, master, "arena/**"]
+    branches: [CHUBUGAMES, main, master, "arena/**"]
+    tags: ["v*"]
+  pull_request:
   workflow_dispatch:
+    inputs:
+      publish:
+        description: "Выложить EXE в Releases"
+        type: boolean
+        default: false
 
-# нужно для публикации сборок в Releases
 permissions:
   contents: write
 
+concurrency:
+  group: desktop-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+      - name: Install dependencies
+        run: npm ci
+        env:
+          ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
+      - name: Typecheck
+        run: npx tsc --noEmit
+      - name: Build web app
+        run: npm run build
+      - name: UI contract checks
+        run: npm run check:ui
+      - name: Key files parse
+        run: node --check desktop/main.cjs && node --check desktop/preload.cjs
+
   build:
+    needs: verify
     # Собираем НА WINDOWS: так .exe получается нативно, без wine,
     # и подпись/иконка проставляются корректно.
     runs-on: windows-latest
+    timeout-minutes: 40
 
     steps:
       - name: Checkout code
@@ -26,7 +63,7 @@ jobs:
           cache: "npm"
 
       - name: Install dependencies
-        run: npm install
+        run: npm ci
 
       - name: Build web app (single offline HTML)
         run: npm run build
@@ -34,22 +71,49 @@ jobs:
       - name: Read app version
         shell: bash
         run: |
-          VER=$(node -p "require('fs').readFileSync('src/core/version.ts','utf8').match(/APP_VERSION\s*=\s*\"([0-9.]+)\"/)[1]")
+          VER=$(node -p "require('fs').readFileSync('src/core/version.ts','utf8').match(/APP_VERSION\\s*=\\s*\\\"([0-9.]+)\\\"/)[1]")
           echo "APP_VER=$VER" >> $GITHUB_ENV
           echo "Версия приложения: $VER"
 
-      # Версия в package.json задаёт имя файлов сборки — синхронизируем
-      # её с той, что показывает само приложение.
+      # Версия в package.json задаёт имя файлов сборки — она обязана
+      # совпадать с той, что показывает приложение: из package.json её
+      # берёт Electron (app.getVersion), и по ней же проверка обновлений
+      # решает, есть ли что ставить. Расхождение = «вечное обновление».
       - name: Sync package version
         shell: bash
         run: |
           node -e "
             const fs=require('fs');
             const p=JSON.parse(fs.readFileSync('package.json','utf8'));
+            if (p.version === process.env.APP_VER) { console.log('package.json уже актуален: '+p.version); process.exit(0); }
+            console.log('::warning::package.json '+p.version+' != '+process.env.APP_VER+' — правь файл в репозитории, а не CI');
             p.version=process.env.APP_VER;
             fs.writeFileSync('package.json', JSON.stringify(p,null,2)+'\n');
           "
           node -p "'package.json version -> '+require('./package.json').version"
+
+      - name: Tag matches the app version
+        shell: bash
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          if [ "$TAG" != "$APP_VER" ]; then
+            echo "Тег v$TAG, а в src/core/version.ts — $APP_VER"; exit 1
+          fi
+
+      - name: Decide what this run is
+        id: kind
+        shell: bash
+        run: |
+          REL=false
+          case "$GITHUB_REF" in
+            refs/tags/v*) REL=true ;;
+          esac
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.publish }}" = "true" ]; then
+            REL=true
+          fi
+          echo "release=$REL" >> "$GITHUB_OUTPUT"
+          echo "Режим: $([ "$REL" = true ] && echo 'РЕЛИЗ' || echo 'проверка (только артефакт)')"
 
       - name: Build Windows EXE
         run: npx electron-builder --config desktop/builder.yml --win --publish never
@@ -116,12 +180,22 @@ jobs:
             fi
           done
 
+      # Хеши считаем ОДИН раз и складываем в файл: он уходит и в описание
+      # релиза, и как отдельный ассет. Приложение сверяет по нему скачанный
+      # файл перед запуском установщика.
+      - name: Checksums
+        shell: bash
+        run: |
+          ( cd desktop-out && sha256sum *.exe > checksums.sha256 )
+          cat desktop-out/checksums.sha256
+
       - name: Upload EXE (артефакт сборки)
         uses: actions/upload-artifact@v4
         with:
           name: CHUBUGAMES-Windows
           path: |
             desktop-out/*.exe
+            desktop-out/checksums.sha256
           retention-days: 90
 
       - name: Prepare release notes
@@ -136,9 +210,9 @@ jobs:
             printf '| `CHUBUGAMES-%s-portable.exe` | Без установки. Один файл |\n\n' "$APP_VER"
             printf 'Содержимое сборок идентично. Данные сохраняются раздельно.\n\n'
             printf '**SmartScreen.** Сборка не подписана сертификатом. Windows покажет предупреждение при первом запуске: «Подробнее» → «Выполнить в любом случае». Репутация SmartScreen считается по хешу файла и не наследуется между версиями.\n\n'
-            printf '**SHA-256**\n\n'
+            printf '**Проверка файла.** Игра сверяет SHA-256 сама перед запуском установщика. Проверить можно и руками — содержимое `checksums.sha256`:\n\n'
             printf '```\n'
-            ( cd desktop-out && sha256sum *.exe ) || true
+            cat desktop-out/checksums.sha256
             printf '```\n'
           } > DESKTOP_BODY.md
           cat DESKTOP_BODY.md
@@ -151,6 +225,7 @@ jobs:
       # шага срезом по индексам строк — если правишь блок ниже, проверь,
       # что он на месте (в check-ui есть проверка).
       - name: Remove outdated assets
+        if: steps.kind.outputs.release == 'true'
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -163,12 +238,15 @@ jobs:
           done
 
       - name: Publish EXE to Releases
+        if: steps.kind.outputs.release == 'true'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: desktop
-          name: PC-сборка
+          name: "PC-сборка ${{ env.APP_VER }}"
           body_path: DESKTOP_BODY.md
-          files: desktop-out/*.exe
+          files: |
+            desktop-out/*.exe
+            desktop-out/checksums.sha256
           make_latest: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

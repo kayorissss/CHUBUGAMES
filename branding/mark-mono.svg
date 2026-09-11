@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!-- Монохромный слой: Android перекрашивает его цветом темы, поэтому
+       здесь только форма и лёгкая недобитость тонов — слои не должны слиться. -->
+  <g transform="translate(0 -26)">
+    <!-- верхняя булочка: купол + кунжут -->
+    <path d="M116 222v-16c0-56 63-96 140-96s140 40 140 96v16c0 10-8 18-18 18H134c-10 0-18-8-18-18Z" fill="#ffffff"/>
+    <path d="M148 152c22-24 56-36 92-36-30 12-54 30-70 52Z" fill="#000000" fill-opacity="0.22"/>
+    <g fill="#000000" fill-opacity="0.3">
+      <ellipse cx="192" cy="176" rx="15" ry="9" transform="rotate(-13 192 176)"/>
+      <ellipse cx="258" cy="156" rx="15" ry="9"/>
+      <ellipse cx="324" cy="178" rx="15" ry="9" transform="rotate(12 324 178)"/>
+    </g>
+
+    <!-- сыр: верхняя грань и капли -->
+    <path d="M108 248h296c10 0 18 8 18 18v8H90v-8c0-10 8-18 18-18Z" fill="#ffffff"/>
+    <path d="M90 274h332l-40 46-44-32-46 46-44-46-46 32-40-46Z" fill="#ffffff"/>
+
+    <!-- котлета -->
+    <rect x="98" y="318" width="316" height="44" rx="22" fill="#ffffff"/>
+    <rect x="98" y="318" width="316" height="14" rx="7" fill="#A9663C" fill-opacity="0.75"/>
+
+    <!-- нижняя булочка -->
+    <path d="M108 380h296c10 0 18 8 18 18v4c0 32-26 58-58 58H148c-32 0-58-26-58-58v-4c0-10 8-18 18-18Z" fill="#ffffff"/>
+    <path d="M126 392h260" stroke="#000000" stroke-opacity="0.2" stroke-width="6" stroke-linecap="round"/>
+  </g>
+</svg>

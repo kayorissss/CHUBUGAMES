@@ -65,13 +65,13 @@ export function freshSave(): SaveState {
     mainFriendId: "lyoha",
     heroSkin: "default",
     ownedSkins: ["default"],
-    ownedThemes: ["amber", "violet", "grey", "red", "yellow", "radomir", "sky"],
+    ownedThemes: ["ember", "amber", "violet", "grey", "red", "yellow", "radomir", "sky"],
     cards: { lyoha: 1 },
     achievements: {},
     daily: { lastClaim: "", streak: 0, quests: pickQuests(today()), questsDate: today() },
     season: { id: 1, xp: 0, claimed: [], startedAt: now },
     settings: {
-      theme: "dark", lang: "ru", accent: "amber", sound: true, haptics: true,
+      theme: "dark", lang: "ru", accent: "ember", sound: true, haptics: true,
       fx: true, controls: "touchpad", difficulty: "normal",
       notifyUpdates: false,
       notifyBoss: false,
@@ -115,9 +115,9 @@ export function migrate(s: any): SaveState {
   out.cards = s.cards || base.cards;
   out.achievements = s.achievements || {};
   out.ownedSkins = Array.isArray(s.ownedSkins) && s.ownedSkins.length ? s.ownedSkins : ["default"];
-  out.ownedThemes = Array.isArray(s.ownedThemes) && s.ownedThemes.length ? s.ownedThemes : ["amber"];
+  out.ownedThemes = Array.isArray(s.ownedThemes) && s.ownedThemes.length ? s.ownedThemes : ["ember"];
   // бесплатные темы доступны всем, включая старые сохранения
-  for (const free of ["amber", "violet", "grey", "red", "yellow", "radomir", "sky"]) {
+  for (const free of ["ember", "amber", "violet", "grey", "red", "yellow", "radomir", "sky"]) {
     if (!out.ownedThemes.includes(free)) out.ownedThemes.push(free);
   }
   // Все мини-игры доступны сразу — в том числе в старых сохранениях

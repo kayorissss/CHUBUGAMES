@@ -1,18 +1,95 @@
 name: Build CHUBGAMES APK
 
+# СБОРКА И ПУБЛИКАЦИЯ РАЗДЕЛЕНЫ ПО СМЫСЛУ.
+#
+# Раньше релиз перезаписывался на ЛЮБОМ пуше в main/master/arena/**: любая
+# экспериментальная ветка выкатывала боевой APK, а каждая ошибка в такой ветке
+# означала битую ссылку скачивания для всех. Плюс фильтры веток разъехались с
+# реальностью: основная ветка репозитория называется CHUBUGAMES, её в списке не
+# было вовсе, и пуш в неё не собирал ничего.
+#
+# Теперь: пуш/PR = проверка и артефакт; релиз = тег v<версия> (или ручной запуск
+# с флагом publish). Так «выпустить версию» — это отдельное осознанное действие.
 on:
   push:
-    branches: [main, master, "arena/**"]
+    branches: [CHUBUGAMES, main, master, "arena/**"]
+    tags: ["v*"]
+  pull_request:
   workflow_dispatch:
+    inputs:
+      publish:
+        description: "Выложить APK в Releases (требует секретов подписи)"
+        type: boolean
+        default: false
 
-# нужно для публикации APK в Releases
+# Релизный job пишет в Releases — ему нужен токен. Проверочный job
+# (verify) прав на запись не получает вообще.
 permissions:
   contents: write
 
-jobs:
-  build:
-    runs-on: ubuntu-latest
+concurrency:
+  group: apk-${{ github.ref }}
+  cancel-in-progress: true
 
+jobs:
+  # ─────────────────────────  ПРОВЕРКА  ─────────────────────────
+  # Дёшево и быстро: типы, сборка и 230+ договорённостей по вёрстке.
+  # Ни Android SDK, ни Java здесь не нужны.
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      # npm ci, а не npm install: сборка должна быть воспроизводимой
+      # по package-lock.json — мы раздаём бинарники пользователям.
+      - name: Install dependencies
+        run: npm ci
+        env:
+          ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
+
+      # vite типы НЕ проверяет: без этого шага ошибка типов спокойно
+      # доезжала до релиза, потому что сборка всё равно проходила.
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      - name: Build web app (single offline HTML)
+        run: npm run build
+
+      # check:ui читает dist/index.html, поэтому строго после сборки
+      - name: UI contract checks
+        run: npm run check:ui
+
+      # Ключ подписи не имеет права вернуться в репозиторий
+      - name: No signing key in the repo
+        run: |
+          if git ls-files | grep -qE '\.(p12|jks|keystore)$'; then
+            echo "В git лежит ключ подписи — удалите его и перенесите в Secrets:"
+            git ls-files | grep -E '\.(p12|jks|keystore)$'
+            exit 1
+          fi
+          echo "ключа в репозитории нет — ок"
+
+      - name: Version is consistent
+        run: |
+          node -e "
+            const fs=require('fs');
+            const app=fs.readFileSync('src/core/version.ts','utf8').match(/APP_VERSION\s*=\s*\"([0-9.]+)\"/)[1];
+            const pkg=JSON.parse(fs.readFileSync('package.json','utf8')).version;
+            if(app!==pkg){ console.error('APP_VERSION='+app+', а в package.json='+pkg); process.exit(1); }
+            console.log('версия '+app+' совпадает в обоих местах');
+          "
+
+  # ─────────────────────────  APK  ─────────────────────────
+  build:
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -26,7 +103,7 @@ jobs:
       # ПК-версии в APK нет, а electron тянет ~100 МБ бинарника —
       # пропускаем его загрузку, сборка Android от этого не зависит.
       - name: Install dependencies
-        run: npm install
+        run: npm ci
         env:
           ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
 
@@ -85,14 +162,32 @@ jobs:
           echo "APP_VER=$VER" >> $GITHUB_ENV
           echo "Версия приложения: $VER (сборка ${{ github.run_number }})"
 
-      - name: Set app label
+      # На релизном прогоне тег обязан совпадать с версией в коде: иначе
+      # «v1.25.0» соберётся из кода, который помнит 1.24.0, и приложение
+      # решит, что обновление уже установлено.
+      - name: Tag matches the app version
+        if: startsWith(github.ref, 'refs/tags/v')
         run: |
-          sed -i 's|<string name="app_name">.*</string>|<string name="app_name">CHUBUGAMES</string>|' android/app/src/main/res/values/strings.xml
-          sed -i 's|<string name="title_activity_main">.*</string>|<string name="title_activity_main">CHUBUGAMES</string>|' android/app/src/main/res/values/strings.xml
-          cat android/app/src/main/res/values/strings.xml
+          TAG="${GITHUB_REF_NAME#v}"
+          if [ "$TAG" != "$APP_VER" ]; then
+            echo "Тег v$TAG, а в src/core/version.ts — $APP_VER"; exit 1
+          fi
+          echo "тег и версия совпадают: $APP_VER"
 
-      # Ставим иконку приложения. Готовые PNG лежат в репозитории (android-icons/),
-      # поэтому сборка не зависит от скачивания доп. пакетов.
+      # Релиз = тег v* или ручной запуск с галкой publish.
+      - name: Decide what this run is
+        id: kind
+        run: |
+          REL=false
+          case "$GITHUB_REF" in
+            refs/tags/v*) REL=true ;;
+          esac
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.publish }}" = "true" ]; then
+            REL=true
+          fi
+          echo "release=$REL" >> "$GITHUB_OUTPUT"
+          echo "Режим: $([ "$REL" = true ] && echo 'РЕЛИЗ (публикация в Releases)' || echo 'проверка (только артефакт)')"
+
       - name: Install app icons
         run: |
           RES=android/app/src/main/res
@@ -152,8 +247,29 @@ jobs:
       # Постоянный ключ подписи и номер версии. Без постоянного ключа каждая
       # сборка подписывалась бы новым debug-ключом, и Android отказывался бы
       # ставить обновление поверх с ошибкой «конфликт пакетов».
+      #
+      # КЛЮЧ БЕРЁТСЯ ИЗ SECRETS. В репозитории его больше нет: публичный
+      # репозиторий + публичный ключ = любой может подписать свой APK как
+      # «обновление CHUBUGAMES» (подробности: android-signing/README.md).
       - name: Configure signing and version
+        env:
+          CHUB_KEYSTORE_B64: ${{ secrets.CHUB_KEYSTORE_B64 }}
+          CHUB_KEYSTORE_PASSWORD: ${{ secrets.CHUB_KEYSTORE_PASSWORD }}
+          CHUB_KEY_ALIAS: ${{ secrets.CHUB_KEY_ALIAS }}
+          CHUB_KEY_PASSWORD: ${{ secrets.CHUB_KEY_PASSWORD }}
+          # Для проверки в ветке допустима сборка без подписи; релиз без
+          # подписи скрипт завернёт сам.
+          CHUB_ALLOW_UNSIGNED: ${{ steps.kind.outputs.release == 'true' && '0' || '1' }}
         run: node scripts/setup-android-signing.mjs "$APP_VER" "${{ github.run_number }}"
+
+      - name: Are the signing secrets configured
+        run: |
+          if [ -z "${{ secrets.CHUB_KEYSTORE_PASSWORD }}" ]; then
+            echo "::warning::Секрет CHUB_KEYSTORE_PASSWORD не задан — APK будет без релизной подписи"
+          else
+            echo "секреты подписи на месте"
+          fi
+        continue-on-error: true
 
       # Плагин фоновой проверки поставляется вместе с нативной библиотекой
       # android-js-engine-release.aar. Без этой строки Gradle её не найдёт
@@ -173,19 +289,46 @@ jobs:
       - name: Make gradlew executable
         run: chmod +x android/gradlew
 
+      # Пароли передаются свойствами Gradle и в git не пишутся.
       - name: Build Release APK
+        env:
+          CHUB_KEYSTORE_PASSWORD: ${{ secrets.CHUB_KEYSTORE_PASSWORD }}
+          CHUB_KEY_ALIAS: ${{ secrets.CHUB_KEY_ALIAS }}
+          CHUB_KEY_PASSWORD: ${{ secrets.CHUB_KEY_PASSWORD }}
         run: |
           cd android
-          ./gradlew assembleRelease --no-daemon --stacktrace
+          ARGS="--no-daemon --stacktrace"
+          if [ -n "$CHUB_KEYSTORE_PASSWORD" ]; then
+            ARGS="$ARGS -PchubStorePassword=$CHUB_KEYSTORE_PASSWORD"
+            ARGS="$ARGS -PchubKeyAlias=${CHUB_KEY_ALIAS:-chubgames}"
+            ARGS="$ARGS -PchubKeyPassword=${CHUB_KEY_PASSWORD:-$CHUB_KEYSTORE_PASSWORD}"
+          fi
+          ./gradlew assembleRelease $ARGS
 
       - name: Rename APK
-        run: mv android/app/build/outputs/apk/release/app-release.apk CHUBGAMES.apk
+        run: mv android/app/build/outputs/apk/release/app-release.apk CHUBUGAMES.apk
+
+      # Проверяем подпись ДО публикации: debug-ключ в релизе — это сломанные
+      # обновления у всех, кто уже поставил игру, и заметить это постфактум
+      # невозможно.
+      - name: Verify signature
+        run: |
+          $ANDROID_HOME/build-tools/35.0.0/apksigner verify --print-certs CHUBUGAMES.apk > sig.txt 2>&1 || {
+            cat sig.txt; echo "APK не подписан вовсе"; exit 1; }
+          cat sig.txt
+          if grep -qi "Android Debug" sig.txt; then
+            echo "APK подписан DEBUG-ключом — в Releases его класть нельзя"
+            [ "${{ steps.kind.outputs.release }}" = "true" ] && exit 1 || echo "::warning::debug-подпись допустима только в непроверочном режиме"
+          fi
+          sha256sum CHUBUGAMES.apk | tee CHUBUGAMES.apk.sha256
 
       - name: Upload APK (артефакт сборки)
         uses: actions/upload-artifact@v4
         with:
-          name: CHUBGAMES-APK
-          path: CHUBGAMES.apk
+          name: CHUBUGAMES-APK
+          path: |
+            CHUBUGAMES.apk
+            CHUBUGAMES.apk.sha256
           retention-days: 90
 
       # Кладём APK в Releases — прямая ссылка на скачивание с телефона,
@@ -194,28 +337,46 @@ jobs:
       # изменений человек читает ВНУТРИ приложения (экран «Что нового»),
       # дублировать его целиком на странице релиза незачем.
       - name: Prepare release notes
+        if: steps.kind.outputs.release == 'true'
         run: |
           {
             printf 'version: %s\n\n' "$APP_VER"
             printf '**CHUBUGAMES %s — Android 7.0+**\n\n' "$APP_VER"
             printf '| Файл | Размер |\n'
             printf '|---|---|\n'
-            printf '| `CHUBGAMES.apk` | %s |\n\n' "$(du -h CHUBGAMES.apk | cut -f1)"
+            printf '| `CHUBUGAMES.apk` | %s |\n\n' "$(du -h CHUBUGAMES.apk | cut -f1)"
             printf 'Установка поверх предыдущей версии сохраняет прогресс. Список изменений — в приложении: «Настройки» → «Что нового».\n\n'
             printf '**Play Protect.** Сборка распространяется вне Google Play. При установке система может показать предупреждение — это реакция на источник, а не на содержимое файла.\n\n'
-            printf '**SHA-256**\n\n'
+            printf '**Проверка файла.** Приложение сверяет контрольную сумму само, но её можно проверить и руками:\n\n'
             printf '```\n'
-            sha256sum CHUBGAMES.apk || true
+            cat CHUBUGAMES.apk.sha256
             printf '```\n'
           } > RELEASE_BODY.md
+          cat RELEASE_BODY.md
 
+      # ТЕГ latest остаётся точкой публикации: на него ведут ссылка в самом
+      # приложении (updater спрашивает releases/tags/latest), ссылки в README и
+      # закладки тех, кто скачивал игру раньше. Меняется только ТО, когда в него
+      # кладут файл — теперь по релизному прогону, а не по любому пушу.
       - name: Publish APK to Releases
+        if: steps.kind.outputs.release == 'true'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: latest
-          name: Android-сборка
+          name: "Android-сборка ${{ env.APP_VER }}"
           body_path: RELEASE_BODY.md
-          files: CHUBGAMES.apk
+          files: |
+            CHUBUGAMES.apk
+            CHUBUGAMES.apk.sha256
           make_latest: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # Старый файл назывался CHUBGAMES.apk — без «U», то есть не совпадал
+      # с названием игры. Он всё ещё висит в релизе, и человек мог скачать
+      # именно его: устаревшую версию, которая потом не обновляется.
+      - name: Remove the misspelled legacy asset
+        if: steps.kind.outputs.release == 'true'
+        run: gh release delete-asset latest CHUBGAMES.apk -y || echo "старого файла уже нет — ок"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

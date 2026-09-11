@@ -47,8 +47,12 @@
 }
 
 /* ============================================================
-   CHUBGAMES — Liquid Glass 2026 design system
-   Палитра: чёрный / тёмно-серый / серый / белый + один акцент
+   CHUBUGAMES — дизайн-система
+   База: чёрный / тёмно-серый / серый / белый, поверх — один акцентный
+   цвет (тема в настройках). «Жидкого стекла» больше нет: на ПК сплошные
+   размытые полупрозрачные подложки складывались в кашу и роняли FPS,
+   поэтому поверхности сделаны ступенчатыми и непрозрачными, а blur
+   остался только у «геройских» панелей и модалок.
    ============================================================ */
 
 :root {
@@ -827,21 +831,178 @@ html.is-desktop *::-webkit-scrollbar-thumb:hover {
   background: var(--n-500);
 }
 
-/* ---------- ПК: полноценный альбомный интерфейс ----------
+/* ============================================================
+   ЗАСТАВКА (и телефон, и компьютер — одна разметка, src/ui/BootScreen.tsx)
+   ============================================================ */
 
-   Предыдущий подход — рисовать «телефон по центру монитора» — был
-   неверным: пользователь просил настоящую компьютерную версию, а не
-   вертикальную полоску посреди экрана.
+.boot {
+  position: fixed;
+  inset: 0;
+  z-index: 140;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem 1.25rem;
+  background: var(--bg);
+  overflow: hidden;
+}
+/* тёплое свечение: сверху акцент, снизу его отблеск */
+.boot-glow {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(58% 46% at 50% 32%, color-mix(in srgb, var(--acc) 22%, transparent), transparent 70%),
+    radial-gradient(120% 70% at 50% 122%, color-mix(in srgb, var(--acc) 12%, transparent), transparent 62%);
+}
+/* сетка-подложка, видимая только в пятне света — намёк на «игровой клиент» */
+.boot-grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(to right, rgba(255, 255, 255, 0.035) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
+  background-size: 46px 46px;
+  -webkit-mask-image: radial-gradient(56% 46% at 50% 44%, #000, transparent 76%);
+  mask-image: radial-gradient(56% 46% at 50% 44%, #000, transparent 76%);
+}
+.boot-sparks {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.boot-inner {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: min(100%, 46rem);
+}
+.boot-mark {
+  display: block;
+  width: clamp(5.5rem, 12vw, 11rem);
+  /* на телефоне 12vw мало, поэтому нижняя граница щедрая; на мониторе
+     знак растёт до 11rem и останавливается — иначе «визитка» превращается
+     в плакат */
+  aspect-ratio: 1;
+  filter: drop-shadow(0 22px 44px rgba(0, 0, 0, 0.62));
+}
+.boot-title {
+  margin: 1.35rem 0 0;
+  /* размер от ширины окна: на мониторе — крупно, на телефоне — аккуратно.
+     Ровно этого не хватало, когда заставка была «сжата как бургер». */
+  font-size: clamp(1.85rem, 4.6vw, 4.25rem);
+  line-height: 1.02;
+  letter-spacing: -0.012em;
+  background-image: linear-gradient(96deg, var(--text) 26%, color-mix(in srgb, var(--acc) 90%, #fff) 94%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  text-align: center;
+}
+.boot-sub {
+  margin: 0.6rem 0 0;
+  font-size: 0.58rem;
+  letter-spacing: 0.22em;
+  color: var(--text-mute);
+  text-align: center;
+}
+.boot-load {
+  width: min(100%, 27rem);
+  margin-top: 2.3rem;
+}
+.boot-track {
+  height: 3px;
+  border-radius: 99px;
+  background: var(--n-300);
+  overflow: hidden;
+}
+.boot-fill {
+  height: 100%;
+  border-radius: 99px;
+  background: linear-gradient(90deg, var(--acc), color-mix(in srgb, var(--acc) 36%, #fff));
+}
+.boot-stages {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  height: 1rem;
+  margin-top: 0.62rem;
+}
+.boot-stage {
+  font-size: 0.56rem;
+  letter-spacing: 0.14em;
+  color: var(--text-dim);
+}
+.boot-pct {
+  font-size: 0.6rem;
+  color: var(--text-mute);
+}
+.boot-foot {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: calc(var(--sab) + 1.15rem);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0 1.35rem;
+}
+.boot-ver {
+  font-size: 0.6rem;
+  color: var(--text-mute);
+}
+.boot-keys {
+  font-size: 0.56rem;
+  color: var(--text-mute);
+}
+.boot-keys b {
+  color: var(--text-dim);
+  font-weight: 700;
+}
 
-   Теперь приложение занимает всё окно, а главный экран раскладывается
-   в три зоны (см. .pc-grid): слева профиль и разделы, справа сетка
-   мини-игр, сверху во всю ширину — босс. Внутриигровые экраны остаются
-   вертикальными: игры нарисованы под портрет, поэтому они центрируются
-   в колонке ограниченной ширины, а по бокам — фон. */
+/* ============================================================
+   ПК: ПОЛНОЦЕННЫЙ АЛЬБОМНЫЙ ИНТЕРФЕЙС
+
+   Почему снова переписано. Первая компьютерная версия была «сценой»
+   размером с телефон, растянутой на окно; вторая — тем же телефонным
+   списком, разложенным по зонам через nth-child. И то и другое давало
+   один и тот же эффект: «всё сжато, растянуто и накидано».
+
+   Здесь компьютерная раскладка настоящая:
+     • сверху одна панель (знак, разделы, кошелёк) — .pc-bar;
+     • контент занимает всё окно под ней — .pc-body;
+     • главный экран: СЛЕВА плитка мини-игр (колонки считаются по ширине
+       окна), СПРАВА панель сведений (профиль, босс, сундук, задания);
+     • экраны разделов — широкие карточки в 2–3 колонки, а не одна
+       телефонная колонка посреди монитора;
+     • сами мини-игры портретные по природе, поэтому они остаются
+       вертикальной колонкой, но оформленной как «экран устройства».
+
+   Разметка при этом ОДНА: телефон и компьютер делят компоненты, а
+   раскладка отличается классами (.pc-games / .pc-blocks) и этим файлом.
+   ============================================================ */
+
+html.is-desktop {
+  /* Единые размеры оболочки. Всё в rem → масштабируется вместе с
+     крупностью интерфейса (core/stage.ts), поэтому «мелко» лечится
+     одной настройкой, а не переписыванием отступов. */
+  --pc-bar-h: 3.5rem;
+  --pc-rail: 23rem;
+  --pc-gap: 1.25rem;
+  --pc-pad: 1.5rem;
+  --r-lg: 16px;
+  --r-xl: 20px;
+  --sat: 0px;
+  --sab: 0px;
+}
 
 html.is-desktop body {
   background:
-    radial-gradient(1400px 900px at 50% -10%, rgba(255, 176, 32, 0.06), transparent 62%),
+    radial-gradient(1500px 900px at 50% -12%, color-mix(in srgb, var(--acc) 7%, transparent), transparent 60%),
     var(--n-000);
   overflow: hidden;
 }
@@ -854,82 +1015,614 @@ html.is-desktop #root {
   background: var(--bg);
 }
 
-/* Полоски жестов на ПК нет */
-html.is-desktop {
-  --sat: 0px;
-  --sab: 0px;
-}
-
-/* ── Раскладка главного экрана на ПК ──
-
-   Порядок блоков в разметке (см. src/pages/Home.tsx):
-     1 шапка с названием   2 сводка   3 сундук   4 босс
-     5 реклама (оверлей)   6 фильтр   7 сетка игр   8 боковая панель
-
-   Раскладываем их по зонам, не меняя саму разметку: слева колонка
-   (шапка, сводка, сундук, боковая панель), справа — босс, фильтр и
-   игры. Так одна и та же вёрстка работает и на телефоне, и на ПК. */
-.pc-home {
-  display: grid;
-  grid-template-columns: minmax(290px, 340px) 1fr;
-  grid-auto-rows: min-content;
-  gap: 14px 20px;
+/* ---------- каркас окна ---------- */
+html.is-desktop .pc-shell {
+  display: flex;
+  flex-direction: column;
   height: 100%;
-  padding: 20px 24px;
+  width: 100%;
+  overflow: hidden;
+}
+html.is-desktop .pc-body {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+/* ---------- верхняя панель ---------- */
+.pc-bar {
+  position: relative;
+  z-index: 6;
+  flex: 0 0 auto;
+  height: var(--pc-bar-h);
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  padding: 0 var(--pc-pad);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--surface-2) 92%, #fff 3%), var(--surface) 70%);
+  border-bottom: 1px solid var(--surface-brd);
+  box-shadow: 0 18px 40px -30px rgba(0, 0, 0, 0.95);
+}
+/* тонкая акцентная нить внизу панели — «живой» край, а не серая линия */
+.pc-bar::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--acc) 55%, transparent) 22%, color-mix(in srgb, var(--acc) 26%, transparent) 62%, transparent);
+}
+.pc-bar-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.35rem 0.6rem 0.35rem 0.35rem;
+  margin-left: -0.35rem;
+  border-radius: var(--r-sm);
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text);
+  position: relative;
+  cursor: pointer;
+}
+html.is-desktop .pc-bar-brand:hover {
+  border-color: var(--surface-brd);
+  background: color-mix(in srgb, var(--surface-3) 60%, transparent);
+}
+.pc-bar-word {
+  font-size: 0.95rem;
+  letter-spacing: -0.005em;
+  line-height: 1;
+  background-image: linear-gradient(96deg, var(--text) 30%, color-mix(in srgb, var(--acc) 92%, #fff));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  white-space: nowrap;
+}
+.pc-bar-lvl {
+  font-size: 0.62rem;
+  padding: 0.16rem 0.42rem;
+  border-radius: 99px;
+  background: var(--acc);
+  color: var(--acc-ink);
+  white-space: nowrap;
+}
+/* полоса опыта прямо под кнопкой профиля — тянется по её ширине */
+.pc-bar-xp {
+  position: absolute;
+  left: 0.35rem;
+  right: 0.6rem;
+  bottom: 0.16rem;
+  height: 2px;
+  border-radius: 99px;
+  background: var(--n-300);
+  overflow: hidden;
+}
+.pc-bar-xp > span {
+  display: block;
+  height: 100%;
+  border-radius: 99px;
+  background: var(--acc);
+  transition: width 0.4s var(--ease, ease);
+}
+.pc-bar-sep {
+  width: 1px;
+  height: 1.5rem;
+  background: var(--surface-brd);
+  flex: 0 0 auto;
+}
+
+/* ---------- вкладки разделов ---------- */
+.pc-bar-tabs {
+  display: flex;
+  align-items: center;
+  gap: 0.2rem;
+  min-width: 0;
+}
+.pc-tab {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.44rem 0.7rem;
+  border-radius: var(--r-sm);
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color 0.16s, border-color 0.16s, background 0.16s;
+}
+html.is-desktop .pc-tab:hover {
+  color: var(--text);
+  border-color: var(--surface-brd);
+  background: color-mix(in srgb, var(--surface-3) 55%, transparent);
+}
+.pc-tab.on {
+  color: var(--acc-ink);
+}
+.pc-tab-pill {
+  position: absolute;
+  inset: 0;
+  border-radius: var(--r-sm);
+  background: var(--acc);
+  box-shadow: 0 10px 24px -14px var(--acc-glow);
+}
+.pc-tab-ico,
+.pc-tab-label,
+.pc-tab-key {
+  position: relative;
+  z-index: 1;
+  line-height: 1.1;
+}
+.pc-tab-label {
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+/* подсказка «1–5» — на телефоне её не существует */
+.pc-tab-key {
+  font-size: 0.56rem;
+  padding: 0.05rem 0.26rem;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--text) 10%, transparent);
+  color: inherit;
+  opacity: 0.62;
+}
+
+/* ---------- второстепенные страницы ---------- */
+.pc-bar-extra {
+  display: flex;
+  align-items: center;
+  gap: 0.2rem;
+  margin-left: 0.35rem;
+  min-width: 0;
+}
+.pc-xtra {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.36rem 0.58rem;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--surface-brd);
+  background: color-mix(in srgb, var(--surface-2) 70%, transparent);
+  color: var(--text-dim);
+  font-size: 0.74rem;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color 0.16s, border-color 0.16s, background 0.16s;
+}
+html.is-desktop .pc-xtra:hover {
+  color: var(--text);
+  border-color: color-mix(in srgb, var(--acc) 45%, var(--surface-brd));
+}
+.pc-xtra.on {
+  background: var(--acc);
+  border-color: var(--acc);
+}
+.pc-xtra.on span {
+  color: inherit;
+}
+
+/* ---------- кошелёк и хинты ---------- */
+.pc-bar-wallet {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-left: auto;
+}
+.pc-wallet-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.4rem 0.6rem;
+  border-radius: 99px;
+  border: 1px solid var(--surface-brd);
+  background: var(--n-050);
+  color: var(--text);
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+html.is-desktop .pc-wallet-item:hover {
+  border-color: var(--btn-brd);
+}
+.pc-bar-hint {
+  font-size: 0.58rem;
+  color: var(--text-mute);
+  white-space: nowrap;
+}
+.pc-bar-hint b {
+  color: var(--text-dim);
+}
+.pc-bar-ver {
+  font-size: 0.58rem;
+  color: var(--text-mute);
+  opacity: 0.8;
+  white-space: nowrap;
+}
+
+/* на узком окне подписи и хинты уходят первыми — пусть лучше останутся
+   иконки и кошелёк, чем панель начнёт наезжать сама на себя */
+@media (max-width: 1180px) {
+  .pc-bar-hint,
+  .pc-tab-key,
+  .pc-bar-ver {
+    display: none;
+  }
+  .pc-xtra span:last-child {
+    display: none;
+  }
+}
+@media (max-width: 940px) {
+  .pc-bar-word,
+  .pc-bar-extra {
+    display: none;
+  }
+}
+
+/* ---------- главный экран: игры слева, сведения справа ---------- */
+html.is-desktop .pc-home {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--pc-rail);
+  grid-template-rows: minmax(0, 1fr);
+  gap: var(--pc-gap);
+  height: 100%;
+  padding: var(--pc-gap) var(--pc-pad) var(--pc-gap) var(--pc-pad);
+  overflow: hidden;
+}
+
+/* на телефоне контейнеры «прозрачны» для вёрстки: дети стоят в обычном
+   потоке Screen ровно в том порядке, в котором написаны */
+.pc-blocks,
+.pc-games {
+  display: contents;
+}
+
+html.is-desktop .pc-games {
+  display: block;
+  grid-column: 1;
+  grid-row: 1;
+  min-width: 0;
+  height: 100%;
   overflow-y: auto;
-  align-content: start;
+  overflow-x: hidden;
+  padding-right: 0.4rem;
 }
-
-/* левая колонка */
-.pc-home > *:nth-child(1),           /* шапка */
-.pc-home > *:nth-child(2),           /* сводка */
-.pc-home > *:nth-child(3) {          /* сундук */
-  grid-column: 1;
-}
-.pc-home-side {
-  grid-column: 1;
-  position: sticky;
-  top: 0;
-}
-
-/* правая колонка: босс сверху, под ним фильтр и игры */
-.pc-home > *:nth-child(4) {          /* босс */
+html.is-desktop .pc-blocks {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
   grid-column: 2;
   grid-row: 1;
-}
-.pc-home > *:nth-child(6),           /* фильтр */
-.pc-home > *:nth-child(7) {          /* сетка игр */
-  grid-column: 2;
-}
-
-/* Сетка игр на ПК: колонки по ширине окна, а не жёсткие две */
-html.is-desktop .pc-home .grid-cols-2 {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(215px, 1fr));
-  gap: 12px;
-}
-
-/* Узкое окно — одна колонка, как на телефоне */
-@media (max-width: 1080px) {
-  .pc-home { grid-template-columns: 1fr; }
-  .pc-home > *:nth-child(n) { grid-column: 1 !important; grid-row: auto !important; }
-  .pc-home-side { position: static; }
-}
-
-/* Экран мини-игры: портретная колонка по центру, фон по бокам */
-html.is-desktop .pc-play {
-  max-width: 520px;
-  margin: 0 auto;
+  min-height: 0;
   height: 100%;
-  position: relative;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-right: 0.4rem;
 }
 
-/* Обычные (не главный) экраны — читаемая колонка, а не растянутая строка */
+/* Подсказки, которые имеют смысл только с мышью */
+.only-pc {
+  display: none;
+}
+html.is-desktop .only-pc {
+  display: inline;
+}
+/* счётчик найденного — справа от заголовка библиотеки */
+.pc-games-count {
+  flex: 0 0 auto;
+  padding: 0.3rem 0.6rem;
+  border-radius: 99px;
+  border: 1px solid var(--surface-brd);
+  background: var(--surface);
+  color: var(--text-mute);
+  font-size: 0.6rem;
+}
+
+/* заголовок «CHUBUGAMES» на ПК не нужен — он уже в панели */
+.pc-only-mobile {
+  display: block;
+}
+html.is-desktop .pc-only-mobile {
+  display: none !important;
+}
+
+/* ---------- шапка профиля (в правой колонке выглядит карточкой) ---------- */
+html.is-desktop .pc-head {
+  /* !important нужен: у шапки в разметке стоит inline paddingTop под
+     безопасную зону телефона, а на ПК её быть не должно */
+  padding: 0.85rem !important;
+  border-radius: var(--r-lg);
+  border: 1px solid var(--surface-brd);
+  background:
+    radial-gradient(120% 140% at 100% 0%, color-mix(in srgb, var(--acc) 12%, transparent), transparent 58%),
+    var(--surface);
+  margin-bottom: 0 !important;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.25rem 0.7rem;
+  align-items: center;
+}
+html.is-desktop .pc-head-stats {
+  grid-column: 1 / -1;
+  gap: 0.5rem !important;
+  margin-bottom: 0 !important;
+}
+html.is-desktop .pc-head-stats > * {
+  padding: 0.5rem 0.55rem !important;
+}
+
+/* ---------- плитка игр ---------- */
+.pc-games-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.85rem;
+}
+.pc-games-title {
+  font-size: 1.35rem;
+  line-height: 1.05;
+  letter-spacing: -0.01em;
+}
+.pc-games-sub {
+  font-size: 0.62rem;
+  color: var(--text-mute);
+  margin-top: 0.3rem;
+  letter-spacing: 0.06em;
+}
+html.is-desktop .pc-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(15.5rem, 1fr));
+  gap: 0.8rem;
+  margin-bottom: 1.5rem;
+}
+.pc-tile {
+  position: relative;
+  overflow: hidden;
+  transition: border-color 0.18s, background 0.18s, box-shadow 0.18s;
+}
+.pc-tile-wash {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  background: radial-gradient(120% 78% at 50% -12%, color-mix(in srgb, var(--acc) 26%, transparent), transparent 62%);
+  transition: opacity 0.22s;
+}
+.pc-tile > div {
+  position: relative;
+  z-index: 1;
+}
+html.is-desktop .pc-tile {
+  padding: 0;
+}
+html.is-desktop .pc-tile > div {
+  padding: 0.9rem;
+  min-height: 9.5rem;
+}
+html.is-desktop .pc-tile:hover {
+  border-color: color-mix(in srgb, var(--acc) 60%, var(--surface-brd));
+  background: var(--surface-2);
+  box-shadow: 0 18px 40px -22px rgba(0, 0, 0, 0.9), 0 0 0 1px color-mix(in srgb, var(--acc) 26%, transparent) inset;
+}
+html.is-desktop .pc-tile:hover .pc-tile-wash {
+  opacity: 1;
+}
+html.is-desktop .pc-tile-locked {
+  opacity: 0.55;
+}
+.pc-tile-badge {
+  width: 2.55rem;
+  height: 2.55rem;
+  border-radius: 0.8rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface-2);
+  border: 1px solid var(--surface-brd);
+  transition: transform 0.2s, border-color 0.2s;
+}
+html.is-desktop .pc-tile:hover .pc-tile-badge {
+  transform: translateY(-1px);
+  border-color: color-mix(in srgb, var(--acc) 50%, var(--surface-brd));
+}
+html.is-desktop .pc-tile-top {
+  margin-bottom: 0.7rem;
+}
+.pc-tile-tag {
+  font-size: 0.5rem;
+  letter-spacing: 0.07em;
+  padding: 0.2rem 0.44rem;
+  border-radius: 99px;
+  background: var(--btn-bg);
+}
+html.is-desktop .pc-tile-name {
+  font-size: 0.95rem;
+  line-height: 1.2;
+}
+html.is-desktop .pc-tile-desc {
+  margin-top: 0.28rem;
+  font-size: 0.72rem;
+  line-height: 1.35;
+  min-height: 2.6em;
+  color: var(--text-dim);
+}
+html.is-desktop .pc-tile-foot {
+  margin-top: 0.7rem;
+  padding-top: 0.6rem;
+  border-top: 1px solid var(--surface-brd);
+  gap: 0.5rem;
+}
+html.is-desktop .pc-tile-best {
+  font-size: 0.9rem;
+}
+html.is-desktop .pc-tile-plays {
+  font-size: 0.64rem;
+}
+/* подсказка «Играть» появляется под курсором: на тапе она не нужна */
+.pc-tile-go {
+  display: none;
+  align-items: center;
+  gap: 0.2rem;
+  font-size: 0.56rem;
+  letter-spacing: 0.1em;
+  color: var(--acc-text);
+  margin-left: auto;
+}
+html.is-desktop .pc-tile:hover .pc-tile-go {
+  display: inline-flex;
+}
+
+/* панель справа не должна выглядеть списком «как попало»:
+   каждый блок — карточка одинаковой плотности */
+html.is-desktop .pc-blocks > * {
+  margin-bottom: 0 !important;
+  flex: 0 0 auto;
+}
+html.is-desktop .pc-blocks .t-caption,
+html.is-desktop .pc-blocks .t-label {
+  overflow-wrap: anywhere;
+}
+
+/* ---------- экран мини-игры: портретная колонка как «экран устройства» ---------- */
+html.is-desktop .pc-play-wrap {
+  display: flex;
+  justify-content: center;
+  align-items: stretch;
+  background:
+    radial-gradient(1100px 700px at 50% -18%, color-mix(in srgb, var(--acc) 10%, transparent), transparent 58%),
+    var(--n-000);
+}
+html.is-desktop .pc-play {
+  position: relative;
+  width: min(34rem, 100%);
+  height: 100%;
+  background: var(--bg);
+  border-left: 1px solid var(--surface-brd);
+  border-right: 1px solid var(--surface-brd);
+  box-shadow: 0 0 90px -20px rgba(0, 0, 0, 0.9);
+  /* transform создаёт containing block: все fixed-оверлеи игры (пауза,
+     итоги, правила) останутся внутри колонки, а не разлипнутся по окну */
+  transform: translateZ(0);
+}
+
+/* ---------- экраны разделов на ПК ----------
+   .pc-page навешан на Glass.Screen, поэтому правки сразу для всех:
+   Прогресс, Магазин, Друзья, Настройки, Казино, Босс, Фанфики, Сеть. */
 html.is-desktop .pc-page {
-  max-width: 900px;
+  max-width: 78rem;
   margin: 0 auto;
   width: 100%;
 }
+html.is-desktop .pc-page-head {
+  padding: 1.15rem var(--pc-pad) 0.9rem !important;
+  margin-bottom: 0.35rem;
+  border-bottom: 1px solid var(--surface-brd);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--surface) 62%, transparent), transparent);
+}
+html.is-desktop .pc-page-body {
+  padding: 1.1rem var(--pc-pad) 3rem !important;
+}
+html.is-desktop .pc-page-head h1 {
+  font-size: 1.55rem;
+}
+/* телефонные сетки становятся колонками по ширине окна */
+html.is-desktop .pc-page .grid-cols-2 {
+  grid-template-columns: repeat(auto-fill, minmax(20rem, 1fr));
+}
+html.is-desktop .pc-page .grid-cols-3 {
+  grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
+}
+html.is-desktop .pc-page .grid-cols-4 {
+  grid-template-columns: repeat(auto-fill, minmax(8.5rem, 1fr));
+}
+html.is-desktop .pc-page .grid-cols-2,
+html.is-desktop .pc-page .grid-cols-3,
+html.is-desktop .pc-page .grid-cols-4 {
+  gap: 0.75rem;
+}
+/* вторые страницы (казино, босс, донат…) кладём поверх контента, но под панель */
+html.is-desktop .pc-sub {
+  z-index: 8;
+}
 
-/* Нижняя навигация на ПК не нужна — разделы слева */
-html.is-desktop .pc-hide-nav { display: none !important; }
+/* фокус с клавиатуры: на ПК без него невозможно пользоваться табом */
+html.is-desktop :focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--acc) 78%, #fff);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+/* нижняя навигация на ПК не нужна — разделы в верхней панели */
+html.is-desktop .pc-hide-nav {
+  display: none !important;
+}
+
+/* Узкое окно (1280×720 ноутбук, половина монитора): две колонки уже не
+   помещаются честно. Тогда игры идут сверху, сведения — под ними, и вся
+   страница скроллится одним потоком, как на телефоне, но с широкими
+   карточками. Никаких «двух независимых скроллов, которые никто не
+   заметил» — на узком окне это ловушка. */
+@media (max-width: 1120px) {
+  html.is-desktop .pc-home {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto;
+    overflow-y: auto;
+  }
+  html.is-desktop .pc-games,
+  html.is-desktop .pc-blocks {
+    grid-column: 1;
+    grid-row: auto;
+    height: auto;
+    overflow: visible;
+    padding-right: 0;
+  }
+  html.is-desktop .pc-blocks {
+    padding-top: 0.4rem;
+    border-top: 1px solid var(--surface-brd);
+  }
+  html.is-desktop .pc-tiles {
+    grid-template-columns: repeat(auto-fill, minmax(13.5rem, 1fr));
+  }
+}
+
+/* ============================================================
+   ТЕМЫ.  Обсидиан (почти чёрный) → Графит (тёмно-серый) → Светлая (белый).
+   Акцент поверх любой из них — см. ACCENTS в core/content.ts.
+   ============================================================ */
+
+/* Тёмно-серая («графит»): та же шкала, поднятая на две ступени.
+   На большом мониторе чистый чёрный выжигает контраст — белый текст
+   режет глаза, а свечение акцента выглядит наклейкой. Графит мягче,
+   при этом разница соседних поверхностей остаётся >= 3.5 L*. */
+html.graphite {
+  --n-000: #17171d;
+  --n-050: #1c1c23;
+  --n-100: #23232b;
+  --n-200: #2c2c36;
+  --n-300: #393945;
+  --n-400: #4d4d5b;
+  --n-500: #696979;
+  --n-600: #9c9cae;
+  --bg: var(--n-000);
+  --surface: var(--n-100);
+  --surface-2: var(--n-200);
+  --surface-3: var(--n-300);
+  --surface-brd: #3b3b47;
+  --surface-brd-soft: #33333e;
+  --glass-bg: rgba(48, 48, 60, 0.7);
+  --glass-bg-strong: rgba(56, 56, 70, 0.85);
+  --glass-brd: #46465a;
+  --btn-bg: var(--n-200);
+  --btn-bg-hi: var(--n-300);
+  --btn-brd: var(--n-400);
+  --track: var(--n-300);
+  --scrim: rgba(10, 10, 14, 0.84);
+  --scrim-strong: rgba(8, 8, 11, 0.92);
+  --toast-bg: #2c2c36;
+  --toast-brd: #43434f;
+  --nav-bg: #23232b;
+  --nav-brd: #393945;
+}

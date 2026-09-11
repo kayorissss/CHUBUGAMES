@@ -157,10 +157,17 @@ export default function Settings({
 
       <SectionTitle>{t("settings.appearance")}</SectionTitle>
       <Card r="lg" style={{ marginBottom: 22, overflow: "hidden" }}>
+        {/* Базовых темы три: чёрный, тёмно-серый и белый. Акцентный цвет
+            подбирается отдельно ниже — так «шикарное игровое» оформление
+            не превращается в один сплошной оранжевый экран. */}
         <Seg
           label={t("settings.theme")}
           value={s.settings.theme}
-          opts={[["dark", t("settings.dark")], ["light", t("settings.light")]]}
+          opts={[
+            ["dark", t("settings.dark")],
+            ["graphite", tr("Графит")],
+            ["light", t("settings.light")],
+          ]}
           onPick={(v) => set((d) => { d.settings.theme = v as any; })}
         />
         <Divider inset={14} />

@@ -23,13 +23,22 @@ import {
 
 type Tab = "farm" | "slots" | "cases" | "battle" | "upgrade" | "stuff";
 
+/*
+ * Названия вкладок храним русскими оригиналами, а tr() вызываем в render.
+ * На уровне модуля перевод работать не может: словарь языка ещё не выбран.
+ */
+/*
+ * Названия вкладок храним русскими оригиналами, а tr() вызываем в render:
+ * на уровне модуля перевод всегда возвращал русский, потому что язык в
+ * этот момент ещё не выбран стором.
+ */
 const TABS: { id: Tab; name: string }[] = [
-  { id: "farm",    name: tr("ФЕРМА") },
-  { id: "slots",   name: tr("СЛОТЫ") },
-  { id: "cases",   name: tr("КЕЙСЫ") },
-  { id: "battle",  name: tr("БАТЛ") },
-  { id: "upgrade", name: tr("АПГРЕЙД") },
-  { id: "stuff",   name: tr("ВЕЩИ") },
+  { id: "farm",    name: "ФЕРМА" },
+  { id: "slots",   name: "СЛОТЫ" },
+  { id: "cases",   name: "КЕЙСЫ" },
+  { id: "battle",  name: "БАТЛ" },
+  { id: "upgrade", name: "АПГРЕЙД" },
+  { id: "stuff",   name: "ВЕЩИ" },
 ];
 
 /** Значок символа слота */
@@ -180,7 +189,7 @@ export default function Casino({ onBack }: { onBack: () => void }) {
               border: `1px solid ${tab === t.id ? "var(--acc)" : "var(--btn-brd)"}`,
             }}
           >
-            {t.name}
+            {tr(t.name)}
           </button>
         ))}
       </div>

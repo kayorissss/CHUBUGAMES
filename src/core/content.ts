@@ -220,7 +220,10 @@ export const DEFAULT_FRIENDS: Friend[] = [
 
 /* ============ АКЦЕНТЫ ============ */
 export const ACCENTS = [
-  // 5 базовых цветов — бесплатны и доступны сразу
+  // Базовые цвета — бесплатны и доступны сразу. Первым стоит «уголёк»:
+  // он задан по умолчанию, потому что оранжевый — цвет бренда, а на
+  // серых поверхностях янтарь (#FFB020) теряется.
+  { id: "ember", name: "Уголёк", hex: "#FF7A18", price: 0 },
   { id: "amber", name: "Янтарь", hex: "#FFB020", price: 0 },
   { id: "violet", name: "Фиолет", hex: "#A77BFF", price: 0 },
   { id: "grey", name: "Графит", hex: "#B4B4C4", price: 0 },
@@ -448,3 +451,6 @@ export const GAME_META = [
   { id: "checkers" as const, name: "ШАШКИ У СТАСА", tag: "Настольные", desc: "Русские шашки. Бить обязательно, дамка ходит через всю доску.", unlockLvl: 0, icon: "dice" as IconName },
   { id: "nards" as const, name: "НАРДЫ С АРТУРОМ", tag: "Настольные", desc: "Длинные нарды. Артур Тигранович играет в них с детства.", unlockLvl: 0, icon: "clover" as IconName },
 ];
+
+/** Тип одной записи каталога игр (используют плитки, фильтры, экраны) */
+export type GameMeta = (typeof GAME_META)[number];

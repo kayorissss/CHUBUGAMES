@@ -13,3 +13,12 @@ capacitor.config.js
 
 # Сборки ПК-версии
 desktop-out/
+
+# Ключ подписи релиза. В git его класть нельзя: репозиторий публичный,
+# и ключ в нём = любой может подписать свой APK как «обновление CHUBUGAMES».
+# Лежит локально у автора и в CI приходит из Secrets (см. android-signing/README.md).
+android-signing/*.p12
+android-signing/*.jks
+android-signing/keystore.properties
+android-signing/PASTE-INTO-SECRETS.txt
+**/chubgames.p12

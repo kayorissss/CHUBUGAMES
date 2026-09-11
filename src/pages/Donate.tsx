@@ -8,11 +8,13 @@ import { sfx, haptic } from "../core/fx";
 export const DONATE_URL = "https://pay.cloudtips.ru/p/cab48a6e";
 export const AUTHOR_URL = "https://t.me/kayorisan";
 
+/* tr() на уровне модуля возвращал всегда русский: язык в этот момент ещё
+   не выбран. Сами строки — оригиналы, перевод вызывается в render. */
 const PERKS = [
-  { icon: "bolt",    title: tr("Новые игры"),      desc: tr("Каждое обновление — ещё режимы и механики") },
-  { icon: "users",   title: tr("Больше друзей"),   desc: tr("Новые персонажи и боссы в общаге") },
-  { icon: "sparkle", title: tr("Оформление"),      desc: tr("Анимации, скины, украшения") },
-  { icon: "shield",  title: tr("Без рекламы"),     desc: tr("Ролики только по желанию, за награду") },
+  { icon: "bolt",    title: "Новые игры",      desc: "Каждое обновление — ещё режимы и механики" },
+  { icon: "users",   title: "Больше друзей",   desc: "Новые персонажи и боссы в общаге" },
+  { icon: "sparkle", title: "Оформление",      desc: "Анимации, скины, украшения" },
+  { icon: "shield",  title: "Без рекламы",     desc: "Ролики только по желанию, за награду" },
 ] as const;
 
 export default function Donate({ onBack }: { onBack: () => void }) {
@@ -159,8 +161,8 @@ export default function Donate({ onBack }: { onBack: () => void }) {
                 <Icon name={p.icon as never} size={18} accent />
               </span>
               <span className="flex-1 min-w-0">
-                <span className="t-title-sm block">{p.title}</span>
-                <span className="t-caption block" style={{ marginTop: 2 }}>{p.desc}</span>
+                <span className="t-title-sm block">{tr(p.title)}</span>
+                <span className="t-caption block" style={{ marginTop: 2 }}>{tr(p.desc)}</span>
               </span>
             </div>
           </Panel>

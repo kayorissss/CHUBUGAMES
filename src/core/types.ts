@@ -103,7 +103,16 @@ export interface SeasonState {
 }
 
 export interface Settings {
-  theme: "dark" | "light";
+  /**
+   * Базовая тема интерфейса. «glass» из старой шкалы убрана: размытые
+   * полупрозрачные подложки по всему экрану на ПК превращались в кашу,
+   * а на телефоне ели FPS.
+   *  dark     — обсидиан, почти чёрный (по умолчанию)
+   *  graphite — тёмно-серый: мягче для глаз на большом мониторе
+   *  light    — белый
+   * Цвет акцента выбирается независимо (ACCENTS в core/content.ts).
+   */
+  theme: "dark" | "graphite" | "light";
   lang: "ru" | "en";
   accent: string;
   sound: boolean;

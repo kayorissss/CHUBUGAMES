@@ -15,12 +15,12 @@ const SKINS = ["#f6d3b0", "#eec9a8", "#e8b48c", "#d9a074", "#c98a5e", "#a9714a",
 const HAIRS = ["#1a1a1e", "#2b2118", "#4a3520", "#7a4a22", "#a8672c", "#c0392b", "#d8c48a", "#e8e8f0", "#5a5a68", "#3b6ea5", "#7a3ba5", "#2fa86b"];
 const EYES = ["#3a2c1e", "#2f5d3a", "#3b6ea5", "#4a4a55", "#6b3f1d", "#2a1c12"];
 const SHIRT_COLORS = ["#2a3140", "#3d4756", "#c86a9a", "#c0392b", "#2f6f4f", "#6b5230", "#1f1f26", "#8f63bd"];
-const HAIR_NAMES = [tr("Лысый"), tr("Короткие"), tr("Шапка"), tr("Ирокез"), tr("Кудри"), tr("Кепка"), tr("Ёжик"), tr("Длинные"), tr("Штрихкод"), tr("Под машинку")];
-const BROW_NAMES = [tr("Обычные"), tr("Злые"), tr("Домиком")];
-const FACIAL_NAMES = [tr("Гладко"), tr("Щетина"), tr("Борода"), tr("Усы"), tr("Козья")];
-const GLASS_NAMES = [tr("Нет"), tr("Круглые"), tr("Прямые")];
-const SHIRT_NAMES = [tr("Обычная"), tr("Сетка"), tr("Костюм"), tr("Худи")];
-const PROP_NAMES = [tr("Нет"), tr("Пиво"), tr("Планшет")];
+const HAIR_NAMES = ["Лысый", "Короткие", "Шапка", "Ирокез", "Кудри", "Кепка", "Ёжик", "Длинные", "Штрихкод", "Под машинку"];
+const BROW_NAMES = ["Обычные", "Злые", "Домиком"];
+const FACIAL_NAMES = ["Гладко", "Щетина", "Борода", "Усы", "Козья"];
+const GLASS_NAMES = ["Нет", "Круглые", "Прямые"];
+const SHIRT_NAMES = ["Обычная", "Сетка", "Костюм", "Худи"];
+const PROP_NAMES = ["Нет", "Пиво", "Планшет"];
 const SHIRT_KEYS = ["plain", "mesh", "suit", "hoodie"] as const;
 const PROP_KEYS = ["none", "beer", "clipboard"] as const;
 
@@ -560,6 +560,13 @@ function Swatches({ list, val, onPick }: { list: string[]; val: string; onPick: 
   );
 }
 
+/**
+ * Список вариантов внешности.
+ *
+ * Подписи переводятся ЗДЕСЬ, а не в модуле: ранее tr() вызывался на уровне
+ * файла, то есть до того, как стор выставил язык, — и в английской версии
+ * редактор друга оставался русским («Лысый», «Кепка» и проч.).
+ */
 function Opts({ list, val, onPick }: { list: string[]; val: number; onPick: (i: number) => void }) {
   return (
     <div className="flex gap-1.5 flex-wrap">
@@ -575,7 +582,7 @@ function Opts({ list, val, onPick }: { list: string[]; val: number; onPick: (i: 
             border: "1px solid var(--glass-brd)",
           }}
         >
-          {n}
+          {tr(n)}
         </button>
       ))}
     </div>

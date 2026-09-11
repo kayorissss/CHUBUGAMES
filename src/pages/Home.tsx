@@ -1,9 +1,7 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { tr } from "../core/i18n";
 import ChestCard from "../ui/ChestCard";
-import PcSidebar from "../ui/PcSidebar";
 import { isDesktop } from "../core/desktop";
-import type { Tab } from "../components/Nav";
 import GameFilter, { CATEGORIES, type SortKey } from "../ui/GameFilter";
 import { AnimatePresence, motion } from "framer-motion";
 import { useGame } from "../core/store";
@@ -12,9 +10,9 @@ import { GAME_META } from "../core/content";
 import { EASE } from "../core/motion";
 import { fmt } from "../core/format";
 import { autoRate } from "../core/save";
-import { Card, Tap, Bar, SectionTitle, Screen } from "../ui/Glass";
+import { Card, Tap, Bar, Screen } from "../ui/Glass";
 import HeadView from "../ui/HeadView";
-import GameIcon from "../ui/GameIcon";
+import GameTile from "../ui/GameTile";
 import Icon, { type IconName } from "../ui/Icon";
 import type { GameId } from "../core/types";
 import AdModal from "../ui/AdModal";
@@ -34,13 +32,11 @@ function fmtLeft(ms: number): string {
 }
 
 export default function Home({
-  onPlay, onOpenProfile, onOpen, onTab,
+  onPlay, onOpenProfile, onOpen,
 }: {
   onPlay: (g: GameId) => void;
   onOpenProfile?: () => void;
   onOpen?: (page: SubPage) => void;
-  /** Переключение разделов — нужно боковой панели ПК-версии */
-  onTab?: (t: Tab) => void;
 }) {
   const { s, set, levelPct, addCoins, toast } = useGame();
 
@@ -129,16 +125,21 @@ export default function Home({
 
   return (
     <Wrap {...wrapProps}>
+            {/* Правая колонка на ПК и верх списка на телефоне. Контейнер
+
+          display:contents в мобильной вёрстке, поэтому порядок и отступы
+          остались ровно теми же, что были до разбиения на зоны. */}
+      <div className="pc-blocks">
       {/* Шапка: название, уровень, монеты.
           Иконку персонажа слева убрали по просьбе пользователя — вход в
           профиль остался на плашке уровня. */}
       <div
-        className="flex items-center gap-3"
+        className="flex items-center gap-3 pc-head"
         style={{ paddingTop: "calc(var(--sat) + 14px)", marginBottom: 16 }}
       >
         <div className="flex-1 min-w-0">
           <h1
-            className="t-display"
+            className="t-display pc-only-mobile"
             style={{
               fontSize: 23,
               backgroundImage: "linear-gradient(94deg, var(--text) 30%, var(--acc))",
@@ -194,7 +195,7 @@ export default function Home({
       </div>
 
       {/* Сводка — сразу под шапкой */}
-      <div className="grid grid-cols-3" style={{ gap: 10, marginBottom: 18 }}>
+      <div className="grid grid-cols-3 pc-head-stats" style={{ gap: 10, marginBottom: 18 }}>
         <Stat icon="run" v={fmt(s.stats.burgersDodged)} l={tr("уклонов")} />
         <Stat icon="tap" v={fmt(s.stats.tapsTotal)} l={tr("тапов")} />
         <Stat icon="coin" v={fmt(s.totalCoinsEver)} l={tr("монет всего")} accent />
@@ -507,6 +508,8 @@ export default function Home({
         </Tap>
       )}
 
+      </div>
+
       <AnimatePresence>
         {showAd && (
           <AdModal
@@ -522,6 +525,23 @@ export default function Home({
         )}
       </AnimatePresence>
 
+      {/* ИГРЫ — основная зона. На ПК это левая колонка во всю ширину
+          окна: плитка сама подбирает число колонок, поэтому на 27"
+          это плотный кадрированный список, а не две растянутые простыни. */}
+      <div className="pc-games">
+      <div className="pc-games-head">
+        <div className="min-w-0">
+          <div className="t-display pc-games-title">{tr("БИБЛИОТЕКА ИГР")}</div>
+          <div className="t-label pc-games-sub">
+            {s.unlockedGames.length}/{GAME_META.length} {tr("открыто")}
+            <span className="only-pc"> · {tr("долгий тап или правый клик — закрепить")}</span>
+          </div>
+        </div>
+        <span className="t-label pc-games-count">
+          {sortedGames.length} {tr("из")} {GAME_META.length}
+        </span>
+      </div>
+
       {/* Поиск, категории и сортировка — вместо ряда чипов */}
       <GameFilter
         query={q}
@@ -534,101 +554,34 @@ export default function Home({
         total={GAME_META.length}
       />
 
-      {/* Сетка игр */}
-      <SectionTitle right={<span className="t-num" style={{ fontSize: 11, color: "var(--text-mute)" }}>{s.unlockedGames.length}/{GAME_META.length}</span>}>{tr("Все игры")}</SectionTitle>
-
-      <div className="grid grid-cols-2" style={{ gap: 12, marginBottom: 22 }}>
+      {/* Сетка игр. Заголовок SectionTitle убран: он дублировал шапку
+          библиотеки над фильтром и на ПК давал два одинаковых счёта. */}
+      <div className="grid grid-cols-2 pc-tiles" style={{ gap: 12, marginBottom: 22 }}>
         {sortedGames.map((g, i) => {
           const unlocked = s.unlockedGames.includes(g.id);
-          const st = s.games[g.id];
           // Поддержку показываем ровно после «Башни Лёхи»: это конец
           // четвёртого ряда, дальше идут остальные игры.
           const donateHere = g.id === "stack";
           return (
             <Fragment key={g.id}>
-            <motion.div
-              initial={{ opacity: 0, y: 14 }}
-              animate={{ opacity: 1, y: 0 }}
-              /* Каскад ограничен: игр уже 27, и при 0.04 c на карточку
-                 последняя выезжала бы через секунду с лишним — сетка
-                 успевала надоесть раньше, чем достраивалась. */
-              transition={{ delay: Math.min(i, 8) * 0.035, duration: 0.3, ease: EASE }}
-            >
-              <Tap
-                onClick={() => unlocked && onPlay(g.id)}
-                onLongPress={() => {
-                  if (!unlocked) return;
-                  haptic("medium");
-                  sfx.tap?.();
-                  set((d) => {
-                    const cur = d.settings.favGames || [];
-                    d.settings.favGames = cur.includes(g.id)
-                      ? cur.filter((x) => x !== g.id)
-                      : [...cur, g.id];
-                  });
-                }}
-                disabled={!unlocked}
-                solid
-                r="lg"
-                className="w-full h-full"
-                sound="power"
-                style={{ display: "block" }}
+              <motion.div
+                initial={{ opacity: 0, y: 14 }}
+                animate={{ opacity: 1, y: 0 }}
+                /* Каскад ограничен: игр уже 29, и при 0.04 c на карточку
+                   последняя выезжала бы через секунду с лишним — сетка
+                   успевала надоесть раньше, чем достраивалась. */
+                transition={{ delay: Math.min(i, 8) * 0.035, duration: 0.3, ease: EASE }}
+                className="h-full"
               >
-                <div
-                  className="flex flex-col h-full"
-                  style={{ padding: 13, minHeight: 152 }}
-                >
-                  <div className="flex items-start justify-between" style={{ marginBottom: 10 }}>
-                    <span style={{ lineHeight: 0, color: "var(--text)" }}>
-                      {unlocked ? (
-                        <GameIcon id={g.id} size={27} />
-                      ) : (
-                        <svg width="27" height="27" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                          <rect x="5" y="11" width="14" height="10" rx="2" />
-                          <path d="M8 11V8a4 4 0 018 0v3" />
-                        </svg>
-                      )}
-                    </span>
-                    <span className="flex items-center" style={{ gap: 5 }}>
-                      {(s.settings.favGames || []).includes(g.id) && (
-                        <span style={{ color: "var(--gold)", lineHeight: 0 }}>
-                          <Icon name="star" size={12} />
-                        </span>
-                      )}
-                      <span
-                        className="t-label"
-                        style={{
-                          fontSize: 8.5, padding: "3px 7px", borderRadius: 999,
-                          background: "var(--btn-bg)", letterSpacing: "0.07em",
-                        }}
-                      >
-                        {tr(g.tag)}
-                      </span>
-                    </span>
-                  </div>
-                  <div className="t-title-sm clip1">{unlocked ? tr(g.name) : "?????"}</div>
-                  <div
-                    className="t-caption clip2"
-                    style={{ marginTop: 4, flex: 1 }}
-                  >
-                    {unlocked ? tr(g.desc) : `${tr("Уровень")} ${g.unlockLvl}`}
-                  </div>
-                  {unlocked && (
-                    <div
-                      className="flex items-center justify-between"
-                      style={{
-                        marginTop: 10, paddingTop: 9,
-                        borderTop: "1px solid var(--surface-brd)",
-                      }}
-                    >
-                      <span className="t-num acc-text" style={{ fontSize: 12.5 }}>{fmt(st.best)}</span>
-                      <span className="t-caption" style={{ fontSize: 10 }}>{st.plays} игр</span>
-                    </div>
-                  )}
-                </div>
-              </Tap>
-            </motion.div>
-            {donateHere && onOpen && (
+                <GameTile
+                  g={g}
+                  unlocked={unlocked}
+                  lockedLevel={g.unlockLvl}
+                  onPlay={onPlay}
+                  compact={!pc}
+                />
+              </motion.div>
+              {donateHere && onOpen && (
               <div style={{ gridColumn: "1 / -1" }}>
                 <Tap
                   onClick={() => onOpen("donate")}
@@ -666,17 +619,8 @@ export default function Home({
           );
         })}
       </div>
+      </div>
 
-      {pc && (
-        <div className="pc-home-side">
-          <PcSidebar
-            tab="home"
-            onTab={(t) => onTab?.(t)}
-            onOpen={onOpen}
-            onOpenProfile={onOpenProfile}
-          />
-        </div>
-      )}
     </Wrap>
   );
 }

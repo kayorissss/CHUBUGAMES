@@ -1248,4 +1248,21 @@ export const EN_TEXT: Record<string, string> = {
   "СБРОСИТЬ ОКНО": "RESET WINDOW",
   "своя": "custom",
   "Крупность подбирается по размеру окна": "Size adapts to the window",
+
+  /* ── ПК-оболочка и редизайн 1.25 ─────────────────────────────────────
+     Строки новой заставки, верхней панели и плитки игр. Ключ — русский
+     оригинал, как и во всём словаре. */
+  "ЗАГРУЖАЮ СОХРАНЕНИЕ": "LOADING SAVE",
+  "СОБИРАЮ ПАЦАНОВ": "GATHERING THE CREW",
+  "РАЗЫГРЕВАЮ ИГРЫ": "WARMING UP GAMES",
+  "БИБЛИОТЕКА ИГР": "GAME LIBRARY",
+  "долгий тап или правый клик — закрепить": "long tap or right click pins the game",
+  "Открыть профиль": "Open profile",
+  "Разделы": "Sections",
+  "Дополнительно": "More",
+  "АЛМАЗЫ": "GEMS",
+  "Редкая валюта: скины, крупные покупки": "Rare currency: skins and big purchases",
+  "Графит": "Graphite",
+    "Уголёк": "Ember",
+  "открыто": "unlocked",
 };

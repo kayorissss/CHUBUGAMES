@@ -10,13 +10,45 @@
 /** Запущены ли мы внутри десктопной оболочки */
 import { applyStage, readStage, writeStage } from "./stage";
 
+const FORCE_KEY = "chubgames.pc";
+
+/**
+ * Запущены ли мы внутри десктопной оболочки.
+ *
+ * Раскладку можно включить и вручную: `?pc=1` в адресе или
+ * localStorage chubgames.pc=1. Зачем: компьютерную версию полезно
+ * смотреть и проверять в обычном браузере — на предпросборе, на планшете,
+ * где Electron недоступен. Всё, что требует настоящей оболочки
+ * (обновление, размер окна, полный экран), там молча отключается:
+ * обращения к мосту идут через `?.`, а не через прямые вызовы.
+ */
 export const isDesktop = (): boolean => {
   if (typeof window === "undefined") return false;
   // Протокол app:// поднимает только наша Electron-оболочка
   if (window.location.protocol === "app:") return true;
   // Запас на случай запуска через electron в разработке
-  return /electron/i.test(navigator.userAgent);
+  if (/electron/i.test(navigator.userAgent)) return true;
+  if (/[?&]pc=1/.test(window.location.search) || window.location.hash === "#pc") return true;
+  try {
+    return localStorage.getItem(FORCE_KEY) === "1";
+  } catch {
+    return false;
+  }
 };
+
+/** Включить/выключить ПК-раскладку вручную (тумблер в настройках) */
+export function forcePcLayout(on: boolean | null) {
+  try {
+    if (on === null) localStorage.removeItem(FORCE_KEY);
+    else localStorage.setItem(FORCE_KEY, on ? "1" : "0");
+  } catch {
+    /* приватный режим — не критично */
+  }
+}
+
+/** Мост к Electron-оболочке. В браузере его нет, и это нормально. */
+export const pcApi = (): any =>
+  typeof window === "undefined" ? undefined : (window as any).chubDesktop;
 
 /**
  * Есть ли у пользователя настоящая мышь и клавиатура.
@@ -100,10 +132,22 @@ export function initDesktopKeys(): () => void {
       return;
     }
 
-    // F11 — полноэкранный режим (обрабатывает сам Electron), но в браузере
-    // на ПК его тоже полезно поддержать
+    /*
+     * F11 — полный экран.
+     *
+     * В собранной ПК-версии режим переключает ОБОЛОЧКА (win.setFullScreen):
+     * она же помнит его между запусками, поэтому игра открывается сразу
+     * на весь экран, а F11 из него ВЫВОДИТ. Просить браузерный fullscreen
+     * поверх оконного было бы двойной работой: оставили его только для
+     * случая «открыл в браузере».
+     */
     if (e.key === "F11") {
       e.preventDefault();
+      // В собранной программе клавишу уже перехватывает оболочка окна
+      // (before-input-event в desktop/main.cjs): она же и помнит состояние.
+      // Второй переключатель отсюда дал бы ДВОЙНОЕ переключение — «нажал F11,
+      // ничего не произошло». Поэтому здесь только выход.
+      if (pcApi()?.toggleFullscreen) return;
       const el = document.documentElement;
       if (document.fullscreenElement) document.exitFullscreen?.();
       else el.requestFullscreen?.();

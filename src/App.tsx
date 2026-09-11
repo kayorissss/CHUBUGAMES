@@ -20,7 +20,8 @@ import {
 import { upcomingBosses } from "./core/bosses";
 import { applyPerfMode, isLowFx, measurePerfOnce } from "./core/perf";
 import { initDesktopKeys, initStage, isDesktop } from "./core/desktop";
-import PcBoot from "./ui/PcBoot";
+import BootScreen from "./ui/BootScreen";
+import PcTopBar from "./ui/pc/PcTopBar";
 import FanficPage from "./pages/Fanfic";
 import Home from "./pages/Home";
 import { ModesProvider } from "./core/modes";
@@ -57,7 +58,7 @@ import Europa from "./games/Europa";
 import Chess from "./games/Chess";
 import Checkers from "./games/Checkers";
 import Backgammon from "./games/Backgammon";
-import { EASE, pageVariants, subPageVariants, gameVariants } from "./core/motion";
+import { pageVariants, subPageVariants, gameVariants } from "./core/motion";
 import Canteen from "./games/Canteen";
 import WhoWasIt from "./games/WhoWasIt";
 import RadomirFlight from "./games/RadomirFlight";
@@ -67,134 +68,27 @@ import { pushBack } from "./core/nav";
 import type { GameId } from "./core/types";
 
 /**
- * Загрузчик приложения.
- *
- * Пользователь просил обновить его полностью: раньше это была прыгающая
- * иконка бургера, аврора на весь экран и тонкая полоска, которая рисовала
- * фиктивные полторы секунды. Смотрелось как заглушка и вдобавок тянуло
- * дорогое размытие на самом старте — то есть первое, что видел человек,
- * подтормаживало на слабом телефоне.
- *
- * Что теперь:
- *  • монограмма ЧГ, которая собирается из двух половин, — без blur-фильтров;
- *  • реальные подписи стадий (сохранение → друзья → игры), чтобы загрузка
- *    выглядела осмысленной;
- *  • прогресс идёт по стадиям, а не «просто анимация до 100%»;
- *  • всё уложено в 1.5 с и уважает режим слабого телефона.
+ * Заставка вынесена в src/ui/BootScreen.tsx: она одна на телефон и на
+ * компьютер. Раньше их было две — мобильная (в этом файле) и десктопная
+ * (PcBoot), и они успели разъехаться по анимациям и размерам.
  */
-const BOOT_STEPS = ["ЗАГРУЖАЮ СОХРАНЕНИЕ", "СОБИРАЮ ПАЦАНОВ", "РАЗОГРЕВАЮ ИГРЫ"];
-
-function Splash({ done }: { done: () => void }) {
-  const [step, setStep] = useState(0);
-  const low = isLowFx();
-
-  useEffect(() => {
-    const timers = BOOT_STEPS.map((_, i) =>
-      window.setTimeout(() => setStep(i), 260 + i * 420),
-    );
-    const end = window.setTimeout(done, low ? 1150 : 1650);
-    return () => { timers.forEach(clearTimeout); clearTimeout(end); };
-  }, [done, low]);
-
-  const pct = ((step + 1) / BOOT_STEPS.length) * 100;
-
-  return (
-    <motion.div
-      className="fixed inset-0 z-[120] flex flex-col items-center justify-center"
-      style={{ background: "var(--bg)" }}
-      exit={{ opacity: 0 }}
-      transition={{ duration: 0.34, ease: EASE }}
-    >
-      {/* Монограмма */}
-      <div className="relative flex items-center justify-center" style={{ marginBottom: 26 }}>
-        <motion.div
-          initial={{ scale: 0.82, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          transition={{ type: "spring", stiffness: 260, damping: 20 }}
-          className="flex items-center justify-center"
-          style={{
-            width: 92, height: 92, borderRadius: 26,
-            background: "var(--acc)", color: "var(--acc-ink)",
-            overflow: "hidden", position: "relative",
-          }}
-        >
-          <span className="t-display" style={{ fontSize: 38, letterSpacing: "-0.02em" }}>ЧГ</span>
-          {/* блик пробегает по монограмме — дёшево, без blur */}
-          {!low && (
-            <motion.span
-              initial={{ x: "-130%" }}
-              animate={{ x: "130%" }}
-              transition={{ duration: 1.4, repeat: Infinity, ease: "easeInOut", repeatDelay: 0.35 }}
-              style={{
-                position: "absolute", top: 0, bottom: 0, width: "48%",
-                background: "linear-gradient(100deg, transparent, rgba(255,255,255,0.5), transparent)",
-              }}
-            />
-          )}
-        </motion.div>
-      </div>
-
-      <motion.div
-        initial={{ y: 10, opacity: 0 }}
-        animate={{ y: 0, opacity: 1 }}
-        transition={{ delay: 0.12, duration: 0.34, ease: EASE }}
-        className="t-display text-center"
-        style={{ fontSize: 34, lineHeight: 1 }}
-      >
-        CHUBUGAMES
-      </motion.div>
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ delay: 0.26 }}
-        className="t-label"
-        style={{ marginTop: 9, fontSize: 9.5, letterSpacing: "0.16em" }}
-      >
-        МИНИ-ИГРЫ ПРО СВОИХ ПАЦАНОВ
-      </motion.div>
-
-      {/* Прогресс со стадиями */}
-      <div
-        className="absolute flex flex-col items-center"
-        style={{ bottom: "calc(var(--sab) + 44px)", width: "min(240px, 68vw)" }}
-      >
-        <div
-          style={{
-            width: "100%", height: 4, borderRadius: 999,
-            background: "var(--n-300)", overflow: "hidden",
-          }}
-        >
-          <motion.div
-            initial={false}
-            animate={{ width: `${pct}%` }}
-            transition={{ duration: 0.38, ease: EASE }}
-            style={{ height: "100%", background: "var(--acc)" }}
-          />
-        </div>
-        <div style={{ height: 15, marginTop: 11, position: "relative", width: "100%" }}>
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={step}
-              initial={{ opacity: 0, y: 5 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -5 }}
-              transition={{ duration: 0.2 }}
-              className="t-label absolute inset-0 text-center"
-              style={{ fontSize: 9, letterSpacing: "0.12em" }}
-            >
-              {BOOT_STEPS[step]}
-            </motion.div>
-          </AnimatePresence>
-        </div>
-      </div>
-    </motion.div>
-  );
-}
 
 function Shell() {
   const { s } = useGame();
+  /** ПК-раскладка: верхняя панель вместо нижнего меню, две колонки на главной */
+  const pc = isDesktop();
   const [splash, setSplash] = useState(true);
-  const [tab, setTab] = useState<Tab>("home");
+  /*
+   * Стартовый раздел умеет приходить из адреса: ?tab=settings. Нужно это
+   * ярлыкам PWA (public/manifest.json → shortcuts) и ссылкам из уведомлений:
+   * без проверки человек получил бы всегда домашний экран.
+   */
+  const [tab, setTab] = useState<Tab>(() => {
+    const want = new URLSearchParams(location.search).get("tab");
+    return (["home", "progress", "shop", "friends", "settings"] as const).includes(want as Tab)
+      ? (want as Tab)
+      : "home";
+  });
   const [game, setGame] = useState<GameId | null>(null);
   // отдельные подстраницы поверх вкладок
   const [sub, setSub] = useState<SubPage | null>(null);
@@ -222,9 +116,6 @@ function Shell() {
    * нет, поэтому вешаем Escape на тот же стек слоёв (core/nav.ts).
    * Класс на <html> позволяет прятать чисто мобильные элементы.
    */
-  /** Заставка показывается один раз за запуск программы */
-  const [pcBoot, setPcBoot] = useState(() => isDesktop());
-
   useEffect(() => {
     if (!isDesktop()) return;
     document.documentElement.classList.add("is-desktop");
@@ -293,7 +184,7 @@ function Shell() {
   }, []);
 
   const pages: Record<Tab, React.ReactNode> = {
-    home: <Home onPlay={(g) => setGame(g)} onOpenProfile={() => setTab("progress")} onOpen={setSub} onTab={setTab} />,
+    home: <Home onPlay={(g) => setGame(g)} onOpenProfile={() => setTab("progress")} onOpen={setSub} />,
     progress: <ProgressPage />,
     shop: <Shop />,
     friends: <Friends />,
@@ -307,12 +198,26 @@ function Shell() {
       bestOf={(g) => s.games[g]?.best ?? 0}
     >
     <MotionConfig reducedMotion={lowFx ? "always" : "never"}>
-    <div className="h-full w-full relative overflow-hidden" style={{ background: "var(--bg)" }}>
-      {/* Заставка запуска — только в десктопной сборке */}
-      {pcBoot && <PcBoot onDone={() => setPcBoot(false)} />}
-
+    <div className={pc ? "h-full w-full pc-shell" : "h-full w-full relative overflow-hidden"} style={{ background: "var(--bg)" }}>
       {s.settings.fx && !lowFx && <Aurora />}
 
+      {/* ПК: разделы, профиль и кошелёк живут в верхней панели. На мониторе
+          нижнее меню выглядит чужим, а боковая колонка с разделами съедала
+          треть ширины, оставляя игры узкой полоской. */}
+      {pc && (
+        <PcTopBar
+          tab={tab}
+          sub={sub}
+          onTab={(next) => { setSub(null); setTab(next); }}
+          onOpen={setSub}
+          onOpenProfile={() => { setSub(null); setTab("progress"); }}
+        />
+      )}
+
+      {/* display:contents на телефоне — оболочка не влияет на мобильную
+          раскладку, но на ПК этоflex-колонка, внутри которой лежат
+          страницы, подстраницы и игры */}
+      <div className={pc ? "pc-body" : "contents"}>
       <div className="relative h-full" style={{ zIndex: 1 }}>
         <AnimatePresence mode="wait">
           <motion.div
@@ -337,7 +242,7 @@ function Shell() {
             initial="initial"
             animate="animate"
             exit="exit"
-            className="absolute inset-0"
+            className="absolute inset-0 pc-sub"
             style={{ zIndex: 40, background: "var(--bg)" }}
           >
             {sub === "network" && <Network onBack={() => setSub(null)} />}
@@ -353,7 +258,7 @@ function Shell() {
           поэтому переключение вкладки обязано закрывать подстраницу —
           иначе тапы по вкладкам «не работают». */}
       {/* На ПК разделы живут в боковой панели, нижнее меню там лишнее */}
-      {!game && !isDesktop() && (
+      {!game && !pc && (
         <Nav
           tab={tab}
           onTab={(next) => { setSub(null); setTab(next); }}
@@ -368,8 +273,9 @@ function Shell() {
             initial="initial"
             animate="animate"
             exit="exit"
-            className="fixed inset-0 z-[60]"
+            className={`fixed inset-0 z-[60] ${pc ? "pc-play-wrap" : ""}`}
           >
+            <div className={pc ? "pc-play" : "h-full w-full"}>
             {game === "burger" && <BurgerRain onExit={() => setGame(null)} />}
             {game === "clicker" && <Clicker onExit={() => setGame(null)} />}
             {game === "merge" && <MergeHeads onExit={() => setGame(null)} />}
@@ -399,16 +305,26 @@ function Shell() {
             {game === "nards" && <Backgammon onExit={() => setGame(null)} />}
             {game === "cheat" && <Cheat onExit={() => setGame(null)} />}
             {game === "lift" && <Elevator onExit={() => setGame(null)} />}
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
+      </div>
 
       <Toasts />
       <OfflineModal />
       {!game && <UpdateBanner />}
       {!game && <WhatsNew />}
 
-      <AnimatePresence>{splash && <Splash done={() => setSplash(false)} />}</AnimatePresence>
+      <AnimatePresence>
+        {splash && (
+          <BootScreen
+            onDone={() => setSplash(false)}
+            minMs={lowFx ? 1000 : pc ? 1500 : 1250}
+            maxMs={pc ? 2200 : 1700}
+          />
+        )}
+      </AnimatePresence>
     </div>
     </MotionConfig>
     </ModesProvider>

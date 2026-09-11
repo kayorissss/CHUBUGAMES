@@ -171,7 +171,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const root = document.documentElement;
     root.classList.toggle("light", s.settings.theme === "light");
-    root.classList.toggle("dark", s.settings.theme === "dark");
+    root.classList.toggle("graphite", s.settings.theme === "graphite");
     root.classList.toggle("no-fx", !s.settings.fx);
     const acc = ACCENTS.find((a) => a.id === s.settings.accent) || ACCENTS[0];
     root.style.setProperty("--acc", acc.hex);

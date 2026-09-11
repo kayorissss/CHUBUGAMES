@@ -103,7 +103,43 @@ const VER=fs.readFileSync('src/core/version.ts','utf8').match(/APP_VERSION\s*=\s
 ok(new RegExp('### Что нового в '+VER.replace(/\./g,'\\.')).test(fs.readFileSync('RELEASE_NOTES.md','utf8')),'описание релиза совпадает с версией '+VER);
 ok(fs.existsSync('public/ads/promo1.mp4'),'рекламный ролик на месте');
 ok(fs.existsSync('dist/ads/promo1.mp4'),'ролик попал в сборку (значит будет в APK)');
-ok(fs.existsSync('android-signing/chubgames.p12'),'ключ подписи лежит в репозитории');
+ok(!execSync('git ls-files').toString().split('\n').some((f) => /\.(p12|jks|keystore)$/.test(f)),
+  'ключа подписи нет в git (был в публичном репо — это дыра)');
+ok(/android-signing\/\*\.p12/.test(fs.readFileSync('.gitignore', 'utf8')),
+  'ключ закрыт в .gitignore — обратно не закоммитить');
+const signScript = fs.readFileSync('scripts/setup-android-signing.mjs', 'utf8');
+ok(/CHUB_KEYSTORE_B64/.test(wf2) && /CHUB_KEYSTORE_PASSWORD/.test(wf2),
+  'ключ и пароль CI берёт из Secrets');
+ok(!/storePassword '[^']*'/.test(signScript) && !/keyPassword 'chubgames'/.test(signScript),
+  'пароль подписи не зашит в скрипт — только из переменных окружения');
+ok(/findProperty\('chubStorePassword'\)/.test(signScript),
+  'пароль передаётся Gradle свойством и не попадает в файлы проекта');
+ok(/apksigner verify/.test(wf2),
+  'подпись APK проверяется до публикации (debug-ключ в релиз не пройдёт)');
+ok(/if: steps\.kind\.outputs\.release == 'true'/.test(wf2),
+  'APK публикуется только релизным прогоном (тег v*), а не любым пушем');
+ok(/CHUBUGAMES\.apk/.test(wf2),
+  'файл сборки называется CHUBUGAMES.apk — как игра, а не CHUBGAMES');
+const wfD = fs.readFileSync('.github/workflows/build-desktop.yml', 'utf8');
+ok(/if: steps\.kind\.outputs\.release == 'true'/.test(wfD),
+  'EXE публикуется только релизным прогоном');
+ok(/npm ci/.test(wf2) && /npm ci/.test(wfD), 'CI ставит зависимости по lock-файлу (сборка воспроизводима)');
+ok(/npx tsc --noEmit/.test(wf2) && /npx tsc --noEmit/.test(wfD),
+  'CI проверяет типы: vite их не проверяет, а релиз собирается именно так');
+const dmain7 = fs.readFileSync('desktop/main.cjs', 'utf8');
+ok(/sha256OfFile/.test(dmain7) && /verifyChecksum\(dest/.test(dmain7),
+  'ПК сверяет SHA-256 установщика до запуска');
+ok(/startsWith\(rootN\)/.test(dmain7),
+  'раздача файлов по app:// закрыта на выходе за папку игры (сепаратор в сравнении)');
+ok(/EXTERNAL_HOSTS/.test(dmain7),
+  'внешние ссылки открываются только на известные домены');
+ok(/githubusercontent/.test(dmain7) && /protocol !== "https:"/.test(dmain7),
+  'обновление скачивается только по https и только с github');
+const updSec = fs.readFileSync('src/core/updater.ts', 'utf8');
+ok(/assertDownloadUrl/.test(updSec) && /verifyDownloaded/.test(updSec),
+  'APK-обновление проверяет источник, размер и контрольную сумму');
+ok(JSON.parse(fs.readFileSync('package.json', 'utf8')).version === VER,
+  'версия в package.json совпадает с APP_VERSION (иначе ПК-сборка вечно «видит» обновление)');
 
 console.log('\n[8] Контент про друзей');
 const cnt=fs.readFileSync('src/core/content.ts','utf8');
@@ -183,7 +219,7 @@ ok(st.includes('makeT'),'перевод подключён в стор');
 ok(fs.existsSync('src/ui/UpdateBanner.tsx')&&app.includes('<UpdateBanner'),'автопроверка обновлений при запуске');
 ok(fs.existsSync('src/ui/GameIcon.tsx'),'иконки игр векторные, без эмодзи');
 const home=fs.readFileSync('src/pages/Home.tsx','utf8');
-ok(home.includes('GameIcon')&&home.includes('onOpenProfile'),'уровень кликабельный, ведёт в статистику');
+ok(home.includes('GameTile')&&home.includes('onOpenProfile'),'плитки игр вынесены в GameTile, уровень ведёт в статистику');
 ok(!fs.existsSync('src/pages/AiPage.tsx')&&!fs.existsSync('src/core/ai.ts'),'режим ИИ удалён по просьбе пользователя');
 const bite=fs.readFileSync('src/games/ArtyomBite.tsx','utf8');
 ok(bite.includes('"rules"'),'у «Зубов Артёма» есть экран правил');
@@ -327,30 +363,90 @@ ok(fs.readFileSync('src/games/shell.tsx', 'utf8').includes('ModeBadge'),
   'во время игры видно активный режим');
 
 /*
- * ПК-версия: масштабирование сцены, разрешения и обновление из программы.
+ * ПК-ВЕРСИЯ: масштаб, верхняя панель, две зоны на главной, заставка.
+ *
+ * Проверки здесь — это закрепленный договор, а не формальность:
+ * пользователь прямо просил (1) не «жидкое стекло с цветами», а игровую
+ * тему чёрный/оранжевый/белый/серый + акценты, (2) слева плитку мини-игр,
+ * идущую вниз, справа — сведения, (3) открытие на весь экран с F11-переключателем,
+ * (4) нормальную заставку вместо «сжатого бургера».
+ * Если это снова уедет в сторону — сборка красная.
  */
 const dmain = fs.readFileSync('desktop/main.cjs', 'utf8');
 ok(!/maxWidth:/.test(dmain), 'ширина окна ПК больше не ограничена');
-ok(dmain.includes('preload.cjs'), 'preload подключён к окну');
+ok(dmain.includes('preload.cjs'), 'preload подключен к окну');
 ok(dmain.includes('update:check') && dmain.includes('update:download'),
   'ПК умеет проверять и ставить обновление сам');
 ok(dmain.includes('win:toggleFullscreen') && dmain.includes('win:resize'),
   'окном можно управлять из игры');
+ok(/setFullScreen\(/.test(dmain) && dmain.includes('window.json'),
+  'ПК стартует полноэкранным и помнит выбор окна');
 const pre = fs.readFileSync('desktop/preload.cjs', 'utf8');
 ok(!/require\("(?!electron)/.test(pre),
   'preload не тянет модули, недоступные в песочнице');
+ok(pre.includes('toggleFullscreen'), 'из игры полный экран переключается через мост');
 const stg23 = fs.readFileSync('src/core/stage.ts', 'utf8');
 ok(stg23.includes('autoScale') && stg23.includes('computeScale'),
   'крупность интерфейса на ПК подстраивается под окно');
-// ПК-версия больше не «телефон по центру монитора»: интерфейс альбомный,
-// главный экран раскладывается гридом на зоны.
+
+// ПК-версия больше не «телефон по центру монитора» и не боковая панель:
+// интерфейс альбомный, разделы — в верхней панели.
 const cssPc23 = fs.readFileSync('src/index.css', 'utf8');
-ok(cssPc23.includes(".pc-home") && cssPc23.includes("grid-template-columns"),
+ok(cssPc23.includes('.pc-home') && cssPc23.includes('grid-template-columns'),
   'на ПК главный экран раскладывается альбомно');
-ok(!cssPc23.includes("--stage-scale"),
+ok(!cssPc23.includes('--stage-scale'),
   'телефонная сцена по центру монитора убрана');
-ok(fs.readFileSync('src/ui/PcSidebar.tsx', 'utf8').includes('ITEMS'),
-  'на ПК разделы вынесены в боковую панель');
+ok(!fs.existsSync('src/ui/PcSidebar.tsx') && fs.existsSync('src/ui/pc/PcTopBar.tsx'),
+  'боковая панель убрана, разделы переехали в верхнюю');
+const topbar = fs.readFileSync('src/ui/pc/PcTopBar.tsx', 'utf8');
+ok(topbar.includes('CHUBUGAMES') && topbar.includes('F11'),
+  'в панели есть знак, кошелёк и подсказка по клавишам');
+ok(topbar.includes('"progress"') && topbar.includes('"settings"'),
+  'панель переключает все пять разделов');
+ok(/grid-template-columns:\s*minmax\(0, 1fr\) var\(--pc-rail\)/.test(cssPc23),
+  'на главной слева — игры, справа — сведения');
+ok(cssPc23.includes('.pc-tiles') && /repeat\(auto-fill,\s*minmax\(15\.5rem/.test(cssPc23),
+  'плитка мини-игр считается от ширины окна, а не растягивается');
+ok(/\.pc-blocks,[\s\S]{0,40}\.pc-games\s*\{\s*display: contents;/.test(cssPc23),
+  'телефон и ПК делят одну разметку: контейнеры пустые до медиа-условия');
+ok(cssPc23.includes('.pc-play-wrap') && cssPc23.includes('.pc-play'),
+  'игра на ПК оформлена как экран устройства по центру');
+ok(home.includes('GameTile') && home.includes('onOpenProfile'),
+  'уровень кликабельный, ведёт в статистику');
+
+// заставка: одна на оба интерфейса, размер — от окна
+const boot = fs.readFileSync('src/ui/BootScreen.tsx', 'utf8');
+ok(!fs.existsSync('src/ui/PcBoot.tsx'),
+  'двух разных заставок (телефонной и ПК) больше нет');
+ok(boot.includes('BURGER_PATHS') && boot.includes('SplashMark'),
+  'заставка собирает знак из тех же путей, что и иконка');
+ok(boot.includes('Sparks') && boot.includes('isLowFx'),
+  'на слабом железе заставка без частиц');
+ok(/font-size:\s*clamp\(1\.85rem,\s*4\.6vw/.test(cssPc23),
+  'название на заставке масштабируется от окна, а не вписано в 340 px');
+ok(boot.includes('STAGES') && boot.includes('maxMs'),
+  'у заставки есть реальные стадии и потолок длительности');
+
+// бренд и темы
+ok(fs.existsSync('branding/logo.svg') && fs.existsSync('branding/mark.svg')
+  && fs.existsSync('branding/mark-mono.svg'),
+  'векторный знак лежит в репозитории');
+const pkgJson = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+ok(pkgJson.scripts && pkgJson.scripts.icons && fs.existsSync('scripts/build-icons.mjs'),
+  'все иконки перегенерируются одной командой (npm run icons)');
+const brand = fs.readFileSync('src/ui/Brand.tsx', 'utf8');
+ok(brand.includes('var(--acc)') && !brand.includes('.png'),
+  'знак в интерфейсе — вектор, он красится акцентом темы');
+const types23 = fs.readFileSync('src/core/types.ts', 'utf8');
+ok(types23.includes('"dark" | "graphite" | "light"'),
+  'базовых темы три: чёрный, графит, белый');
+const content23 = fs.readFileSync('src/core/content.ts', 'utf8');
+ok(content23.includes('#FF7A18') && content23.indexOf('"ember"') < content23.indexOf('"amber"'),
+  'акцент по умолчанию — оранжевый «уголёк», он первый в списке');
+ok(fs.readFileSync('src/core/save.ts', 'utf8').includes('accent: "ember"'),
+  'новый профиль стартует с бесплатного акцента');
+ok(cssPc23.includes('html.graphite'),
+  'тема «графит» описана в палитре, а не только в настройке');
 ok(fs.readFileSync('src/App.tsx', 'utf8').includes('chub:nav'),
   'разделы переключаются с клавиатуры');
 const wfDesk = fs.readFileSync('.github/workflows/build-desktop.yml', 'utf8');

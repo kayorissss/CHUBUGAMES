@@ -193,7 +193,13 @@ export function Tap({
       onPointerUp={cancelLp}
       onPointerLeave={cancelLp}
       onPointerCancel={cancelLp}
-      onContextMenu={(e) => { if (onLongPress) e.preventDefault(); }}
+      onContextMenu={(e) => {
+        if (!onLongPress) return;
+        e.preventDefault();
+        // Долгого тапа на мыши нет, а закреплять игры как-то надо:
+        // правый клик делает ровно то же самое, что и долгий тап.
+        if (e.nativeEvent?.button === 2) onLongPress();
+      }}
       onClick={() => {
         if (disabled) return;
         // после долгого нажатия обычный клик игнорируем
@@ -307,10 +313,10 @@ export function Screen({
   scroll?: boolean; sub?: string;
 }) {
   return (
-    <div className="h-full flex flex-col">
+    <div className="h-full flex flex-col pc-page">
       {title && (
         <div
-          className="flex items-center justify-between gap-3 shrink-0"
+          className="flex items-center justify-between gap-3 shrink-0 pc-page-head"
           style={{
             padding: "0 16px 12px",
             paddingTop: "calc(var(--sat) + 14px)",
@@ -324,7 +330,7 @@ export function Screen({
         </div>
       )}
       <div
-        className={scroll ? "flex-1 scroll" : "flex-1"}
+        className={scroll ? "flex-1 scroll pc-page-body" : "flex-1 pc-page-body"}
         style={{
           padding: "0 16px",
           paddingBottom: "calc(var(--sab) + 104px)",
