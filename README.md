@@ -4,8 +4,8 @@
 
 | Куда | Файл | Ссылка |
 |---|---|---|
-| **Компьютер — обычный способ** | `CHUBGAMES-setup.exe` — устанавливает игру, ярлык на рабочем столе, обновляется кнопкой внутри | **[СКАЧАТЬ ДЛЯ ПК](https://github.com/kayorissss/CHUBUGAMES/releases/download/desktop/CHUBGAMES-1.23.0-setup.exe)** |
-| **Компьютер — без установки** | `CHUBGAMES-portable.exe` — просто запускается, живёт одним файлом, можно носить на флешке | [Portable-версия](https://github.com/kayorissss/CHUBUGAMES/releases/download/desktop/CHUBGAMES-1.23.0-portable.exe) |
+| **Компьютер — обычный способ** | `CHUBUGAMES-setup.exe` — устанавливает игру, ярлык на рабочем столе, обновляется кнопкой внутри | **[СКАЧАТЬ ДЛЯ ПК](https://github.com/kayorissss/CHUBUGAMES/releases/download/desktop/CHUBUGAMES-1.24.0-setup.exe)** |
+| **Компьютер — без установки** | `CHUBUGAMES-portable.exe` — просто запускается, живёт одним файлом, можно носить на флешке | [Portable-версия](https://github.com/kayorissss/CHUBUGAMES/releases/download/desktop/CHUBUGAMES-1.24.0-portable.exe) |
 | **Телефон (Android)** | `CHUBGAMES.apk` | [Скачать APK](https://github.com/kayorissss/CHUBUGAMES/releases/download/latest/CHUBGAMES.apk) |
 
 **Чем отличаются две версии для ПК?** Игра внутри одинаковая. `setup` ставится в систему как обычная программа
