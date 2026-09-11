@@ -386,19 +386,20 @@ jobs:
           } > RELEASE_BODY.md
           cat RELEASE_BODY.md
 
+      # Причина та же, что в build-desktop.yml: gh вместо action-gh-release.
       - name: Publish APK to Releases
         if: steps.kind.outputs.release == 'true'
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: latest
-          name: "Android-сборка ${{ env.APP_VER }}"
-          body_path: RELEASE_BODY.md
-          files: |
-            CHUBUGAMES.apk
-            CHUBUGAMES.apk.sha256
-          make_latest: true
+        run: |
+          if ! gh release view latest >/dev/null 2>&1; then
+            gh release create latest --latest --title "Android-сборка $APP_VER" --notes-file RELEASE_BODY.md
+          else
+            gh release edit latest --title "Android-сборка $APP_VER" --notes-file RELEASE_BODY.md --latest
+          fi
+          gh release upload latest CHUBUGAMES.apk CHUBUGAMES.apk.sha256 --clobber
+          echo "--- что теперь лежит в релизе latest ---"
+          gh release view latest --json assets -q '.assets[].name'
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       # Тег latest остаётся точкой публикации: на него ведут ссылка внутри
       # самого приложения (updater спрашивает releases/tags/latest), ссылки в

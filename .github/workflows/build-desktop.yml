@@ -217,19 +217,26 @@ jobs:
           } > DESKTOP_BODY.md
           cat DESKTOP_BODY.md
 
+      # Публикуем самим gh, а не сторонним action: в прогоне из тега шаг с
+      # softprops/action-gh-release падал с exit 1 без внятного сообщения
+      # (он пытался привести к согласию уже существующий релиз desktop и
+      # тег, из которого запущен прогон). gh делает ровно то, что написано,
+      # и ошибку печатает текстом, а не «Process completed».
       - name: Publish EXE to Releases
         if: steps.kind.outputs.release == 'true'
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: desktop
-          name: "PC-сборка ${{ env.APP_VER }}"
-          body_path: DESKTOP_BODY.md
-          files: |
-            desktop-out/*.exe
-            desktop-out/checksums.sha256
-          make_latest: false
+        shell: bash
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if ! gh release view desktop >/dev/null 2>&1; then
+            gh release create desktop --title "PC-сборка $APP_VER" --notes-file DESKTOP_BODY.md
+          else
+            gh release edit desktop --title "PC-сборка $APP_VER" --notes-file DESKTOP_BODY.md
+          fi
+          gh release upload desktop desktop-out/*.exe desktop-out/checksums.sha256 --clobber
+          echo "--- что теперь лежит в релизе desktop ---"
+          gh release view desktop --json assets -q '.assets[].name'
+
 
       # Устаревшие exe удаляем ПОСЛЕ загрузки новых: если почистить заранее,
       # а публикация упадёт, в релизе не останется вообще ничего и ссылка
