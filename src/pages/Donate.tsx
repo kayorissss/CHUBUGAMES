@@ -50,18 +50,33 @@ export default function Donate({ onBack }: { onBack: () => void }) {
           r="xl"
           strong
           style={{
-            padding: 22,
+            padding: 26,
             marginBottom: 14,
             textAlign: "center",
+            position: "relative",
+            overflow: "hidden",
             border: "1.5px solid rgba(255,176,32,0.45)",
             background:
-              "radial-gradient(120% 90% at 50% 0%, rgba(255,176,32,0.14), transparent 70%)",
+              "radial-gradient(120% 90% at 50% 0%, rgba(255,176,32,0.16), transparent 70%)",
           }}
         >
+          {/* Живой фон: мягкие блики, которые медленно дышат */}
+          <motion.div
+            className="absolute pointer-events-none"
+            animate={{ opacity: [0.5, 0.85, 0.5], scale: [1, 1.12, 1] }}
+            transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }}
+            style={{
+              inset: -40,
+              background:
+                "radial-gradient(closest-side at 30% 25%, rgba(255,176,32,0.22), transparent 70%)," +
+                "radial-gradient(closest-side at 74% 60%, rgba(255,107,90,0.16), transparent 72%)",
+            }}
+          />
+
           <motion.span
-            className="inline-flex items-center justify-center"
-            animate={{ scale: [1, 1.06, 1] }}
-            transition={{ duration: 2.4, repeat: Infinity, ease: "easeInOut" }}
+            className="inline-flex items-center justify-center relative"
+            animate={{ scale: [1, 1.07, 1], y: [0, -4, 0] }}
+            transition={{ duration: 2.8, repeat: Infinity, ease: "easeInOut" }}
             style={{
               width: 74, height: 74, borderRadius: "var(--r-lg)",
               background: "var(--gold-soft)",
@@ -83,12 +98,35 @@ export default function Donate({ onBack }: { onBack: () => void }) {
             Любая сумма помогает и мотивирует пилить дальше.
           </div>
 
+          {/* Подсказка по суммам: так проще решиться, чем перед пустым полем */}
+          <div className="flex" style={{ gap: 8, marginBottom: 12, position: "relative" }}>
+            {["100 ₽", "300 ₽", "500 ₽", tr("своя")].map((x, i) => (
+              <motion.button
+                key={x}
+                type="button"
+                onClick={() => open(DONATE_URL)}
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.1 + i * 0.05 }}
+                className="t-num flex-1"
+                style={{
+                  padding: "10px 0", fontSize: 12, borderRadius: "var(--r-sm)",
+                  background: "var(--surface-2)",
+                  border: "1px solid var(--btn-brd)",
+                  color: "var(--text)",
+                }}
+              >
+                {x}
+              </motion.button>
+            ))}
+          </div>
+
           <Tap
             onClick={() => open(DONATE_URL)}
             accent
             r="md"
             center
-            className="w-full py-4 t-title"
+            className="w-full py-4 t-title relative"
             style={{ fontSize: 15 }}
             sound="coin"
           >

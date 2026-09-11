@@ -5,7 +5,7 @@ import { Aurora } from "./ui/Glass";
 import Nav, { type Tab } from "./components/Nav";
 
 /** Подстраницы поверх вкладок */
-export type SubPage = "network" | "casino" | "donate" | "boss";
+export type SubPage = "network" | "casino" | "donate" | "boss" | "fanfic";
 import { Toasts, OfflineModal } from "./components/Overlays";
 import UpdateBanner from "./ui/UpdateBanner";
 import WhatsNew from "./ui/WhatsNew";
@@ -21,6 +21,7 @@ import { upcomingBosses } from "./core/bosses";
 import { applyPerfMode, isLowFx, measurePerfOnce } from "./core/perf";
 import { initDesktopKeys, initStage, isDesktop } from "./core/desktop";
 import PcBoot from "./ui/PcBoot";
+import FanficPage from "./pages/Fanfic";
 import Home from "./pages/Home";
 import { ModesProvider } from "./core/modes";
 import Casino from "./pages/Casino";
@@ -343,6 +344,7 @@ function Shell() {
             {sub === "casino" && <Casino onBack={() => setSub(null)} />}
             {sub === "donate" && <Donate onBack={() => setSub(null)} />}
             {sub === "boss" && <BossFight onBack={() => setSub(null)} />}
+            {sub === "fanfic" && <FanficPage onBack={() => setSub(null)} />}
           </motion.div>
         )}
       </AnimatePresence>

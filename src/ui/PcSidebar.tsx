@@ -31,6 +31,7 @@ const ITEMS: { id: Tab; label: string; icon: IconName }[] = [
 const EXTRA: { id: SubPage; label: string; icon: IconName; tone: string }[] = [
   { id: "casino", label: "Казино", icon: "dice", tone: "var(--violet)" },
   { id: "network", label: "Сеть", icon: "wifi", tone: "var(--info)" },
+  { id: "fanfic", label: "Фанфики", icon: "note", tone: "var(--violet)" },
   { id: "donate", label: "Поддержать", icon: "heart", tone: "var(--gold)" },
 ];
 

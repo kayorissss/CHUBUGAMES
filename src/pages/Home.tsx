@@ -203,6 +203,36 @@ export default function Home({
       {/* Ежечасный сундук — повод заглянуть между парами */}
       <ChestCard />
 
+      {/* Сборник фанфиков — читалка с озвучкой */}
+      {onOpen && (
+        <Tap
+          onClick={() => onOpen("fanfic")}
+          r="lg"
+          className="w-full"
+          style={{ padding: 12, marginBottom: 10, display: "block" }}
+          sound="click"
+        >
+          <span className="flex items-center" style={{ gap: 11 }}>
+            <span
+              className="shrink-0 flex items-center justify-center"
+              style={{
+                width: 36, height: 36, borderRadius: "var(--r-sm)",
+                background: "var(--violet-soft)", color: "var(--violet)",
+              }}
+            >
+              <Icon name="note" size={17} />
+            </span>
+            <span className="flex-1 min-w-0">
+              <span className="t-title-sm block clip1">{tr("Фанфики")}</span>
+              <span className="t-caption block clip1" style={{ marginTop: 2, fontSize: 9.5 }}>
+                {tr("Читалка с озвучкой и подсветкой строки")}
+              </span>
+            </span>
+            <Icon name="chevron" size={14} />
+          </span>
+        </Tap>
+      )}
+
       {/* Босс — главная плашка экрана */}
       {onOpen && (
         <Tap
