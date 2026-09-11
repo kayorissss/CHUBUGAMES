@@ -1,4 +1,4 @@
-name: Build CHUBGAMES APK
+name: Build CHUBUGAMES APK
 
 # СБОРКА И ПУБЛИКАЦИЯ РАЗДЕЛЕНЫ ПО СМЫСЛУ.
 #
@@ -289,24 +289,56 @@ jobs:
       - name: Make gradlew executable
         run: chmod +x android/gradlew
 
+      # Тип сборки зависит от того, что это за прогон:
+      #  • РЕЛИЗ (тег v* или dispatch c publish=true) — assembleRelease.
+      #    Без секретов CHUB_KEYSTORE_* он не соберётся: неподписанный
+      #    release-APK нельзя ни поставить поверх предыдущего, ни отдать
+      #    людям как обновление, поэтому скрипт настройки подписи сам
+      #    завершает прогон ошибкой.
+      #  • ВЕТКА/PR — assembleDebug: быстрая проверка, что сборка жива и
+      #    ставится на телефон. Раньше на ветках тоже шёл assembleRelease и
+      #    падал он не на полезном, а на имени файла: Gradle кладёт
+      #    неподписанный результат в app-release-unsigned.apk.
+      #
       # Пароли передаются свойствами Gradle и в git не пишутся.
-      - name: Build Release APK
+      - name: Build APK
         env:
           CHUB_KEYSTORE_PASSWORD: ${{ secrets.CHUB_KEYSTORE_PASSWORD }}
           CHUB_KEY_ALIAS: ${{ secrets.CHUB_KEY_ALIAS }}
           CHUB_KEY_PASSWORD: ${{ secrets.CHUB_KEY_PASSWORD }}
         run: |
           cd android
+          TASK=assembleDebug
+          if [ "${{ steps.kind.outputs.release }}" = "true" ]; then
+            TASK=assembleRelease
+          fi
+          echo "тип сборки: $TASK"
           ARGS="--no-daemon --stacktrace"
           if [ -n "$CHUB_KEYSTORE_PASSWORD" ]; then
             ARGS="$ARGS -PchubStorePassword=$CHUB_KEYSTORE_PASSWORD"
             ARGS="$ARGS -PchubKeyAlias=${CHUB_KEY_ALIAS:-chubgames}"
             ARGS="$ARGS -PchubKeyPassword=${CHUB_KEY_PASSWORD:-$CHUB_KEYSTORE_PASSWORD}"
           fi
-          ./gradlew assembleRelease $ARGS
+          ./gradlew $TASK $ARGS
 
+      # Ищем результат в обеих папках: путь у Gradle зависит от типа сборки,
+      # а следующий шаг (проверка подписи) должен получить файл всегда.
       - name: Rename APK
-        run: mv android/app/build/outputs/apk/release/app-release.apk CHUBUGAMES.apk
+        run: |
+          SRC=$(ls -1t android/app/build/outputs/apk/*/*.apk 2>/dev/null | head -1)
+          if [ -z "$SRC" ]; then
+            echo "Gradle не оставил APK. Что есть в outputs:"
+            find android/app/build/outputs -maxdepth 3 | sed -n '1,25p'
+            exit 1
+          fi
+          echo "свежий APK: $SRC"
+          case "$SRC" in
+            *unsigned*)
+              echo "::error::APK собран без подписи (нет секрета CHUB_KEYSTORE_PASSWORD)"
+              if [ "${{ steps.kind.outputs.release }}" = "true" ]; then exit 1; fi
+              ;;
+          esac
+          mv "$SRC" CHUBUGAMES.apk
 
       # Проверяем подпись ДО публикации: debug-ключ в релизе — это сломанные
       # обновления у всех, кто уже поставил игру, и заметить это постфактум
