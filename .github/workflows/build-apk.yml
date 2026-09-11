@@ -244,6 +244,22 @@ jobs:
           fi
           echo "иконка на месте: $(stat -c%s "$B") Б"
 
+      # Отдельная и ранняя проверка: если секреты забыты, падение следующего
+      # шага должно быть объяснимо уже в логе, а не «node exited 1».
+      # Секреты читаем через env, а не подстановкой прямо в команду: пароль с
+      # кавычкой или скобкой иначе сломал бы весь shell-шаг.
+      - name: Are the signing secrets configured
+        env:
+          CHUB_KEYSTORE_B64: ${{ secrets.CHUB_KEYSTORE_B64 }}
+          CHUB_KEYSTORE_PASSWORD: ${{ secrets.CHUB_KEYSTORE_PASSWORD }}
+        run: |
+          if [ -z "$CHUB_KEYSTORE_B64" ] || [ -z "$CHUB_KEYSTORE_PASSWORD" ]; then
+            echo "::warning::Секреты подписи не заданы — APK соберётся debug-подписью и в релиз не попадёт. Инструкция: android-signing/README.md"
+          else
+            echo "секреты подписи на месте"
+          fi
+        continue-on-error: true
+
       # Постоянный ключ подписи и номер версии. Без постоянного ключа каждая
       # сборка подписывалась бы новым debug-ключом, и Android отказывался бы
       # ставить обновление поверх с ошибкой «конфликт пакетов».
@@ -261,15 +277,6 @@ jobs:
           # подписи скрипт завернёт сам.
           CHUB_ALLOW_UNSIGNED: ${{ steps.kind.outputs.release == 'true' && '0' || '1' }}
         run: node scripts/setup-android-signing.mjs "$APP_VER" "${{ github.run_number }}"
-
-      - name: Are the signing secrets configured
-        run: |
-          if [ -z "${{ secrets.CHUB_KEYSTORE_PASSWORD }}" ]; then
-            echo "::warning::Секрет CHUB_KEYSTORE_PASSWORD не задан — APK будет без релизной подписи"
-          else
-            echo "секреты подписи на месте"
-          fi
-        continue-on-error: true
 
       # Плагин фоновой проверки поставляется вместе с нативной библиотекой
       # android-js-engine-release.aar. Без этой строки Gradle её не найдёт
