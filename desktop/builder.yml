@@ -13,7 +13,11 @@ copyright: KAYORISAN
 
 directories:
   output: desktop-out
-  buildResources: desktop
+  # ВАЖНО: buildResources НЕ должен совпадать с папкой, где лежит main.cjs.
+  # electron-builder всегда исключает buildResources из пакета
+  # (fileMatcher.js: customFirstPatterns.push(`!${relativeBuildResourceDir}`)),
+  # и оболочка рискует не попасть внутрь .exe. Держим ресурсы отдельно.
+  buildResources: desktop/res
 
 # Что попадает внутрь приложения
 files:
@@ -30,7 +34,7 @@ asarUnpack:
   - "dist/femboichik.mp3"
 
 win:
-  icon: desktop/icon.ico
+  icon: desktop/res/icon.ico
   # Без подписи Windows SmartScreen покажет предупреждение — это ожидаемо
   # для бесплатной сборки, объяснение есть в README.
   signAndEditExecutable: true
@@ -56,7 +60,7 @@ nsis:
 
 # Linux-сборка идёт «бесплатно» — тот же код, полезно для тестов
 linux:
-  icon: desktop/icon.png
+  icon: desktop/res/icon.png
   category: Game
   target:
     - target: AppImage
