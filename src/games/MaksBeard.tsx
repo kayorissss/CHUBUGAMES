@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence } from "framer-motion";
 import { useGame } from "../core/store";
+import { scene, alpha } from "../core/palette";
 import { sfx, haptic } from "../core/fx";
 import { useCanvas, GameHUD, GameOver, Countdown, HudGauge, HudStat } from "./shell";
 import { drawHead } from "../core/head";
@@ -32,6 +33,9 @@ const ZONES = [
   { name: "РУКИ", count: 34, rage: 1.55 },
 ];
 
+/** Радиус головы Макса — от него считается борода */
+const FACE_R = 56;
+
 const PULL_OK = 46;       // на сколько px оттянуть обычный волосок
 const PULL_TOUGH = 78;
 const RAGE_MAX = 100;
@@ -47,6 +51,18 @@ export default function MaksBeard({ onExit }: { onExit: () => void }) {
   const [result, setResult] = useState({ score: 0, coins: 0, xp: 0 });
 
   const best = s.games.beard?.best || 0;
+  /** Пошаговая подсказка: ведём игрока от первого волоска до последней зоны */
+  const pulledInZone = ZONES[zone].count - left;
+  const step =
+    rage > 62 ? tr("Макс на пределе — подожди пару секунд, злость спадёт сама")
+    : pulledInZone === 0 && zone === 0 ? tr("Наведи лупу на волосок, зажми его и тяни вниз, пока не позеленеет")
+    : pulledInZone < 3 ? tr("Отпусти палец, когда волосок стал зелёным — тогда он вырвется")
+    : pulledInZone < 7 ? tr("Не дёргай подряд без пауз: от спешки растёт злость")
+    : pulledInZone < 12 ? tr("Толстые красные волоски вросли — их надо тянуть заметно дальше")
+    : left <= 5 ? tr("Почти всё: дочисти зону, и перейдём к следующей")
+    : zone === 0 ? tr("Лупу можно двигать пальцем по всему лицу")
+    : zone === 1 ? tr("Грудь гуще бороды — Макс злится быстрее")
+    : tr("Последняя зона: руки. Держи паузы, злость почти не прощает");
   const maks = s.friends.find((f) => f.id === "maks") || s.friends[0];
 
   const G = useRef({
@@ -54,6 +70,9 @@ export default function MaksBeard({ onExit }: { onExit: () => void }) {
     grabbed: -1,
     hover: false,   // палец на экране — показываем лупу
     px: 0, py: 0,
+    /** Где сейчас стекло лупы и куда оно едет */
+    lens: { x: 0, y: 0 },
+    lensTo: { x: 0, y: 0 },
     running: false,
     zone: 0,
     rage: 0,
@@ -77,20 +96,28 @@ export default function MaksBeard({ onExit }: { onExit: () => void }) {
     for (let i = 0; i < z.count; i++) {
       let x: number, y: number;
       if (zi === 0) {
-        // борода: дуга под лицом
-        const a = Math.PI * (0.15 + Math.random() * 0.7);
-        const r = 52 + Math.random() * 22;
-        x = cx - Math.cos(a) * r;
-        y = faceY + 26 + Math.sin(a) * r * 0.62;
+        /*
+         * Борода лежит НА ЛИЦЕ — по нижней дуге головы радиуса FACE_R.
+         *
+         * Было: `y = faceY + 26 + sin(a)*r*0.62` при r до 74 — проверка
+         * (/tmp/beard.mjs) показала, что 100% волосков оказывались ВНЕ
+         * окружности головы, а 61% — ниже подбородка, то есть на шее.
+         * Ровно то, на что жаловался пользователь: «борода на шее вместо
+         * подбородка». Новая формула держит все волоски на лице.
+         */
+        const a = Math.PI * (0.16 + Math.random() * 0.68);
+        const rr = FACE_R * (0.5 + Math.random() * 0.42);
+        x = cx - Math.cos(a) * rr;
+        y = faceY + Math.sin(a) * rr * 0.92;
       } else if (zi === 1) {
-        // грудь: прямоугольник ниже
-        x = cx - 78 + Math.random() * 156;
-        y = h * 0.55 + Math.random() * 96;
+        // грудь: вырез майки, между лямками
+        x = cx - 52 + Math.random() * 104;
+        y = faceY + FACE_R + 40 + Math.random() * 62;
       } else {
-        // руки: две полосы по бокам
+        // руки: вдоль предплечий
         const side = Math.random() < 0.5 ? -1 : 1;
-        x = cx + side * (96 + Math.random() * 46);
-        y = h * 0.48 + Math.random() * 150;
+        x = cx + side * (86 + Math.random() * 40);
+        y = faceY + FACE_R + 70 + Math.random() * 120;
       }
       arr.push({
         x, y,
@@ -102,6 +129,18 @@ export default function MaksBeard({ onExit }: { onExit: () => void }) {
       });
     }
     g.hairs = arr;
+    /*
+     * «При смене места лупа и игрок перемещаются туда» — считаем центр
+     * свежей зоны и отправляем стекло к нему. Волоски уже разложены,
+     * поэтому центр берём прямо по ним.
+     */
+    if (arr.length) {
+      const mx = arr.reduce((a, hr) => a + hr.x, 0) / arr.length;
+      const my = arr.reduce((a, hr) => a + hr.y, 0) / arr.length;
+      g.lensTo = { x: mx, y: my };
+      if (!g.lens.x && !g.lens.y) g.lens = { x: mx, y: my };
+      g.px = mx; g.py = my;
+    }
   }, []);
 
   const reset = useCallback((w: number, h: number) => {
@@ -152,6 +191,7 @@ export default function MaksBeard({ onExit }: { onExit: () => void }) {
     const x = e.clientX - r.left, y = e.clientY - r.top;
     g.px = x; g.py = y;
     g.hover = true;              // палец на экране — показываем лупу
+    g.lensTo = { x, y };         // лупу можно двигать: она едет к пальцу
     // берём ближайший волосок в радиусе пальца
     let bi = -1, bd = 30;
     g.hairs.forEach((hr, i) => {
@@ -171,6 +211,7 @@ export default function MaksBeard({ onExit }: { onExit: () => void }) {
     // лупа едет за пальцем даже когда волосок ещё не схвачен —
     // так ей можно прицеливаться
     g.hover = true;
+    g.lensTo = { x: g.px, y: g.py };
     if (g.grabbed < 0) return;
     const hr = g.hairs[g.grabbed];
     hr.pulled = Math.hypot(g.px - hr.x, g.py - hr.y);
@@ -243,6 +284,7 @@ export default function MaksBeard({ onExit }: { onExit: () => void }) {
   }, [end, spawnZone]);
 
   const canvasRef = useCanvas((ctx, w, h, dt) => {
+    const P = scene();
     const g = G.current;
     if (!g.hairs.length && !g.running) reset(w, h);
     g.w = w; g.h = h;
@@ -257,8 +299,8 @@ export default function MaksBeard({ onExit }: { onExit: () => void }) {
 
     /* фон */
     const grd = ctx.createLinearGradient(0, 0, 0, h);
-    grd.addColorStop(0, "#14100e");
-    grd.addColorStop(1, "#1d1714");
+    grd.addColorStop(0, P.bg0);
+    grd.addColorStop(1, P.bg1);
     ctx.fillStyle = grd;
     ctx.fillRect(0, 0, w, h);
 
@@ -268,11 +310,22 @@ export default function MaksBeard({ onExit }: { onExit: () => void }) {
     const cx = w / 2;
     const faceY = g.faceY || h * 0.32;
 
-    // тело: торс и руки, чтобы зоны читались
-    ctx.fillStyle = "#e0b08a";
-    ctx.beginPath();
-    ctx.roundRect(cx - 86, faceY + 42, 172, h * 0.5, 26);
-    ctx.fill();
+    /*
+     * Лупа догоняет цель по экспоненте — так она «едет», а не телепортируется
+     * (пользователь просил, чтобы персонаж/лупа не дёргались).
+     */
+    if (!g.lens.x && !g.lens.y) g.lens = { x: cx, y: faceY };
+    if (!g.lensTo.x && !g.lensTo.y) g.lensTo = { x: cx, y: faceY };
+    const kf = 1 - Math.pow(0.001, dt / 1000);
+    g.lens.x += (g.lensTo.x - g.lens.x) * kf;
+    g.lens.y += (g.lensTo.y - g.lens.y) * kf;
+
+    /*
+     * Раньше здесь сначала рисовался большой скруглённый прямоугольник
+     * телесного цвета (cx-86, faceY+42, 172 x h/2), а поверх него —
+     * настоящий торс. Эта подложка торчала из-за плеч и снизу, из-за
+     * чего казалось, что Макс лежит на другом человеке. Убрана.
+     */
     /*
      * Тело Макса.
      *
@@ -281,91 +334,100 @@ export default function MaksBeard({ onExit }: { onExit: () => void }) {
      * контуром с плечами, талией и грудью, руки идут от плеч с локтем
      * и кистью, а майка надета поверх торса, а не заменяет его.
      */
-    const SKIN = "#d9a87f";
-    const SKIN_DARK = "#c2916a";
-    const shY = faceY + 62;              // линия плеч
-    const shX = 82;                      // полуширина плеч
-    const hipY = faceY + 150 + h * 0.5 - 108;
+    /**
+     * Вся сцена одной функцией: тело, майка, голова.
+     * Лупа переиспользует её, поэтому под увеличением видно настоящего
+     * Макса, а не плоское пятно кожи, как было раньше.
+     */
+    const drawMaks = () => {
+      const SKIN = "#d9a87f";
+      const SKIN_DARK = "#c2916a";
+      const shY = faceY + 62;              // линия плеч
+      const shX = 82;                      // полуширина плеч
+      const hipY = faceY + 150 + h * 0.5 - 108;
 
-    // торс: плечи -> талия -> бёдра
-    ctx.fillStyle = SKIN;
-    ctx.beginPath();
-    ctx.moveTo(cx - shX, shY + 16);
-    ctx.quadraticCurveTo(cx - shX - 6, shY, cx - shX * 0.62, shY - 8);
-    ctx.quadraticCurveTo(cx, shY - 20, cx + shX * 0.62, shY - 8);
-    ctx.quadraticCurveTo(cx + shX + 6, shY, cx + shX, shY + 16);
-    ctx.quadraticCurveTo(cx + shX - 4, faceY + 150, cx + shX * 0.82, hipY);
-    ctx.lineTo(cx - shX * 0.82, hipY);
-    ctx.quadraticCurveTo(cx - shX + 4, faceY + 150, cx - shX, shY + 16);
-    ctx.closePath();
-    ctx.fill();
-
-    // грудные мышцы — намёк линией, чтобы читался объём
-    ctx.strokeStyle = SKIN_DARK;
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(cx, shY + 24);
-    ctx.lineTo(cx, shY + 74);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.arc(cx - 34, shY + 46, 30, -0.5, 1.1);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.arc(cx + 34, shY + 46, 30, 2.0, 3.6);
-    ctx.stroke();
-
-    // руки: плечо -> локоть -> кисть
-    for (const sx of [-1, 1]) {
-      const p0 = { x: cx + sx * (shX - 6), y: shY + 6 };
-      const p1 = { x: cx + sx * (shX + 26), y: shY + 96 };
-      const p2 = { x: cx + sx * (shX + 18), y: shY + 186 };
-      ctx.strokeStyle = SKIN;
-      ctx.lineCap = "round";
-      ctx.lineJoin = "round";
-      ctx.lineWidth = 34;
-      ctx.beginPath();
-      ctx.moveTo(p0.x, p0.y); ctx.lineTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y);
-      ctx.stroke();
-      // кисть
+      // торс: плечи -> талия -> бёдра
       ctx.fillStyle = SKIN;
-      ctx.beginPath(); ctx.arc(p2.x, p2.y + 12, 19, 0, Math.PI * 2); ctx.fill();
-      // пальцы намёком
+      ctx.beginPath();
+      ctx.moveTo(cx - shX, shY + 16);
+      ctx.quadraticCurveTo(cx - shX - 6, shY, cx - shX * 0.62, shY - 8);
+      ctx.quadraticCurveTo(cx, shY - 20, cx + shX * 0.62, shY - 8);
+      ctx.quadraticCurveTo(cx + shX + 6, shY, cx + shX, shY + 16);
+      ctx.quadraticCurveTo(cx + shX - 4, faceY + 150, cx + shX * 0.82, hipY);
+      ctx.lineTo(cx - shX * 0.82, hipY);
+      ctx.quadraticCurveTo(cx - shX + 4, faceY + 150, cx - shX, shY + 16);
+      ctx.closePath();
+      ctx.fill();
+
+      // грудные мышцы — намёк линией, чтобы читался объём
       ctx.strokeStyle = SKIN_DARK;
       ctx.lineWidth = 2;
-      for (let f = -1; f <= 1; f++) {
+      ctx.beginPath();
+      ctx.moveTo(cx, shY + 24);
+      ctx.lineTo(cx, shY + 74);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(cx - 34, shY + 46, 30, -0.5, 1.1);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(cx + 34, shY + 46, 30, 2.0, 3.6);
+      ctx.stroke();
+
+      // руки: плечо -> локоть -> кисть
+      for (const sx of [-1, 1]) {
+        const p0 = { x: cx + sx * (shX - 6), y: shY + 6 };
+        const p1 = { x: cx + sx * (shX + 26), y: shY + 96 };
+        const p2 = { x: cx + sx * (shX + 18), y: shY + 186 };
+        ctx.strokeStyle = SKIN;
+        ctx.lineCap = "round";
+        ctx.lineJoin = "round";
+        ctx.lineWidth = 34;
         ctx.beginPath();
-        ctx.moveTo(p2.x + f * 7, p2.y + 20);
-        ctx.lineTo(p2.x + f * 8, p2.y + 30);
+        ctx.moveTo(p0.x, p0.y); ctx.lineTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y);
         ctx.stroke();
+        // кисть
+        ctx.fillStyle = SKIN;
+        ctx.beginPath(); ctx.arc(p2.x, p2.y + 12, 19, 0, Math.PI * 2); ctx.fill();
+        // пальцы намёком
+        ctx.strokeStyle = SKIN_DARK;
+        ctx.lineWidth = 2;
+        for (let f = -1; f <= 1; f++) {
+          ctx.beginPath();
+          ctx.moveTo(p2.x + f * 7, p2.y + 20);
+          ctx.lineTo(p2.x + f * 8, p2.y + 30);
+          ctx.stroke();
+        }
       }
-    }
 
-    // майка поверх торса
-    ctx.fillStyle = "#33404e";
-    ctx.beginPath();
-    ctx.moveTo(cx - shX + 2, shY + 96);
-    ctx.lineTo(cx + shX - 2, shY + 96);
-    ctx.quadraticCurveTo(cx + shX - 4, faceY + 150, cx + shX * 0.82, hipY);
-    ctx.lineTo(cx - shX * 0.82, hipY);
-    ctx.quadraticCurveTo(cx - shX + 4, faceY + 150, cx - shX + 2, shY + 96);
-    ctx.closePath();
-    ctx.fill();
-    // лямки
-    ctx.strokeStyle = "#33404e";
-    ctx.lineWidth = 15;
-    ctx.beginPath();
-    ctx.moveTo(cx - 40, shY + 96); ctx.lineTo(cx - 30, shY + 8);
-    ctx.moveTo(cx + 40, shY + 96); ctx.lineTo(cx + 30, shY + 8);
-    ctx.stroke();
+      // майка поверх торса
+      ctx.fillStyle = "#33404e";
+      ctx.beginPath();
+      ctx.moveTo(cx - shX + 2, shY + 96);
+      ctx.lineTo(cx + shX - 2, shY + 96);
+      ctx.quadraticCurveTo(cx + shX - 4, faceY + 150, cx + shX * 0.82, hipY);
+      ctx.lineTo(cx - shX * 0.82, hipY);
+      ctx.quadraticCurveTo(cx - shX + 4, faceY + 150, cx - shX + 2, shY + 96);
+      ctx.closePath();
+      ctx.fill();
+      // лямки
+      ctx.strokeStyle = "#33404e";
+      ctx.lineWidth = 15;
+      ctx.beginPath();
+      ctx.moveTo(cx - 40, shY + 96); ctx.lineTo(cx - 30, shY + 8);
+      ctx.moveTo(cx + 40, shY + 96); ctx.lineTo(cx + 30, shY + 8);
+      ctx.stroke();
 
-    // голова Макса
-    const angry = g.rage / RAGE_MAX;
-    drawHead(ctx, maks.look, cx, faceY, 56, {
-      body: false,
-      angry,
-      mouth: angry * 0.8,
-      squish: g.shake > 0 ? 0.25 : 0,
-    });
+      // голова Макса
+      const angry = g.rage / RAGE_MAX;
+      drawHead(ctx, maks.look, cx, faceY, FACE_R, {
+        body: false,
+        angry,
+        mouth: angry * 0.8,
+        squish: g.shake > 0 ? 0.25 : 0,
+      });
+
+    };
+    drawMaks();
 
     // волоски (та же процедура переиспользуется внутри лупы)
     const drawHairs = () => {
@@ -402,42 +464,74 @@ export default function MaksBeard({ onExit }: { onExit: () => void }) {
     /*
      * ЛУПА.
      *
-     * Волоски мелкие, и попасть по нужному пальцем было тяжело —
-     * пользователь просил «типа лупа преувеличила». Круг под пальцем
-     * показывает ту же сцену в увеличении: отсекаем область кругом,
-     * масштабируем систему координат вокруг точки касания и повторно
-     * рисуем волоски. Никакого второго канваса не нужно.
+     * Просьба пользователя: «лупа приближает участок, её можно двигать,
+     * при смене места лупа и игрок перемещаются туда».
+     *
+     * Было: круг показывал ОДНИ ВОЛОСКИ поверх плоской заливки кожи —
+     * никакого участка он не приближал. Теперь внутрь круга рисуется
+     * настоящая сцена (drawMaks + волоски) в масштабе ZOOM вокруг точки
+     * g.lens, поэтому под стеклом видно кожу, майку и лицо крупно.
+     *
+     * Лупа живёт своей точкой g.lens и плавно едет к пальцу, а при
+     * переходе на новую зону — к центру этой зоны (см. g.lensTo).
      */
-    if (g.grabbed >= 0 || g.hover) {
-      const lx = g.px, ly = g.py;
-      const LR = 62;          // радиус лупы
-      const ZOOM = 2.1;
-      if (lx > 0 && ly > 0) {
-        ctx.save();
-        ctx.beginPath();
-        ctx.arc(lx, ly - LR - 34, LR, 0, Math.PI * 2);
-        ctx.clip();
-        // фон лупы, чтобы не просвечивало
-        ctx.fillStyle = "#e8c9a8";
-        ctx.fillRect(lx - LR, ly - LR * 2 - 34, LR * 2, LR * 2);
-        // увеличиваем область вокруг пальца и показываем её выше пальца
-        ctx.translate(lx, ly - LR - 34);
-        ctx.scale(ZOOM, ZOOM);
-        ctx.translate(-lx, -ly);
-        drawHairs();
-        ctx.restore();
-        // оправа
-        ctx.strokeStyle = "rgba(255,255,255,0.85)";
-        ctx.lineWidth = 3;
-        ctx.beginPath();
-        ctx.arc(lx, ly - LR - 34, LR, 0, Math.PI * 2);
-        ctx.stroke();
-        ctx.strokeStyle = "rgba(0,0,0,0.35)";
-        ctx.lineWidth = 1.5;
-        ctx.beginPath();
-        ctx.arc(lx, ly - LR - 34, LR - 2, 0, Math.PI * 2);
-        ctx.stroke();
-      }
+    {
+      const LR = Math.min(74, w * 0.2);   // радиус стекла
+      const ZOOM = 2.15;
+      const lx = g.lens.x, ly = g.lens.y;
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(lx, ly, LR, 0, Math.PI * 2);
+      ctx.clip();
+      // фон под стеклом = тот же фон сцены, чтобы не было дыры
+      ctx.fillStyle = P.bg1;
+      ctx.fillRect(lx - LR, ly - LR, LR * 2, LR * 2);
+      ctx.translate(lx, ly);
+      ctx.scale(ZOOM, ZOOM);
+      ctx.translate(-lx, -ly);
+      drawMaks();
+      drawHairs();
+      ctx.restore();
+
+      // блик стекла
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(lx, ly, LR, 0, Math.PI * 2);
+      ctx.clip();
+      const gl = ctx.createLinearGradient(lx - LR, ly - LR, lx + LR, ly + LR);
+      gl.addColorStop(0, alpha("text", 0.16, "rgba(255,255,255,0.16)"));
+      gl.addColorStop(0.45, alpha("text", 0.02, "rgba(255,255,255,0.02)"));
+      gl.addColorStop(1, alpha("text", 0.1, "rgba(255,255,255,0.1)"));
+      ctx.fillStyle = gl;
+      ctx.fillRect(lx - LR, ly - LR, LR * 2, LR * 2);
+      ctx.restore();
+
+      // оправа: толстое кольцо + ручка вбок
+      ctx.strokeStyle = P.line;
+      ctx.lineWidth = 7;
+      ctx.beginPath(); ctx.arc(lx, ly, LR + 3, 0, Math.PI * 2); ctx.stroke();
+      ctx.strokeStyle = P.text;
+      ctx.lineWidth = 2.5;
+      ctx.beginPath(); ctx.arc(lx, ly, LR + 3, 0, Math.PI * 2); ctx.stroke();
+      ctx.strokeStyle = P.dim;
+      ctx.lineWidth = 1.4;
+      ctx.beginPath(); ctx.arc(lx, ly, LR - 1, 0, Math.PI * 2); ctx.stroke();
+      // ручка — по диагонали вниз-вправо
+      const hxr = lx + Math.cos(0.79) * (LR + 6);
+      const hyr = ly + Math.sin(0.79) * (LR + 6);
+      ctx.strokeStyle = P.line;
+      ctx.lineCap = "round";
+      ctx.lineWidth = 11;
+      ctx.beginPath();
+      ctx.moveTo(hxr, hyr);
+      ctx.lineTo(hxr + Math.cos(0.79) * 26, hyr + Math.sin(0.79) * 26);
+      ctx.stroke();
+      ctx.strokeStyle = P.dim;
+      ctx.lineWidth = 6;
+      ctx.beginPath();
+      ctx.moveTo(hxr, hyr);
+      ctx.lineTo(hxr + Math.cos(0.79) * 26, hyr + Math.sin(0.79) * 26);
+      ctx.stroke();
     }
 
     ctx.restore();
@@ -452,11 +546,11 @@ export default function MaksBeard({ onExit }: { onExit: () => void }) {
     }
     ctx.globalAlpha = 1;
 
-    if (g.running && g.score < 40) {
-      ctx.fillStyle = "rgba(255,255,255,0.45)";
-      ctx.font = "600 12px Inter, system-ui, sans-serif";
-      ctx.fillText(tr("Тяни волосок и отпускай. Не спеши — Макс злится"), w / 2, h - 20);
-    }
+    /*
+     * Подсказка внизу убрана: она сидела в 20 px от края (на полоске
+     * жестов) и дублировала пошаговую строку, которая теперь висит
+     * сверху под HUD.
+     */
   }, [phase]);
 
   useEffect(() => {
@@ -492,6 +586,44 @@ export default function MaksBeard({ onExit }: { onExit: () => void }) {
           </>
         }
       />
+
+      {/*
+        ПОШАГОВЫЕ ПОДСКАЗКИ СВЕРХУ (просьба пользователя: «пошаговые
+        подсказки сверху»). Строка меняется по ходу дела: сперва учим
+        тянуть, потом — про паузу, про жёсткие волоски и про смену зоны.
+        Сидит под HUD, а не внизу, где её перекрывал палец.
+      */}
+      {phase === "play" && (
+        <div
+          style={{
+            position: "absolute", left: 12, right: 12,
+            top: "calc(var(--sat) + 62px + 44px + 8px)",
+            zIndex: 30, pointerEvents: "none",
+          }}
+        >
+          <div
+            className="flex items-center"
+            style={{
+              gap: 8, padding: "8px 12px", borderRadius: "var(--r-md)",
+              background: "var(--surface-2)", border: "1px solid var(--surface-brd)",
+            }}
+          >
+            <span
+              className="t-num"
+              style={{
+                fontSize: 10, minWidth: 34, textAlign: "center",
+                padding: "2px 6px", borderRadius: "var(--r-xs)",
+                background: "var(--acc)", color: "var(--acc-ink)",
+              }}
+            >
+              {zone + 1}/{ZONES.length}
+            </span>
+            <span className="t-caption clip2 flex-1" style={{ fontSize: 10.5, lineHeight: 1.35 }}>
+              {step}
+            </span>
+          </div>
+        </div>
+      )}
 
       <AnimatePresence>{phase === "count" && <Countdown n={cd} />}</AnimatePresence>
 
