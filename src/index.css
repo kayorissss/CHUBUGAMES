@@ -1320,11 +1320,13 @@ html.is-desktop .only-pc {
   font-size: 0.6rem;
 }
 
-/* заголовок «CHUBUGAMES» на ПК не нужен — он уже в панели */
-.pc-only-mobile {
+/* Две утилиты-переключателя: то, что имеет смысл только на телефоне
+   (заголовок CHUBUGAMES — на ПК он уже в панели), и то, что имеет смысл
+   только с мышью (подсказка про правый клик). */
+.only-mobile {
   display: block;
 }
-html.is-desktop .pc-only-mobile {
+html.is-desktop .only-mobile {
   display: none !important;
 }
 
@@ -1430,6 +1432,9 @@ html.is-desktop .pc-tile:hover .pc-tile-badge {
 }
 html.is-desktop .pc-tile-top {
   margin-bottom: 0.7rem;
+}
+.pc-tile-tags {
+  gap: 0.4rem;
 }
 .pc-tile-tag {
   font-size: 0.5rem;

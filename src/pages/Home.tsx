@@ -139,7 +139,7 @@ export default function Home({
       >
         <div className="flex-1 min-w-0">
           <h1
-            className="t-display pc-only-mobile"
+            className="t-display only-mobile"
             style={{
               fontSize: 23,
               backgroundImage: "linear-gradient(94deg, var(--text) 30%, var(--acc))",
