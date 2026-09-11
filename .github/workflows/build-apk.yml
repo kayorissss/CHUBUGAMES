@@ -91,18 +91,59 @@ jobs:
       # поэтому сборка не зависит от скачивания доп. пакетов.
       - name: Install app icons
         run: |
+          RES=android/app/src/main/res
           for d in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
-            cp -v android-icons/mipmap-$d/*.png android/app/src/main/res/mipmap-$d/
+            mkdir -p $RES/mipmap-$d
+            cp -v android-icons/mipmap-$d/*.png $RES/mipmap-$d/
           done
+
           # фон adaptive-иконки: белый -> тёмный, под стиль приложения
           printf '%s\n' \
             '<?xml version="1.0" encoding="utf-8"?>' \
             '<resources>' \
             '    <color name="ic_launcher_background">#0D0D10</color>' \
             '</resources>' \
-            > android/app/src/main/res/values/ic_launcher_background.xml
-          echo "--- итоговый фон иконки ---"
-          cat android/app/src/main/res/values/ic_launcher_background.xml
+            > $RES/values/ic_launcher_background.xml
+
+          # Adaptive-иконка описывается XML в mipmap-anydpi-v26. Раньше мы
+          # надеялись на шаблон Capacitor и просто подменяли PNG — из-за
+          # этого foreground-слой мог остаться шаблонным. Теперь пишем XML
+          # сами: фон - цвет, поверх - бургер, плюс монохромный слой для
+          # тематических иконок Android 13+.
+          mkdir -p $RES/mipmap-anydpi-v26
+          for name in ic_launcher ic_launcher_round; do
+            printf '%s\n' \
+              '<?xml version="1.0" encoding="utf-8"?>' \
+              '<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">' \
+              '    <background android:drawable="@color/ic_launcher_background" />' \
+              '    <foreground android:drawable="@mipmap/ic_launcher_foreground" />' \
+              '    <monochrome android:drawable="@mipmap/ic_launcher_monochrome" />' \
+              '</adaptive-icon>' \
+              > $RES/mipmap-anydpi-v26/$name.xml
+          done
+
+          # Шаблон Capacitor может принести свои ic_launcher_foreground.xml
+          # (вектор-заглушка). Одноимённый XML перебивает наш PNG, поэтому
+          # такие файлы удаляем.
+          rm -fv $RES/drawable*/ic_launcher_foreground.xml || true
+          rm -fv $RES/drawable*/ic_launcher_background.xml || true
+
+          echo "--- итоговые ресурсы иконки ---"
+          ls -la $RES/mipmap-anydpi-v26/ $RES/mipmap-xxxhdpi/
+          cat $RES/mipmap-anydpi-v26/ic_launcher.xml
+          cat $RES/values/ic_launcher_background.xml
+
+      # Проверяем, что иконка действительно попала в сборку, а не осталась
+      # шаблонной. Сравниваем размер с эталоном из репозитория.
+      - name: Verify icon installed
+        run: |
+          A=android-icons/mipmap-xxxhdpi/ic_launcher_foreground.png
+          B=android/app/src/main/res/mipmap-xxxhdpi/ic_launcher_foreground.png
+          if ! cmp -s "$A" "$B"; then
+            echo "ОШИБКА: foreground-иконка в проекте не совпадает с эталоном"
+            exit 1
+          fi
+          echo "иконка на месте: $(stat -c%s "$B") Б"
 
       # Постоянный ключ подписи и номер версии. Без постоянного ключа каждая
       # сборка подписывалась бы новым debug-ключом, и Android отказывался бы
