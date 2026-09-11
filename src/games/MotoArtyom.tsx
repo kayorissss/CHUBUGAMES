@@ -61,6 +61,14 @@ export default function MotoArtyom({ onExit }: { onExit: () => void }) {
   const [result, setResult] = useState({ score: 0, coins: 0, xp: 0 });
 
   const best = s.games.moto?.best || 0;
+  /** Что делать прямо сейчас — короткая задача под шкалой трассы */
+  const task =
+    heat >= HEAT_MAX ? tr("Мотор перегрелся — отпусти газ и жди, пока остынет")
+    : heat > 72 ? tr("Жар на пределе: отпусти палец, дай двигателю выдохнуть")
+    : dist / ROAD_LEN >= WIRE_ZONE ? tr("Зона проводов: свайп вниз, чтобы пригнуться")
+    : dist < 900 ? tr("Держи палец — газ. Отпустил — тормоз и остывание")
+    : dist / ROAD_LEN < 0.5 ? tr("Свайп вверх и вниз — перестроиться между полос, объезжай конусы и ямы")
+    : tr("Доедь до финиша: впереди провода на уровне шеи");
   const artyom = s.friends.find((f) => f.id === "artyom") || s.friends[0];
 
   const G = useRef({
@@ -264,30 +272,105 @@ export default function MotoArtyom({ onExit }: { onExit: () => void }) {
     g.pops = g.pops.filter((p) => p.t > 0);
     if (g.shake > 0) g.shake = Math.max(0, g.shake - dt * 0.03);
 
-    /* ---------- отрисовка ---------- */
+    /* ----------------------------------------------------------------
+     * ОТРИСОВКА в духе NEON RIDER (2018) — ориентир задал пользователь.
+     *
+     * Признаки стиля: почти чёрное небо, закатный градиент к горизонту,
+     * солнце-диск с горизонтальными прорезями, сетка-перспектива уходящая
+     * вдаль, силуэты города и всё светящееся — magenta + electric blue.
+     * ---------------------------------------------------------------- */
+    const NEON_A = "#ff2fb9";     // магента
+    const NEON_B = "#25e6ff";     // электрик-блю
+    const NEON_C = "#8a5cff";     // фиолет
+
     const sky = ctx.createLinearGradient(0, 0, 0, roadY);
-    sky.addColorStop(0, "#101827");
-    sky.addColorStop(1, "#20293a");
+    sky.addColorStop(0, "#07060f");
+    sky.addColorStop(0.55, "#170a2b");
+    sky.addColorStop(1, "#3b0f42");
     ctx.fillStyle = sky;
     ctx.fillRect(0, 0, w, roadY);
 
     ctx.save();
     if (g.shake > 0) ctx.translate((Math.random() - 0.5) * g.shake, (Math.random() - 0.5) * g.shake);
 
-    // дальние дома — параллакс
-    ctx.fillStyle = "#18202e";
-    for (let i = 0; i < 14; i++) {
-      const bx = ((i * 130 - g.dist * 0.18) % (w + 200)) - 100;
-      const bh = 44 + ((i * 37) % 70);
-      ctx.fillRect(bx, roadY - bh, 74, bh);
+    // ретро-солнце с прорезями
+    {
+      const sr = Math.min(w * 0.26, 96);
+      const sxc = w * 0.5, syc = roadY - sr * 0.55;
+      const sg = ctx.createLinearGradient(0, syc - sr, 0, syc + sr);
+      sg.addColorStop(0, "#ffe14d");
+      sg.addColorStop(0.5, "#ff7a3d");
+      sg.addColorStop(1, NEON_A);
+      ctx.save();
+      ctx.beginPath(); ctx.arc(sxc, syc, sr, 0, Math.PI * 2); ctx.clip();
+      ctx.fillStyle = sg;
+      ctx.fillRect(sxc - sr, syc - sr, sr * 2, sr * 2);
+      // прорези: чем ниже, тем толще
+      ctx.fillStyle = "#170a2b";
+      for (let i = 0; i < 9; i++) {
+        const yy = syc - sr * 0.1 + i * (sr * 0.14);
+        ctx.fillRect(sxc - sr, yy, sr * 2, 2 + i * 0.9);
+      }
+      ctx.restore();
     }
 
-    // дорога
-    ctx.fillStyle = "#23262c";
+    // звёзды
+    ctx.fillStyle = "rgba(255,255,255,0.55)";
+    for (let i = 0; i < 26; i++) {
+      const sx2 = (i * 137.5) % w;
+      const sy2 = (i * 61.7) % (roadY * 0.62);
+      ctx.fillRect(sx2, sy2, 1.6, 1.6);
+    }
+
+    // силуэты города с неоновой кромкой — параллакс
+    for (let i = 0; i < 16; i++) {
+      const bx = ((i * 118 - g.dist * 0.16) % (w + 240)) - 120;
+      const bh = 40 + ((i * 53) % 78);
+      ctx.fillStyle = "#0d0a1c";
+      ctx.fillRect(bx, roadY - bh, 66, bh);
+      ctx.strokeStyle = i % 2 ? NEON_B : NEON_C;
+      ctx.globalAlpha = 0.5;
+      ctx.lineWidth = 1.6;
+      ctx.strokeRect(bx + 0.5, roadY - bh + 0.5, 65, bh);
+      ctx.globalAlpha = 1;
+      // окна-точки
+      ctx.fillStyle = i % 2 ? "rgba(37,230,255,0.5)" : "rgba(138,92,255,0.5)";
+      for (let wy = roadY - bh + 8; wy < roadY - 6; wy += 13) {
+        for (let wx = bx + 8; wx < bx + 58; wx += 15) {
+          if ((wx + wy + i) % 3) ctx.fillRect(wx, wy, 4, 5);
+        }
+      }
+    }
+
+    // светящаяся линия горизонта
+    ctx.strokeStyle = NEON_A;
+    ctx.shadowColor = NEON_A;
+    ctx.shadowBlur = 14;
+    ctx.lineWidth = 2.5;
+    ctx.beginPath(); ctx.moveTo(0, roadY); ctx.lineTo(w, roadY); ctx.stroke();
+    ctx.shadowBlur = 0;
+
+    // дорога: тёмное полотно с сеткой-перспективой
+    const rg = ctx.createLinearGradient(0, roadY, 0, h);
+    rg.addColorStop(0, "#1a0b2e");
+    rg.addColorStop(1, "#0a0512");
+    ctx.fillStyle = rg;
     ctx.fillRect(0, roadY, w, h - roadY);
-    // разметка между тремя полосами
-    ctx.strokeStyle = "rgba(255,255,255,0.26)";
-    ctx.lineWidth = 3;
+
+    // поперечные линии сетки бегут на игрока — видно скорость
+    ctx.strokeStyle = "rgba(138,92,255,0.34)";
+    ctx.lineWidth = 1.4;
+    for (let i = 0; i < 16; i++) {
+      const t = ((i / 16) + ((g.dist * 0.0016) % (1 / 16))) % 1;
+      const gy = roadY + (h - roadY) * t * t;
+      ctx.beginPath(); ctx.moveTo(0, gy); ctx.lineTo(w, gy); ctx.stroke();
+    }
+
+    // разметка между тремя полосами — светящийся пунктир
+    ctx.strokeStyle = NEON_B;
+    ctx.shadowColor = NEON_B;
+    ctx.shadowBlur = 8;
+    ctx.lineWidth = 2.6;
     ctx.setLineDash([30, 24]);
     ctx.lineDashOffset = -g.dist * 0.9;
     for (let k = 0; k < LANES - 1; k++) {
@@ -297,6 +380,7 @@ export default function MotoArtyom({ onExit }: { onExit: () => void }) {
       ctx.stroke();
     }
     ctx.setLineDash([]);
+    ctx.shadowBlur = 0;
 
     // препятствия
     for (const o of g.obs) {
@@ -305,36 +389,61 @@ export default function MotoArtyom({ onExit }: { onExit: () => void }) {
       const ox = bikeX + rel;
       const oy = o.lane >= 0 ? laneToY(roadY, o.lane) : roadY;
       if (o.kind === "hole") {
-        ctx.fillStyle = "#0a0b0d";
+        // яма: провал с неоновой кромкой
+        ctx.fillStyle = "#000";
         ctx.beginPath();
         ctx.ellipse(ox, oy + 6, 24, 8, 0, 0, Math.PI * 2);
         ctx.fill();
-        ctx.strokeStyle = "rgba(255,255,255,0.18)";
-        ctx.lineWidth = 1.5;
+        ctx.strokeStyle = NEON_A;
+        ctx.shadowColor = NEON_A;
+        ctx.shadowBlur = 10;
+        ctx.lineWidth = 2;
         ctx.stroke();
+        ctx.shadowBlur = 0;
       } else if (o.kind === "cone") {
+        // конус: светящийся каркас, а не плоский треугольник
+        ctx.shadowColor = "#ff9a3d";
+        ctx.shadowBlur = 12;
         ctx.fillStyle = "#ff7a2a";
         ctx.beginPath();
-        ctx.moveTo(ox, oy - 24);
-        ctx.lineTo(ox - 11, oy + 6);
-        ctx.lineTo(ox + 11, oy + 6);
+        ctx.moveTo(ox, oy - 26);
+        ctx.lineTo(ox - 12, oy + 6);
+        ctx.lineTo(ox + 12, oy + 6);
         ctx.closePath();
         ctx.fill();
-        ctx.fillStyle = "#fff";
-        ctx.fillRect(ox - 7, oy - 10, 14, 5);
-      } else {
-        // нитка поперёк на уровне шеи
-        ctx.strokeStyle = "#e8e8f0";
-        ctx.lineWidth = 2;
-        ctx.setLineDash([6, 5]);
-        ctx.beginPath();
-        ctx.moveTo(ox, roadY - 96);
-        ctx.lineTo(ox, roadY + 20);
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = "#fff4d6";
+        ctx.fillRect(ox - 8, oy - 12, 16, 5);
+        ctx.strokeStyle = "rgba(255,255,255,0.5)";
+        ctx.lineWidth = 1.2;
         ctx.stroke();
-        ctx.setLineDash([]);
+      } else {
+        /*
+         * Нитка на уровне шеи. Пользователь жаловался, что непонятны
+         * задачи: теперь провод не просто серая пунктирная палка, а
+         * ярко-магентовый луч с подписью «ПРИГНИСЬ» — видно заранее.
+         */
+        ctx.strokeStyle = NEON_A;
+        ctx.shadowColor = NEON_A;
+        ctx.shadowBlur = 14;
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(ox, roadY - 100);
+        ctx.lineTo(ox, roadY + 22);
+        ctx.stroke();
+        ctx.shadowBlur = 0;
         // столбики
-        ctx.fillStyle = "#6a6a78";
-        ctx.fillRect(ox - 3, roadY - 100, 6, 10);
+        ctx.fillStyle = NEON_C;
+        ctx.fillRect(ox - 4, roadY - 106, 8, 12);
+        // подпись появляется, когда провод близко
+        if (rel > 40 && rel < w * 0.75) {
+          ctx.save();
+          ctx.textAlign = "center";
+          ctx.font = "800 11px Unbounded, Inter, system-ui, sans-serif";
+          ctx.fillStyle = NEON_A;
+          ctx.fillText(tr("ПРИГНИСЬ"), ox, roadY - 114);
+          ctx.restore();
+        }
       }
     }
 
@@ -356,7 +465,9 @@ export default function MotoArtyom({ onExit }: { onExit: () => void }) {
       ctx.stroke();
     }
     // рама
-    ctx.strokeStyle = "#c8402a";
+    ctx.shadowColor = NEON_B;
+    ctx.shadowBlur = 12;
+    ctx.strokeStyle = "#ff3d6e";
     ctx.lineWidth = 6;
     ctx.lineCap = "round";
     ctx.beginPath();
@@ -377,13 +488,32 @@ export default function MotoArtyom({ onExit }: { onExit: () => void }) {
     ctx.moveTo(-2, -20);
     ctx.lineTo(duck ? 8 : 2, headY + 16);
     ctx.stroke();
+    ctx.shadowBlur = 0;
     drawHead(ctx, artyom.look, duck ? 10 : 2, headY, 17, { body: false, mouth: g.gas ? 0.5 : 0 });
     ctx.restore();
+
+    /*
+     * Неоновый след за байком — главный визуальный маркер NEON RIDER.
+     * Длина следа зависит от скорости, поэтому разгон видно глазами.
+     */
+    if (g.speed > 0.15) {
+      const tl = 30 + g.speed * 90;
+      const tg = ctx.createLinearGradient(bikeX - tl, 0, bikeX, 0);
+      tg.addColorStop(0, "rgba(37,230,255,0)");
+      tg.addColorStop(1, "rgba(37,230,255,0.55)");
+      ctx.strokeStyle = tg;
+      ctx.lineWidth = 7;
+      ctx.lineCap = "round";
+      ctx.beginPath();
+      ctx.moveTo(bikeX - tl, by);
+      ctx.lineTo(bikeX - 24, by);
+      ctx.stroke();
+    }
 
     // выхлоп при газе
     if (g.gas && g.overheat <= 0) {
       for (let i = 0; i < 3; i++) {
-        ctx.fillStyle = `rgba(200,200,210,${0.16 - i * 0.045})`;
+        ctx.fillStyle = `rgba(255,47,185,${0.34 - i * 0.09})`;
         ctx.beginPath();
         ctx.arc(bikeX - 40 - i * 15, by - 8 + Math.sin(g.wheelPh + i) * 4, 6 + i * 3, 0, Math.PI * 2);
         ctx.fill();
@@ -453,9 +583,49 @@ export default function MotoArtyom({ onExit }: { onExit: () => void }) {
         className="absolute"
         style={{ left: 12, right: 12, top: "calc(var(--sat) + 58px)", zIndex: 20 }}
       >
-        <div style={{ height: 6, borderRadius: 999, background: "var(--n-300)", overflow: "hidden", border: "1px solid var(--n-400)" }}>
+        {/* Шкала трассы: слева старт, справа финиш, метка зоны проводов */}
+        <div
+          style={{
+            position: "relative", height: 8, borderRadius: 999,
+            background: "var(--n-300)", overflow: "hidden",
+            border: "1px solid var(--n-400)",
+          }}
+        >
           <div style={{ width: `${pct}%`, height: "100%", background: "var(--acc)", transition: "width .2s linear" }} />
+          {/* отметка, с которой начинаются провода */}
+          <div
+            style={{
+              position: "absolute", top: 0, bottom: 0,
+              left: `${WIRE_ZONE * 100}%`, width: 2, background: "#ff2fb9",
+            }}
+          />
         </div>
+
+        {/*
+          ЗАДАЧА КРУПНО. Пользователь: «непонятны задачи». Строка прямо
+          говорит, что делать прямо сейчас, и меняется по ходу заезда.
+        */}
+        {phase === "play" && (
+          <div
+            className="flex items-center"
+            style={{
+              gap: 8, marginTop: 7, padding: "7px 11px",
+              borderRadius: "var(--r-md)",
+              background: "var(--surface-2)",
+              border: "1px solid var(--surface-brd)",
+            }}
+          >
+            <span
+              className="t-num"
+              style={{ fontSize: 10, color: "var(--acc)", minWidth: 40 }}
+            >
+              {Math.round(pct)}%
+            </span>
+            <span className="t-caption clip1 flex-1" style={{ fontSize: 10.5 }}>
+              {task}
+            </span>
+          </div>
+        )}
       </div>
 
       <AnimatePresence>{phase === "count" && <Countdown n={cd} />}</AnimatePresence>

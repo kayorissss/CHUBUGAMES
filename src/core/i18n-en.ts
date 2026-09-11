@@ -1036,4 +1036,12 @@ export const EN_TEXT: Record<string, string> = {
   "Грудь гуще бороды — Макс злится быстрее": "The chest is denser than the beard \u2014 Maks gets angry faster",
   "Последняя зона: руки. Держи паузы, злость почти не прощает": "Last zone: the arms. Keep pausing, rage barely forgives now",
   "ЗЛОСТЬ": "RAGE",
+  "Мотор перегрелся — отпусти газ и жди, пока остынет": "Engine overheated \u2014 release the throttle and let it cool",
+  "Жар на пределе: отпусти палец, дай двигателю выдохнуть": "Heat is maxing out: lift your finger, let the engine breathe",
+  "Зона проводов: свайп вниз, чтобы пригнуться": "Wire zone: swipe down to duck",
+  "Держи палец — газ. Отпустил — тормоз и остывание": "Hold your finger for throttle. Release to brake and cool down",
+  "Свайп вверх и вниз — перестроиться между полос, объезжай конусы и ямы": "Swipe up and down to change lanes, dodge cones and potholes",
+  "Доедь до финиша: впереди провода на уровне шеи": "Reach the finish: neck-height wires are coming up",
+  "ПРИГНИСЬ": "DUCK",
+  "ЖАР": "HEAT",
 };
