@@ -2,6 +2,8 @@ import { useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { useGame } from "../core/store";
 import { Card, Button, SectionTitle, Screen, Divider } from "../ui/Glass";
+import DesktopSettings from "../ui/DesktopSettings";
+import { isDesktop } from "../core/desktop";
 import UpdateCheckRow from "../ui/UpdateCheckRow";
 import {
   askNotifyPermission,
@@ -134,10 +136,20 @@ export default function Settings({
 
   return (
     <Screen title={t("settings.title")}>
-      <SectionTitle>{t("settings.update")}</SectionTitle>
-      <Card r="lg" style={{ marginBottom: 12, padding: 0, overflow: "hidden" }}>
-        <UpdateCheckRow />
-      </Card>
+      {/* На ПК — свой блок: масштаб, разрешение сцены и обновление через exe */}
+      {isDesktop() ? (
+        <>
+          <SectionTitle>{tr("Компьютер")}</SectionTitle>
+          <DesktopSettings />
+        </>
+      ) : (
+        <>
+          <SectionTitle>{t("settings.update")}</SectionTitle>
+          <Card r="lg" style={{ marginBottom: 12, padding: 0, overflow: "hidden" }}>
+            <UpdateCheckRow />
+          </Card>
+        </>
+      )}
       <SectionTitle>{tr("Уведомления")}</SectionTitle>
       <Card r="lg" style={{ marginBottom: 22, overflow: "hidden" }}>
         <NotifyBlock />

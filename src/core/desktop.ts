@@ -8,6 +8,8 @@
  */
 
 /** Запущены ли мы внутри десктопной оболочки */
+import { applyStage, readStage, writeStage } from "./stage";
+
 export const isDesktop = (): boolean => {
   if (typeof window === "undefined") return false;
   // Протокол app:// поднимает только наша Electron-оболочка
@@ -36,6 +38,25 @@ export const hasKeyboard = (): boolean => {
  *
  * Возвращает функцию снятия обработчика.
  */
+/**
+ * Следить за размером окна и пересчитывать масштаб сцены.
+ * Возвращает функцию отписки.
+ */
+export function initStage(): () => void {
+  if (typeof window === "undefined") return () => {};
+  let raf = 0;
+  const apply = () => {
+    cancelAnimationFrame(raf);
+    raf = requestAnimationFrame(() => applyStage(readStage()));
+  };
+  apply();
+  window.addEventListener("resize", apply);
+  return () => {
+    cancelAnimationFrame(raf);
+    window.removeEventListener("resize", apply);
+  };
+}
+
 export function initDesktopKeys(): () => void {
   if (typeof window === "undefined") return () => {};
 
@@ -50,6 +71,23 @@ export function initDesktopKeys(): () => void {
       // history.back() поднимет popstate, а его уже слушает core/nav.ts
       e.preventDefault();
       history.back();
+      return;
+    }
+
+    /*
+     * Ctrl +/- и Ctrl+0 меняют масштаб сцены, как в браузере.
+     * Работают только в ручном режиме: в «вписать» и «во весь экран»
+     * масштаб считается автоматически, и менять его руками бессмысленно.
+     */
+    if (e.ctrlKey && (e.key === "=" || e.key === "+" || e.key === "-" || e.key === "0")) {
+      const st = readStage();
+      if (st.mode !== "actual") return;
+      e.preventDefault();
+      const next = e.key === "0"
+        ? 1
+        : Math.max(0.4, Math.min(3, st.zoom + (e.key === "-" ? -0.1 : 0.1)));
+      writeStage({ ...st, zoom: next });
+      applyStage({ ...st, zoom: next });
       return;
     }
 

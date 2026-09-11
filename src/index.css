@@ -826,3 +826,51 @@ html.is-desktop *::-webkit-scrollbar-thumb {
 html.is-desktop *::-webkit-scrollbar-thumb:hover {
   background: var(--n-500);
 }
+
+/* ---------- ПК: сцена телефона по центру монитора ----------
+
+   Раньше ПК-версия просто ограничивала ширину окна (620 px) и на большом
+   мониторе выглядела узкой полоской. Растянуть вёрстку на всю ширину
+   нельзя: игра свёрстана под портрет, а часть эффектов считает координаты
+   от window.innerWidth.
+
+   Решение — масштабировать всё приложение целиком как «сцену».
+
+   ВАЖНО, почему это безопасно для модалок: элемент с transform создаёт
+   containing block, и потомки с position:fixed позиционируются
+   относительно него, а не окна. Все 13 полноэкранных оверлеев (модалки,
+   реклама, перетаскиваемые фигуры) остаются на своих местах внутри сцены.
+   Именно из-за неверного предположения об обратном я в прошлый раз
+   ограничил ширину окна вместо масштабирования. */
+
+html.is-desktop body {
+  /* фон вокруг сцены — чтобы монитор не светился чёрным «ничем» */
+  background:
+    radial-gradient(1200px 800px at 50% 0%, rgba(255, 176, 32, 0.05), transparent 60%),
+    var(--n-000);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+html.is-desktop #root {
+  width: var(--stage-w, 420px);
+  height: var(--stage-h, 880px);
+  /* Масштаб задаётся из JS по размеру окна и выбору пользователя */
+  transform: scale(var(--stage-scale, 1));
+  transform-origin: center center;
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--stage-radius, 22px);
+  box-shadow:
+    0 0 0 1px var(--surface-brd),
+    0 40px 120px -30px rgba(0, 0, 0, 0.9);
+  background: var(--bg);
+}
+
+/* Режим «во весь экран»: сцена занимает всё окно без рамки и скруглений */
+html.is-desktop.stage-fill #root {
+  border-radius: 0;
+  box-shadow: none;
+}

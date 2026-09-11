@@ -22,6 +22,7 @@ directories:
 # Что попадает внутрь приложения
 files:
   - "desktop/main.cjs"
+  - "desktop/preload.cjs"
   - "dist/**/*"
   - "!dist/runners/**"        # фоновый скрипт нужен только Android
   - "!**/*.map"

@@ -25,7 +25,7 @@ console.log("Первые записи:");
 list.slice(0, 12).forEach((f) => console.log("   " + f));
 
 let bad = false;
-const need = ["desktop/main.cjs", "dist/index.html", "package.json"];
+const need = ["desktop/main.cjs", "desktop/preload.cjs", "dist/index.html", "package.json"];
 for (const f of need) {
   const ok = list.includes(f);
   console.log(`${ok ? "есть" : "НЕТ "}: ${f}`);

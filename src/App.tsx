@@ -19,7 +19,7 @@ import {
 } from "./core/notify";
 import { upcomingBosses } from "./core/bosses";
 import { applyPerfMode, isLowFx, measurePerfOnce } from "./core/perf";
-import { initDesktopKeys, isDesktop } from "./core/desktop";
+import { initDesktopKeys, initStage, isDesktop } from "./core/desktop";
 import Home from "./pages/Home";
 import { ModesProvider } from "./core/modes";
 import Casino from "./pages/Casino";
@@ -223,7 +223,9 @@ function Shell() {
   useEffect(() => {
     if (!isDesktop()) return;
     document.documentElement.classList.add("is-desktop");
-    return initDesktopKeys();
+    const offKeys = initDesktopKeys();
+    const offStage = initStage();
+    return () => { offKeys(); offStage(); };
   }, []);
 
   // При первом запуске система сама спросит про уведомления — тумблер в

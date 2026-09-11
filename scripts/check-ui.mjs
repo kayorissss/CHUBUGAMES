@@ -309,6 +309,39 @@ const mpSrc = fs.readFileSync('src/ui/ModesPanel.tsx', 'utf8');
 ok(mpSrc.includes('grid-cols-3'), 'режимы показаны компактной сеткой');
 ok(mpSrc.includes('Чем отличаются режимы'), 'у режимов есть пояснение по запросу');
 
+/*
+ * Режимы: пять багов из жалобы «режимы багованые».
+ */
+const md23 = fs.readFileSync('src/core/modes.tsx', 'utf8');
+ok(md23.includes('MODE_BLOCKLIST') && md23.includes('"clicker"'),
+  'бесконечный кликер исключён из режимов — иначе марафон виснет');
+ok(md23.includes('MODE_POOL'), 'режимы берут игры из отфильтрованного пула');
+ok(/if \(best <= 0\)/.test(md23),
+  'цель выживания в неигранной игре не вырождается в 1 очко');
+ok(md23.includes('setInterval') && md23.includes('sprintBest'),
+  'у спринта есть собственный таймер завершения');
+ok(fs.readFileSync('src/games/shell.tsx', 'utf8').includes('ModeBadge'),
+  'во время игры видно активный режим');
+
+/*
+ * ПК-версия: масштабирование сцены, разрешения и обновление из программы.
+ */
+const dmain = fs.readFileSync('desktop/main.cjs', 'utf8');
+ok(!/maxWidth:/.test(dmain), 'ширина окна ПК больше не ограничена');
+ok(dmain.includes('preload.cjs'), 'preload подключён к окну');
+ok(dmain.includes('update:check') && dmain.includes('update:download'),
+  'ПК умеет проверять и ставить обновление сам');
+ok(dmain.includes('win:toggleFullscreen') && dmain.includes('win:resize'),
+  'окном можно управлять из игры');
+const pre = fs.readFileSync('desktop/preload.cjs', 'utf8');
+ok(!/require\("(?!electron)/.test(pre),
+  'preload не тянет модули, недоступные в песочнице');
+const stg23 = fs.readFileSync('src/core/stage.ts', 'utf8');
+ok(stg23.includes('STAGE_PRESETS') && stg23.includes('computeScale'),
+  'есть выбор разрешения и расчёт масштаба сцены');
+ok(fs.readFileSync('src/index.css', 'utf8').includes('--stage-scale'),
+  'сцена масштабируется через CSS');
+
 const bf18 = fs.readFileSync('src/pages/BossFight.tsx', 'utf8');
 ok(bf18.includes('setWindup'), 'босс замахивается перед ударом');
 ok(bf18.includes('blockReady'), 'у блока есть перезарядка');
