@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence } from "framer-motion";
 import { useGame } from "../core/store";
-import { scene } from "../core/palette";
+import { scene, alpha } from "../core/palette";
 import { sfx, haptic } from "../core/fx";
 import { useCanvas, GameHUD, GameOver, Countdown, HudGauge, HudStat } from "./shell";
 import { drawHead } from "../core/head";
@@ -34,6 +34,10 @@ const HIT_COST_BAG = 9;       // а эта ещё и с авоськой
 const MISS_COST = 28;         // не успел выйти на остановке
 const STOP_BONUS = 18;        // терпение возвращается за успешный выход
 
+/** Расцветки платков и пальто — чтобы каждая бабка была своя */
+const SCARFS = ["#c85a7a", "#8a7ac8", "#d99a3c", "#5aa5c8", "#b5546b", "#7ba05b"];
+const COATS  = ["#4a4256", "#3d4a52", "#524238", "#45404a", "#3a4a42"];
+
 /** Где в этот раз двери: сзади, спереди или сбоку */
 type ExitSide = "back" | "front" | "left" | "right";
 const EXITS: ExitSide[] = ["back", "front", "left", "right"];
@@ -51,6 +55,13 @@ interface Babka {
   hunting: boolean;
   /** сколько ещё преследует, мс */
   huntT: number;
+  /** Внешность: чтобы толпа не выглядела как пять одинаковых кружков.
+   *  Пользователь: «бабок больше одной» — их и было пять, но все на одно
+   *  лицо, поэтому читались как один повторённый спрайт. */
+  size: number;      // 0.86..1.12 от базового радиуса
+  scarf: number;     // индекс расцветки платка
+  coat: number;      // индекс пальто
+  glasses: boolean;
 }
 
 export default function Bus12({ onExit }: { onExit: () => void }) {
@@ -87,7 +98,6 @@ export default function Bus12({ onExit }: { onExit: () => void }) {
     w: 0, h: 0,
     hitCd: 0,
     exit: "back" as ExitSide,   // где двери на этой остановке
-    announce: 0,                // сколько ещё показывать объявление, мс
     huntT: 2600,                // таймер до следующей охотницы
   });
 
@@ -104,6 +114,10 @@ export default function Bus12({ onExit }: { onExit: () => void }) {
         ph: Math.random() * Math.PI * 2,
         hunting: false,
         huntT: 0,
+        size: 0.86 + Math.random() * 0.26,
+        scarf: Math.floor(Math.random() * SCARFS.length),
+        coat: Math.floor(Math.random() * COATS.length),
+        glasses: Math.random() < 0.4,
       });
     }
     g.babki = arr;
@@ -118,7 +132,6 @@ export default function Bus12({ onExit }: { onExit: () => void }) {
     g.door = false; g.timer = RIDE_MS;
     g.pops = []; g.shake = 0; g.bump = 0; g.bumpT = 1800; g.hitCd = 0;
     g.exit = EXITS[Math.floor(Math.random() * EXITS.length)];
-    g.announce = 0;
     g.huntT = 2600;
     g.startT = Date.now();
     fillCrowd(w, h, crowdBase);
@@ -198,17 +211,12 @@ export default function Bus12({ onExit }: { onExit: () => void }) {
           g.door = true;
           setDoorOpen(true);
           g.timer = DOOR_MS;
-          g.announce = 2200;
           sfx.power();
-          g.pops.push({
-            x: w / 2, y: h * 0.45, t: 1,
-            txt: `${tr("ВЫХОД")}: ${tr(exitName(g.exit))}`,
-            col: "var(--ok)",
-          });
+          // Текстового объявления «ВЫХОД ПОЯВИЛСЯ СПЕРЕДИ» больше нет:
+          // пользователь просил его убрать. Дверь и так подсвечена
+          // пульсирующей рамкой со стрелкой наружу — этого достаточно.
         }
       }
-
-      if (g.announce > 0) g.announce -= dt;
 
       /* кочки: автобус потряхивает, толпу качает */
       g.bumpT -= dt;
@@ -248,7 +256,7 @@ export default function Bus12({ onExit }: { onExit: () => void }) {
           pick.huntT = 2600 + Math.random() * 1400;
           g.pops.push({
             x: pick.x, y: pick.y - 26, t: 1,
-            txt: tr("УСТУПИ МЕСТО!"), col: "#FFD86B",
+            txt: tr("УСТУПИ МЕСТО!"), col: P.warn,
           });
         }
       }
@@ -329,110 +337,201 @@ export default function Bus12({ onExit }: { onExit: () => void }) {
     if (g.shake > 0) g.shake = Math.max(0, g.shake - dt * 0.03);
 
     /* ---------- отрисовка ---------- */
-    ctx.fillStyle = "#12151a";
+    ctx.fillStyle = P.bg0;
     ctx.fillRect(0, 0, w, h);
 
     ctx.save();
     const sh = g.shake + g.bump * 3;
     if (sh > 0) ctx.translate((Math.random() - 0.5) * sh, (Math.random() - 0.5) * sh);
 
+    /**
+     * Корпус автобуса. Раньше это был просто серый прямоугольник —
+     * пользователь: «красивее автобус и выходы». Теперь рисуем кузов
+     * со скруглениями, обшивку, окна по бортам и кабину спереди,
+     * чтобы сверху читалось, что это салон, а не поле.
+     */
+    const bx = 10, by = 44, bw = w - 20, bh = h - 84;
+    // кузов
+    ctx.fillStyle = P.surface2;
+    ctx.beginPath(); ctx.roundRect(bx, by, bw, bh, 22); ctx.fill();
+    ctx.strokeStyle = P.line;
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.roundRect(bx, by, bw, bh, 22); ctx.stroke();
+
     // пол салона
-    ctx.fillStyle = "#1b2028";
-    ctx.fillRect(14, 52, w - 28, h - 96);
-    ctx.strokeStyle = "rgba(255,255,255,0.07)";
+    ctx.fillStyle = P.surface;
+    ctx.beginPath(); ctx.roundRect(bx + 8, by + 8, bw - 16, bh - 16, 16); ctx.fill();
+
+    // продольные полосы пола
+    ctx.strokeStyle = alpha("--text", 0.05);
     ctx.lineWidth = 1;
-    for (let y = 60; y < h - 50; y += 26) {
-      ctx.beginPath(); ctx.moveTo(16, y); ctx.lineTo(w - 16, y); ctx.stroke();
+    for (let y = by + 26; y < by + bh - 16; y += 26) {
+      ctx.beginPath(); ctx.moveTo(bx + 12, y); ctx.lineTo(bx + bw - 12, y); ctx.stroke();
     }
-    // поручни
-    ctx.strokeStyle = "rgba(255,255,255,0.16)";
+
+    // окна по бортам — светлые проёмы вдоль стен
+    ctx.fillStyle = alpha("--info", 0.13);
+    for (let i = 0; i < 6; i++) {
+      const wy = by + 30 + i * ((bh - 70) / 6);
+      const wh2 = (bh - 70) / 6 - 12;
+      if (wh2 < 6) break;
+      ctx.beginPath(); ctx.roundRect(bx + 2, wy, 7, wh2, 3); ctx.fill();
+      ctx.beginPath(); ctx.roundRect(bx + bw - 9, wy, 7, wh2, 3); ctx.fill();
+    }
+
+    // кабина водителя спереди
+    ctx.fillStyle = alpha("--text", 0.07);
+    ctx.beginPath(); ctx.roundRect(bx + 12, by + 10, bw - 24, 22, 8); ctx.fill();
+    ctx.fillStyle = P.mute;
+    ctx.font = "700 8.5px Inter, system-ui, sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText(tr("КАБИНА"), w / 2, by + 25);
+
+    // поручень по центру
+    ctx.strokeStyle = alpha("--text", 0.2);
     ctx.lineWidth = 3;
-    ctx.beginPath(); ctx.moveTo(w * 0.5, 56); ctx.lineTo(w * 0.5, h - 100); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(w * 0.5, by + 40); ctx.lineTo(w * 0.5, by + bh - 20); ctx.stroke();
+    // кольца поручня
+    ctx.lineWidth = 1.6;
+    for (let i = 0; i < 5; i++) {
+      const ry = by + 66 + i * ((bh - 100) / 5);
+      ctx.beginPath(); ctx.arc(w * 0.5, ry, 4.5, 0, Math.PI * 2); ctx.stroke();
+    }
 
     // сиденья по бортам
-    ctx.fillStyle = "#252c36";
-    for (let i = 0; i < 5; i++) {
-      const y = 74 + i * 62;
-      ctx.beginPath(); ctx.roundRect(18, y, 34, 44, 6); ctx.fill();
-      ctx.beginPath(); ctx.roundRect(w - 52, y, 34, 44, 6); ctx.fill();
+    const seatN = Math.max(3, Math.floor((bh - 80) / 62));
+    for (let i = 0; i < seatN; i++) {
+      const y = by + 46 + i * 62;
+      if (y + 44 > by + bh - 12) break;
+      for (const sx2 of [bx + 12, bx + bw - 46]) {
+        ctx.fillStyle = P.surface2;
+        ctx.beginPath(); ctx.roundRect(sx2, y, 34, 44, 7); ctx.fill();
+        // спинка
+        ctx.fillStyle = alpha("--text", 0.08);
+        ctx.beginPath(); ctx.roundRect(sx2 + 3, y + 3, 28, 13, 5); ctx.fill();
+      }
     }
 
-    // двери: рисуем только когда открыты — до объявления игрок не
-    // должен знать, с какой стороны выход
+    /**
+     * Двери. Пользователь просил убрать подсказку «ВЫХОД ПОЯВИЛСЯ
+     * СПЕРЕДИ» — теперь текстового объявления нет вовсе: открытые
+     * створки видно по самой двери, она подсвечена и мигает стрелкой.
+     */
     if (g.door) {
       const d = doorRect;
-      ctx.fillStyle = "rgba(89,255,158,0.16)";
-      ctx.fillRect(d.x0, d.y0, d.x1 - d.x0, d.y1 - d.y0);
-      ctx.strokeStyle = "#59FF9E";
+      const dw = d.x1 - d.x0, dh = d.y1 - d.y0;
+      const pulse = 0.55 + 0.45 * Math.sin(Date.now() * 0.006);
+
+      // проём
+      ctx.fillStyle = alpha("--ok", 0.16);
+      ctx.beginPath(); ctx.roundRect(d.x0, d.y0, dw, dh, 8); ctx.fill();
+
+      // раздвижные створки по краям проёма
+      ctx.fillStyle = P.surface2;
+      const horiz = dw > dh;
+      if (horiz) {
+        ctx.beginPath(); ctx.roundRect(d.x0, d.y0, 9, dh, 4); ctx.fill();
+        ctx.beginPath(); ctx.roundRect(d.x1 - 9, d.y0, 9, dh, 4); ctx.fill();
+      } else {
+        ctx.beginPath(); ctx.roundRect(d.x0, d.y0, dw, 9, 4); ctx.fill();
+        ctx.beginPath(); ctx.roundRect(d.x0, d.y1 - 9, dw, 9, 4); ctx.fill();
+      }
+
+      // светящаяся рамка
+      ctx.strokeStyle = P.ok;
+      ctx.globalAlpha = pulse;
       ctx.lineWidth = 3;
-      ctx.strokeRect(d.x0, d.y0, d.x1 - d.x0, d.y1 - d.y0);
-      ctx.fillStyle = "#59FF9E";
-      ctx.font = "700 11px Inter, system-ui, sans-serif";
-      ctx.textAlign = "center";
-      ctx.fillText(tr("ВЫХОД"), (d.x0 + d.x1) / 2, (d.y0 + d.y1) / 2 + 4);
-    }
-
-    // объявление о том, где открылись двери
-    if (g.announce > 0) {
-      const a = Math.min(1, g.announce / 400);
-      ctx.globalAlpha = a;
-      ctx.fillStyle = "rgba(0,0,0,0.82)";
-      ctx.fillRect(0, h * 0.30, w, 46);
-      ctx.fillStyle = "#FFD86B";
-      ctx.font = "800 15px Inter, system-ui, sans-serif";
-      ctx.textAlign = "center";
-      ctx.fillText(`${tr("ВЫХОД ПОЯВИЛСЯ")}: ${tr(exitName(g.exit))}`, w / 2, h * 0.30 + 29);
+      ctx.beginPath(); ctx.roundRect(d.x0, d.y0, dw, dh, 8); ctx.stroke();
       ctx.globalAlpha = 1;
-    }
 
-    if (!g.door) {
-      ctx.fillStyle = "rgba(255,255,255,0.35)";
-      ctx.font = "700 11px Inter, system-ui, sans-serif";
-      ctx.textAlign = "center";
-      ctx.fillText(tr("ДВЕРИ ЗАКРЫТЫ"), w / 2, h - 16);
+      // стрелка наружу — куда именно идти
+      const cx = (d.x0 + d.x1) / 2, cy = (d.y0 + d.y1) / 2;
+      ctx.fillStyle = P.ok;
+      ctx.save();
+      ctx.translate(cx, cy);
+      const rot = g.exit === "back" ? 0 : g.exit === "front" ? Math.PI
+        : g.exit === "left" ? Math.PI * 0.5 : -Math.PI * 0.5;
+      ctx.rotate(rot);
+      ctx.beginPath();
+      ctx.moveTo(0, 9); ctx.lineTo(-7, -1); ctx.lineTo(-2.6, -1);
+      ctx.lineTo(-2.6, -9); ctx.lineTo(2.6, -9); ctx.lineTo(2.6, -1);
+      ctx.lineTo(7, -1); ctx.closePath(); ctx.fill();
+      ctx.restore();
     }
 
     // бабульки
     for (const b of g.babki) {
-      ctx.fillStyle = "rgba(0,0,0,0.3)";
-      ctx.beginPath(); ctx.ellipse(b.x, b.y + 15, 15, 5, 0, 0, Math.PI * 2); ctx.fill();
+      const R = R_BABKA * b.size;
+      ctx.fillStyle = alpha("--n-000", 0.42, "#000000");
+      ctx.beginPath(); ctx.ellipse(b.x, b.y + R * 0.9, R * 0.9, R * 0.3, 0, 0, Math.PI * 2); ctx.fill();
+
       // охотницу видно сразу: красное кольцо и восклицательный знак
       if (b.hunting) {
-        ctx.strokeStyle = "#FF6B4D";
+        ctx.strokeStyle = P.danger;
         ctx.lineWidth = 2.5;
-        ctx.beginPath(); ctx.arc(b.x, b.y, R_BABKA + 7, 0, Math.PI * 2); ctx.stroke();
-        ctx.fillStyle = "#FF6B4D";
+        ctx.beginPath(); ctx.arc(b.x, b.y, R + 7, 0, Math.PI * 2); ctx.stroke();
+        ctx.fillStyle = P.danger;
         ctx.font = "800 15px Inter, system-ui, sans-serif";
         ctx.textAlign = "center";
-        ctx.fillText("!", b.x, b.y - R_BABKA - 10);
+        ctx.fillText("!", b.x, b.y - R - 10);
       }
-      // платок
-      ctx.fillStyle = b.bag ? "#c85a7a" : "#8a7ac8";
-      ctx.beginPath(); ctx.arc(b.x, b.y, R_BABKA, Math.PI, 0); ctx.fill();
-      ctx.beginPath(); ctx.arc(b.x, b.y, R_BABKA * 0.92, 0, Math.PI * 2); ctx.fill();
+
+      // пальто (плечи) — видно сверху как овал шире головы
+      ctx.fillStyle = COATS[b.coat];
+      ctx.beginPath(); ctx.ellipse(b.x, b.y + R * 0.34, R * 1.06, R * 0.82, 0, 0, Math.PI * 2); ctx.fill();
+
+      // платок: узел сзади + купол
+      const scarf = SCARFS[b.scarf];
+      ctx.fillStyle = scarf;
+      ctx.beginPath(); ctx.arc(b.x, b.y, R, 0, Math.PI * 2); ctx.fill();
+      // затенение платка снизу — объём
+      ctx.fillStyle = alpha("--n-000", 0.18, "#000000");
+      ctx.beginPath(); ctx.arc(b.x, b.y + R * 0.2, R * 0.94, 0, Math.PI); ctx.fill();
+      // узелок
+      ctx.fillStyle = scarf;
+      ctx.beginPath(); ctx.arc(b.x - R * 0.72, b.y + R * 0.5, R * 0.24, 0, Math.PI * 2); ctx.fill();
+
       // лицо
       ctx.fillStyle = "#e8c4a0";
-      ctx.beginPath(); ctx.arc(b.x, b.y + 2, R_BABKA * 0.66, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = "#3a2a1e";
-      ctx.beginPath(); ctx.arc(b.x - 4, b.y, 1.8, 0, Math.PI * 2); ctx.fill();
-      ctx.beginPath(); ctx.arc(b.x + 4, b.y, 1.8, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(b.x, b.y + 2, R * 0.62, 0, Math.PI * 2); ctx.fill();
+
+      // глаза / очки
+      if (b.glasses) {
+        ctx.strokeStyle = "#3a2a1e";
+        ctx.lineWidth = 1.3;
+        ctx.beginPath(); ctx.arc(b.x - R * 0.26, b.y, R * 0.2, 0, Math.PI * 2); ctx.stroke();
+        ctx.beginPath(); ctx.arc(b.x + R * 0.26, b.y, R * 0.2, 0, Math.PI * 2); ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(b.x - R * 0.06, b.y); ctx.lineTo(b.x + R * 0.06, b.y); ctx.stroke();
+      } else {
+        ctx.fillStyle = "#3a2a1e";
+        ctx.beginPath(); ctx.arc(b.x - R * 0.24, b.y, 1.8, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(b.x + R * 0.24, b.y, 1.8, 0, Math.PI * 2); ctx.fill();
+      }
+
+      // недовольный рот
       ctx.strokeStyle = "#7a4a3a";
       ctx.lineWidth = 1.4;
-      ctx.beginPath(); ctx.arc(b.x, b.y + 7, 3.4, 0.15 * Math.PI, 0.85 * Math.PI); ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(b.x, b.y + R * 0.52, R * 0.22, 1.15 * Math.PI, 1.85 * Math.PI);
+      ctx.stroke();
+
       // авоська
       if (b.bag) {
         ctx.fillStyle = "#d8c48a";
-        ctx.beginPath(); ctx.ellipse(b.x + 19, b.y + 10, 7, 9, 0.2, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.ellipse(b.x + R * 1.1, b.y + R * 0.6, R * 0.4, R * 0.52, 0.2, 0, Math.PI * 2); ctx.fill();
+        ctx.strokeStyle = alpha("--n-000", 0.3, "#000000");
+        ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.ellipse(b.x + R * 1.1, b.y + R * 0.6, R * 0.4, R * 0.52, 0.2, 0, Math.PI * 2); ctx.stroke();
       }
     }
 
     // я
-    ctx.fillStyle = "rgba(0,0,0,0.35)";
+    ctx.fillStyle = alpha("--n-000", 0.45, "#000000");
     ctx.beginPath(); ctx.ellipse(g.me.x, g.me.y + 14, 14, 5, 0, 0, Math.PI * 2); ctx.fill();
     drawHead(ctx, me.look, g.me.x, g.me.y, R_ME, { body: false });
     // подсветка своей головы, чтобы не потеряться в толпе
     ctx.strokeStyle = P.acc;
-    ctx.strokeStyle = "#ffb020";
     ctx.lineWidth = 2;
     ctx.beginPath(); ctx.arc(g.me.x, g.me.y, R_ME + 5, 0, Math.PI * 2); ctx.stroke();
 
@@ -449,7 +548,7 @@ export default function Bus12({ onExit }: { onExit: () => void }) {
     ctx.globalAlpha = 1;
 
     if (g.running && g.stop === 0 && !g.door) {
-      ctx.fillStyle = "rgba(255,255,255,0.45)";
+      ctx.fillStyle = P.dim;
       ctx.font = "600 12px Inter, system-ui, sans-serif";
       ctx.fillText(tr("Веди пальцем к дверям, не задевая бабулек"), w / 2, 42);
     }
@@ -506,23 +605,22 @@ export default function Bus12({ onExit }: { onExit: () => void }) {
   );
 }
 
-/** Прямоугольник дверей для стороны выхода */
+/**
+ * Прямоугольник дверей для стороны выхода.
+ *
+ * Двери должны лежать В СТЕНЕ кузова, который рисуется в границах
+ * bx=10, by=44, bw=w-20, bh=h-84. Раньше зоны считались от краёв
+ * экрана и половина двери оказывалась снаружи автобуса.
+ */
 function exitRect(side: ExitSide, w: number, h: number) {
-  const T = 44;   // толщина зоны
+  const T = 44;                       // толщина зоны
+  const bx = 10, by = 44, bw = w - 20, bh = h - 84;
   switch (side) {
-    case "back":  return { x0: w * 0.28, x1: w * 0.72, y0: h - T, y1: h };
-    case "front": return { x0: w * 0.28, x1: w * 0.72, y0: h * 0.12, y1: h * 0.12 + T };
-    case "left":  return { x0: 0, x1: T, y0: h * 0.34, y1: h * 0.66 };
-    case "right": return { x0: w - T, x1: w, y0: h * 0.34, y1: h * 0.66 };
+    case "back":  return { x0: bx + bw * 0.26, x1: bx + bw * 0.74, y0: by + bh - T, y1: by + bh };
+    case "front": return { x0: bx + bw * 0.26, x1: bx + bw * 0.74, y0: by + 34, y1: by + 34 + T };
+    case "left":  return { x0: bx, x1: bx + T, y0: by + bh * 0.34, y1: by + bh * 0.66 };
+    case "right": return { x0: bx + bw - T, x1: bx + bw, y0: by + bh * 0.34, y1: by + bh * 0.66 };
   }
 }
 
-/** Человеческое название стороны для объявления */
-function exitName(side: ExitSide): string {
-  switch (side) {
-    case "back": return "СЗАДИ";
-    case "front": return "СПЕРЕДИ";
-    case "left": return "СЛЕВА";
-    case "right": return "СПРАВА";
-  }
-}
+
