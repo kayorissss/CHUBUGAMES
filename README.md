@@ -1,5 +1,25 @@
 # 🍔 CHUBGAMES
 
+## СКАЧАТЬ
+
+| Куда | Файл | Ссылка |
+|---|---|---|
+| **Компьютер (Windows 10/11)** | `CHUBGAMES-portable.exe` — запустил и играешь, ничего не устанавливается | **[СКАЧАТЬ ДЛЯ ПК](https://github.com/kayorissss/CHUBUGAMES/releases/download/desktop/CHUBGAMES-1.19.0-portable.exe)** |
+| **Компьютер (установщик)** | `CHUBGAMES-setup.exe` — ярлык на рабочем столе и в «Пуске» | [Скачать установщик](https://github.com/kayorissss/CHUBUGAMES/releases/download/desktop/CHUBGAMES-1.19.0-setup.exe) |
+| **Телефон (Android)** | `CHUBGAMES.apk` | [Скачать APK](https://github.com/kayorissss/CHUBUGAMES/releases/download/latest/CHUBGAMES.apk) |
+
+Все сборки: [страница релизов](https://github.com/kayorissss/CHUBUGAMES/releases).
+
+### Первый запуск на ПК
+
+Windows покажет синее окно **«Защита Windows предотвратила запуск»**. Это не вирус: так система
+реагирует на любую программу без платной подписи разработчика. Нажми **«Подробнее» → «Выполнить в любом случае»**.
+
+Управление мышью. **Escape** — назад, **F11** — на весь экран. Работает полностью офлайн.
+Прогресс с телефоном не синхронизируется — переносится файлом сохранения через настройки.
+
+---
+
 Оффлайн мобильное приложение с мини-играми про друзей.
 Стиль — **Liquid Glass 2026**: жидкое стекло, чёрный / тёмно-серый / серый / белый + один акцентный цвет.
 
