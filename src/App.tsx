@@ -38,6 +38,7 @@ import ArtyomBite from "./games/ArtyomBite";
 import ShitovRun from "./games/ShitovRun";
 import RadomirBeat from "./games/RadomirBeat";
 import BurgerStack from "./games/BurgerStack";
+import Cheat from "./games/Cheat";
 import Basket from "./games/Basket";
 import Volley from "./games/Volley";
 import Penalty from "./games/Penalty";
@@ -372,6 +373,7 @@ function Shell() {
             {game === "chess" && <Chess onExit={() => setGame(null)} />}
             {game === "checkers" && <Checkers onExit={() => setGame(null)} />}
             {game === "nards" && <Backgammon onExit={() => setGame(null)} />}
+            {game === "cheat" && <Cheat onExit={() => setGame(null)} />}
           </motion.div>
         )}
       </AnimatePresence>

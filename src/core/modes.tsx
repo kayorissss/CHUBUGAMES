@@ -79,6 +79,7 @@ const CHALLENGE_TARGET: Record<GameId, number> = {
   crossword: 300, bus: 600, pet: 700, beard: 500,
   moto: 400, fuel: 350, hands: 300, europa: 600,
   chess: 800, checkers: 700, nards: 700,
+  cheat: 9,
 };
 
 function hash(seed: string) {

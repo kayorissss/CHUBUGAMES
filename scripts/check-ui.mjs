@@ -106,7 +106,15 @@ console.log('\n[8] Контент про друзей');
 const cnt=fs.readFileSync('src/core/content.ts','utf8');
 for(const id of ['lyoha','vanya','maks','seryoga','artyom','radomir','kudrya','shitov'])
   ok(cnt.includes(`id: "${id}"`),`друг ${id} есть в игре`);
-ok((cnt.match(/unlockLvl: 0/g)||[]).length===27,'все 27 мини-игр открыты сразу');
+/*
+ * Число игр больше не зашито: оно считается из GameId и растёт с каждой
+ * новой игрой. Раньше здесь стояло «27», и добавление игры валило три
+ * проверки подряд, хотя код был верным.
+ */
+const GAME_COUNT = (fs.readFileSync('src/core/types.ts','utf8')
+  .match(/export type GameId =([\s\S]*?);/)[1].match(/"/g).length) / 2;
+ok((cnt.match(/unlockLvl: 0/g)||[]).length===GAME_COUNT,
+  `все ${GAME_COUNT} мини-игр открыты сразу`);
 const sav=fs.readFileSync('src/core/save.ts','utf8');
 ok(/unlockedGames = ALL_GAMES\.slice\(\)/.test(sav)&&/ALL_GAMES: GameId\[\]/.test(sav),'старые сохранения тоже получают все игры');
 ok(sav.includes('if (!have.has(f.id))'),'новые друзья досыпаются в старые сохранения');
@@ -350,7 +358,7 @@ for (const id of Object.keys(sv19)) {
 }
 
 // Ни одна игра не должна быть заперта за уровнем.
-ok((cnt19.match(/unlockLvl: 0/g) || []).length === 27, 'все 27 игр открыты сразу');
+ok((cnt19.match(/unlockLvl: 0/g) || []).length === GAME_COUNT, `все ${GAME_COUNT} игр открыты сразу`);
 
 // Эмодзи запрещены во всём приложении.
 const emo19 = /[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/u;
@@ -485,7 +493,7 @@ console.log('\n[22] Правила есть в каждой игре');
 const rul22 = fs.readFileSync('src/core/rules.ts', 'utf8');
 const meta22 = fs.readFileSync('src/core/content.ts', 'utf8');
 const ids22 = [...meta22.matchAll(/id: "(\w+)" as const/g)].map((m) => m[1]);
-ok(ids22.length === 27, `в игре 27 мини-игр (нашли ${ids22.length})`);
+ok(ids22.length === GAME_COUNT, `в игре ${GAME_COUNT} мини-игр (нашли ${ids22.length})`);
 for (const id of ids22) ok(new RegExp(`^  ${id}: \\{`, 'm').test(rul22), `${id}: правила описаны`);
 ok(fs.existsSync('src/ui/RulesCard.tsx'), 'карточка правил есть');
 const shell22 = fs.readFileSync('src/games/shell.tsx', 'utf8');

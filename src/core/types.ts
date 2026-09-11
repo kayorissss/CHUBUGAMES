@@ -5,7 +5,8 @@ export type GameId =
   | "stack" | "sort" | "memory" | "flap" | "defend"
   | "basket" | "volley" | "penalty" | "pool"
   | "crossword" | "bus" | "pet" | "beard" | "moto" | "fuel" | "hands" | "europa"
-  | "chess" | "checkers" | "nards";
+  | "chess" | "checkers" | "nards"
+  | "cheat";
 
 /**
  * 0 лысый, 1 короткие, 2 шапка волос, 3 ирокез, 4 кудри-облако,

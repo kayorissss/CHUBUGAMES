@@ -274,6 +274,15 @@ export default function GameIcon({
       );
 
     // Треугольники нард и кубик
+    case "cheat":
+      // листок-шпаргалка с ручкой (viewBox 32x32, как у остальных)
+      return (
+        <svg {...p} fill="none" stroke="currentColor" strokeWidth="2">
+          <rect x="5" y="4" width="15" height="24" rx="2.5" />
+          <path d="M9 11h7M9 16h7M9 21h4" strokeLinecap="round" />
+          <path d="M24 15l4 4-6.5 6.5-4.5 1 1-4.5z" fill={acc} stroke="none" />
+        </svg>
+      );
     case "nards":
       return (
         <svg {...p} fill="none">
