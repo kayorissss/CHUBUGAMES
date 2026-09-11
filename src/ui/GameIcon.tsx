@@ -274,6 +274,16 @@ export default function GameIcon({
       );
 
     // Треугольники нард и кубик
+    case "lift":
+      // шахта лифта со стрелками вверх-вниз
+      return (
+        <svg {...p} fill="none" stroke="currentColor" strokeWidth="2">
+          <rect x="6" y="3" width="20" height="26" rx="2.5" />
+          <path d="M16 3v26" />
+          <path d="M11 13l0-4M9 11l2-2 2 2" stroke={acc} strokeLinecap="round" strokeLinejoin="round" />
+          <path d="M21 19l0 4M19 21l2 2 2-2" stroke={acc} strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      );
     case "cheat":
       // листок-шпаргалка с ручкой (viewBox 32x32, как у остальных)
       return (

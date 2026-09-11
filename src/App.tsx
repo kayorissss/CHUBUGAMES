@@ -39,6 +39,7 @@ import ShitovRun from "./games/ShitovRun";
 import RadomirBeat from "./games/RadomirBeat";
 import BurgerStack from "./games/BurgerStack";
 import Cheat from "./games/Cheat";
+import Elevator from "./games/Elevator";
 import Basket from "./games/Basket";
 import Volley from "./games/Volley";
 import Penalty from "./games/Penalty";
@@ -374,6 +375,7 @@ function Shell() {
             {game === "checkers" && <Checkers onExit={() => setGame(null)} />}
             {game === "nards" && <Backgammon onExit={() => setGame(null)} />}
             {game === "cheat" && <Cheat onExit={() => setGame(null)} />}
+            {game === "lift" && <Elevator onExit={() => setGame(null)} />}
           </motion.div>
         )}
       </AnimatePresence>
