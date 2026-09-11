@@ -19,6 +19,11 @@ export type ChangeItem = {
 export const CHANGELOG: Record<string, ChangeItem[]> = {
   "1.19.0": [
     {
+      title: "Версия для компьютера",
+      text: "Появилась сборка под Windows: portable-файл и установщик. Работает офлайн, управление мышью, Escape — назад",
+      icon: "speed",
+    },
+    {
       title: "Бой с боссом переделан",
       text: "Вместо висящей головы и одной кнопки — арена с двумя бойцами целиком: они бьют, блокируют, отлетают и падают",
       icon: "fist",
