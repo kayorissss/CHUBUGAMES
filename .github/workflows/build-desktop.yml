@@ -71,8 +71,15 @@ jobs:
       - name: Smoke test (запуск приложения)
         shell: pwsh
         run: |
-          $exe = "desktop-out/win-unpacked/CHUBGAMES.exe"
-          if (-not (Test-Path $exe)) { Write-Error "нет $exe"; exit 1 }
+          # Имя exe берём из папки, а не хардкодим: оно зависит от
+          # productName и однажды уже разъехалось при переименовании.
+          $exe = (Get-ChildItem "desktop-out/win-unpacked/*.exe" | Select-Object -First 1).FullName
+          if (-not $exe) {
+            Write-Error "в win-unpacked нет ни одного .exe"
+            Get-ChildItem "desktop-out/win-unpacked" | Format-Table Name
+            exit 1
+          }
+          Write-Host "запускаю $exe"
           $p = Start-Process -FilePath $exe -PassThru
           Start-Sleep -Seconds 25
           if ($p.HasExited) {
