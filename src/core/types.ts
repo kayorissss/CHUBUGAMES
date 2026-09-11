@@ -120,7 +120,7 @@ export interface Settings {
   /** Закреплённые игры — показываются первыми в сетке */
   favGames?: string[];
   /** Порядок игр в сетке */
-  gameSort?: "default" | "best" | "recent" | "plays";
+  gameSort?: "default" | "best" | "recent" | "plays" | "name";
 }
 
 export interface SaveState {

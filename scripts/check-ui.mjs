@@ -284,6 +284,31 @@ ok(fs.readFileSync('src/core/mastery.ts', 'utf8').includes('masteryBonus'),
 ok(fs.readFileSync('src/core/friendship.ts', 'utf8').includes('STORY_TIERS'),
   'у друзей есть истории по уровням дружбы');
 
+/*
+ * Поиск и фильтр игр. Раньше на главной висел ряд из четырёх чипов
+ * сортировки, поиска не было вовсе, а фильтровать предлагалось по два
+ * десятка разрозненных тегов.
+ */
+const gfSrc = fs.readFileSync('src/ui/GameFilter.tsx', 'utf8');
+ok(gfSrc.includes('placeholder={tr("Найти игру")}'), 'есть поиск по играм');
+ok(gfSrc.includes('CATEGORIES'), 'игры сгруппированы в категории');
+ok(fs.readFileSync('src/pages/Home.tsx', 'utf8').includes('GameFilter'),
+  'панель поиска подключена на главной');
+// каждая игра должна попадать хотя бы в одну категорию, иначе её не найти
+{
+  const cats = [...gfSrc.slice(gfSrc.indexOf('CATEGORIES'), gfSrc.indexOf('const SORTS'))
+    .matchAll(/tags: \[([\s\S]*?)\]/g)]
+    .flatMap((m) => [...m[1].matchAll(/"([^"]+)"/g)].map((x) => x[1]));
+  const tags = [...fs.readFileSync('src/core/content.ts', 'utf8')
+    .matchAll(/tag: "([^"]+)"/g)].map((m) => m[1]);
+  const orphan = [...new Set(tags)].filter((t) => !cats.includes(t));
+  ok(orphan.length === 0, `все теги игр попадают в категории${orphan.length ? ': нет ' + orphan.join(', ') : ''}`);
+}
+// Режимы должны быть компактными: не четыре плашки во всю ширину
+const mpSrc = fs.readFileSync('src/ui/ModesPanel.tsx', 'utf8');
+ok(mpSrc.includes('grid-cols-3'), 'режимы показаны компактной сеткой');
+ok(mpSrc.includes('Чем отличаются режимы'), 'у режимов есть пояснение по запросу');
+
 const bf18 = fs.readFileSync('src/pages/BossFight.tsx', 'utf8');
 ok(bf18.includes('setWindup'), 'босс замахивается перед ударом');
 ok(bf18.includes('blockReady'), 'у блока есть перезарядка');

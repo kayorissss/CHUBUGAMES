@@ -11,7 +11,7 @@ export type IconName =
   | "target" | "clock" | "calendar" | "gift" | "case" | "lock" | "check"
   | "cross" | "plus" | "minus" | "chevron" | "arrowDown" | "arrowUp"
   | "download" | "refresh" | "settings" | "user" | "users" | "shop"
-  | "chart" | "music" | "sound" | "soundOff" | "vibrate" | "moon" | "sun" | "globe"
+  | "search" | "filter" | "sort" | "chart" | "music" | "sound" | "soundOff" | "vibrate" | "moon" | "sun" | "globe"
   | "wifi" | "speed" | "shield" | "skull" | "burger" | "tooth" | "hammer"
   | "brain" | "sparkle" | "flag" | "medal" | "ticket" | "rocket" | "leaf"
   | "snow" | "magnet" | "clover" | "fist" | "gear" | "bank" | "dice"
@@ -235,6 +235,26 @@ export default function Icon({
         <svg {...p}>
           <path d="M3.5 8.5h17l-1.3 11a2 2 0 01-2 1.8H6.8a2 2 0 01-2-1.8z" />
           <path d="M8.5 8.5V6a3.5 3.5 0 017 0v2.5" />
+        </svg>
+      );
+    case "search":
+      return (
+        <svg {...p}>
+          <circle cx="11" cy="11" r="6.5" />
+          <path d="M16 16l4.5 4.5" strokeLinecap="round" />
+        </svg>
+      );
+    case "filter":
+      return (
+        <svg {...p}>
+          <path d="M4 6h16M7 12h10M10 18h4" strokeLinecap="round" />
+        </svg>
+      );
+    case "sort":
+      return (
+        <svg {...p}>
+          <path d="M7 4v16M7 20l-3-3M7 20l3-3" strokeLinecap="round" strokeLinejoin="round" />
+          <path d="M17 20V4M17 4l-3 3M17 4l3 3" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
       );
     case "chart":

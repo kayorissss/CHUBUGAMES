@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { tr } from "../core/i18n";
 import ChestCard from "../ui/ChestCard";
+import GameFilter, { CATEGORIES, type SortKey } from "../ui/GameFilter";
 import { AnimatePresence, motion } from "framer-motion";
 import { useGame } from "../core/store";
 import { sfx, haptic } from "../core/fx";
@@ -8,7 +9,7 @@ import { GAME_META } from "../core/content";
 import { EASE } from "../core/motion";
 import { fmt } from "../core/format";
 import { autoRate } from "../core/save";
-import { Card, Tap, Bar, Chip, SectionTitle, Screen } from "../ui/Glass";
+import { Card, Tap, Bar, SectionTitle, Screen } from "../ui/Glass";
 import HeadView from "../ui/HeadView";
 import GameIcon from "../ui/GameIcon";
 import Icon, { type IconName } from "../ui/Icon";
@@ -38,6 +39,10 @@ export default function Home({
 }) {
   const { s, set, levelPct, addCoins, toast } = useGame();
 
+  /** Поиск по названию и выбранная категория */
+  const [q, setQ] = useState("");
+  const [cat, setCat] = useState("all");
+
   /**
    * Порядок игр в сетке.
    *
@@ -48,7 +53,25 @@ export default function Home({
   const sortedGames = useMemo(() => {
     const fav = s.settings.favGames || [];
     const mode = s.settings.gameSort || "default";
-    const list = GAME_META.map((g, i) => ({ g, i }));
+    const needle = q.trim().toLowerCase();
+    const catDef = CATEGORIES.find((c) => c.id === cat);
+
+    let list = GAME_META.map((g, i) => ({ g, i }));
+
+    // поиск идёт и по названию, и по описанию, и по тегу — на обоих языках
+    if (needle) {
+      list = list.filter(({ g }) =>
+        [g.name, g.desc, g.tag, tr(g.name), tr(g.desc), tr(g.tag)]
+          .join(" ")
+          .toLowerCase()
+          .includes(needle),
+      );
+    }
+    if (cat === "fav") list = list.filter(({ g }) => fav.includes(g.id));
+    else if (catDef && catDef.tags.length) {
+      list = list.filter(({ g }) => catDef.tags.includes(g.tag));
+    }
+
     list.sort((a, b) => {
       const fa = fav.includes(a.g.id) ? 0 : 1;
       const fb = fav.includes(b.g.id) ? 0 : 1;
@@ -57,10 +80,11 @@ export default function Home({
       if (mode === "best") return (sb?.best || 0) - (sa?.best || 0);
       if (mode === "plays") return (sb?.plays || 0) - (sa?.plays || 0);
       if (mode === "recent") return (sb?.recent?.[0]?.t || 0) - (sa?.recent?.[0]?.t || 0);
+      if (mode === "name") return tr(a.g.name).localeCompare(tr(b.g.name));
       return a.i - b.i;
     });
     return list.map((x) => x.g);
-  }, [s.settings.favGames, s.settings.gameSort, s.games]);
+  }, [s.settings.favGames, s.settings.gameSort, s.games, q, cat]);
   const rate = autoRate(s);
   const [showAd, setShowAd] = useState(false);
   const [adLeft, setAdLeft] = useState(() => bonusesLeft());
@@ -449,30 +473,17 @@ export default function Home({
         )}
       </AnimatePresence>
 
-      {/*
-        СОРТИРОВКА И ИЗБРАННОЕ.
-        Игр 27, и мотать до нужной каждый раз было долго. Закреплённые
-        (долгий тап по карточке) всегда идут первыми.
-      */}
-      <div className="flex items-center" style={{ gap: 7, marginBottom: 10, flexWrap: "wrap" }}>
-        {([
-          { k: "default" as const, l: tr("По порядку") },
-          { k: "best" as const, l: tr("По рекорду") },
-          { k: "plays" as const, l: tr("По забегам") },
-          { k: "recent" as const, l: tr("Недавние") },
-        ]).map((o) => (
-          <Chip
-            key={o.k}
-            active={(s.settings.gameSort || "default") === o.k}
-            onClick={() => {
-              sfx.click();
-              set((d) => { d.settings.gameSort = o.k; });
-            }}
-          >
-            {o.l}
-          </Chip>
-        ))}
-      </div>
+      {/* Поиск, категории и сортировка — вместо ряда чипов */}
+      <GameFilter
+        query={q}
+        onQuery={setQ}
+        cat={cat}
+        onCat={setCat}
+        sort={(s.settings.gameSort as SortKey) || "default"}
+        onSort={(k) => set((d) => { d.settings.gameSort = k; })}
+        found={sortedGames.length}
+        total={GAME_META.length}
+      />
 
       {/* Сетка игр */}
       <SectionTitle right={<span className="t-num" style={{ fontSize: 11, color: "var(--text-mute)" }}>{s.unlockedGames.length}/{GAME_META.length}</span>}>{tr("Все игры")}</SectionTitle>
