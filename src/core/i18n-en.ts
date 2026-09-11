@@ -1067,4 +1067,12 @@ export const EN_TEXT: Record<string, string> = {
   "КУДРЯ": "KUDRYA",
   "СЕРЁГА": "SERYOGA",
   "ТВОЯ РУКА": "YOUR HAND",
+  "ЗОЛОТО": "GOLD",
+  "ХОД": "TURN",
+  "Все провинции твои": "Every province is yours",
+  "Ткни в провинцию на карте: зелёная — твоя, красная — чужая": "Tap a province on the map: green is yours, red is theirs",
+  "Своя провинция: докупи войско или развитие, они тратят золото": "Your province: buy troops or development, both cost gold",
+  "Чужая провинция: жми НАПАСТЬ, удар пойдёт по красной стрелке": "Enemy province: hit ATTACK, the strike follows the red arrow",
+  "куда можно напасть": "where you can attack",
+  "провинций": "provinces",
 };

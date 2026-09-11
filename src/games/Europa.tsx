@@ -116,6 +116,8 @@ export default function Europa({ onExit }: { onExit: () => void }) {
 
   const mine = provs.filter((p) => p.owner === "me");
   const selP = sel !== null ? provs.find((p) => p.id === sel) : undefined;
+  /** Сколько провинций уже захвачено — показываем прогресс к победе */
+  const mineCount = provs.filter((p) => p.owner === "me").length;
 
   /** Можно ли атаковать: есть моя соседняя провинция с войском */
   const attackFrom = (target: Prov): Prov | undefined => {
@@ -285,18 +287,49 @@ export default function Europa({ onExit }: { onExit: () => void }) {
             preserveAspectRatio="none"
             style={{ position: "absolute", inset: 0, width: "100%", height: "100%" }}
           >
+            <defs>
+              {/* наконечник для стрелок наступления */}
+              <marker
+                id="eu-arrow" viewBox="0 0 10 10" refX="9" refY="5"
+                markerWidth="4" markerHeight="4" orient="auto-start-reverse"
+              >
+                <path d="M0 0 L10 5 L0 10 z" fill="#ff6b4d" />
+              </marker>
+            </defs>
+
+            {/*
+              Дороги между провинциями. Пользователь жаловался, что
+              «непонятно направление движения»: раньше все связи были
+              одинаковыми серыми палочками. Теперь дорога, по которой
+              МОЖНО наступать прямо сейчас (моя провинция с войском ->
+              соседняя чужая), рисуется красной стрелкой С НАКОНЕЧНИКОМ,
+              показывающим, куда пойдёт удар.
+            */}
             {MAP.flatMap((p) =>
               p.links
                 .filter((id) => id > p.id)
                 .map((id) => {
                   const q = MAP.find((x) => x.id === id)!;
+                  const pp = provs.find((x) => x.id === p.id);
+                  const qq = provs.find((x) => x.id === id);
+                  if (!pp || !qq) return null;
+                  // в какую сторону возможно наступление по этой дороге
+                  const pToQ = pp.owner === "me" && qq.owner === "ai" && pp.army > 1 && !pp.moved;
+                  const qToP = qq.owner === "me" && pp.owner === "ai" && qq.army > 1 && !qq.moved;
+                  const live = pToQ || qToP;
+                  // стрелка всегда от моей провинции к чужой
+                  const a = pToQ ? p : q;
+                  const b = pToQ ? q : p;
                   return (
                     <line
                       key={`${p.id}-${id}`}
-                      x1={p.x * 100} y1={p.y * 105}
-                      x2={q.x * 100} y2={q.y * 105}
-                      stroke="var(--surface-brd)"
-                      strokeWidth="0.5"
+                      x1={a.x * 100} y1={a.y * 105}
+                      x2={b.x * 100} y2={b.y * 105}
+                      stroke={live ? "#ff6b4d" : "var(--surface-brd)"}
+                      strokeWidth={live ? "0.9" : "0.5"}
+                      strokeDasharray={live ? "2 1.4" : undefined}
+                      markerEnd={live ? "url(#eu-arrow)" : undefined}
+                      opacity={live ? 0.9 : 1}
                     />
                   );
                 }),
@@ -330,23 +363,67 @@ export default function Europa({ onExit }: { onExit: () => void }) {
                 >
                   {tr(p.name)}
                 </div>
-                <div className="t-num" style={{ fontSize: 11, marginTop: 2 }}>
-                  {p.army}
+                {/*
+                  Значки с расшифровкой. Раньше на фишке было голое число
+                  и безымянные точки — пользователь не понимал, что это.
+                  Теперь: щит = войско, звёздочка = развитие.
+                */}
+                <div className="flex items-center justify-center" style={{ gap: 3, marginTop: 3 }}>
+                  <span style={{ color: "var(--text-mute)", lineHeight: 0 }}>
+                    <Icon name="shield" size={8} />
+                  </span>
+                  <span className="t-num" style={{ fontSize: 11 }}>{p.army}</span>
                 </div>
-                <div className="flex items-center justify-center" style={{ gap: 2, marginTop: 2 }}>
-                  {Array.from({ length: Math.min(5, p.dev) }).map((_, i) => (
-                    <span
-                      key={i}
-                      style={{
-                        width: 3, height: 3, borderRadius: 999, display: "block",
-                        background: "var(--n-700)",
-                      }}
-                    />
-                  ))}
+                <div className="flex items-center justify-center" style={{ gap: 3, marginTop: 1 }}>
+                  <span style={{ color: "var(--gold)", lineHeight: 0 }}>
+                    <Icon name="sparkle" size={7} />
+                  </span>
+                  <span className="t-num" style={{ fontSize: 9, color: "var(--gold)" }}>{p.dev}</span>
                 </div>
               </button>
             );
           })}
+        </div>
+
+        {/*
+          ЛЕГЕНДА И ЗАДАЧА. Жалоба: «непонятно что делать, значки,
+          направление движения». Держим короткую расшифровку прямо под
+          картой, чтобы не лезть в правила.
+        */}
+        <div
+          style={{
+            padding: "10px 12px", borderRadius: "var(--r-md)",
+            background: "var(--surface)", border: "1px solid var(--surface-brd)",
+            marginBottom: 10,
+          }}
+        >
+          <div className="t-caption" style={{ fontSize: 10.5, lineHeight: 1.4, marginBottom: 8 }}>
+            {mineCount === MAP.length
+              ? tr("Все провинции твои")
+              : sel === null
+                ? tr("Ткни в провинцию на карте: зелёная — твоя, красная — чужая")
+                : selP && selP.owner === "me"
+                  ? tr("Своя провинция: докупи войско или развитие, они тратят золото")
+                  : tr("Чужая провинция: жми НАПАСТЬ, удар пойдёт по красной стрелке")}
+          </div>
+          <div className="flex items-center flex-wrap" style={{ gap: 10 }}>
+            <span className="flex items-center" style={{ gap: 4 }}>
+              <span style={{ color: "var(--text-mute)", lineHeight: 0 }}><Icon name="shield" size={9} /></span>
+              <span className="t-caption" style={{ fontSize: 9 }}>{tr("войско")}</span>
+            </span>
+            <span className="flex items-center" style={{ gap: 4 }}>
+              <span style={{ color: "var(--gold)", lineHeight: 0 }}><Icon name="sparkle" size={9} /></span>
+              <span className="t-caption" style={{ fontSize: 9 }}>{tr("развитие")}</span>
+            </span>
+            <span className="flex items-center" style={{ gap: 4 }}>
+              <span style={{ width: 12, height: 2, background: "#ff6b4d", display: "block" }} />
+              <span className="t-caption" style={{ fontSize: 9 }}>{tr("куда можно напасть")}</span>
+            </span>
+            <span className="flex items-center" style={{ gap: 4 }}>
+              <span className="t-num" style={{ fontSize: 9, color: "var(--ok)" }}>{mineCount}</span>
+              <span className="t-caption" style={{ fontSize: 9 }}>/ {MAP.length} {tr("провинций")}</span>
+            </span>
+          </div>
         </div>
 
         {/* панель провинции */}
