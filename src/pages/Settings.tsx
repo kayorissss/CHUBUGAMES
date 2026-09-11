@@ -73,7 +73,7 @@ export default function Settings({
       try {
         const handle = await picker({
           suggestedName: name,
-          types: [{ description: "Сохранение ЧУБУГЕЙМ", accept: { "application/json": [".json"] } }],
+          types: [{ description: "Сохранение CHUBUGAMES", accept: { "application/json": [".json"] } }],
         });
         const w = await handle.createWritable();
         await w.write(data);
@@ -92,7 +92,7 @@ export default function Settings({
       const file = new File([data], name, { type: "application/json" });
       const nav = navigator as any;
       if (nav.canShare?.({ files: [file] })) {
-        await nav.share({ files: [file], title: "Сохранение ЧУБУГЕЙМ" });
+        await nav.share({ files: [file], title: "Сохранение CHUBUGAMES" });
         sfx.buy();
         toast({ title: "Файл отправлен", sub: "Выбери, куда положить", icon: "download" });
         return;
@@ -350,7 +350,7 @@ export default function Settings({
       </Card>
 
       <div className="text-center" style={{ paddingBlock: 18 }}>
-        <div className="t-display-sm" style={{ color: "var(--n-400)" }}>ЧУБУГЕЙМ</div>
+        <div className="t-display-sm" style={{ color: "var(--n-400)" }}>CHUBUGAMES</div>
         <div className="t-caption" style={{ marginTop: 5 }}>
           {t("common.version")} {APP_VERSION} · {t("settings.offline")}
         </div>
@@ -447,16 +447,26 @@ function NotifyBlock() {
     }
   };
 
-  const native = isNativeApp();
+  /*
+   * Где уведомления вообще работают.
+   *
+   * На Android — через системные каналы, на ПК — средствами Electron.
+   * Раньше проверялось только isNativeApp(), поэтому в десктопной сборке
+   * все тумблеры были серыми и нажать их было нельзя.
+   */
+  const desktop = isDesktop();
+  const native = isNativeApp() || desktop;
 
   return (
     <>
       <Toggle
         label={tr("Обновления")}
         hint={
-          native
-            ? tr("Напомню о новой версии, даже когда игра закрыта")
-            : tr("Работает только в приложении на телефоне")
+          desktop
+            ? tr("Скажу, когда выйдет новая версия для компьютера")
+            : native
+              ? tr("Напомню о новой версии, даже когда игра закрыта")
+              : tr("Работает только в приложении на телефоне")
         }
         on={s.settings.notifyUpdates}
         disabled={busy || !native}
@@ -481,8 +491,11 @@ function NotifyBlock() {
       <Divider inset={14} />
       <div style={{ padding: "13px 14px" }}>
         <div className="t-caption" style={{ marginBottom: 10, lineHeight: 1.55 }}>
-          {tr("Каждый вид уведомлений можно выключить прямо в телефоне: НОВИНКИ, ОБНОВЛЕНИЯ и БОССЫ — это отдельные каналы Android.")}
+          {desktop
+            ? tr("На компьютере уведомления включены сразу — выключить можно здесь же.")
+            : tr("Каждый вид уведомлений можно выключить прямо в телефоне: НОВИНКИ, ОБНОВЛЕНИЯ и БОССЫ — это отдельные каналы Android.")}
         </div>
+        {!desktop && (
         <Button
           variant="secondary"
           full
@@ -494,7 +507,7 @@ function NotifyBlock() {
               if (!ok) {
                 toast({
                   title: tr("Открой настройки телефона"),
-                  sub: tr("Приложения → ЧУБУГЕЙМ → Уведомления"),
+                  sub: tr("Приложения → CHUBUGAMES → Уведомления"),
                   icon: "info",
                 });
               }
@@ -506,6 +519,7 @@ function NotifyBlock() {
             {tr("Настроить в телефоне")}
           </span>
         </Button>
+        )}
       </div>
     </>
   );

@@ -78,7 +78,7 @@ export default function Donate({ onBack }: { onBack: () => void }) {
             className="t-body"
             style={{ color: "var(--text-mute)", lineHeight: 1.6, marginBottom: 20 }}
           >
-            ЧУБУГЕЙМ бесплатный и без обязательной рекламы.
+            CHUBUGAMES бесплатный и без обязательной рекламы.
             Если игра зашла — можно закинуть на развитие.
             Любая сумма помогает и мотивирует пилить дальше.
           </div>

@@ -1,6 +1,9 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { tr } from "../core/i18n";
 import ChestCard from "../ui/ChestCard";
+import PcSidebar from "../ui/PcSidebar";
+import { isDesktop } from "../core/desktop";
+import type { Tab } from "../components/Nav";
 import GameFilter, { CATEGORIES, type SortKey } from "../ui/GameFilter";
 import { AnimatePresence, motion } from "framer-motion";
 import { useGame } from "../core/store";
@@ -31,11 +34,13 @@ function fmtLeft(ms: number): string {
 }
 
 export default function Home({
-  onPlay, onOpenProfile, onOpen,
+  onPlay, onOpenProfile, onOpen, onTab,
 }: {
   onPlay: (g: GameId) => void;
   onOpenProfile?: () => void;
   onOpen?: (page: SubPage) => void;
+  /** Переключение разделов — нужно боковой панели ПК-версии */
+  onTab?: (t: Tab) => void;
 }) {
   const { s, set, levelPct, addCoins, toast } = useGame();
 
@@ -99,6 +104,8 @@ export default function Home({
   const nextBoss = bossOfHour(Date.now() + BOSS_EVERY_MS);
   // жетоны показываем прямо на плашке казино — видно, есть ли на что играть
   const chips = readGamble().chips;
+  /** ПК: альбомная раскладка вместо телефонной колонки */
+  const pc = isDesktop();
   useEffect(() => {
     const iv = setInterval(() => setBossTick((n) => n + 1), 1000);
     return () => clearInterval(iv);
@@ -108,8 +115,20 @@ export default function Home({
   // награда — как 3 минуты автодохода, но не меньше осмысленной суммы
   const adReward = Math.max(500, Math.floor(rate * 180) + s.level * 250);
 
+  /*
+   * ДВЕ РАСКЛАДКИ ОДНИМ КОДОМ.
+   *
+   * Содержимое главного экрана одинаковое, отличается только раскладка:
+   * на телефоне — одна колонка (Screen), на компьютере — CSS-грид
+   * .pc-home, который расставляет те же блоки по зонам (см. index.css).
+   * Разрезать разметку на два дерева нельзя: тогда любая правка карточки
+   * игры пришлась бы в двух местах и они бы разъехались.
+   */
+  const Wrap: React.ElementType = pc ? "div" : Screen;
+  const wrapProps = pc ? { className: "pc-home" } : {};
+
   return (
-    <Screen>
+    <Wrap {...wrapProps}>
       {/* Шапка: название, уровень, монеты.
           Иконку персонажа слева убрали по просьбе пользователя — вход в
           профиль остался на плашке уровня. */}
@@ -128,7 +147,7 @@ export default function Home({
               color: "transparent",
             }}
           >
-            ЧУБУГЕЙМ
+            CHUBUGAMES
           </h1>
           <div className="flex items-center" style={{ gap: 8, marginTop: 6 }}>
             <button
@@ -618,7 +637,17 @@ export default function Home({
         })}
       </div>
 
-    </Screen>
+      {pc && (
+        <div className="pc-home-side">
+          <PcSidebar
+            tab="home"
+            onTab={(t) => onTab?.(t)}
+            onOpen={onOpen}
+            onOpenProfile={onOpenProfile}
+          />
+        </div>
+      )}
+    </Wrap>
   );
 }
 

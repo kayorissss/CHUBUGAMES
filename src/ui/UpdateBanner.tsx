@@ -39,7 +39,7 @@ function parseNotes(raw: string): { head: string; items: string[] }[] {
         continue;
       }
       // название приложения в шапке — не раздел
-      if (/^ЧУБУГЕЙМ$/i.test(head)) { cur = null; continue; }
+      if (/^CHUBUGAMES$/i.test(head)) { cur = null; continue; }
       cur = { head, items: [] };
       out.push(cur);
       continue;

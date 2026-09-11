@@ -67,6 +67,15 @@ export function initDesktopKeys(): () => void {
       return;
     }
 
+    /*
+     * Цифры 1–5 переключают разделы: на ПК это быстрее, чем целиться
+     * мышью в боковую панель. Событие слушает App через window.
+     */
+    if (/^[1-5]$/.test(e.key) && !e.ctrlKey && !e.altKey && !e.metaKey) {
+      window.dispatchEvent(new CustomEvent("chub:nav", { detail: Number(e.key) - 1 }));
+      return;
+    }
+
     if (e.key === "Escape") {
       // history.back() поднимет popstate, а его уже слушает core/nav.ts
       e.preventDefault();

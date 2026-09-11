@@ -1,8 +1,8 @@
 /**
- * Уведомления ЧУБУГЕЙМ.
+ * Уведомления CHUBUGAMES.
  *
  * Три отдельных КАНАЛА Android — так человек может отключить лишнее прямо
- * в системных настройках телефона («Настройки → Приложения → ЧУБУГЕЙМ →
+ * в системных настройках телефона («Настройки → Приложения → CHUBUGAMES →
  * Уведомления»), не заходя в игру:
  *
  *   chub-updates  ОБНОВЛЕНИЯ  вышла новая версия
@@ -75,6 +75,8 @@ const ID = {
   bossBase: 7100,
   /** новинки и ежедневки — 7200..7209 */
   newsBase: 7200,
+  /** прогресс загрузки обновления */
+  download: 7300,
 };
 
 /* ───────────────────────── Плагины ───────────────────────── */
@@ -223,6 +225,57 @@ export async function scheduleBossNotifications(
     });
   } catch {
     /* нет разрешения — молча пропускаем */
+  }
+}
+
+/* ─────────────── Прогресс загрузки обновления ─────────────── */
+
+/**
+ * Показать прогресс скачивания в шторке.
+ *
+ * Раньше загрузку было видно только на открытом экране: свернул игру —
+ * и непонятно, идёт ли она вообще. Теперь проценты видно в уведомлении,
+ * поэтому приложение можно свернуть.
+ *
+ * Уведомление перевыпускается с тем же id — Android заменяет его, а не
+ * плодит новые. Обновляем не чаще раза в 2 %, иначе шторка «дрожит»
+ * и тратится батарея.
+ */
+let lastPct = -1;
+
+export async function showDownloadProgress(pct: number, mb: string) {
+  if (!isNative()) return;
+  const p = Math.max(0, Math.min(100, Math.round(pct)));
+  if (p === lastPct || (p % 2 !== 0 && p < 100)) return;
+  lastPct = p;
+  const n = await notifications();
+  if (!n) return;
+  try {
+    await n.schedule({
+      notifications: [{
+        id: ID.download,
+        channelId: channelId("updates"),
+        title: p >= 100 ? "Загрузка завершена" : `Скачивание обновления · ${p}%`,
+        body: p >= 100 ? "Сейчас откроется установка" : mb,
+        ongoing: p < 100,
+        autoCancel: p >= 100,
+      }],
+    });
+  } catch {
+    /* нет разрешения — не критично */
+  }
+}
+
+/** Убрать уведомление о загрузке */
+export async function clearDownloadProgress() {
+  lastPct = -1;
+  if (!isNative()) return;
+  const n = await notifications();
+  if (!n) return;
+  try {
+    await n.cancel({ notifications: [{ id: ID.download }] });
+  } catch {
+    /* нечего снимать */
   }
 }
 
@@ -381,13 +434,27 @@ export async function initNotificationsOnFirstRun(): Promise<void> {
     // их ещё нет, а без них уведомления уйдут в канал «по умолчанию».
     await ensureChannels();
 
-    if (localStorage.getItem(ASKED_KEY) === "1") {
-      // уже спрашивали — просто поддерживаем фоновую проверку живой
-      if (await notifyGranted()) await enableBackgroundCheck();
+    /*
+     * ЗАПРОС РАЗРЕШЕНИЯ.
+     *
+     * Раньше флаг «уже спрашивали» ставился НАВСЕГДА и до вызова
+     * системного диалога. Из-за этого: если человек отказал, промахнулся
+     * мимо кнопки или диалог не успел показаться — второго шанса не было
+     * никогда. Тумблеры уведомлений в настройках оставались серыми и не
+     * нажимались, потому что разрешения нет, а спросить его больше некому.
+     *
+     * Теперь спрашиваем при каждом запуске, пока разрешение не выдано
+     * (система сама покажет диалог максимум пару раз, дальше вернёт
+     * "denied" молча — навязчивости не будет), а флаг ставим ТОЛЬКО
+     * после фактического ответа.
+     */
+    if (await notifyGranted()) {
+      await enableBackgroundCheck();
       return;
     }
-    localStorage.setItem(ASKED_KEY, "1");
+
     const ok = await askNotifyPermission();
+    localStorage.setItem(ASKED_KEY, ok ? "granted" : "asked");
     if (ok) await enableBackgroundCheck();
   } catch {
     /* плагин недоступен — молча пропускаем */

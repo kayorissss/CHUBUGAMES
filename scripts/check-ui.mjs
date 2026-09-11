@@ -35,7 +35,10 @@ ok(/paddingBottom:\s*"calc\(var\(--sab\) \+ 104px\)"/.test(glass),'Screen рез
 ok(/padding:\s*"0 16px"/.test(glass),'Screen задаёт единые боковые поля');
 for(const f of ['Home','Progress','Shop','Friends','Settings']){
   const t=fs.readFileSync(`src/pages/${f}.tsx`,'utf8');
-  ok(/<Screen/.test(t),`${f}: использует единый каркас Screen`);
+  // Home на ПК подменяет Screen на грид-контейнер (переменная Wrap),
+  // поэтому у него проверяем сам факт использования каркаса.
+  ok(/<Screen/.test(t) || /Wrap: React\.ElementType = pc \? "div" : Screen/.test(t),
+    `${f}: использует единый каркас Screen`);
   ok(!/pb-28/.test(t)&&!/\+ 116px/.test(t),`${f}: старый жёсткий отступ убран`);
   ok(!/<Panel/.test(t),`${f}: непрозрачные карточки вместо стекла в списках`);
 }
@@ -339,8 +342,17 @@ ok(!/require\("(?!electron)/.test(pre),
 const stg23 = fs.readFileSync('src/core/stage.ts', 'utf8');
 ok(stg23.includes('STAGE_PRESETS') && stg23.includes('computeScale'),
   'есть выбор разрешения и расчёт масштаба сцены');
-ok(fs.readFileSync('src/index.css', 'utf8').includes('--stage-scale'),
-  'сцена масштабируется через CSS');
+// ПК-версия больше не «телефон по центру монитора»: интерфейс альбомный,
+// главный экран раскладывается гридом на зоны.
+const cssPc23 = fs.readFileSync('src/index.css', 'utf8');
+ok(cssPc23.includes(".pc-home") && cssPc23.includes("grid-template-columns"),
+  'на ПК главный экран раскладывается альбомно');
+ok(!cssPc23.includes("--stage-scale"),
+  'телефонная сцена по центру монитора убрана');
+ok(fs.readFileSync('src/ui/PcSidebar.tsx', 'utf8').includes('ITEMS'),
+  'на ПК разделы вынесены в боковую панель');
+ok(fs.readFileSync('src/App.tsx', 'utf8').includes('chub:nav'),
+  'разделы переключаются с клавиатуры');
 const wfDesk = fs.readFileSync('.github/workflows/build-desktop.yml', 'utf8');
 ok(wfDesk.includes('Remove outdated assets'),
   'сборка ПК чистит устаревшие exe из релиза');

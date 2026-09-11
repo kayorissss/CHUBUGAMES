@@ -1222,4 +1222,12 @@ export const EN_TEXT: Record<string, string> = {
   "portable-сборка": "portable build",
   "установщик": "installer",
   "Новый файл скачан и показан в проводнике. Portable-версия не может заменить сама себя — просто положи новый exe вместо старого.": "The new file is downloaded and shown in Explorer. A portable build cannot replace itself \u2014 just put the new exe over the old one.",
+  "Игрок": "Player",
+  "престиж": "prestige",
+  "разделы": "sections",
+  "назад": "back",
+  "Сеть": "Network",
+  "Поддержать": "Support",
+  "Скажу, когда выйдет новая версия для компьютера": "I\u2019ll tell you when a new desktop version is out",
+  "На компьютере уведомления включены сразу — выключить можно здесь же.": "On desktop notifications are on by default \u2014 you can turn them off right here.",
 };

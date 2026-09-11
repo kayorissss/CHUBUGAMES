@@ -87,8 +87,8 @@ jobs:
 
       - name: Set app label
         run: |
-          sed -i 's|<string name="app_name">.*</string>|<string name="app_name">ЧУБУГЕЙМ</string>|' android/app/src/main/res/values/strings.xml
-          sed -i 's|<string name="title_activity_main">.*</string>|<string name="title_activity_main">ЧУБУГЕЙМ</string>|' android/app/src/main/res/values/strings.xml
+          sed -i 's|<string name="app_name">.*</string>|<string name="app_name">CHUBUGAMES</string>|' android/app/src/main/res/values/strings.xml
+          sed -i 's|<string name="title_activity_main">.*</string>|<string name="title_activity_main">CHUBUGAMES</string>|' android/app/src/main/res/values/strings.xml
           cat android/app/src/main/res/values/strings.xml
 
       # Ставим иконку приложения. Готовые PNG лежат в репозитории (android-icons/),
@@ -190,21 +190,30 @@ jobs:
 
       # Кладём APK в Releases — прямая ссылка на скачивание с телефона,
       # без ZIP-архива и без входа в аккаунт GitHub
+      # Описание релиза держим коротким и техническим: подробный список
+      # изменений человек читает ВНУТРИ приложения (экран «Что нового»),
+      # дублировать его целиком на странице релиза незачем.
       - name: Prepare release notes
         run: |
           {
             printf 'version: %s\n\n' "$APP_VER"
-            cat RELEASE_NOTES.md
-            printf '\n---\n'
-            printf 'Собрано автоматически из ветки `%s`\n' "$GITHUB_REF_NAME"
-            printf '· коммит `%s`\n' "$GITHUB_SHA"
+            printf '**CHUBUGAMES %s — Android 7.0+**\n\n' "$APP_VER"
+            printf '| Файл | Размер |\n'
+            printf '|---|---|\n'
+            printf '| `CHUBGAMES.apk` | %s |\n\n' "$(du -h CHUBGAMES.apk | cut -f1)"
+            printf 'Установка поверх предыдущей версии сохраняет прогресс. Список изменений — в приложении: «Настройки» → «Что нового».\n\n'
+            printf '**Play Protect.** Сборка распространяется вне Google Play. При установке система может показать предупреждение — это реакция на источник, а не на содержимое файла.\n\n'
+            printf '**SHA-256**\n\n'
+            printf '```\n'
+            sha256sum CHUBGAMES.apk || true
+            printf '```\n'
           } > RELEASE_BODY.md
 
       - name: Publish APK to Releases
         uses: softprops/action-gh-release@v2
         with:
           tag_name: latest
-          name: ЧУБУГЕЙМ — последняя сборка
+          name: Android-сборка
           body_path: RELEASE_BODY.md
           files: CHUBGAMES.apk
           make_latest: true

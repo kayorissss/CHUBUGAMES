@@ -60,7 +60,7 @@ export async function saveFileNative(name: string, data: string): Promise<SaveRe
   try {
     const { Share } = await import("@capacitor/share");
     await Share.share({
-      title: "Сохранение ЧУБУГЕЙМ",
+      title: "Сохранение CHUBUGAMES",
       text: name,
       url: uri,
       dialogTitle: "Куда положить сохранение",

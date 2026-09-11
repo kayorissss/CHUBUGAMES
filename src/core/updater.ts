@@ -14,6 +14,7 @@ import { Filesystem, Directory } from "@capacitor/filesystem";
 import type { PluginListenerHandle } from "@capacitor/core";
 import { FileOpener } from "@capacitor-community/file-opener";
 import { APP_VERSION, UPDATE_REPO, UPDATE_TAG } from "./version";
+import { clearDownloadProgress, showDownloadProgress } from "./notify";
 
 export type UpdateInfo = {
   version: string;
@@ -247,8 +248,22 @@ export async function downloadAndInstall(
 
   // На телефоне качаем нативно: fetch упёрся бы в CORS редиректа GitHub
   if (isNative()) {
-    const uri = await downloadApkNative(info.url, name, onProgress);
+    /*
+     * Прогресс дублируем в уведомление, чтобы игру можно было свернуть
+     * и всё равно видеть, сколько осталось.
+     */
+    const uri = await downloadApkNative(info.url, name, (loaded, total) => {
+      onProgress(loaded, total);
+      if (total > 0) {
+        void showDownloadProgress(
+          (loaded / total) * 100,
+          `${fmtBytes(loaded)} из ${fmtBytes(total)}`,
+        );
+      }
+    });
+    await showDownloadProgress(100, "");
     await installApk(uri);
+    void clearDownloadProgress();
     return uri;
   }
 

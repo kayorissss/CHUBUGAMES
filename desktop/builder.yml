@@ -1,4 +1,4 @@
-# Сборка ПК-версии ЧУБУГЕЙМ (electron-builder).
+# Сборка ПК-версии CHUBUGAMES (electron-builder).
 #
 # Собираем ДВА варианта под Windows:
 #   • portable  — один .exe, ничего не устанавливает, запускается с флешки;
@@ -8,7 +8,7 @@
 # в пакет кладём только dist/ и оболочку desktop/.
 
 appId: com.chubgames.app
-productName: CHUBGAMES
+productName: CHUBUGAMES
 copyright: KAYORISAN
 
 directories:
@@ -46,16 +46,16 @@ win:
       arch: [x64]
 
 portable:
-  artifactName: CHUBGAMES-${version}-portable.exe
+  artifactName: CHUBUGAMES-${version}-portable.exe
 
 nsis:
-  artifactName: CHUBGAMES-${version}-setup.exe
+  artifactName: CHUBUGAMES-${version}-setup.exe
   oneClick: false
   perMachine: false
   allowToChangeInstallationDirectory: true
   createDesktopShortcut: true
   createStartMenuShortcut: true
-  shortcutName: ЧУБУГЕЙМ
+  shortcutName: CHUBUGAMES
   # Удаление должно уносить и сохранения, если пользователь этого хочет
   deleteAppDataOnUninstall: false
 
@@ -66,4 +66,4 @@ linux:
   target:
     - target: AppImage
       arch: [x64]
-  artifactName: CHUBGAMES-${version}-x86_64.AppImage
+  artifactName: CHUBUGAMES-${version}-x86_64.AppImage

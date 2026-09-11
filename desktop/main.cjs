@@ -1,5 +1,5 @@
 /**
- * ЧУБУГЕЙМ — оболочка для ПК (Windows .exe).
+ * CHUBUGAMES — оболочка для ПК (Windows .exe).
  *
  * Игра целиком собирается в один самодостаточный dist/index.html
  * (vite-plugin-singlefile), поэтому десктопной версии не нужен ни сервер,
@@ -118,7 +118,7 @@ function createWindow() {
     backgroundColor: "#08080A",
     autoHideMenuBar: true,
     show: false,
-    title: "ЧУБУГЕЙМ",
+    title: "CHUBUGAMES",
     icon: path.join(__dirname, "res", "icon.png"),
     webPreferences: {
       // Игре не нужен доступ к Node — держим песочницу закрытой

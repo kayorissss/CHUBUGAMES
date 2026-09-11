@@ -139,7 +139,7 @@ function Splash({ done }: { done: () => void }) {
         className="t-display text-center"
         style={{ fontSize: 34, lineHeight: 1 }}
       >
-        ЧУБУГЕЙМ
+        CHUBUGAMES
       </motion.div>
       <motion.div
         initial={{ opacity: 0 }}
@@ -225,7 +225,18 @@ function Shell() {
     document.documentElement.classList.add("is-desktop");
     const offKeys = initDesktopKeys();
     const offStage = initStage();
-    return () => { offKeys(); offStage(); };
+    // Цифры 1-5 — переключение разделов с клавиатуры
+    const order: Tab[] = ["home", "progress", "shop", "friends", "settings"];
+    const onNav = (e: Event) => {
+      const i = (e as CustomEvent<number>).detail;
+      if (order[i]) { setSub(null); setTab(order[i]); }
+    };
+    window.addEventListener("chub:nav", onNav);
+    return () => {
+      offKeys();
+      offStage();
+      window.removeEventListener("chub:nav", onNav);
+    };
   }, []);
 
   // При первом запуске система сама спросит про уведомления — тумблер в
@@ -277,7 +288,7 @@ function Shell() {
   }, []);
 
   const pages: Record<Tab, React.ReactNode> = {
-    home: <Home onPlay={(g) => setGame(g)} onOpenProfile={() => setTab("progress")} onOpen={setSub} />,
+    home: <Home onPlay={(g) => setGame(g)} onOpenProfile={() => setTab("progress")} onOpen={setSub} onTab={setTab} />,
     progress: <ProgressPage />,
     shop: <Shop />,
     friends: <Friends />,
@@ -332,7 +343,8 @@ function Shell() {
       {/* Нижнее меню видно и поверх подстраниц (казино, донат…),
           поэтому переключение вкладки обязано закрывать подстраницу —
           иначе тапы по вкладкам «не работают». */}
-      {!game && (
+      {/* На ПК разделы живут в боковой панели, нижнее меню там лишнее */}
+      {!game && !isDesktop() && (
         <Nav
           tab={tab}
           onTab={(next) => { setSub(null); setTab(next); }}

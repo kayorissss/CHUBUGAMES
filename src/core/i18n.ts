@@ -53,7 +53,7 @@ const RU: Dict = {
   "settings.no": "Нет",
   "settings.deleteAll": "Удалить всё",
   "settings.about": "Об игре",
-  "settings.author": "автор и разработчик ЧУБУГЕЙМ",
+  "settings.author": "автор и разработчик CHUBUGAMES",
   "settings.offline": "работает офлайн",
   "settings.forOurs": "сделано для своих",
 
