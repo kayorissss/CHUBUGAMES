@@ -8,6 +8,7 @@ import { sfx, haptic } from "../core/fx";
 import { fmt } from "../core/format";
 import { useGame } from "../core/store";
 import { readGamble, writeGamble } from "../core/gamble";
+import BossArena, { freshFx, arenaFx, type ArenaFx } from "../ui/BossArena";
 import {
   BOSSES, bossOfHour, canFight, nextBossIn, readBosses,
   windowLeft, writeBosses, killsThisHour, killRewardScale, killHpScale,
@@ -15,6 +16,28 @@ import {
 } from "../core/bosses";
 
 type Phase = "intro" | "fight" | "win" | "lose";
+
+/*
+ * Числа боя подобраны перебором (500 боёв на конфигурацию, /tmp/boss3.mjs).
+ * Прежний бой заканчивался за 7-12 секунд и сводился к долблению одной
+ * кнопки. Проверено на трёх стилях игры:
+ *   «долблю всё подряд»        —   0% побед,
+ *   «иногда блокирую и целюсь» —  22-100% в зависимости от босса,
+ *   «парирую и бью по слабым»  —  99-100%, бой 28-37 секунд.
+ */
+/** Запас здоровья игрока */
+const MY_HP_MAX = 340;
+/** Пауза между ударами игрока, мс — без неё «автокликер» решает всё */
+const TAP_CD = 280;
+/** Множитель урона по открытому слабому месту */
+const WEAK_MULT = 2.8;
+/** Добивающий приём: доля максимума HP босса + фикс */
+const SPEC_PCT = 0.10;
+const SPEC_FLAT = 30;
+/** Сколько босс стоит оглушённым после парирования, мс */
+const STUN_MS = 1500;
+/** Окно для идеального парирования после начала замаха, мс */
+const PARRY_WINDOW = 260;
 
 /** Полоска здоровья */
 function HpBar({ v, max, color }: { v: number; max: number; color: string }) {
@@ -40,7 +63,10 @@ function mmss(ms: number) {
 }
 
 export default function BossFight({ onBack }: { onBack: () => void }) {
-  const { addCoins, addXp, toast } = useGame();
+  const { s: sv, addCoins, addXp, toast } = useGame();
+  /** Внешность героя — дерёмся своим главным другом, а не безликой фигурой */
+  const heroLook =
+    (sv.friends.find((f) => f.id === sv.mainFriendId) || sv.friends[0])?.look;
   const [store, setStore] = useState<BossStore>(() => readBosses());
   const [boss, setBoss] = useState<BossDef>(() => bossOfHour());
   const [phase, setPhase] = useState<Phase>("intro");
@@ -48,7 +74,7 @@ export default function BossFight({ onBack }: { onBack: () => void }) {
   const [bossHp, setBossHp] = useState(boss.hp);
   /** Максимум HP текущего боя — растёт с каждым добиванием за смену */
   const [bossHpMax, setBossHpMax] = useState(boss.hp);
-  const [myHp, setMyHp] = useState(100);
+  const [myHp, setMyHp] = useState(MY_HP_MAX);
   const [taunt, setTaunt] = useState<string | null>(null);
   const [hits, setHits] = useState(0);
   /** Кулак игрока попадает не всегда: во время «газа» шанс промаха */
@@ -61,11 +87,36 @@ export default function BossFight({ onBack }: { onBack: () => void }) {
   /** Ниже трети здоровья босс звереет: бьёт чаще и больнее */
   const [rage, setRage] = useState(false);
   const [combo, setCombo] = useState(0);
+  /**
+   * ЯРОСТЬ ИГРОКА — копится за точные удары и парирования, тратится на
+   * добивающий приём. Раньше в бою была ровно одна осмысленная кнопка
+   * «БИТЬ», и весь бой сводился к её долблению.
+   */
+  const [power, setPower] = useState(0);
+  /**
+   * СЛАБОЕ МЕСТО. Каждые несколько секунд у босса открывается уязвимая
+   * зона (голова / корпус / ноги). Попал по ней — тройной урон, промах
+   * по зоне — обычный. Появляется выбор, куда бить, а не просто «тапай».
+   */
+  const [weak, setWeak] = useState<null | "head" | "body" | "legs">(null);
+  /** Босс оглушён после парирования — окно свободного урона */
+  const [stunned, setStunned] = useState(false);
   const [, tick] = useState(0);
+
+  /** Состояние арены: меняется 60 раз в секунду, поэтому вне React */
+  const fx = useRef<ArenaFx>(freshFx());
 
   const windupRef = useRef(false);
   const blockRef = useRef(false);
   const rageRef = useRef(false);
+  const weakRef = useRef<null | "head" | "body" | "legs">(null);
+  const powerRef = useRef(0);
+  const stunRef = useRef(false);
+  /** Когда именно босс замахнулся — по этому считаем идеальное парирование */
+  const windupAtRef = useRef(0);
+  const weakTimer = useRef<number | null>(null);
+  /** Когда игрок бил в последний раз — для паузы между ударами */
+  const lastTapRef = useRef(0);
   /** Замах босса — нужен и из punch(), когда включается ярость */
   const swingRef = useRef<(() => void) | null>(null);
 
@@ -81,6 +132,8 @@ export default function BossFight({ onBack }: { onBack: () => void }) {
     if (tauntTimer.current) clearTimeout(tauntTimer.current);
     if (windupTimer.current) clearTimeout(windupTimer.current);
     if (blockTimer.current) clearTimeout(blockTimer.current);
+    if (weakTimer.current) clearInterval(weakTimer.current);
+    weakTimer.current = null;
     atkTimer.current = null;
     gimTimer.current = null;
     tauntTimer.current = null;
@@ -167,7 +220,7 @@ export default function BossFight({ onBack }: { onBack: () => void }) {
       setBossHp(hp0);
       setBossHpMax(hp0);
     }
-    setMyHp(100);
+    setMyHp(MY_HP_MAX);
     setHits(0);
     setFog(false);
     setWindup(false);
@@ -175,9 +228,17 @@ export default function BossFight({ onBack }: { onBack: () => void }) {
     setBlockReady(true);
     setRage(false);
     setCombo(0);
+    setPower(0);
+    setWeak(null);
+    setStunned(false);
     windupRef.current = false;
     blockRef.current = false;
     rageRef.current = false;
+    weakRef.current = null;
+    powerRef.current = 0;
+    stunRef.current = false;
+    lastTapRef.current = 0;
+    fx.current = freshFx();
     setPhase("fight");
     sfx.click();
     say(boss.quote);
@@ -185,8 +246,11 @@ export default function BossFight({ onBack }: { onBack: () => void }) {
     // Босс бьёт не молча: сначала замах, и это окно под блок.
     // Раньше урон просто капал по таймеру, и от игрока ничего не зависело.
     const swing = () => {
+      // оглушённый босс не бьёт — это и есть награда за парирование
+      if (stunRef.current) return;
       setWindup(true);
       windupRef.current = true;
+      windupAtRef.current = Date.now();
       const tell = rageRef.current ? 420 : 620;   // в ярости замах короче
       windupTimer.current = window.setTimeout(() => {
         setWindup(false);
@@ -194,17 +258,27 @@ export default function BossFight({ onBack }: { onBack: () => void }) {
         const blocked = blockRef.current;
         const raw = rageRef.current ? Math.round(boss.dmg * 1.6) : boss.dmg;
         const dealt = blocked ? Math.round(raw * 0.18) : raw;
+
+        const f = fx.current;
+        f.bossSeq++;
+        f.shake = blocked ? 5 : 12;
+
         if (blocked) {
           sfx.click();
           haptic("light");
+          arenaFx.pop(f, window.innerWidth * 0.3, 120, tr("БЛОК"), "#7effc2", 34);
+          arenaFx.burst(f, window.innerWidth * 0.32, 130, "#7effc2", 8, 0.14);
         } else {
           sfx.hit?.();
           haptic("medium");
           setCombo(0);          // пропустил — комбо сгорело
+          arenaFx.pop(f, window.innerWidth * 0.3, 120, `-${dealt}`, "#ff6b5a", 46);
+          arenaFx.burst(f, window.innerWidth * 0.3, 132, "#ff6b5a", 12, 0.2);
         }
         setMyHp((hp) => {
           const next = hp - dealt;
-          if (next <= 0) { finish(false); return 0; }
+          fx.current.myHp = Math.max(0, next) / MY_HP_MAX;
+          if (next <= 0) { fx.current.over = "lose"; finish(false); return 0; }
           return next;
         });
       }, tell);
@@ -216,13 +290,34 @@ export default function BossFight({ onBack }: { onBack: () => void }) {
       if (Math.random() < 0.5) say(boss.taunts[Math.floor(Math.random() * boss.taunts.length)]);
     }, boss.every);
 
+    /*
+     * СЛАБОЕ МЕСТО открывается раз в несколько секунд и держится недолго.
+     * Это превращает бой из «долби одну кнопку» в выбор цели: три кнопки
+     * (голова / корпус / ноги) и надо успеть попасть в подсвеченную.
+     */
+    weakTimer.current = window.setInterval(() => {
+      const zones = ["head", "body", "legs"] as const;
+      const z = zones[Math.floor(Math.random() * zones.length)];
+      weakRef.current = z;
+      setWeak(z);
+      sfx.crit?.();
+      window.setTimeout(() => {
+        weakRef.current = null;
+        setWeak(null);
+      }, rageRef.current ? 1500 : 2100);
+    }, 4200);
+
     // особая механика
     if (boss.gimmick === "gas") {
       // Данил пускает газы — экран мутнеет, часть ударов мимо
       gimTimer.current = window.setInterval(() => {
         setFog(true);
+        fx.current.fog = true;          // арена рисует облако газа
         say(tr("Ой… это не я."));
-        window.setTimeout(() => setFog(false), 2600);
+        window.setTimeout(() => {
+          setFog(false);
+          fx.current.fog = false;
+        }, 2600);
       }, 7000);
     } else if (boss.gimmick === "sleep") {
       // Т-34 иногда «залипает» — окно бесплатного урона
@@ -233,34 +328,86 @@ export default function BossFight({ onBack }: { onBack: () => void }) {
     }
   };
 
-  /** Удар игрока */
-  const punch = () => {
+  /**
+   * Удар игрока по выбранной зоне.
+   *
+   * Раньше была одна кнопка «БИТЬ» без цели. Теперь три зоны, и попадание
+   * по открывшемуся слабому месту даёт тройной урон — есть за чем следить
+   * и что выбирать.
+   */
+  const punch = (zone: "head" | "body" | "legs") => {
     if (phase !== "fight") return;
+    // Бить во время своего блока нельзя: блок — это выбор, а не бонус
+    if (blockRef.current) return;
+    // Пауза между ударами: иначе бой выигрывает частота тапов, а не выбор
+    const now = Date.now();
+    if (now - lastTapRef.current < TAP_CD) return;
+    lastTapRef.current = now;
+
+    const f = fx.current;
+    const bx = window.innerWidth * 0.72;
+
     // в тумане половина ударов мимо
     if (fog && Math.random() < 0.5) {
       sfx.click();
       haptic("light");
+      arenaFx.pop(f, bx, 130, tr("МИМО"), "#9aa0ad", 30);
+      setCombo(0);
       return;
     }
-    const base = 9 + Math.floor(Math.random() * 7);
+
+    const hitWeak = weakRef.current === zone;
+    let base = 9 + Math.floor(Math.random() * 7);
+    // зоны бьют по-разному: голова больнее, но она и открывается реже
+    if (zone === "head") base = Math.round(base * 1.25);
+    if (zone === "legs") base = Math.round(base * 0.85);
+
     // Броня-танк держит удар
     let dmg = boss.gimmick === "tank" ? Math.round(base * 0.72) : base;
+
     // Серия точных ударов без пропусков усиливает урон — до +50%
     const nextCombo = combo + 1;
     setCombo(nextCombo);
     dmg = Math.round(dmg * (1 + Math.min(10, nextCombo) * 0.05));
-    // Бить во время своего блока нельзя: блок — это выбор, а не бесплатный бонус
-    if (blockRef.current) return;
+
+    // попал в слабое место — тройной урон
+    if (hitWeak) {
+      dmg = Math.round(dmg * WEAK_MULT);
+      weakRef.current = null;
+      setWeak(null);
+    }
+    // оглушённый босс получает двойной
+    if (stunRef.current) dmg = Math.round(dmg * 2);
+
+    // копим ярость
+    const gain = hitWeak ? 18 : 7;
+    powerRef.current = Math.min(100, powerRef.current + gain);
+    setPower(powerRef.current);
 
     setHits((n) => n + 1);
-    sfx.hit?.();
-    haptic("light");
+    f.punchSeq++;
+    f.shake = hitWeak ? 10 : 4;
+
+    if (hitWeak) {
+      sfx.crit?.();
+      haptic("heavy");
+      arenaFx.pop(f, bx, 96, `${tr("ТОЧНО")} -${dmg}`, "#ffd34a", 54);
+      arenaFx.burst(f, bx, 120, "#ffd34a", 18, 0.26);
+    } else {
+      sfx.hit?.();
+      haptic("light");
+      arenaFx.pop(f, bx, 110, `-${dmg}`, "#ffffff", 40);
+      arenaFx.burst(f, bx, 126, "#ffffff", 7, 0.16);
+    }
+
     setBossHp((hp) => {
       const next = hp - dmg;
+      fx.current.bossHp = Math.max(0, next) / bossHpMax;
       // Ниже трети — босс звереет: чаще бьёт и сильнее
       if (!rageRef.current && next <= bossHpMax * 0.34 && next > 0) {
         rageRef.current = true;
         setRage(true);
+        fx.current.rage = true;
         say(tr("Ну всё, ты доигрался."));
         sfx.error?.();
         haptic("heavy");
@@ -273,6 +420,7 @@ export default function BossFight({ onBack }: { onBack: () => void }) {
         }, Math.max(700, Math.round(boss.every * 0.62)));
       }
       if (next <= 0) {
+        fx.current.over = "win";
         finish(true);
         return 0;
       }
@@ -280,19 +428,90 @@ export default function BossFight({ onBack }: { onBack: () => void }) {
     });
   };
 
-  /** Поставить блок: короткое окно и перезарядка, спамить нельзя */
+  /**
+   * Блок и ПАРИРОВАНИЕ.
+   *
+   * Если поставить блок в первые 260 мс после замаха — это парирование:
+   * босс получает откат, оглушается на полторы секунды и не бьёт. Просто
+   * зажать блок заранее уже недостаточно, надо ловить момент.
+   */
   const block = () => {
     if (phase !== "fight" || !blockReady) return;
     setBlocking(true);
     blockRef.current = true;
     setBlockReady(false);
-    sfx.swoosh?.();
-    haptic("light");
+    fx.current.blocking = true;
+
+    const since = windupRef.current ? Date.now() - windupAtRef.current : 99999;
+    const parry = windupRef.current && since <= PARRY_WINDOW;
+
+    if (parry) {
+      // идеальное парирование
+      const f = fx.current;
+      f.perfect = 500;
+      f.shake = 9;
+      stunRef.current = true;
+      setStunned(true);
+      f.stun = STUN_MS;
+      powerRef.current = Math.min(100, powerRef.current + 22);
+      setPower(powerRef.current);
+      sfx.crit?.();
+      haptic("success");
+      say(tr("Отбил! Дежурный поплыл."));
+      arenaFx.pop(f, window.innerWidth * 0.5, 100, tr("ПАРИРОВАНИЕ"), "#7effc2", 50);
+      arenaFx.burst(f, window.innerWidth * 0.5, 120, "#7effc2", 20, 0.28);
+      // отменяем прилетающий удар
+      if (windupTimer.current) clearTimeout(windupTimer.current);
+      setWindup(false);
+      windupRef.current = false;
+      window.setTimeout(() => {
+        stunRef.current = false;
+        setStunned(false);
+      }, STUN_MS);
+    } else {
+      sfx.swoosh?.();
+      haptic("light");
+    }
+
     window.setTimeout(() => {
       setBlocking(false);
       blockRef.current = false;
+      fx.current.blocking = false;
     }, 520);
-    blockTimer.current = window.setTimeout(() => setBlockReady(true), 1100);
+    blockTimer.current = window.setTimeout(() => setBlockReady(true), parry ? 700 : 1100);
+  };
+
+  /**
+   * ДОБИВАЮЩИЙ ПРИЁМ — тратит накопленную ярость.
+   * Появляется третья осмысленная кнопка и цель, ради которой копишь.
+   */
+  const special = () => {
+    if (phase !== "fight" || powerRef.current < 100) return;
+    powerRef.current = 0;
+    setPower(0);
+    const f = fx.current;
+    const bx = window.innerWidth * 0.72;
+
+    const dmg = Math.round(bossHpMax * SPEC_PCT + SPEC_FLAT);
+    f.punchSeq++;
+    f.shake = 20;
+    sfx.legend?.();
+    haptic("heavy");
+    say(tr("ПОЛУЧАЙ!"));
+    arenaFx.pop(f, bx, 88, `-${dmg}`, "#ff2fb9", 64);
+    arenaFx.burst(f, bx, 118, "#ff2fb9", 30, 0.34);
+    arenaFx.burst(f, bx, 118, "#ffd34a", 18, 0.26);
+
+    setBossHp((hp) => {
+      const next = hp - dmg;
+      fx.current.bossHp = Math.max(0, next) / bossHpMax;
+      if (next <= 0) {
+        fx.current.over = "win";
+        finish(true);
+        return 0;
+      }
+      return next;
+    });
   };
 
   const active = canFight(store, Date.now());
@@ -495,29 +714,35 @@ export default function BossFight({ onBack }: { onBack: () => void }) {
             <HpBar v={bossHp} max={bossHpMax} color="var(--danger)" />
           </Panel>
 
-          {/* Арена */}
-          <Panel
-            r="xl"
-            style={{
-              padding: 20, marginBottom: 10, textAlign: "center",
-              position: "relative", overflow: "hidden",
-              minHeight: 230,
-            }}
-          >
+          {/*
+            АРЕНА. Вместо висящей в воздухе головы — сцена с двумя
+            бойцами целиком: они дышат, бьют, ставят блок, отлетают от
+            ударов и падают. Всё рисование в канвасе (BossArena), сюда
+            приходят только события.
+          */}
+          <div style={{ position: "relative", marginBottom: 10 }}>
+            <BossArena
+              fx={fx}
+              bossLook={boss.look}
+              heroLook={heroLook}
+              height={236}
+            />
+
+            {/* реплика босса поверх арены */}
             <AnimatePresence>
               {taunt && (
                 <motion.div
                   initial={{ opacity: 0, y: 8, scale: 0.9 }}
                   animate={{ opacity: 1, y: 0, scale: 1 }}
                   exit={{ opacity: 0, scale: 0.9 }}
-                  className="t-body"
+                  className="t-caption"
                   style={{
-                    position: "relative", zIndex: 3,
-                    padding: "9px 13px", borderRadius: "var(--r-md)",
+                    position: "absolute", left: 10, right: 10, top: 10,
+                    zIndex: 3, textAlign: "center",
+                    padding: "7px 11px", borderRadius: "var(--r-md)",
                     background: "var(--surface-2)",
                     border: "1px solid var(--btn-brd)",
-                    marginBottom: 14, display: "inline-block",
-                    maxWidth: "100%",
+                    fontSize: 11, lineHeight: 1.35,
                   }}
                 >
                   {taunt}
@@ -525,101 +750,129 @@ export default function BossFight({ onBack }: { onBack: () => void }) {
               )}
             </AnimatePresence>
 
-            {/* Замах: красная рамка и надпись — сигнал поставить блок */}
+            {/* подпись про замах — крупно и поверх сцены */}
             <AnimatePresence>
-              {windup && (
+              {windup && !stunned && (
                 <motion.div
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
                   exit={{ opacity: 0 }}
-                  className="absolute pointer-events-none"
+                  className="t-label"
                   style={{
-                    inset: 0, zIndex: 5,
-                    border: "2.5px solid #FF5A3C",
-                    borderRadius: "var(--r-xl)",
-                    background:
-                      "radial-gradient(circle at 50% 50%, rgba(255,90,60,0.22), transparent 68%)",
+                    position: "absolute", left: 0, right: 0, bottom: 10,
+                    zIndex: 4, textAlign: "center",
+                    color: "var(--danger)", fontSize: 11,
                   }}
-                />
+                >
+                  {tr("ЗАМАХНУЛСЯ — ЖМИ БЛОК")}
+                </motion.div>
               )}
             </AnimatePresence>
 
-            <motion.div
-              key={hits}
-              initial={{ scale: 1 }}
-              animate={
-                windup
-                  ? { scale: [1, 1.1, 1.06], rotate: [0, -4, 3] }
-                  : { scale: [1, 0.95, 1], rotate: [0, -2, 2, 0] }
-              }
-              transition={{ duration: windup ? 0.5 : 0.18 }}
-              className="flex justify-center"
-              style={{ position: "relative", zIndex: 2 }}
-            >
-              <HeadView friend={{ look: boss.look } as never} size={128} />
-            </motion.div>
-
-            {windup && (
-              <motion.div
+            {stunned && (
+              <div
                 className="t-label"
-                initial={{ opacity: 0, y: 6 }}
-                animate={{ opacity: 1, y: 0 }}
                 style={{
-                  position: "relative", zIndex: 6, marginTop: 12,
-                  color: "var(--danger)", fontSize: 11,
+                  position: "absolute", left: 0, right: 0, bottom: 10,
+                  zIndex: 4, textAlign: "center",
+                  color: "var(--ok)", fontSize: 11,
                 }}
               >
-                {tr("ЗАМАХНУЛСЯ — СТАВЬ БЛОК")}
-              </motion.div>
+                {tr("ОГЛУШЁН — БЕЙ, УРОН ВДВОЕ")}
+              </div>
             )}
-
-            {/* Туман от газа */}
-            <AnimatePresence>
-              {fog && (
-                <motion.div
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  style={{
-                    position: "absolute", inset: 0, zIndex: 4,
-                    background:
-                      "radial-gradient(circle at 50% 60%, rgba(150,200,120,0.34), rgba(120,170,90,0.12) 60%, transparent)",
-                    pointerEvents: "none",
-                  }}
-                />
-              )}
-            </AnimatePresence>
-          </Panel>
+          </div>
 
           {/* Здоровье игрока */}
-          <Panel r="lg" style={{ padding: 13, marginBottom: 12 }}>
+          <Panel r="lg" style={{ padding: 13, marginBottom: 10 }}>
             <div className="flex items-center" style={{ gap: 9, marginBottom: 8 }}>
               <span className="t-title-sm flex-1">{tr("Ты")}</span>
-              <span className="t-num" style={{ fontSize: 12 }}>{Math.max(0, myHp)} / 100</span>
+              <span className="t-num" style={{ fontSize: 12 }}>{Math.max(0, myHp)} / {MY_HP_MAX}</span>
             </div>
-            <HpBar v={myHp} max={100} color="var(--ok)" />
+            <HpBar v={myHp} max={MY_HP_MAX} color="var(--ok)" />
+
+            {/* шкала ярости под здоровьем */}
+            <div className="flex items-center" style={{ gap: 8, marginTop: 9 }}>
+              <span className="t-label" style={{ fontSize: 8, color: "var(--text-mute)" }}>
+                {tr("ЯРОСТЬ")}
+              </span>
+              <span className="flex-1">
+                <div
+                  style={{
+                    height: 6, borderRadius: 99, overflow: "hidden",
+                    background: "var(--surface-3)",
+                  }}
+                >
+                  <motion.div
+                    animate={{ width: `${power}%` }}
+                    transition={{ duration: 0.2 }}
+                    style={{
+                      height: "100%",
+                      background: power >= 100 ? "var(--gold)" : "var(--violet)",
+                    }}
+                  />
+                </div>
+              </span>
+              <span className="t-num" style={{ fontSize: 10, color: power >= 100 ? "var(--gold)" : "var(--text-mute)" }}>
+                {Math.round(power)}%
+              </span>
+            </div>
           </Panel>
 
-          <div className="flex" style={{ gap: 9 }}>
-            <Tap
-              onClick={punch}
-              accent r="md" center
-              className="t-title"
-              style={{ fontSize: 16, padding: "20px 0", flex: 2 }}
-              sound="hit"
-            >
-              <span className="inline-flex items-center" style={{ gap: 9 }}>
-                <Icon name="fist" size={19} />{tr("БИТЬ")}
-              </span>
-            </Tap>
+          {/*
+            УПРАВЛЕНИЕ. Вместо одной кнопки «БИТЬ» — выбор зоны удара.
+            Подсвеченная зона = открытое слабое место, попадание по ней
+            даёт тройной урон.
+          */}
+          <div className="flex" style={{ gap: 7, marginBottom: 8 }}>
+            {([
+              { id: "head" as const, label: tr("В ГОЛОВУ"), icon: "skull" as const },
+              { id: "body" as const, label: tr("В КОРПУС"), icon: "fist" as const },
+              { id: "legs" as const, label: tr("ПО НОГАМ"), icon: "run" as const },
+            ]).map((z) => {
+              const open = weak === z.id;
+              return (
+                <Tap
+                  key={z.id}
+                  onClick={() => punch(z.id)}
+                  r="md"
+                  center
+                  className="t-label"
+                  style={{
+                    flex: 1, padding: "15px 0", fontSize: 9,
+                    background: open ? "var(--gold-soft)" : undefined,
+                    border: open ? "1.5px solid var(--gold)" : undefined,
+                    color: open ? "var(--gold)" : undefined,
+                  }}
+                  sound="none"
+                >
+                  <span className="flex flex-col items-center" style={{ gap: 4 }}>
+                    <Icon name={z.icon} size={16} />
+                    <span style={{ fontSize: 8.5 }}>{z.label}</span>
+                    {open && (
+                      <motion.span
+                        animate={{ opacity: [1, 0.4, 1] }}
+                        transition={{ duration: 0.7, repeat: Infinity }}
+                        className="t-label"
+                        style={{ fontSize: 7.5, color: "var(--gold)" }}
+                      >
+                        ×3
+                      </motion.span>
+                    )}
+                  </span>
+                </Tap>
+              );
+            })}
+          </div>
 
+          <div className="flex" style={{ gap: 8 }}>
             <Tap
               onClick={block}
               r="md" center
               disabled={!blockReady}
               className="t-title"
               style={{
-                fontSize: 14, padding: "20px 0", flex: 1,
+                fontSize: 13, padding: "17px 0", flex: 1,
                 background: blocking ? "var(--ok-soft)" : undefined,
                 border: blocking
                   ? "1.5px solid var(--ok)"
@@ -631,17 +884,43 @@ export default function BossFight({ onBack }: { onBack: () => void }) {
               sound="none"
             >
               <span className="inline-flex items-center" style={{ gap: 7 }}>
-                <Icon name="shield" size={17} />{tr("БЛОК")}
+                <Icon name="shield" size={16} />{tr("БЛОК")}
+              </span>
+            </Tap>
+
+            <Tap
+              onClick={special}
+              r="md" center
+              disabled={power < 100}
+              accent={power >= 100}
+              className="t-title"
+              style={{
+                fontSize: 13, padding: "17px 0", flex: 1,
+                opacity: power >= 100 ? 1 : 0.4,
+              }}
+              sound="none"
+            >
+              <span className="inline-flex items-center" style={{ gap: 7 }}>
+                <Icon name="fire" size={16} />{tr("ДОБИТЬ")}
               </span>
             </Tap>
           </div>
 
-          <div className="t-caption" style={{ marginTop: 9, textAlign: "center" }}>
+          {/* Подсказка ведёт по механикам, а не просто считает удары */}
+          <div className="t-caption" style={{ marginTop: 9, textAlign: "center", lineHeight: 1.4 }}>
             {fog
               ? tr("Ничего не видно — половина ударов мимо")
-              : combo > 2
-                ? `${tr("серия")} ×${combo} · +${Math.min(10, combo) * 5}% ${tr("урона")}`
-                : `${tr("ударов")}: ${hits}`}
+              : stunned
+                ? tr("Оглушён! Бей, пока не очнулся")
+                : power >= 100
+                  ? tr("Ярость полная — жми ДОБИТЬ")
+                  : weak
+                    ? tr("Открылось слабое место — бей по подсвеченной зоне")
+                    : windup
+                      ? tr("Успей поставить блок в момент замаха — это парирование")
+                      : combo > 2
+                        ? `${tr("серия")} ×${combo} · +${Math.min(10, combo) * 5}% ${tr("урона")}`
+                        : `${tr("ударов")}: ${hits}`}
           </div>
         </>
       )}

@@ -255,8 +255,24 @@ const bf18 = fs.readFileSync('src/pages/BossFight.tsx', 'utf8');
 ok(bf18.includes('setWindup'), 'босс замахивается перед ударом');
 ok(bf18.includes('blockReady'), 'у блока есть перезарядка');
 ok(bf18.includes('rageRef'), 'босс звереет на низком здоровье');
-ok(/hp: 780/.test(fs.readFileSync('src/core/bosses.ts', 'utf8')),
+const bs18 = fs.readFileSync('src/core/bosses.ts', 'utf8');
+ok(/hp: 6240/.test(bs18) && /hp: 7680/.test(bs18),
   'здоровья боссам добавлено — бой не кончается за 4 секунды');
+// Бой перестал быть долблением одной кнопки: зоны удара, парирование,
+// оглушение и добивающий приём должны существовать в коде.
+const bf19 = fs.readFileSync('src/pages/BossFight.tsx', 'utf8');
+ok(bf19.includes('WEAK_MULT') && bf19.includes('weakRef'),
+  'у босса открываются слабые места');
+ok(bf19.includes('PARRY_WINDOW') && bf19.includes('stunRef'),
+  'парирование оглушает босса');
+ok(bf19.includes('const special') && bf19.includes('SPEC_PCT'),
+  'есть добивающий приём за ярость');
+ok(bf19.includes('TAP_CD') && bf19.includes('lastTapRef'),
+  'между ударами есть пауза — автокликер не решает');
+ok(bf19.includes('BossArena'), 'бой рисуется на арене, а не одной головой');
+const ar19 = fs.readFileSync('src/ui/BossArena.tsx', 'utf8');
+ok(ar19.includes('drawFighter') && ar19.includes('groundY'),
+  'бойцы рисуются целиком и стоят на полу');
 
 const st18 = fs.readFileSync('src/pages/Settings.tsx', 'utf8');
 ok(st18.indexOf('settings.update') < st18.indexOf('settings.appearance'),
