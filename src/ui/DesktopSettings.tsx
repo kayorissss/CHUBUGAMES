@@ -22,8 +22,9 @@ type Upd =
   | { state: "idle" }
   | { state: "checking" }
   | { state: "none"; current: string }
-  | { state: "found"; version: string; size: number; notes: string }
+  | { state: "found"; version: string; size: number; notes: string; portable: boolean }
   | { state: "downloading"; percent: number; received: number; total: number }
+  | { state: "ready"; portable: boolean }
   | { state: "error"; error: string };
 
 const MODES: { id: StageMode; label: string; hint: string }[] = [
@@ -68,7 +69,7 @@ export default function DesktopSettings() {
     const r = await api.checkUpdate();
     if (!r?.ok) return setUpd({ state: "error", error: r?.error || tr("не вышло") });
     if (!r.hasUpdate) return setUpd({ state: "none", current: r.current });
-    setUpd({ state: "found", version: r.version, size: r.size, notes: r.notes });
+    setUpd({ state: "found", version: r.version, size: r.size, notes: r.notes, portable: !!r.portable });
   };
 
   const install = async () => {
@@ -78,6 +79,7 @@ export default function DesktopSettings() {
       setUpd({ state: "downloading", percent: pr.percent, received: pr.received, total: pr.total });
     });
     if (!r?.ok) setUpd({ state: "error", error: r?.error || tr("не вышло") });
+    else if (r.portable) setUpd({ state: "ready", portable: true });
   };
 
   return (
@@ -248,13 +250,18 @@ export default function DesktopSettings() {
                   {tr("После загрузки откроется установщик, игра закроется сама")}
                 </div>
               </>
+            ) : upd.state === "ready" ? (
+              <div className="t-caption" style={{ fontSize: 10.5, lineHeight: 1.5 }}>
+                {tr("Новый файл скачан и показан в проводнике. Portable-версия не может заменить сама себя — просто положи новый exe вместо старого.")}
+              </div>
             ) : upd.state === "found" ? (
               <>
                 <div className="t-body" style={{ fontSize: 12, marginBottom: 4 }}>
                   {tr("Есть новая версия")} {upd.version}
                 </div>
                 <div className="t-caption" style={{ fontSize: 9.5, marginBottom: 9 }}>
-                  {Math.round(upd.size / 1048576)} МБ
+                  {Math.round(upd.size / 1048576)} МБ ·{" "}
+                  {upd.portable ? tr("portable-сборка") : tr("установщик")}
                 </div>
                 <Tap
                   onClick={install}

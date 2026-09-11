@@ -1219,4 +1219,7 @@ export const EN_TEXT: Record<string, string> = {
   "Высокий · 430 × 1040": "Tall \u00b7 430 \u00d7 1040",
   "Планшет · 600 × 960": "Tablet \u00b7 600 \u00d7 960",
   "Компьютер": "Desktop",
+  "portable-сборка": "portable build",
+  "установщик": "installer",
+  "Новый файл скачан и показан в проводнике. Portable-версия не может заменить сама себя — просто положи новый exe вместо старого.": "The new file is downloaded and shown in Explorer. A portable build cannot replace itself \u2014 just put the new exe over the old one.",
 };

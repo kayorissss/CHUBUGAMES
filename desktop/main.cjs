@@ -299,6 +299,17 @@ function isNewer(remote, local) {
   return false;
 }
 
+/**
+ * Portable или установленная версия?
+ *
+ * Portable-сборка electron-builder выставляет переменную окружения
+ * PORTABLE_EXECUTABLE_FILE с путём к самому exe. У установленной версии
+ * её нет. Это важно для обновления: установщику нужен setup.exe, а
+ * portable-версии — новый portable.exe, иначе пользователь получит не
+ * тот файл и вторую копию игры.
+ */
+const IS_PORTABLE = !!process.env.PORTABLE_EXECUTABLE_FILE;
+
 let pendingUpdate = null;
 
 ipcMain.handle("app:version", () => app.getVersion());
@@ -312,8 +323,14 @@ ipcMain.handle("update:check", async () => {
     if (!res.ok) return { ok: false, error: `GitHub ответил ${res.status}` };
     const json = await res.json();
 
-    // Для ПК берём установщик, а не portable: он умеет ставить поверх
-    const asset = (json.assets || []).find((a) => /setup\.exe$/i.test(a.name))
+    /*
+     * Берём файл того же типа, что запущен сейчас: установленной версии —
+     * setup.exe (ставится поверх), portable — portable.exe. Раньше всегда
+     * качался setup, и обновление portable-версии молча ставило вторую
+     * копию игры в систему.
+     */
+    const want = IS_PORTABLE ? /portable\.exe$/i : /setup\.exe$/i;
+    const asset = (json.assets || []).find((a) => want.test(a.name))
       || (json.assets || []).find((a) => /\.exe$/i.test(a.name));
     if (!asset) return { ok: false, error: "в релизе нет .exe" };
 
@@ -329,6 +346,8 @@ ipcMain.handle("update:check", async () => {
       version,
       current: cur,
       size: asset.size || 0,
+      portable: IS_PORTABLE,
+      asset: asset.name,
       notes: String(json.body || "").replace(/version:\s*[0-9.]+\s*/i, "").trim(),
     };
   } catch (e) {
@@ -344,10 +363,20 @@ ipcMain.handle("update:download", async (e) => {
       e.sender.send("update:progress", p);
     });
 
-    // Запускаем установщик и закрываем игру, чтобы файлы не были заняты
+    if (IS_PORTABLE) {
+      /*
+       * Portable нельзя «установить»: файл запущен и заменить сам себя
+       * не может. Показываем скачанный exe в проводнике — пользователь
+       * сам положит его на место старого.
+       */
+      shell.showItemInFolder(dest);
+      return { ok: true, path: dest, portable: true };
+    }
+
+    // Установщик ставится поверх; игру закрываем, чтобы файлы не были заняты
     await shell.openPath(dest);
     setTimeout(() => app.quit(), 1200);
-    return { ok: true, path: dest };
+    return { ok: true, path: dest, portable: false };
   } catch (err) {
     return { ok: false, error: String((err && err.message) || err) };
   }
