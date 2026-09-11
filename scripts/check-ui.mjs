@@ -341,6 +341,13 @@ ok(stg23.includes('STAGE_PRESETS') && stg23.includes('computeScale'),
   'есть выбор разрешения и расчёт масштаба сцены');
 ok(fs.readFileSync('src/index.css', 'utf8').includes('--stage-scale'),
   'сцена масштабируется через CSS');
+const wfDesk = fs.readFileSync('.github/workflows/build-desktop.yml', 'utf8');
+ok(wfDesk.includes('Remove outdated assets'),
+  'сборка ПК чистит устаревшие exe из релиза');
+ok(wfDesk.includes('sha256sum'),
+  'в описании релиза публикуются хеши файлов');
+ok(dmain.includes('IS_PORTABLE'),
+  'обновление ПК различает portable и установленную версию');
 
 const bf18 = fs.readFileSync('src/pages/BossFight.tsx', 'utf8');
 ok(bf18.includes('setWindup'), 'босс замахивается перед ударом');
