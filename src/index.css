@@ -777,3 +777,52 @@ canvas {
 .rarity-rare { --rc: #5fa8ff; }
 .rarity-epic { --rc: #b07bff; }
 .rarity-legend { --rc: #ffb020; }
+
+/* ---------- ПК-версия (Windows .exe на Electron) ----------
+   Игра свёрстана под телефон и на компьютере работает как есть, но
+   несколько вещей нужно поправить именно для мыши и большого экрана. */
+
+/* Полоски жестов на компьютере нет — незачем держать под неё отступ.
+   На телефоне значения приходят из env(safe-area-inset-*). */
+html.is-desktop {
+  --sat: 0px;
+  --sab: 0px;
+}
+
+/* Курсор-палец на всём, что нажимается: на телефоне это не нужно, а
+   мышью иначе непонятно, где кнопка. */
+html.is-desktop button:not(:disabled),
+html.is-desktop [role="button"]:not([aria-disabled="true"]),
+html.is-desktop a {
+  cursor: pointer;
+}
+html.is-desktop button:disabled,
+html.is-desktop [aria-disabled="true"] {
+  cursor: default;
+}
+
+/* Подсветка под курсором — обратная связь, которой на тапе не бывает.
+   Только там, где есть настоящая мышь (hover: hover), чтобы не ловить
+   «залипший ховер» на сенсорных экранах. */
+@media (hover: hover) and (pointer: fine) {
+  html.is-desktop button:not(:disabled):hover {
+    filter: brightness(1.14);
+  }
+}
+
+/* Полосы прокрутки в тон интерфейсу, а не системные светлые */
+html.is-desktop *::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+html.is-desktop *::-webkit-scrollbar-track {
+  background: var(--surface);
+}
+html.is-desktop *::-webkit-scrollbar-thumb {
+  background: var(--n-400);
+  border-radius: 99px;
+  border: 2px solid var(--surface);
+}
+html.is-desktop *::-webkit-scrollbar-thumb:hover {
+  background: var(--n-500);
+}

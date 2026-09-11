@@ -1,0 +1,64 @@
+# Сборка ПК-версии ЧУБУГЕЙМ (electron-builder).
+#
+# Собираем ДВА варианта под Windows:
+#   • portable  — один .exe, ничего не устанавливает, запускается с флешки;
+#   • nsis      — обычный установщик с ярлыком на рабочем столе.
+#
+# Игра целиком лежит в dist/index.html (один самодостаточный файл), поэтому
+# в пакет кладём только dist/ и оболочку desktop/.
+
+appId: com.chubgames.app
+productName: CHUBGAMES
+copyright: KAYORISAN
+
+directories:
+  output: desktop-out
+  buildResources: desktop
+
+# Что попадает внутрь приложения
+files:
+  - "desktop/main.cjs"
+  - "dist/**/*"
+  - "!dist/runners/**"        # фоновый скрипт нужен только Android
+  - "!**/*.map"
+
+# Медиа лежат обычными файлами рядом со сборкой — так <video> и <audio>
+# могут их стримить и перематывать
+asar: true
+asarUnpack:
+  - "dist/ads/**"
+  - "dist/femboichik.mp3"
+
+win:
+  icon: desktop/icon.ico
+  # Без подписи Windows SmartScreen покажет предупреждение — это ожидаемо
+  # для бесплатной сборки, объяснение есть в README.
+  signAndEditExecutable: true
+  target:
+    - target: portable
+      arch: [x64]
+    - target: nsis
+      arch: [x64]
+
+portable:
+  artifactName: CHUBGAMES-${version}-portable.exe
+
+nsis:
+  artifactName: CHUBGAMES-${version}-setup.exe
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: ЧУБУГЕЙМ
+  # Удаление должно уносить и сохранения, если пользователь этого хочет
+  deleteAppDataOnUninstall: false
+
+# Linux-сборка идёт «бесплатно» — тот же код, полезно для тестов
+linux:
+  icon: desktop/icon.png
+  category: Game
+  target:
+    - target: AppImage
+      arch: [x64]
+  artifactName: CHUBGAMES-${version}-x86_64.AppImage

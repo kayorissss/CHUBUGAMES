@@ -10,3 +10,6 @@ capacitor.config.js
 .DS_Store
 *.log
 .vite/
+
+# Сборки ПК-версии
+desktop-out/

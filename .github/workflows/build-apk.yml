@@ -23,8 +23,12 @@ jobs:
           node-version: "20"
           cache: "npm"
 
+      # ПК-версии в APK нет, а electron тянет ~100 МБ бинарника —
+      # пропускаем его загрузку, сборка Android от этого не зависит.
       - name: Install dependencies
         run: npm install
+        env:
+          ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
 
       - name: Build web app (single offline HTML)
         run: npm run build

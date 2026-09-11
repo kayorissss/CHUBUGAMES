@@ -1,0 +1,117 @@
+name: Build Desktop (Windows EXE)
+
+on:
+  push:
+    branches: [main, master, "arena/**"]
+  workflow_dispatch:
+
+# нужно для публикации сборок в Releases
+permissions:
+  contents: write
+
+jobs:
+  build:
+    # Собираем НА WINDOWS: так .exe получается нативно, без wine,
+    # и подпись/иконка проставляются корректно.
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build web app (single offline HTML)
+        run: npm run build
+
+      - name: Read app version
+        shell: bash
+        run: |
+          VER=$(node -p "require('fs').readFileSync('src/core/version.ts','utf8').match(/APP_VERSION\s*=\s*\"([0-9.]+)\"/)[1]")
+          echo "APP_VER=$VER" >> $GITHUB_ENV
+          echo "Версия приложения: $VER"
+
+      # Версия в package.json задаёт имя файлов сборки — синхронизируем
+      # её с той, что показывает само приложение.
+      - name: Sync package version
+        shell: bash
+        run: |
+          node -e "
+            const fs=require('fs');
+            const p=JSON.parse(fs.readFileSync('package.json','utf8'));
+            p.version=process.env.APP_VER;
+            fs.writeFileSync('package.json', JSON.stringify(p,null,2)+'\n');
+          "
+          node -p "'package.json version -> '+require('./package.json').version"
+
+      - name: Build Windows EXE
+        run: npx electron-builder --config desktop/builder.yml --win --publish never
+
+      - name: List artifacts
+        shell: bash
+        run: ls -la desktop-out/ || true
+
+      # Проверяем, что оба файла реально собрались и не пустые
+      - name: Verify build
+        shell: bash
+        run: |
+          PORT="desktop-out/CHUBGAMES-${APP_VER}-portable.exe"
+          SETUP="desktop-out/CHUBGAMES-${APP_VER}-setup.exe"
+          for f in "$PORT" "$SETUP"; do
+            if [ ! -f "$f" ]; then
+              echo "ОШИБКА: не собрался $f"
+              ls -la desktop-out/
+              exit 1
+            fi
+            SZ=$(stat -c%s "$f" 2>/dev/null || stat -f%z "$f")
+            echo "$f -> $SZ Б"
+            if [ "$SZ" -lt 40000000 ]; then
+              echo "ОШИБКА: $f подозрительно маленький — вероятно, игра не попала внутрь"
+              exit 1
+            fi
+          done
+
+      - name: Upload EXE (артефакт сборки)
+        uses: actions/upload-artifact@v4
+        with:
+          name: CHUBGAMES-Windows
+          path: |
+            desktop-out/*.exe
+          retention-days: 90
+
+      - name: Prepare release notes
+        shell: bash
+        run: |
+          {
+            printf 'version: %s\n\n' "$APP_VER"
+            printf '## ЧУБУГЕЙМ для компьютера\n\n'
+            printf 'Две сборки под Windows 10/11 (64-бит):\n\n'
+            printf '* **CHUBGAMES-%s-portable.exe** — просто запусти, ничего не устанавливается. Можно носить на флешке.\n' "$APP_VER"
+            printf '* **CHUBGAMES-%s-setup.exe** — установщик с ярлыком на рабочем столе и в меню «Пуск».\n\n' "$APP_VER"
+            printf 'Игра работает полностью офлайн. Прогресс общий внутри одного компьютера, но с телефоном не синхронизируется — переносится файлом сохранения через настройки.\n\n'
+            printf 'Управление мышью. Escape — назад, F11 — на весь экран.\n\n'
+            printf '### При первом запуске\n\n'
+            printf 'Windows покажет синее окно SmartScreen «Защита Windows предотвратила запуск». Это не вирус: так система реагирует на любую программу без платной подписи разработчика. Нажми **«Подробнее» → «Выполнить в любом случае»**.\n\n'
+            printf -- '---\n'
+            printf 'Собрано автоматически из ветки `%s`\n' "$GITHUB_REF_NAME"
+            printf '\u00b7 коммит `%s`\n' "$GITHUB_SHA"
+          } > DESKTOP_BODY.md
+          cat DESKTOP_BODY.md
+
+      - name: Publish EXE to Releases
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: desktop
+          name: ЧУБУГЕЙМ для ПК — последняя сборка
+          body_path: DESKTOP_BODY.md
+          files: desktop-out/*.exe
+          make_latest: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

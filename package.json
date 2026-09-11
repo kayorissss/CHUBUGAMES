@@ -1,13 +1,15 @@
 {
   "name": "chubgames",
   "private": true,
-  "version": "1.17.0",
+  "version": "1.19.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "check:ui": "node scripts/check-ui.mjs"
+    "check:ui": "node scripts/check-ui.mjs",
+    "desktop": "vite build && electron desktop/main.cjs",
+    "desktop:build": "vite build && electron-builder --config desktop/builder.yml"
   },
   "dependencies": {
     "@capacitor-community/file-opener": "^7.0.1",
@@ -29,9 +31,12 @@
     "@types/react": "19.2.7",
     "@types/react-dom": "19.2.3",
     "@vitejs/plugin-react": "5.1.1",
+    "electron": "33.4.11",
+    "electron-builder": "25.1.8",
     "tailwindcss": "4.1.17",
     "typescript": "5.9.3",
     "vite": "7.3.2",
     "vite-plugin-singlefile": "2.3.0"
-  }
+  },
+  "main": "desktop/main.cjs"
 }
