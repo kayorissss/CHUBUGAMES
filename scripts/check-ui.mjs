@@ -474,6 +474,20 @@ ok(glass23.includes('className = ""') && glass23.includes('pc-page'),
 const wfDesk = fs.readFileSync('.github/workflows/build-desktop.yml', 'utf8');
 ok(wfDesk.includes('Remove outdated assets'),
   'сборка ПК чистит устаревшие exe из релиза');
+// Публикация и чистка ассетов: порядок важен. Если удалять старые файлы
+// ДО загрузки новых, упавшая публикация оставит релиз пустым — и ссылка
+// скачивания превратится в 404 для всех.
+{
+  const order = (txt) => {
+    const st = (txt.match(/^      - name: (.+)$/gm) || []).map((l) => l.replace(/^      - name: /, ''));
+    return [st.findIndex((n) => /Publish/.test(n)), st.findIndex((n) => /Remove/.test(n))];
+  };
+  const [a, b] = order(wfDesk);
+  ok(a > -1 && b > -1 && a < b, 'на ПК сначала выкладываем exe, потом чистим старые');
+  const wfApk = fs.readFileSync('.github/workflows/build-apk.yml', 'utf8');
+  const [c, d] = order(wfApk);
+  ok(c > -1 && d > -1 && c < d, 'на Android сначала выкладываем APK, потом убираем старое имя');
+}
 ok(wfDesk.includes('sha256sum'),
   'в описании релиза публикуются хеши файлов');
 ok(dmain.includes('IS_PORTABLE'),
