@@ -1309,8 +1309,13 @@ html.is-desktop .pc-blocks {
 html.is-desktop .only-pc {
   display: inline;
 }
-/* счётчик найденного — справа от заголовка библиотеки */
+html.is-desktop .pc-games-count {
+  display: inline-flex;
+}
+/* счётчик найденного — только на ПК: под фильтром на телефоне он дублировал
+   то, что уже есть в строке «N из 29» */
 .pc-games-count {
+  display: none;
   flex: 0 0 auto;
   padding: 0.3rem 0.6rem;
   border-radius: 99px;
