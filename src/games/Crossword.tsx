@@ -39,11 +39,11 @@ const PUZZLES: Word[][] = [
        ·У·С·О··
        ·С···Н··                                                    */
   [
-    { clue: "Стесняется, но танцует", answer: "РАДОМИР", row: 0, col: 0, dir: "h" },
-    { clue: "Его обносит Кирилл", answer: "ПОРТФЕЛЬ", row: 3, col: 0, dir: "h" },
-    { clue: "Двенадцатый номер", answer: "АВТОБУС", row: 0, col: 1, dir: "v" },
-    { clue: "Короткое имя друга", answer: "СТАС", row: 2, col: 3, dir: "v" },
-    { clue: "Валюта казино", answer: "ЖЕТОН", row: 2, col: 5, dir: "v" },
+    { clue: "Фембой, танцует под свой трек", answer: "РАДОМИР", row: 0, col: 0, dir: "h" },
+    { clue: "Что ворует Кирилл на паре", answer: "ПОРТФЕЛЬ", row: 3, col: 0, dir: "h" },
+    { clue: "Транспорт: маршрут №12", answer: "АВТОБУС", row: 0, col: 1, dir: "v" },
+    { clue: "Друг, 4 буквы, начинается на С", answer: "СТАС", row: 2, col: 3, dir: "v" },
+    { clue: "Чем играют в казино, не монеты", answer: "ЖЕТОН", row: 2, col: 5, dir: "v" },
   ],
   /* ·М······
      ·О··П·С·
@@ -54,11 +54,11 @@ const PUZZLES: Word[][] = [
      ····И···
      ····Ж···                                                      */
   [
-    { clue: "Валюта в игре", answer: "МОНЕТА", row: 0, col: 1, dir: "v" },
-    { clue: "Сброс ради бонуса", answer: "ПРЕСТИЖ", row: 1, col: 4, dir: "v" },
-    { clue: "Короткое имя друга", answer: "СТАС", row: 1, col: 6, dir: "v" },
-    { clue: "Главный в колледже", answer: "ДЕКАН", row: 3, col: 3, dir: "h" },
-    { clue: "Его надо закрыть", answer: "ЗАЧЁТ", row: 5, col: 0, dir: "h" },
+    { clue: "Главная валюта: чубкоины иначе", answer: "МОНЕТА", row: 0, col: 1, dir: "v" },
+    { clue: "Обнулить прогресс ради бонуса", answer: "ПРЕСТИЖ", row: 1, col: 4, dir: "v" },
+    { clue: "Друг, 4 буквы, начинается на С", answer: "СТАС", row: 1, col: 6, dir: "v" },
+    { clue: "Главный начальник колледжа", answer: "ДЕКАН", row: 3, col: 3, dir: "h" },
+    { clue: "Его закрывают в конце семестра", answer: "ЗАЧЁТ", row: 5, col: 0, dir: "h" },
   ],
   /* ····К····
      ···АРТЁМ·
@@ -70,11 +70,11 @@ const PUZZLES: Word[][] = [
      ··С·Р····
      ····ДЕКАН                                                     */
   [
-    { clue: "То, что ты решаешь", answer: "КРОССВОРД", row: 0, col: 4, dir: "v" },
-    { clue: "Брекет-босс", answer: "АРТЁМ", row: 1, col: 3, dir: "h" },
-    { clue: "Короткое имя друга", answer: "СТАС", row: 4, col: 2, dir: "v" },
-    { clue: "Препод, бегает за тобой", answer: "ШИТОВ", row: 5, col: 0, dir: "h" },
-    { clue: "Главный в колледже", answer: "ДЕКАН", row: 8, col: 4, dir: "h" },
+    { clue: "Игра, в которую ты сейчас играешь", answer: "КРОССВОРД", row: 0, col: 4, dir: "v" },
+    { clue: "Друг с брекетами, кусается", answer: "АРТЁМ", row: 1, col: 3, dir: "h" },
+    { clue: "Друг, 4 буквы, начинается на С", answer: "СТАС", row: 4, col: 2, dir: "v" },
+    { clue: "Препод, от которого убегаешь", answer: "ШИТОВ", row: 5, col: 0, dir: "h" },
+    { clue: "Главный начальник колледжа", answer: "ДЕКАН", row: 8, col: 4, dir: "h" },
   ],
   /* СТАС····
      Т·······
@@ -85,17 +85,20 @@ const PUZZLES: Word[][] = [
      ··Я··И··
      ·····Н··                                                      */
   [
-    { clue: "Короткое имя друга", answer: "СТАС", row: 0, col: 0, dir: "h" },
-    { clue: "Приходит раз в месяц", answer: "СТИПА", row: 0, col: 0, dir: "v" },
-    { clue: "Воспитатель-танк", answer: "БРОНЯ", row: 2, col: 2, dir: "v" },
-    { clue: "В РФ с ним беда", answer: "БЕНЗИН", row: 2, col: 5, dir: "v" },
-    { clue: "Его обносит Кирилл", answer: "ПОРТФЕЛЬ", row: 3, col: 0, dir: "h" },
+    { clue: "Друг, 4 буквы, начинается на С", answer: "СТАС", row: 0, col: 0, dir: "h" },
+    { clue: "Деньги студенту раз в месяц", answer: "СТИПА", row: 0, col: 0, dir: "v" },
+    { clue: "Босс-воспитатель, крепкая как танк", answer: "БРОНЯ", row: 2, col: 2, dir: "v" },
+    { clue: "Топливо, которое ищешь в игре", answer: "БЕНЗИН", row: 2, col: 5, dir: "v" },
+    { clue: "Что ворует Кирилл на паре", answer: "ПОРТФЕЛЬ", row: 3, col: 0, dir: "h" },
   ],
 ];
 
-const ALPHABET = "АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯ".split("");
 
 const SUSPICION_MS = 95000;   // за столько подозрение дойдёт до предела само
+/** Сколько подозрения стоит одна открытая буква */
+const HINT_COST = 0.16;
+/** Насколько верное слово ОТКАТЫВАЕТ подозрение назад */
+const SOLVE_REWARD = 0.2;
 
 export default function Crossword({ onExit }: { onExit: () => void }) {
   const { s, addCoins, addXp, finishGame, questProgress } = useGame();
@@ -172,6 +175,28 @@ export default function Crossword({ onExit }: { onExit: () => void }) {
     return () => clearInterval(iv);
   }, [phase, end]);
 
+  /**
+   * Ввод идёт СИСТЕМНОЙ клавиатурой телефона (пользователь: «ввод
+   * системной клавиатурой, а не встроенной»). Встроенная сетка из 33
+   * кнопок занимала пол-экрана и была неудобной.
+   *
+   * Приём: невидимое поле input держит фокус, а мы читаем из него
+   * символы. Поле именно прозрачное и растянутое по области ответа —
+   * так тап по ячейкам открывает клавиатуру, а не отдельная кнопка.
+   */
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const focusInput = useCallback(() => {
+    const el = inputRef.current;
+    if (!el) return;
+    el.focus({ preventScroll: true });
+  }, []);
+
+  // при смене слова возвращаем фокус, иначе клавиатура закрывается
+  useEffect(() => {
+    if (phase === "play" && !solved[active]) focusInput();
+  }, [phase, active, solved, focusInput]);
+
   const pushLetter = (ch: string) => {
     if (phase !== "play" || solved[active]) return;
     const w = words[active];
@@ -186,7 +211,7 @@ export default function Crossword({ onExit }: { onExit: () => void }) {
       setSolved(ns);
       setTyped("");
       setScore((v) => v + 100);
-      setSusp((v) => Math.max(0, v - 0.2));
+      setSusp((v) => Math.max(0, v - SOLVE_REWARD));
       sfx.crit();
       haptic("success");
       const nextUnsolved = ns.findIndex((x) => !x);
@@ -205,7 +230,7 @@ export default function Crossword({ onExit }: { onExit: () => void }) {
     if (phase !== "play" || solved[active]) return;
     const w = words[active];
     setTyped(w.answer.slice(0, Math.min(w.answer.length - 1, typed.length + 1)));
-    setSusp((v) => Math.min(1, v + 0.16));
+    setSusp((v) => Math.min(1, v + HINT_COST));
     sfx.click();
   };
 
@@ -216,6 +241,28 @@ export default function Crossword({ onExit }: { onExit: () => void }) {
     setSolved(PUZZLES[idx].map(() => false));
     setActive(0); setTyped(""); setSusp(0); setScore(0);
     setCd(3); setPhase("count");
+  };
+
+  /** Перейти к следующему/предыдущему НЕрешённому вопросу */
+  const step = useCallback((dir: 1 | -1) => {
+    const n = words.length;
+    for (let i = 1; i <= n; i++) {
+      const idx = (active + dir * i + n * 2) % n;
+      if (!solved[idx]) { setActive(idx); setTyped(""); sfx.click(); haptic("light"); return; }
+    }
+  }, [active, solved, words.length]);
+
+  // свайп по карточке вопроса — пользователь просил «листать свайпом»
+  const swipe = useRef<{ x: number; y: number } | null>(null);
+  const onSwipeStart = (e: React.PointerEvent) => { swipe.current = { x: e.clientX, y: e.clientY }; };
+  const onSwipeEnd = (e: React.PointerEvent) => {
+    const st = swipe.current;
+    swipe.current = null;
+    if (!st) return;
+    const dx = e.clientX - st.x;
+    const dy = e.clientY - st.y;
+    if (Math.abs(dx) < 42 || Math.abs(dy) > Math.abs(dx)) return;
+    step(dx < 0 ? 1 : -1);
   };
 
   const w = words[active];
@@ -258,18 +305,20 @@ export default function Crossword({ onExit }: { onExit: () => void }) {
           и длинные вопросы просто не читались.
         */}
         <div
+          onPointerDown={onSwipeStart}
+          onPointerUp={onSwipeEnd}
           style={{
             padding: "12px 14px", borderRadius: "var(--r-md)",
             background: "var(--surface)",
-            border: `1px solid ${solved[active] ? "rgba(89,255,158,0.5)" : "var(--acc)"}`,
-            marginBottom: 14,
+            border: `1px solid ${solved[active] ? "var(--ok)" : "var(--acc)"}`,
+            marginBottom: 14, touchAction: "pan-y",
           }}
         >
           <div className="flex items-center justify-between" style={{ gap: 10, marginBottom: 6 }}>
-            <span className="t-label" style={{ fontSize: 9, opacity: 0.6 }}>
+            <span className="t-label" style={{ fontSize: 9, color: "var(--text-mute)" }}>
               {tr("ВОПРОС")} {active + 1}/{words.length} · {w.dir === "h" ? tr("ПО ГОРИЗОНТАЛИ") : tr("ПО ВЕРТИКАЛИ")}
             </span>
-            <span className="t-num shrink-0" style={{ fontSize: 11, opacity: 0.75 }}>
+            <span className="t-num shrink-0" style={{ fontSize: 11, color: "var(--text-dim)" }}>
               {w.answer.length} {tr("букв")}
             </span>
           </div>
@@ -279,6 +328,44 @@ export default function Crossword({ onExit }: { onExit: () => void }) {
           >
             {tr(w.clue)}
           </div>
+          {/* Листалка: свайп по карточке или стрелки — пользователь просил
+              «вопрос только сверху, листать свайпом» */}
+          {words.length > 1 && (
+            <div className="flex items-center" style={{ gap: 8, marginTop: 10 }}>
+              <button
+                type="button"
+                onClick={() => step(-1)}
+                className="t-label flex items-center justify-center shrink-0"
+                style={{
+                  width: 34, height: 28, borderRadius: "var(--r-sm)",
+                  background: "var(--btn-bg)", border: "1px solid var(--btn-brd)",
+                  color: "var(--text)",
+                }}
+                aria-label={tr("Предыдущий вопрос")}
+              >
+                <span style={{ transform: "rotate(180deg)", lineHeight: 0 }}>
+                  <Icon name="chevron" size={13} />
+                </span>
+              </button>
+              <span className="t-caption flex-1 text-center clip1" style={{ fontSize: 9.5 }}>
+                {tr("Свайп по карточке — другой вопрос")}
+              </span>
+              <button
+                type="button"
+                onClick={() => step(1)}
+                className="t-label flex items-center justify-center shrink-0"
+                style={{
+                  width: 34, height: 28, borderRadius: "var(--r-sm)",
+                  background: "var(--btn-bg)", border: "1px solid var(--btn-brd)",
+                  color: "var(--text)",
+                }}
+                aria-label={tr("Следующий вопрос")}
+              >
+                <Icon name="chevron" size={13} />
+              </button>
+            </div>
+          )}
+
           {/* набранные буквы отдельной строкой — видно, что уже введено */}
           <div className="flex items-center" style={{ gap: 4, marginTop: 9, flexWrap: "wrap" }}>
             {Array.from({ length: w.answer.length }).map((_, i) => (
@@ -386,59 +473,100 @@ export default function Crossword({ onExit }: { onExit: () => void }) {
           ))}
         </div>
 
-        {/* Клавиатура */}
+        {/*
+          Ввод. Клавиатуры в игре больше нет — печатает системная
+          клавиатура телефона. Невидимое поле держит фокус, а мы
+          показываем только ячейки ответа и кнопку подсказки с ценой.
+        */}
         {!solved[active] && (
           <div style={{ marginTop: "auto" }}>
-            <div className="flex items-center justify-end" style={{ marginBottom: 8 }}>
+            <input
+              ref={inputRef}
+              value=""
+              inputMode="text"
+              autoCapitalize="characters"
+              autoCorrect="off"
+              autoComplete="off"
+              spellCheck={false}
+              aria-label={tr("Введите ответ")}
+              onChange={(e) => {
+                // Читаем последний введённый символ и сразу чистим поле,
+                // чтобы автозамена телефона не подставляла целые слова.
+                const raw = e.target.value;
+                for (const ch of raw.toUpperCase()) {
+                  if (/[А-ЯЁA-Z]/.test(ch)) pushLetter(ch === "Ё" ? "Ё" : ch);
+                }
+                e.target.value = "";
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Backspace") {
+                  e.preventDefault();
+                  setTyped((v) => v.slice(0, -1));
+                  sfx.click();
+                }
+              }}
+              style={{
+                position: "absolute", opacity: 0, pointerEvents: "none",
+                width: 1, height: 1, left: -9999,
+              }}
+            />
+
+            <div
+              className="flex items-center"
+              style={{ gap: 9, marginBottom: 10 }}
+            >
               <button
                 type="button"
-                onClick={hint}
-                className="t-label shrink-0"
+                onClick={() => { focusInput(); sfx.click(); haptic("light"); }}
+                className="t-title-sm flex-1 flex items-center justify-center"
                 style={{
-                  padding: "6px 11px", borderRadius: 999,
-                  background: "var(--btn-bg)", border: "1px solid var(--btn-brd)",
-                  fontSize: 9,
+                  gap: 8, padding: "13px 14px", borderRadius: "var(--r-md)",
+                  background: "var(--acc)", color: "var(--acc-ink)",
+                  border: "1px solid var(--acc)", fontSize: 13,
                 }}
               >
-                {tr("ПОДСКАЗКА")}
+                <Icon name="note" size={15} />
+                {tr("ВПИСАТЬ ОТВЕТ")}
               </button>
-            </div>
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(8, 1fr)",
-                gap: 4,
-              }}
-            >
-              {ALPHABET.map((ch) => (
-                <button
-                  key={ch}
-                  type="button"
-                  onClick={() => pushLetter(ch)}
-                  className="t-num"
-                  style={{
-                    padding: "9px 0", borderRadius: 6, fontSize: 13,
-                    background: "var(--btn-bg)", border: "1px solid var(--btn-brd)",
-                    color: "var(--text)",
-                  }}
-                >
-                  {ch}
-                </button>
-              ))}
               <button
                 type="button"
                 onClick={() => { setTyped((v) => v.slice(0, -1)); sfx.click(); }}
-                className="t-label"
+                className="t-label shrink-0"
                 style={{
-                  gridColumn: "span 2", padding: "9px 0", borderRadius: 6, fontSize: 9,
+                  padding: "13px 15px", borderRadius: "var(--r-md)", fontSize: 9.5,
                   background: "var(--btn-bg)", border: "1px solid var(--btn-brd)",
+                  color: "var(--text)",
                 }}
               >
                 {tr("СТЕРЕТЬ")}
               </button>
             </div>
+
+            {/* Подсказка: видно, что она стоит и сколько именно */}
+            <button
+              type="button"
+              onClick={hint}
+              className="w-full flex items-center"
+              style={{
+                gap: 9, padding: "11px 13px", borderRadius: "var(--r-md)",
+                background: "var(--warn-soft)", border: "1px solid var(--warn-brd)",
+              }}
+            >
+              <span className="ico-box shrink-0" style={{ width: 28, height: 28, color: "var(--warn)" }}>
+                <Icon name="sparkle" size={14} />
+              </span>
+              <span className="flex-1 min-w-0 text-left">
+                <span className="t-title-sm block" style={{ fontSize: 12 }}>
+                  {tr("ПОДСКАЗКА: ОТКРЫТЬ БУКВУ")}
+                </span>
+                <span className="t-caption block clip1" style={{ fontSize: 10, marginTop: 1 }}>
+                  {tr("Бобкова насторожится")} +{Math.round(HINT_COST * 100)}%
+                </span>
+              </span>
+            </button>
           </div>
         )}
+
       </div>
 
       <AnimatePresence>{phase === "count" && <Countdown n={cd} />}</AnimatePresence>

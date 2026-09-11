@@ -121,6 +121,7 @@
   --ok-brd: rgba(92, 227, 155, 0.42);
   --warn: #ffc53d;
   --warn-soft: rgba(255, 197, 61, 0.14);
+  --warn-brd: rgba(255, 197, 61, 0.42);
   --danger: #ff6b5a;
   --danger-ink: #180507;      /* текст на заливке --danger */
   --danger-soft: rgba(255, 107, 90, 0.14);
@@ -227,6 +228,7 @@ html.light {
   --ok-brd: rgba(18, 136, 90, 0.4);
   --warn: #9a6a00;
   --warn-soft: rgba(154, 106, 0, 0.12);
+  --warn-brd: rgba(154, 106, 0, 0.4);
   --danger: #c8362a;
   --danger-ink: #fff5f3;
   --danger-soft: rgba(200, 54, 42, 0.1);
