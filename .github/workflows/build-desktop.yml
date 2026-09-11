@@ -60,41 +60,11 @@ jobs:
 
       # Раньше .exe собирался «успешно», но при запуске показывал пустое
       # окно: оболочка и игра не попадали внутрь архива app.asar.
-      # Теперь распаковываем собранный asar и проверяем содержимое.
+      # Скрипт распаковывает пакет и проверяет состав (пути внутри asar
+      # на Windows идут с обратным слэшем — сравнение нормализованное).
       - name: Verify app contents inside asar
         shell: bash
-        run: |
-          ASAR="desktop-out/win-unpacked/resources/app.asar"
-          if [ ! -f "$ASAR" ]; then
-            echo "ОШИБКА: app.asar не найден"
-            ls -R desktop-out/win-unpacked/resources || true
-            exit 1
-          fi
-          echo "--- содержимое app.asar ---"
-          npx asar list "$ASAR" > asar-list.txt
-          head -40 asar-list.txt
-          for f in "/desktop/main.cjs" "/dist/index.html" "/package.json"; do
-            if ! grep -qx "$f" asar-list.txt; then
-              echo "ОШИБКА: внутри пакета нет $f — приложение не запустится"
-              exit 1
-            fi
-            echo "есть: $f"
-          done
-          # index.html должен быть настоящей игрой, а не заглушкой
-          npx asar extract-file "$ASAR" dist/index.html
-          SZ=$(stat -c%s index.html 2>/dev/null || stat -f%z index.html)
-          echo "dist/index.html внутри пакета: $SZ Б"
-          if [ "$SZ" -lt 500000 ]; then
-            echo "ОШИБКА: index.html подозрительно маленький"
-            exit 1
-          fi
-          # точка входа в package.json должна указывать на оболочку
-          npx asar extract-file "$ASAR" package.json
-          node -e "
-            const m=require('./package.json').main;
-            console.log('main =', m);
-            if (m !== 'desktop/main.cjs') { console.error('ОШИБКА: неверная точка входа'); process.exit(1); }
-          "
+        run: node scripts/verify-asar.mjs desktop-out/win-unpacked/resources/app.asar
 
       # Запускаем собранное приложение вживую и убеждаемся, что окно
       # действительно отрисовалось, а не упало на старте.
