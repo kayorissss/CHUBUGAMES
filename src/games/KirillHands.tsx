@@ -3,7 +3,6 @@ import { AnimatePresence } from "framer-motion";
 import { useGame } from "../core/store";
 import { sfx, haptic } from "../core/fx";
 import { useCanvas, GameHUD, GameOver, Countdown, HudStat } from "./shell";
-import { drawHead } from "../core/head";
 import { tr } from "../core/i18n";
 
 /**
@@ -39,9 +38,20 @@ interface Hand {
   grabT: number;
   /** какую вещь утащила — рисуем её в кулаке */
   loot: string | null;
+  /**
+   * Кто тянется и за чем.
+   *
+   * Жалоба: «непонятно кто и что ворует». Теперь у каждой руки есть имя
+   * владельца и цель, выбранные ЗАРАНЕЕ, и подпись видна, пока рука
+   * ползёт к портфелю — успеваешь понять, свою бьёшь или чужую.
+   */
+  who: string;
+  target: string;
 }
 
 const ITEMS = ["ТЕЛЕФОН", "КОШЕЛЁК", "НАУШНИКИ", "ЗАРЯДКА", "ТЕТРАДЬ", "КЛЮЧИ"];
+/** Кому принадлежат чужие руки — подписываем, чтобы было ясно, кто ворует */
+const THIEVES = ["КИРИЛЛ", "СТАС", "РОМА", "АНТОН", "КУДРЯ", "СЕРЁГА"];
 /** Пауза захвата: последний шанс успеть ударить по руке */
 const GRAB_MS = 420;
 
@@ -55,7 +65,6 @@ export default function KirillHands({ onExit }: { onExit: () => void }) {
   const [result, setResult] = useState({ score: 0, coins: 0, xp: 0 });
 
   const best = s.games.hands?.best || 0;
-  const kirill = s.friends.find((f) => f.id === "kirill") || s.friends[0];
 
   const G = useRef({
     running: false,
@@ -181,7 +190,10 @@ export default function KirillHands({ onExit }: { onExit: () => void }) {
       if (g.spawnT <= 0) {
         g.spawnT = 620 + Math.random() * 520;
         const mine = Math.random() < 0.18;
+        const target = ITEMS[Math.floor(Math.random() * ITEMS.length)];
         g.hands.push({
+          who: mine ? "ТВОЯ РУКА" : THIEVES[Math.floor(Math.random() * THIEVES.length)],
+          target,
           side: Math.random() < 0.5 ? -1 : 1,
           y: h * 0.24 + Math.random() * h * 0.42,
           reach: 0,
@@ -222,7 +234,7 @@ export default function KirillHands({ onExit }: { onExit: () => void }) {
           if (hnd.grabT <= 0) {
             // вещь ушла — теперь рука уносит её
             hnd.state = "carry";
-            hnd.loot = ITEMS[Math.max(0, g.items - 1)] || "ВЕЩЬ";
+            hnd.loot = hnd.target || "ВЕЩЬ";
             g.items -= 1;
             g.combo = 0;
             setCombo(0);
@@ -270,8 +282,12 @@ export default function KirillHands({ onExit }: { onExit: () => void }) {
 
     const bagX = w / 2, bagY = h * 0.52;
 
-    // Кирилл сверху — «худой», смотрит на портфель
-    drawHead(ctx, kirill.look, bagX, h * 0.15, 34, { body: false, mouth: 0.35, tilt: Math.sin(g.elapsed * 0.001) * 0.12 });
+    /*
+     * Голова Кирилла сверху УБРАНА (жалоба: «голова улетела и не нужна
+     * сверху»). Она висела в воздухе без тела на h*0.15 и выглядела как
+     * оторванная. Сцена теперь читается сама: твой портфель в центре,
+     * чужие руки лезут к нему с боков.
+     */
 
     // портфель
     const bp = 1 + g.bagPulse * 0.06;
@@ -306,42 +322,115 @@ export default function KirillHands({ onExit }: { onExit: () => void }) {
       const fromX = hnd.side < 0 ? -20 : w + 20;
       const skin = hnd.mine ? "#f0c9a4" : "#d9a87f";
 
-      // предплечье
-      ctx.strokeStyle = skin;
-      ctx.lineWidth = 17;
-      ctx.lineCap = "round";
-      ctx.beginPath();
-      ctx.moveTo(fromX, hnd.y);
-      ctx.quadraticCurveTo((fromX + tip.x) / 2, hnd.y - 12, tip.x, tip.y);
-      ctx.stroke();
-
-      // рукав
-      ctx.strokeStyle = hnd.mine ? "#3a4a5e" : "#2e3a2c";
-      ctx.lineWidth = 21;
-      ctx.beginPath();
-      ctx.moveTo(fromX, hnd.y);
-      ctx.lineTo(fromX + hnd.side * -46, hnd.y - 4);
-      ctx.stroke();
-
-      // кисть с пальцами — чтобы читалось как рука
-      ctx.fillStyle = skin;
-      ctx.beginPath(); ctx.arc(tip.x, tip.y, 13, 0, Math.PI * 2); ctx.fill();
+      /*
+       * РУКА, А НЕ НОГА.
+       *
+       * Жалоба: «руки похожи на ноги». Раньше это была одна дуга
+       * постоянной толщины 17 px с шариком на конце — ровно силуэт
+       * ноги со ступнёй. Теперь рисуем анатомию: плечо толще,
+       * предплечье тоньше, между ними ЛОКОТЬ с изломом, дальше
+       * запястье и уже потом кисть с пальцами.
+       */
       const dir = hnd.side < 0 ? 1 : -1;
+      // локоть — точка излома между плечом и кистью
+      const ex = fromX + (tip.x - fromX) * 0.46;
+      const ey = hnd.y + (tip.y - hnd.y) * 0.3 - 16;
+      // запястье чуть не доходит до кисти
+      const wxp = tip.x - dir * 12;
+      const wyp = tip.y - (tip.y - ey) * 0.12;
+
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+
+      // плечо: от края экрана до локтя, толстое
+      ctx.strokeStyle = skin;
+      ctx.lineWidth = 19;
+      ctx.beginPath();
+      ctx.moveTo(fromX, hnd.y);
+      ctx.lineTo(ex, ey);
+      ctx.stroke();
+
+      // предплечье: от локтя к запястью, заметно тоньше — так рука
+      // перестаёт читаться как ровная нога
+      ctx.lineWidth = 13.5;
+      ctx.beginPath();
+      ctx.moveTo(ex, ey);
+      ctx.lineTo(wxp, wyp);
+      ctx.stroke();
+
+      // тень на сгибе локтя — подчёркивает, что это сустав
+      ctx.strokeStyle = hnd.mine ? "rgba(0,0,0,0.16)" : "rgba(0,0,0,0.22)";
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(ex, ey, 8, 0.4, 2.6);
+      ctx.stroke();
+
+      // рукав на плече
+      ctx.strokeStyle = hnd.mine ? "#3a4a5e" : "#2e3a2c";
+      ctx.lineWidth = 23;
+      ctx.beginPath();
+      ctx.moveTo(fromX + hnd.side * -50, hnd.y - 4);
+      ctx.lineTo(fromX + (ex - fromX) * 0.32, hnd.y + (ey - hnd.y) * 0.32);
+      ctx.stroke();
+      // манжет
+      ctx.strokeStyle = hnd.mine ? "#4a5e75" : "#3c4a38";
+      ctx.lineWidth = 25;
+      ctx.beginPath();
+      ctx.moveTo(fromX + (ex - fromX) * 0.26, hnd.y + (ey - hnd.y) * 0.26);
+      ctx.lineTo(fromX + (ex - fromX) * 0.34, hnd.y + (ey - hnd.y) * 0.34);
+      ctx.stroke();
+
+      // ЛАДОНЬ: не круг, а вытянутая кисть поперёк направления
+      ctx.save();
+      ctx.translate(tip.x, tip.y);
+      ctx.rotate(Math.atan2(tip.y - wyp, tip.x - wxp));
+      ctx.fillStyle = skin;
+      ctx.beginPath();
+      ctx.roundRect(-4, -11, 17, 22, 7);
+      ctx.fill();
+      ctx.restore();
+
+      // пальцы веером от ладони
       for (let f = 0; f < 4; f++) {
-        const a = -0.55 + f * 0.36;
+        const a = -0.62 + f * 0.4;
         ctx.strokeStyle = skin;
-        ctx.lineWidth = 4.6;
+        ctx.lineWidth = 4.8 - f * 0.35;
+        ctx.lineCap = "round";
         ctx.beginPath();
-        ctx.moveTo(tip.x, tip.y);
-        ctx.lineTo(tip.x + dir * Math.cos(a) * 17, tip.y + Math.sin(a) * 17);
+        ctx.moveTo(tip.x + dir * 4, tip.y + Math.sin(a) * 6);
+        ctx.lineTo(tip.x + dir * (4 + Math.cos(a) * 16), tip.y + Math.sin(a) * 17);
         ctx.stroke();
       }
-      // большой палец
-      ctx.lineWidth = 5.4;
+      // большой палец — отдельно и в другую сторону, это ключевой признак руки
+      ctx.lineWidth = 5.8;
       ctx.beginPath();
-      ctx.moveTo(tip.x, tip.y);
-      ctx.lineTo(tip.x + dir * 6, tip.y + 15);
+      ctx.moveTo(tip.x - dir * 2, tip.y - 4);
+      ctx.lineTo(tip.x + dir * 9, tip.y - 15);
       ctx.stroke();
+
+      /*
+       * ПОДПИСЬ: кто тянется и за чем. Висит у самого края экрана,
+       * рядом с плечом — не перекрывает портфель и не пляшет вместе
+       * с кистью.
+       */
+      {
+        const lblX = hnd.side < 0 ? 8 : w - 8;
+        ctx.save();
+        ctx.textAlign = hnd.side < 0 ? "left" : "right";
+        ctx.font = "800 9.5px Unbounded, Inter, system-ui, sans-serif";
+        ctx.fillStyle = hnd.mine ? "#59FF9E" : "#ff9a80";
+        ctx.fillText(tr(hnd.who), lblX, hnd.y - 26);
+        if (!hnd.mine) {
+          ctx.font = "600 9px Inter, system-ui, sans-serif";
+          ctx.fillStyle = "rgba(255,255,255,0.72)";
+          ctx.fillText(`${tr("тянется за")}: ${tr(hnd.target)}`, lblX, hnd.y - 14);
+        } else {
+          ctx.font = "600 9px Inter, system-ui, sans-serif";
+          ctx.fillStyle = "rgba(89,255,158,0.8)";
+          ctx.fillText(tr("не бей"), lblX, hnd.y - 14);
+        }
+        ctx.restore();
+      }
 
       // своя рука помечена шнурком на запястье
       if (hnd.mine) {
@@ -365,11 +454,10 @@ export default function KirillHands({ onExit }: { onExit: () => void }) {
     }
     ctx.globalAlpha = 1;
 
-    if (g.running && g.elapsed < 4200) {
-      ctx.fillStyle = "rgba(255,255,255,0.5)";
-      ctx.font = "600 12px Inter, system-ui, sans-serif";
-      ctx.fillText(tr("Бей по рукам. Свою руку со шнурком не трогай"), w / 2, h - 22);
-    }
+    /*
+     * Подсказка внизу убрана: она сидела в 22 px от края, на полоске
+     * жестов. Кто есть кто теперь подписано у самих рук.
+     */
   }, [phase]);
 
   return (
