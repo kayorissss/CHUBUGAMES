@@ -1,68 +1,83 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { tr } from "../core/i18n";
 import { useGame, useToasts } from "../core/store";
+import { isDesktop } from "../core/desktop";
 import { Panel, Tap } from "../ui/Glass";
 import { fmt, fmtTime } from "../core/format";
 import Icon from "../ui/Icon";
 
+/**
+ * УВЕДОМЛЕНИЯ.
+ *
+ * Как было: плашки сыпались СВОИМ СТОПКОЙ ПО ЦЕНТР СВЕРХУ, по три-семь
+ * штук одновременно, не закрывались руками и залепляли шапку с очками.
+ * Просьба: «уведомления стереть, и они по центру сверху, а не в углу».
+ *
+ * Как стало:
+ *  • угол — справа сверху на ПК (не перекрывает счёт и HUD), слева сверху на
+ *    телефоне (там справа живёт FPS и монеты);
+ *  • максимум три плашки, остальные ждут в очереди (store: MAX_TOASTS) и
+ *    выходят по одной — поток событий читается по порядку, а не кашей;
+ *  • у каждой плашки крестик: убрать можно не дожидаясь 3.4 с;
+ *  • наведение мышью на ПК откладывает авто-скрытие: читать с таймером
+ *    неудобно;
+ *  • клик по плашке тоже закрывает её.
+ */
 export function Toasts() {
   // подписан только на список тостов, а не на всё состояние игры
-  const { toasts } = useToasts();
+  const { toasts, dismiss } = useToasts();
+  const pc = isDesktop();
+
   return (
     <div
-      className="fixed left-0 right-0 z-[90] flex flex-col items-center gap-2 px-4 pointer-events-none"
-      style={{ top: "calc(var(--sat) + 10px)" }}
+      className={`toast-stack ${pc ? "pc" : ""}`}
+      role="status"
+      aria-live="polite"
     >
-      <AnimatePresence>
+      <AnimatePresence initial={false}>
         {toasts.map((t) => (
           <motion.div
             key={t.id}
-            initial={{ y: -60, opacity: 0, scale: 0.9 }}
+            layout={pc ? false : undefined}
+            initial={{ y: -18, opacity: 0, scale: 0.96 }}
             animate={{ y: 0, opacity: 1, scale: 1 }}
-            exit={{ y: -30, opacity: 0, scale: 0.94 }}
-            transition={{ type: "spring", stiffness: 420, damping: 30 }}
-            className="w-full max-w-xs"
+            exit={{ y: -12, opacity: 0, scale: 0.97 }}
+            transition={{ type: "spring", stiffness: 460, damping: 34 }}
+            className={`toast-item ${t.tone === "gold" ? "gold" : ""} ${t.tone === "bad" ? "bad" : ""}`}
+            onMouseEnter={() => holdToast(t.id, true)}
+            onMouseLeave={() => holdToast(t.id, false)}
           >
-            <div
-              className="px-3.5 py-3 flex items-center gap-3"
-              style={{
-                borderRadius: "var(--r-lg)",
-                /* Плотный НЕпрозрачный фон — сквозь тост не должно просвечивать */
-                background: "var(--toast-bg)",
-                border: `1.5px solid ${t.tone === "gold" ? "var(--acc)" : "var(--toast-brd)"}`,
-                boxShadow:
-                  t.tone === "gold"
-                    ? "0 16px 40px -10px rgba(0,0,0,0.9), 0 0 26px -8px var(--acc-glow)"
-                    : "0 16px 40px -10px rgba(0,0,0,0.9)",
-              }}
+            {t.icon && (
+              <span className="toast-ico">
+                <Icon name={t.icon} size={18} />
+              </span>
+            )}
+            <span className="toast-text">
+              <span className="toast-title">{t.title}</span>
+              {t.sub && <span className="toast-sub">{t.sub}</span>}
+            </span>
+            <button
+              type="button"
+              className="toast-x"
+              aria-label={tr("Закрыть")}
+              onClick={() => dismiss(t.id)}
             >
-              {t.icon && (
-                <span
-                  className="shrink-0 flex items-center justify-center"
-                  style={{ width: 24, height: 24, color: t.tone === "gold" ? "var(--acc)" : "var(--text)" }}
-                >
-                  <Icon name={t.icon} size={21} />
-                </span>
-              )}
-              <div className="flex-1 min-w-0">
-                <div
-                  className="t-title clip1"
-                  style={{ fontSize: 14, color: t.tone === "bad" ? "var(--danger)" : "var(--text)" }}
-                >
-                  {t.title}
-                </div>
-                {t.sub && (
-                  <div className="clip1" style={{ fontSize: 11.5, color: "var(--text-dim)", marginTop: 1 }}>
-                    {t.sub}
-                  </div>
-                )}
-              </div>
-            </div>
+              <Icon name="cross" size={13} />
+            </button>
           </motion.div>
         ))}
       </AnimatePresence>
     </div>
   );
+}
+
+/**
+ * Наведение мыши = «не убирай». Проще всего сказать это store-у через
+ * собственное событие: компонент не имеет права лезть в таймеры провайдера,
+ * а провайдер не знает про курсор.
+ */
+function holdToast(id: number, on: boolean): void {
+  window.dispatchEvent(new CustomEvent("chub:toastrule", { detail: { id, on } }));
 }
 
 export function OfflineModal() {

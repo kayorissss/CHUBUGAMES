@@ -9,6 +9,8 @@
 
 /** Запущены ли мы внутри десктопной оболочки */
 import { applyStage, readStage, writeStage } from "./stage";
+import { isPlaying } from "./play";
+import { pause, resumeNow, isPaused } from "./pause";
 
 const FORCE_KEY = "chubgames.pc";
 
@@ -89,6 +91,17 @@ export function initStage(): () => void {
   };
 }
 
+/**
+ * Esc внутри игры: первый раз — пауза, второй — снять её. Возвращает true,
+ * если событие обработано и «назад» вызывать не нужно. Вынесено отсюда,
+ * чтобы обработчик клавиш оставался списком «клавиша → действие».
+ */
+function toggleEscape(): boolean {
+  if (isPaused()) resumeNow();
+  else pause();
+  return true;
+}
+
 export function initDesktopKeys(): () => void {
   if (typeof window === "undefined") return () => {};
 
@@ -109,6 +122,16 @@ export function initDesktopKeys(): () => void {
     }
 
     if (e.key === "Escape") {
+      /*
+       * Внутри игры Esc сначала СТАВИТ ИГРУ НА ПАУЗУ и только потом, если
+       * пауза уже открыта, закрывает её. Выйти из игры — дело кнопки «назад»
+       * или пункта «Выйти в меню» в паузе: раньше Esc выкидывал из партии
+       * одним нажатием, и это было обидно ровно всегда.
+       */
+      if (isPlaying() && toggleEscape()) {
+        e.preventDefault();
+        return;
+      }
       // history.back() поднимет popstate, а его уже слушает core/nav.ts
       e.preventDefault();
       history.back();

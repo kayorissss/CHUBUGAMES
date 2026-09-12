@@ -9,7 +9,11 @@
 
 appId: com.chubgames.app
 productName: CHUBUGAMES
-copyright: KAYORISAN
+# «Издатель» везде берётся из package.json → author.name (KAYORISAN):
+# electron-builder кладёт его и в версию exe (CompanyName), и в реестр
+# установки (Publisher) — это та строчка, что показывает UAC-диалог и
+# «Приложения и функции». Copyright — вторая строка свойств файла.
+copyright: "Copyright © 2026 KAYORISAN"
 
 directories:
   output: desktop-out
@@ -56,6 +60,8 @@ nsis:
   createDesktopShortcut: true
   createStartMenuShortcut: true
   shortcutName: CHUBUGAMES
+  # в списке установленных программ подпись удалятора тоже должна быть нашей
+  uninstallDisplayName: "CHUBUGAMES (KAYORISAN)"
   # Удаление должно уносить и сохранения, если пользователь этого хочет
   deleteAppDataOnUninstall: false
 

@@ -416,7 +416,7 @@ export default function Settings({
           смотрит; теперь она там, где о ней спрашивают. */}
       <div className="pc-foot">
         <div className="pc-foot-brand">
-          <div className="t-display-sm" style={{ color: "var(--n-400)" }}>CHUBUGAMES</div>
+          <div className="t-display-sm" style={{ color: "var(--text-mute)" }}>CHUBUGAMES</div>
           <div className="t-caption" style={{ marginTop: 5 }}>
             {t("settings.forOurs")}
           </div>

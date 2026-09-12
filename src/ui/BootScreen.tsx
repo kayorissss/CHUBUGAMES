@@ -76,12 +76,17 @@ function SplashMark({ low }: { low: boolean }) {
           <stop offset="0" stopColor="#8B5130" />
           <stop offset="1" stopColor="#5A2F18" />
         </linearGradient>
+        <linearGradient id="sLeaf" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#9BE86A" />
+          <stop offset="1" stopColor="#3F7C2A" />
+        </linearGradient>
       </defs>
 
-      <g transform="translate(0 -26)">
+      <g>
         {low ? (
           <>
             <path d={p.bunTop} fill="url(#sBun)" />
+            {p.leaf && <path d={p.leaf} fill="url(#sLeaf)" />}
             <path d={p.cheeseBar} fill="url(#sCheese)" />
             <path d={p.cheeseDrip} fill="url(#sCheese)" />
             <rect {...p.patty} fill="url(#sPatty)" />
@@ -90,6 +95,7 @@ function SplashMark({ low }: { low: boolean }) {
         ) : (
           <>
             <Layer d={p.bunTop} delay={0.02} fill="url(#sBun)" />
+            {p.leaf && <Layer d={p.leaf} delay={0.1} fill="url(#sLeaf)" />}
             <Layer d={p.cheeseBar} delay={0.16} fill="url(#sCheese)" />
             <Layer d={p.cheeseDrip} delay={0.22} fill="url(#sCheese)" />
             <motion.rect

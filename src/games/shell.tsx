@@ -12,6 +12,7 @@ import { useGame } from "../core/store";
 import { adaptValue, isLowFx, renderScale, fpsFeed, onAdapt } from "../core/perf";
 import RulesCard from "../ui/RulesCard";
 import { sfx, haptic } from "../core/fx";
+import { isPaused, pause } from "../core/pause";
 import type { GameId } from "../core/types";
 import { modalBackdrop, modalCard, springPop, springTap, EASE } from "../core/motion";
 
@@ -61,6 +62,18 @@ export function useCanvas(
 
     const loop = (now: number) => {
       if (!alive) return;
+      /*
+       * ПАУЗА. Кадры не рисуем, но цикл держим и last обновляем: иначе на
+       * первом кадре после продолжения dt был бы равен всему времени паузы,
+       * и персонаж одним шагом перелетел бы через половину экрана. Канвас при
+       * этом не чистится — на экране остаётся последний кадр, а не чёрный
+       * прямоугольник.
+       */
+      if (isPaused()) {
+        last = now;
+        raf = requestAnimationFrame(loop);
+        return;
+      }
       const dt = Math.min(50, now - last);
       last = now;
       /* Кадры считаем здесь же — отдельный rAF на индикатор был бы ещё
@@ -299,6 +312,18 @@ export function GameHUD({
 
         {lives && <Lives value={lives.value} max={lives.max} icon={lives.icon} />}
         {extra}
+
+        {/* Пауза. На клавиатуре её же даёт Esc (core/desktop.ts), но на
+            телефоне клавиатуры нет, поэтому кнопка обязана быть видна. */}
+        <button
+          type="button"
+          onClick={() => { sfx.click(); haptic("light"); pause(); }}
+          className="hud-chip shrink-0 justify-center"
+          style={{ width: HUD_H, padding: 0 }}
+          aria-label={tr("Пауза")}
+        >
+          <Icon name="pause" size={17} />
+        </button>
 
         {gid && (
           <button

@@ -42,5 +42,10 @@
     "vite-plugin-singlefile": "2.3.0",
     "sharp": "^0.33.5"
   },
-  "main": "desktop/main.cjs"
+  "main": "desktop/main.cjs",
+  "author": {
+    "name": "KAYORISAN",
+    "email": "kayorisan@chubgames.app",
+    "url": "https://t.me/kayorisan"
+  }
 }

@@ -469,17 +469,15 @@ body {
 
 /* Акцентная стеклянная кнопка */
 .glass-acc {
-  background: linear-gradient(
-    170deg,
-    color-mix(in srgb, var(--acc) 92%, white),
-    var(--acc) 55%,
-    color-mix(in srgb, var(--acc) 78%, black)
-  );
+  /* Градиент собран из --acc-hi/--acc-lo (см. core/theme.ts): верхняя грань
+     светлее, нижняя темнее — кнопка выглядит литой. Чернила считаются из
+     яркости акцента, поэтому текст читаем и на янтаре, и на «Крови». */
+  background: linear-gradient(170deg, var(--acc-hi), var(--acc) 52%, var(--acc-lo));
   color: var(--acc-ink);
-  border: 1px solid color-mix(in srgb, var(--acc) 60%, white);
+  border: 1px solid color-mix(in srgb, var(--acc) 62%, white);
   box-shadow:
-    0 8px 26px -8px var(--acc-glow),
-    inset 0 1px 0 rgba(255, 255, 255, 0.55);
+    0 8px 26px -10px var(--acc-glow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.4);
 }
 
 /* ---------- Кнопки без React-обёртки ----------
@@ -3119,4 +3117,429 @@ html.low-fx:not(.is-desktop) .m-nav-item {
 }
 html.low-fx:not(.is-desktop) .glass::after {
   display: none;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   1.27 — ОБОЛОЧКА: ЦВЕТ, УВЕДОМЛЕНИЯ, ПАУЗА, ВКЛАДКИ, ГЛАВНАЯ
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* ── ГЛАВНЫЙ ЦВЕТОВОЙ ФИКС: акцентная кнопка на ПК ──────────────────────────
+   Правило «на компьютере стекло становится плотной панелью» (html.is-desktop
+   .glass) перебивало .glass-acc по специфичности — и каждая акцентная кнопка
+   на ПК теряла заливку, оставаясь с тёмными чернилами на тёмной панели.
+   Отсюда жалоба «некоторые цвета сломались, текст не видно»: «ЕЩЁ РАЗ» на
+   экране итога, «ЗАБРАТЬ» в казино, главные CTA в магазине.
+  dens
+   Акцент теперь возвращается явно, плотность стекла при этом остаётся. */
+html.is-desktop .glass.glass-acc {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  background: linear-gradient(170deg, var(--acc-hi), var(--acc) 52%, var(--acc-lo));
+  color: var(--acc-ink);
+  border: 1px solid color-mix(in srgb, var(--acc) 62%, #ffffff);
+  box-shadow: 0 10px 26px -14px var(--acc-glow), inset 0 1px 0 rgba(255, 255, 255, 0.34);
+}
+html.is-desktop .glass.glass-acc:hover {
+  filter: brightness(1.05);
+}
+/* светлая тема: белая «кромка» на акценте не нужна, она и так светлая */
+html.light .glass-acc,
+html.light.is-desktop .glass.glass-acc {
+  border-color: color-mix(in srgb, var(--acc) 70%, #000000 18%);
+  box-shadow: 0 8px 22px -14px var(--acc-glow), inset 0 1px 0 rgba(255, 255, 255, 0.5);
+}
+
+/* ── читаемость мелких подписей ──────────────────────────────────────────── */
+.t-caption,
+.t-label {
+  text-wrap: pretty;
+}
+/* Подпись на акцентной плашке обязана принадлежать акценту, а не «серому по
+   умолчанию»: на цветной подложке серый превращается в грязь. */
+.glass-acc .t-label,
+.glass-acc .t-caption {
+  color: color-mix(in srgb, var(--acc-ink) 78%, transparent);
+  opacity: 1;
+}
+
+/* Rarity-цвета на светлой теме: те же роли, но затемнённые — на белом
+   #ffb020 и #b07bff были невидимы (контраст 1.9:1). */
+html.light .rarity-common { --rc: #5f5f6d; }
+html.light .rarity-rare { --rc: #1f5fb8; }
+html.light .rarity-epic { --rc: #6b2fc0; }
+html.light .rarity-legend { --rc: #8a5a00; }
+
+/* ── УВЕДОМЛЕНИЯ: стопка в углу, а не по центру сверху ───────────────────── */
+.toast-stack {
+  position: fixed;
+  z-index: 95;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: min(21rem, calc(100vw - 24px));
+  pointer-events: none;
+  left: 12px;
+  top: calc(var(--sat) + 10px);
+  align-items: flex-start;
+}
+/* на компьютере правый верхний угол свободен (слева — «назад» и счёт),
+   там уведомление ничего не перекрывает */
+.toast-stack.pc {
+  left: auto;
+  right: 14px;
+  top: calc(var(--sat) + 56px);
+  align-items: flex-end;
+}
+.toast-item {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 9px 8px 9px 11px;
+  border-radius: var(--r-md);
+  background: var(--toast-bg);
+  border: 1px solid var(--toast-brd);
+  box-shadow: 0 16px 34px -18px rgba(0, 0, 0, 0.9);
+  cursor: pointer;
+}
+.toast-item.gold {
+  border-color: var(--acc);
+  box-shadow: 0 16px 34px -16px rgba(0, 0, 0, 0.9), 0 0 22px -10px var(--acc-glow);
+}
+.toast-item.bad {
+  border-color: var(--danger-brd);
+}
+.toast-ico {
+  flex-shrink: 0;
+  display: inline-flex;
+  width: 26px;
+  height: 26px;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--r-sm);
+  background: var(--surface-3);
+  color: var(--text);
+}
+.toast-item.gold .toast-ico {
+  background: var(--acc);
+  color: var(--acc-ink);
+}
+.toast-item.bad .toast-ico {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+.toast-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.toast-title {
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.25;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.toast-item.gold .toast-title {
+  color: var(--acc-text);
+}
+.toast-item.bad .toast-title {
+  color: var(--danger);
+}
+.toast-sub {
+  font-size: 11px;
+  line-height: 1.3;
+  color: var(--text-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.toast-x {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--r-sm);
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.toast-x:hover {
+  background: var(--surface-3);
+  color: var(--text);
+}
+
+/* ── ПАУЗА ───────────────────────────────────────────────────────────────── */
+.pause-scrim {
+  position: absolute;
+  inset: 0;
+  z-index: 70;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 18px;
+  background: var(--scrim-strong);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+.pause-card {
+  width: min(24rem, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 18px;
+  border-radius: var(--r-xl);
+  background: var(--surface);
+  border: 1px solid var(--surface-brd);
+  box-shadow: 0 30px 70px -30px rgba(0, 0, 0, 0.95);
+}
+.pause-kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  align-self: flex-start;
+  padding: 4px 9px;
+  border-radius: var(--r-sm);
+  background: var(--acc);
+  color: var(--acc-ink);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+}
+.pause-game {
+  font-size: 19px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: var(--text);
+}
+.pause-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: var(--r-md);
+  background: var(--btn-bg);
+  border: 1px solid var(--btn-brd);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: -0.005em;
+  cursor: pointer;
+  transition: background 0.16s, transform 0.12s;
+}
+.pause-btn:hover {
+  background: var(--btn-bg-hi);
+}
+.pause-btn:active {
+  transform: scale(0.985);
+}
+.pause-btn.primary {
+  background: linear-gradient(170deg, var(--acc-hi), var(--acc) 52%, var(--acc-lo));
+  border-color: color-mix(in srgb, var(--acc) 62%, #ffffff);
+  color: var(--acc-ink);
+  box-shadow: 0 10px 26px -14px var(--acc-glow);
+}
+.pause-hint {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  justify-content: center;
+  font-size: 10.5px;
+  color: var(--text-mute);
+}
+.pause-count {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  font-family: var(--font-display, "Unbounded", sans-serif);
+  font-size: clamp(84px, 18vw, 150px);
+  line-height: 1;
+  color: var(--text);
+  text-shadow: 0 8px 40px rgba(0, 0, 0, 0.8);
+}
+/* пока игра на паузе — стоим и CSS-анимациями: иначе «пауза» выглядит так,
+   будто ничего не произошло, а часть эффектов всё равно крутится */
+html.is-paused .game-stage,
+html.is-paused .game-stage *,
+html.is-paused .game-stage *::before,
+html.is-paused .game-stage *::after {
+  animation-play-state: paused !important;
+}
+.kbd {
+  display: inline-block;
+  padding: 1px 5px;
+  border-radius: 5px;
+  background: var(--surface-3);
+  border: 1px solid var(--btn-brd);
+  border-bottom-width: 2px;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-dim);
+}
+
+/* ── СЕГМЕНТИРОВАННЫЕ ВКЛАДКИ: один вид на казино, прогресс и настройки ────
+   Раньше у каждой страницы был свой самопальный ряд кнопок; в магазине
+   человеку понравилось, поэтому вид забираем оттуда и делаем общим. */
+.pc-seg {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  border-radius: var(--r-lg);
+  background: var(--surface-2);
+  border: 1px solid var(--surface-brd);
+}
+.pc-seg-item {
+  position: relative;
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 9px 10px;
+  border-radius: var(--r-md);
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 0.16s, color 0.16s, border-color 0.16s;
+}
+.pc-seg-item:hover {
+  color: var(--text);
+  background: color-mix(in srgb, var(--surface-3) 70%, transparent);
+}
+.pc-seg-item.on {
+  color: var(--acc-ink);
+}
+.pc-seg-pill {
+  position: absolute;
+  inset: 0;
+  border-radius: var(--r-md);
+  background: linear-gradient(170deg, var(--acc-hi), var(--acc) 55%, var(--acc-lo));
+  box-shadow: 0 8px 20px -12px var(--acc-glow);
+  z-index: 0;
+}
+.pc-seg-item > *:not(.pc-seg-pill) {
+  position: relative;
+  z-index: 1;
+}
+/* узкий экран: вкладки переезжают в горизонтальный скролл, а не в кашу */
+@media (max-width: 640px) {
+  .pc-seg {
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .pc-seg::-webkit-scrollbar {
+    display: none;
+  }
+  .pc-seg-item {
+    flex: 0 0 auto;
+  }
+}
+
+/* ── ЭКРАН ПАДЕНИЯ (ui/BugGuard) ─────────────────────────────────────────── */
+.bug-wrap {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 18px;
+  background: var(--bg);
+  z-index: 120;
+}
+.bug-card {
+  width: min(26rem, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  padding: 16px;
+  border-radius: var(--r-xl);
+  background: var(--surface);
+  border: 1px solid var(--surface-brd);
+  box-shadow: 0 26px 60px -26px rgba(0, 0, 0, 0.9);
+}
+.bug-kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  align-self: flex-start;
+  padding: 4px 9px;
+  border-radius: var(--r-sm);
+  background: var(--danger-soft);
+  border: 1px solid var(--danger-brd);
+  color: var(--danger);
+  font-size: 9.5px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+}
+.bug-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--danger);
+}
+.bug-title {
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--text);
+  line-height: 1.2;
+}
+.bug-sub {
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--text-dim);
+}
+.bug-code {
+  display: block;
+  padding: 8px 10px;
+  border-radius: var(--r-sm);
+  background: var(--n-000);
+  border: 1px solid var(--surface-brd);
+  color: var(--warn);
+  font-size: 10.5px;
+  line-height: 1.4;
+  word-break: break-word;
+  max-height: 92px;
+  overflow: auto;
+}
+.bug-actions {
+  display: flex;
+  gap: 8px;
+}
+.bug-btn {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 11px 12px;
+  border-radius: var(--r-md);
+  background: var(--btn-bg);
+  border: 1px solid var(--btn-brd);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+}
+.bug-btn.primary {
+  background: linear-gradient(170deg, var(--acc-hi), var(--acc) 52%, var(--acc-lo));
+  border-color: color-mix(in srgb, var(--acc) 62%, #ffffff);
+  color: var(--acc-ink);
 }

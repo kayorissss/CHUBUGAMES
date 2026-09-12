@@ -71,6 +71,10 @@ import RadomirFlight from "./games/RadomirFlight";
 import DormDefense from "./games/DormDefense";
 import { unlockAudio } from "./core/fx";
 import { pushBack } from "./core/nav";
+import { resumeNow, setPauseExitHandler } from "./core/pause";
+import PauseOverlay from "./ui/PauseOverlay";
+import BugGuard, { installCrashWatch } from "./ui/BugGuard";
+import { GAME_META } from "./core/content";
 import type { GameId } from "./core/types";
 
 /**
@@ -78,6 +82,19 @@ import type { GameId } from "./core/types";
  * компьютер. Раньше их было две — мобильная (в этом файле) и десктопная
  * (PcBoot), и они успели разъехаться по анимациям и размерам.
  */
+
+/** Мост между глобальными обработчиками и очередью уведомлений. */
+function CrashWatch() {
+  const { toast } = useGame();
+  useEffect(
+    () =>
+      installCrashWatch((title, detail) => {
+        toast({ title: title, sub: detail, icon: "warn", tone: "bad", ms: 5200 });
+      }),
+    [toast],
+  );
+  return null;
+}
 
 function Shell() {
   const { s, toast } = useGame();
@@ -218,6 +235,17 @@ function Shell() {
     return pushBack(`sub:${sub}`, () => setSub(null));
   }, [sub]);
 
+  /*
+   * ПАУЗА. Кнопка «Выйти в меню» в PauseOverlay не знает про setGame — она
+   * дёргает обработчик отсюда. При выходе паузу снимаем обязательно: иначе
+   * следующая игра стартовала бы «на паузе» с оверлеем поверх.
+   */
+  useEffect(() => {
+    setPauseExitHandler(game ? () => setGame(null) : null);
+    if (!game) resumeNow();
+    return () => setPauseExitHandler(null);
+  }, [game]);
+
   // с любой вкладки «назад» возвращает на Игры
   useEffect(() => {
     if (game || sub || tab === "home") return;
@@ -295,7 +323,7 @@ function Shell() {
             exit="exit"
             className="h-full"
           >
-            {pages[tab]}
+            <BugGuard kind="page">{pages[tab]}</BugGuard>
           </motion.div>
           )}
         </AnimatePresence>
@@ -343,7 +371,7 @@ function Shell() {
             exit="exit"
             className={`fixed inset-0 z-[60] ${pc ? "pc-play-wrap" : ""}`}
           >
-            <div className={pc ? "pc-play" : "h-full w-full"} ref={playRef}>
+            <div className={pc ? "pc-play game-stage" : "game-stage h-full w-full"} ref={playRef}>
             {game === "burger" && <BurgerRain onExit={() => setGame(null)} />}
             {game === "clicker" && <Clicker onExit={() => setGame(null)} />}
             {game === "merge" && <MergeHeads onExit={() => setGame(null)} />}
@@ -380,10 +408,15 @@ function Shell() {
             {s.settings.fpsHud !== false && <FpsHud />}
             {s.settings.keys !== false && !handlesKeysNatively(game) && <KeyCursor />}
             </div>
+            <PauseOverlay label={(() => { const g = GAME_META.find((x) => x.id === game); return g ? tr(g.name) : undefined; })()} />
           </motion.div>
         )}
       </AnimatePresence>
       </div>
+
+      {/* Сторож фоновых ошибок: невыловленный reject в мини-игре раньше
+          просто останавливал анимацию, и выглядело это как «зависло». */}
+      <CrashWatch />
 
       <Toasts />
       <OfflineModal />

@@ -18,7 +18,12 @@ ok(/\.clip1/.test(css)&&/\.clip2/.test(css),'есть утилиты обрез�
 
 console.log('\n[2] Тосты читаемы (непрозрачный фон)');
 const ov=fs.readFileSync('src/components/Overlays.tsx','utf8');
-ok(/--toast-bg/.test(ov),'тост использует плотный фон, а не стекло');
+/* Плашка уведомления обязана быть плотной (текст читается поверх игры) и living
+   в углу, а не «стопа по центру сверху» — за это следим и в CSS, и в разметке. */
+ok(/\.toast-item \{[\s\S]{0,300}?background: var\(--toast-bg\)/.test(css) || /--toast-bg/.test(ov),
+   'тост использует плотный фон, а не стекло');
+ok(/position: fixed/.test(css) && /\.toast-stack/.test(css),
+   'тосты собраны в одну стопку-угол, а не сыплются по центру');
 ok(!/<Panel[^>]*strong[\s\S]{0,200}t\.icon/.test(ov),'тост больше не полупрозрачная Panel');
 ok(/--toast-bg/.test(css)&&(css.match(/--toast-bg/g)||[]).length>=2,'toast-bg задан для тёмной и светлой темы');
 
@@ -1264,6 +1269,70 @@ console.log('\n[33] Android без ключа подписи: preview вмест
   const rm = fs.readFileSync('README.md', 'utf8');
   ok(/preview/i.test(rm) && /PASTE-INTO-SECRETS/.test(rm),
     'README объясняет, что делать без ключа и где взять значения');
+}
+
+console.log('\n[34] 1.27: цвета, уведомления, пауза, защита от падений, издатель');
+{
+  const css = fs.readFileSync('src/index.css', 'utf8');
+  const store = fs.readFileSync('src/core/store.tsx', 'utf8');
+  const theme = fs.readFileSync('src/core/theme.ts', 'utf8');
+  const shell = fs.readFileSync('src/games/shell.tsx', 'utf8');
+  const desk = fs.readFileSync('src/core/desktop.ts', 'utf8');
+  const ov = fs.readFileSync('src/components/Overlays.tsx', 'utf8');
+  const app = fs.readFileSync('src/App.tsx', 'utf8');
+  const mainf = fs.readFileSync('src/main.tsx', 'utf8');
+  const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+  const builder = fs.readFileSync('desktop/builder.yml', 'utf8');
+
+  /* цвет: акцентная кнопка на ПК не должна терять заливку — это и был баг
+     «текст не видно»: правило плотности стекла перебивало .glass-acc */
+  ok(/html\.is-desktop \.glass\.glass-acc \{[^}]*background:/.test(css),
+    'акцентная кнопка на ПК получает свою заливку явно (иначе --acc-ink тонет)');
+  ok(/\.glass-acc \{[\s\S]{0,400}?--acc-hi/.test(css),
+    'заливка акцента собрана из --acc-hi/--acc-lo, а не захардкоженным миксом');
+  ok(!/color: "var\(--n-[45]00\)"/.test(fs.readFileSync('src/pages/Settings.tsx', 'utf8')),
+    'ни один текст не закрашен нейтральной ступенью --n-400/--n-500 (контраст < 3)');
+
+  /* тема: чернила и текст считаются из яркости, а не зашиты */
+  ok(/export function inkOn/.test(theme) && /export function accentText/.test(theme),
+    'core/theme.ts умеет подбирать чернила и читаемый акцентный текст');
+  ok(/accentTokens\(acc\.hex/.test(store),
+    'store выставляет --acc-* из accentTokens(), а не константами');
+  ok(/const MAX_TOASTS = 3;/.test(store) && /\.slice\(-MAX_TOASTS\)/.test(store),
+    'уведомления идут очередью: на экране не больше трёх');
+  ok(/chub:toastrule/.test(store) && /chub:toastrule/.test(ov),
+    'наведение мыши на уведомление откладывает авто-скрытие');
+  ok(/toast-stack\.pc/.test(css) && /\.toast-x \{/.test(css),
+    'стопка уведомлений живёт в углу и закрывается крестиком');
+
+  /* пауза */
+  ok(/isPaused\(\)/.test(shell), 'цикл useCanvas пропускает кадры на паузе');
+  ok(/last = now;/.test(shell), 'dt не накапливается: после паузы нет прыжка на полэкрана');
+  ok(/Icon name="pause"/.test(shell), 'в шапке игры есть кнопка паузы (на телефоне клавиатуры нет)');
+  ok(/toggleEscape/.test(desk) && /isPlaying\(\) && toggleEscape\(\)/.test(desk),
+    'Esc внутри игры = пауза, а не мгновенный выход');
+  ok(/html\.is-paused \.game-stage/.test(css) && /game-stage/.test(app),
+    'на паузе CSS-анимации сцены тоже замирают');
+  ok(/<PauseOverlay/.test(app) && /resumeWithCountdown/.test(fs.readFileSync('src/core/pause.ts', 'utf8')),
+    'пауза показывает меню с отсчётом 3-2-1');
+  ok(/setPauseExitHandler\(game \? \(\) => setGame\(null\) : null\)/.test(app),
+    'выход из паузы возвращает в библиотеку и снимает паузу');
+
+  /* защита от падений */
+  const bug = fs.readFileSync('src/ui/BugGuard.tsx', 'utf8');
+  ok(/getDerivedStateFromError/.test(bug) && /static getDerivedStateFromError/.test(bug),
+    'есть ErrorBoundary с экраном падения и двумя действиями');
+  ok(/<BugGuard kind="app"/.test(mainf), 'всё приложение под границей — белого экрана не будет');
+  ok(/<BugGuard kind="page">/.test(app), 'каждая страница под своей границей');
+  ok(/installCrashWatch/.test(app), 'невыловленные reject/error не молчат, а сообщают о себе');
+  ok(/\.bug-card \{/.test(css), 'экран падения свёрстан классами, а не инлайн-костылем');
+
+  /* издатель */
+  ok(pkg.author && pkg.author.name === 'KAYORISAN',
+    'package.json → author.name = KAYORISAN: из него electron-builder берёт Publisher/CompanyName');
+  ok(/KAYORISAN/.test(builder) && /uninstallDisplayName/.test(builder),
+    'builder.yml подписывает и удаление установки тем же издателем');
+  ok(!('"win"' in pkg), 'в package.json нет мёртвого блока win (electron-builder читает desktop/builder.yml)');
 }
 
 console.log(fails===0?'\n✅ ВСЕ ПРОВЕРКИ ВЁРСТКИ ПРОЙДЕНЫ\n':`\n❌ ПРОВАЛЕНО: ${fails}\n`);

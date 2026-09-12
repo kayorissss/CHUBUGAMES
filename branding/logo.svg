@@ -1,76 +1,99 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
   <!--
-    CHUBUGAMES — знак. Бургер из трёх слоёв в плашке.
-    Только геометрия: ни шрифтов, ни растров, ни масок — знак обязан
-    читаться и в 16 px (favicon), и как adaptive-иконка Android 108dp,
-    и в монохромном слое тем.
+    CHUBUGAMES — знак. Плашка с бургером.
+
+    Правила, по которым он собран (иначе на 16 px получается каша):
+      • Слоёв ровно четыре: булочка сверху, сыр, котлета, булочка снизу.
+        Салат — тонкая полоска, он украшение, а не несущий элемент.
+      • Каждый слой не тоньше 8 % высоты знака: при 16 px это ~4 px,
+        меньше — слой исчезает, и бургер превращается в коричневое пятно.
+      • Никаких фильтров и масок: растер для Android и favicon считаются
+        из этого же файла, а feGaussianBlur в разных рендерах размывается
+        по-разному. Тени набраны вложенными эллипсами.
+      • Плашка тёмная и МАТОВАЯ, свет снизу тёплый: знак не должен
+        выглядеть «стекляшкой» рядом со стеклянными панелями приложения.
   -->
   <defs>
-    <linearGradient id="bg" x1="0.1" y1="0" x2="0.9" y2="1">
-      <stop offset="0" stop-color="#22222C"/>
-      <stop offset="0.5" stop-color="#121218"/>
-      <stop offset="1" stop-color="#07070A"/>
+    <linearGradient id="plate" x1="0.18" y1="0" x2="0.82" y2="1">
+      <stop offset="0" stop-color="#26262F"/>
+      <stop offset="0.46" stop-color="#131318"/>
+      <stop offset="1" stop-color="#08080B"/>
     </linearGradient>
-    <linearGradient id="edge" x1="0" y1="0" x2="0.3" y2="1">
-      <stop offset="0" stop-color="#FFC46B" stop-opacity="0.95"/>
-      <stop offset="0.45" stop-color="#FF7A18" stop-opacity="0.35"/>
-      <stop offset="1" stop-color="#FF7A18" stop-opacity="0.12"/>
-    </linearGradient>
-    <radialGradient id="glow" cx="0.5" cy="0.46" r="0.5">
-      <stop offset="0" stop-color="#FF7A18" stop-opacity="0.4"/>
-      <stop offset="0.65" stop-color="#FF7A18" stop-opacity="0.08"/>
+    <!-- тёплый свет снизу: бургер «лежит» на нём, а не вырезан из фона -->
+    <radialGradient id="under" cx="0.5" cy="0.9" r="0.5">
+      <stop offset="0" stop-color="#FF7A18" stop-opacity="0.20"/>
+      <stop offset="0.6" stop-color="#FF7A18" stop-opacity="0.04"/>
       <stop offset="1" stop-color="#FF7A18" stop-opacity="0"/>
     </radialGradient>
-    <linearGradient id="bunTop" x1="0" y1="0" x2="0.2" y2="1">
-      <stop offset="0" stop-color="#FFD28A"/>
-      <stop offset="0.55" stop-color="#FF9E2C"/>
-      <stop offset="1" stop-color="#F1760D"/>
+    <!-- верхняя кромка плашки: 1 px блик, чтобы угол не был плоским -->
+    <linearGradient id="rim" x1="0" y1="0" x2="0.25" y2="1">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.24"/>
+      <stop offset="0.38" stop-color="#FFFFFF" stop-opacity="0.05"/>
+      <stop offset="1" stop-color="#FF7A18" stop-opacity="0.22"/>
     </linearGradient>
-    <linearGradient id="bunBottom" x1="0" y1="0" x2="0.2" y2="1">
-      <stop offset="0" stop-color="#FFB556"/>
-      <stop offset="1" stop-color="#E2670A"/>
+    <linearGradient id="bunTop" x1="0.1" y1="0" x2="0.62" y2="1">
+      <stop offset="0" stop-color="#FFE0AC"/>
+      <stop offset="0.42" stop-color="#FFA83A"/>
+      <stop offset="1" stop-color="#EA6E07"/>
+    </linearGradient>
+    <linearGradient id="bunBot" x1="0.1" y1="0" x2="0.5" y2="1">
+      <stop offset="0" stop-color="#FFC172"/>
+      <stop offset="1" stop-color="#DE6206"/>
     </linearGradient>
     <linearGradient id="cheese" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#FFE27A"/>
-      <stop offset="1" stop-color="#FFC93C"/>
+      <stop offset="0" stop-color="#FFEC96"/>
+      <stop offset="1" stop-color="#FFC633"/>
     </linearGradient>
     <linearGradient id="patty" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#8B5130"/>
-      <stop offset="1" stop-color="#5A2F18"/>
+      <stop offset="0" stop-color="#7A4526"/>
+      <stop offset="0.5" stop-color="#552C15"/>
+      <stop offset="1" stop-color="#38190A"/>
     </linearGradient>
-    <linearGradient id="sheen" x1="0" y1="0" x2="0.7" y2="1">
-      <stop offset="0" stop-color="#ffffff" stop-opacity="0.14"/>
-      <stop offset="0.6" stop-color="#ffffff" stop-opacity="0.02"/>
-      <stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
+    <linearGradient id="leaf" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#9BE86A"/>
+      <stop offset="1" stop-color="#4E9B34"/>
     </linearGradient>
   </defs>
 
-  <!-- плашка + светящаяся рамка -->
-  <rect x="6" y="6" width="500" height="500" rx="124" fill="url(#bg)"/>
-  <rect x="6" y="6" width="500" height="500" rx="124" fill="url(#glow)"/>
-  <rect x="8" y="8" width="496" height="496" rx="122" fill="none" stroke="url(#edge)" stroke-width="4"/>
-  <path d="M6 6 H506 V286 C330 330 168 288 6 196 Z" fill="url(#sheen)"/>
+  <!-- плашка -->
+  <rect x="8" y="8" width="496" height="496" rx="112" fill="url(#plate)"/>
+  <rect x="8" y="8" width="496" height="496" rx="112" fill="url(#under)"/>
+  <rect x="10.5" y="10.5" width="491" height="491" rx="109.5" fill="none" stroke="url(#rim)" stroke-width="3"/>
 
-  <g transform="translate(0 -26)">
-    <!-- верхняя булочка: купол + кунжут -->
-    <path d="M116 222v-16c0-56 63-96 140-96s140 40 140 96v16c0 10-8 18-18 18H134c-10 0-18-8-18-18Z" fill="url(#bunTop)"/>
-    <path d="M148 152c22-24 56-36 92-36-30 12-54 30-70 52Z" fill="#ffffff" fill-opacity="0.16"/>
-    <g fill="#FFF4E2" fill-opacity="0.9">
-      <ellipse cx="192" cy="176" rx="15" ry="9" transform="rotate(-13 192 176)"/>
-      <ellipse cx="258" cy="156" rx="15" ry="9"/>
-      <ellipse cx="324" cy="178" rx="15" ry="9" transform="rotate(12 324 178)"/>
+  <!-- тень под бургером: три эллипса вместо блюра -->
+  <g>
+    <ellipse cx="256" cy="392" rx="146" ry="26" fill="#000000" fill-opacity="0.30"/>
+    <ellipse cx="256" cy="388" rx="120" ry="19" fill="#000000" fill-opacity="0.22"/>
+    <ellipse cx="256" cy="385" rx="88" ry="12" fill="#000000" fill-opacity="0.18"/>
+  </g>
+
+  <g>
+    <!-- верхняя булочка: купол с прямой подошвой -->
+    <path d="M104 214v-10c0-62 68-104 152-104s152 42 152 104v10c0 11-9 20-20 20H124c-11 0-20-9-20-20Z" fill="url(#bunTop)"/>
+    <!-- блик по куполу -->
+    <path d="M138 154c24-26 60-40 98-40-34 14-60 34-78 58-10 14-24 12-26-4-1-6 1-11 6-14Z" fill="#FFFFFF" fill-opacity="0.20"/>
+    <!-- кунжут: 5 семечек, развёрнутых веером -->
+    <g fill="#FFF6E6" fill-opacity="0.94">
+      <ellipse cx="176" cy="180" rx="16" ry="9" transform="rotate(-16 176 180)"/>
+      <ellipse cx="240" cy="156" rx="16" ry="9" transform="rotate(-5 240 156)"/>
+      <ellipse cx="306" cy="164" rx="16" ry="9" transform="rotate(9 306 164)"/>
+      <ellipse cx="352" cy="192" rx="15" ry="8.5" transform="rotate(17 352 192)"/>
+      <ellipse cx="270" cy="196" rx="15" ry="8.5" transform="rotate(3 270 196)"/>
     </g>
 
-    <!-- сыр: верхняя грань и капли -->
-    <path d="M108 248h296c10 0 18 8 18 18v8H90v-8c0-10 8-18 18-18Z" fill="url(#cheese)"/>
-    <path d="M90 274h332l-40 46-44-32-46 46-44-46-46 32-40-46Z" fill="url(#cheese)"/>
+    <!-- салат: тонкая волнистая полоска, видна только крупно -->
+    <path d="M108 236h296c0 16-14 26-30 26H138c-16 0-30-10-30-26Z" fill="url(#leaf)"/>
+    <path d="M108 238c22 14 40-8 62 4s38-10 60 2 40-10 62 2 38-8 58 4c14 8 26 2 34-6-8 20-24 30-44 30H140c-20 0-34-14-32-36Z" fill="url(#leaf)"/>
 
-    <!-- котлета -->
-    <rect x="98" y="318" width="316" height="44" rx="22" fill="url(#patty)"/>
-    <rect x="98" y="318" width="316" height="14" rx="7" fill="#A9663C" fill-opacity="0.75"/>
+    <!-- сыр: широкая лента с тремя потёками -->
+    <path d="M116 262h280c8 0 12 6 10 13l-10 34c-3 10-16 12-22 3l-12-18-16 30c-4 8-16 8-20 0l-14-26-18 32c-4 8-16 8-20-1l-12-24-16 26c-5 9-18 8-22-2l-8-20-14 22c-5 9-18 8-22-2l-8-20-12 16c-6 9-19 8-22-2l-8-28c-2-7 2-13 10-13Z" fill="url(#cheese)"/>
+
+    <!-- котлета: толстый брусок с верхней подсветкой -->
+    <rect x="122" y="310" width="268" height="46" rx="23" fill="url(#patty)"/>
+    <rect x="136" y="316" width="240" height="9" rx="4.5" fill="#FFFFFF" fill-opacity="0.12"/>
 
     <!-- нижняя булочка -->
-    <path d="M108 380h296c10 0 18 8 18 18v4c0 32-26 58-58 58H148c-32 0-58-26-58-58v-4c0-10 8-18 18-18Z" fill="url(#bunBottom)"/>
-    <path d="M126 392h260" stroke="#ffffff" stroke-opacity="0.14" stroke-width="6" stroke-linecap="round"/>
+    <path d="M126 362h260c11 0 20 9 20 20 0 24-22 40-52 40H158c-30 0-52-16-52-40 0-11 9-20 20-20Z" fill="url(#bunBot)"/>
+    <path d="M148 372c34 10 156 10 200 0-6 14-40 22-100 22s-96-8-100-22Z" fill="#FFFFFF" fill-opacity="0.12"/>
   </g>
 </svg>

@@ -11,7 +11,7 @@ import type { CSSProperties } from "react";
  *
  * Вектор, а не PNG, по трём причинам:
  *  • не размывается на 4K и при масштабировании интерфейса;
- *  • цвета берутся из дизайн-системы (var(--acc)), то есть знак MENЯЕТСЯ
+ *  • цвета берутся из дизайн-системы (var(--acc)), то есть знак меняется
  *    вместе с акцентной темой — как и всё остальное;
  *  • не тянет в сборку лишних килобайт растровой картинки.
  *
@@ -20,14 +20,20 @@ import type { CSSProperties } from "react";
  * приложения начнут жить разными формами.
  */
 
+/* Пути совпадают с branding/logo.svg: знак внутри приложения и иконка
+   приложения обязаны быть одной формой (пересборка — `npm run icons`). */
 const BUN_TOP_D =
-  "M116 222v-16c0-56 63-96 140-96s140 40 140 96v16c0 10-8 18-18 18H134c-10 0-18-8-18-18Z";
+  "M104 214v-10c0-62 68-104 152-104s152 42 152 104v10c0 11-9 20-20 20H124c-11 0-20-9-20-20Z";
+const LEAF_D =
+  "M106 236h300c0 15-13 26-29 26H135c-16 0-29-11-29-26Z";
 const CHEESE_BAR_D =
-  "M108 248h296c10 0 18 8 18 18v8H90v-8c0-10 8-18 18-18Z";
+  "M112 262h288c9 0 16 7 16 16v6H96v-6c0-9 7-16 16-16Z";
+/* потёки сыра: два симметричных зуба по краям — асимметрия в 40 px читалась
+   как «криво нарисовано» */
 const CHEESE_DRIP_D =
-  "M90 274h332l-40 46-44-32-46 46-44-46-46 32-40-46Z";
+  "M96 286h320l-32 24-32-24h-192l-32 24-32-24Z";
 const BUN_BOTTOM_D =
-  "M108 380h296c10 0 18 8 18 18v4c0 32-26 58-58 58H148c-32 0-58-26-58-58v-4c0-10 8-18 18-18Z";
+  "M126 362h260c11 0 20 9 20 20 0 24-22 40-52 40H158c-30 0-52-16-52-40 0-11 9-20 20-20Z";
 
 export function Burger({
   size = 32,
@@ -75,33 +81,38 @@ export function Burger({
           <stop offset="0" stopColor="#8B5130" />
           <stop offset="1" stopColor="#5A2F18" />
         </linearGradient>
+        <linearGradient id="cbLeaf" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="color-mix(in srgb, var(--ok) 70%, #7FD35A)" />
+          <stop offset="1" stopColor="#3F7C2A" />
+        </linearGradient>
       </defs>
 
-      <g transform="translate(0 -26)">
-        {glow && <ellipse cx="256" cy="300" rx="212" ry="150" fill="var(--acc)" opacity="0.14" />}
+      <g>
+        {glow && <ellipse cx="256" cy="286" rx="212" ry="150" fill="var(--acc)" opacity="0.14" />}
         <path d={BUN_TOP_D} fill="url(#cbTop)" />
         <path
-          d="M148 152c22-24 56-36 92-36-30 12-54 30-70 52Z"
+          d={BURGER_PATHS.shine}
           fill="#ffffff"
-          opacity="0.16"
+          opacity="0.18"
         />
-        <g fill="#FFF4E2" opacity="0.9">
-          <ellipse cx="192" cy="176" rx="15" ry="9" transform="rotate(-13 192 176)" />
-          <ellipse cx="258" cy="156" rx="15" ry="9" />
-          <ellipse cx="324" cy="178" rx="15" ry="9" transform="rotate(12 324 178)" />
+        <g fill="#FFF6E6" opacity="0.92">
+          {BURGER_PATHS.seeds.map((sd, i) => (
+            <ellipse
+              key={i}
+              cx={sd.cx}
+              cy={sd.cy}
+              rx="15.5"
+              ry="8.6"
+              transform={`rotate(${sd.rot} ${sd.cx} ${sd.cy})`}
+            />
+          ))}
         </g>
+        <path d={LEAF_D} fill="url(#cbLeaf)" />
         <path d={CHEESE_BAR_D} fill="url(#cbCheese)" />
         <path d={CHEESE_DRIP_D} fill="url(#cbCheese)" />
         <rect {...BURGER_PATHS.patty} fill="url(#cbPatty)" />
-        <rect x="98" y="318" width="316" height="14" rx="7" fill="#A9663C" opacity="0.75" />
+        <rect x="136" y="316" width="240" height="9" rx="4.5" fill="#ffffff" opacity="0.14" />
         <path d={BUN_BOTTOM_D} fill="url(#cbBottom)" />
-        <path
-          d="M126 392h260"
-          stroke="#ffffff"
-          strokeOpacity="0.14"
-          strokeWidth="6"
-          strokeLinecap="round"
-        />
       </g>
     </svg>
   );
@@ -165,17 +176,20 @@ export function BrandMark({
  */
 export const BURGER_PATHS = {
   bunTop: BUN_TOP_D,
+  leaf: LEAF_D,
   cheeseBar: CHEESE_BAR_D,
   cheeseDrip: CHEESE_DRIP_D,
   /** котлета — это <rect>, поэтому отдаём атрибуты как есть: их распыляют
       и статичный знак, и анимированный в заставке ({...BURGER_PATHS.patty}) */
-  patty: { x: 98, y: 318, width: 316, height: 44, rx: 22 },
+  patty: { x: 122, y: 310, width: 268, height: 46, rx: 23 },
   bunBottom: BUN_BOTTOM_D,
-  shine: "M148 152c22-24 56-36 92-36-30 12-54 30-70 52Z",
+  shine: "M138 154c24-26 60-40 98-40-34 14-60 34-78 58-10 14-24 12-26-4-1-6 1-11 6-14Z",
   seeds: [
-    { cx: 192, cy: 176, rot: -13 },
-    { cx: 258, cy: 156, rot: 0 },
-    { cx: 324, cy: 178, rot: 12 },
+    { cx: 176, cy: 180, rot: -16 },
+    { cx: 240, cy: 156, rot: -5 },
+    { cx: 270, cy: 196, rot: 3 },
+    { cx: 306, cy: 164, rot: 9 },
+    { cx: 352, cy: 192, rot: 17 },
   ],
 };
 
