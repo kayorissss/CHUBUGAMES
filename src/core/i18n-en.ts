@@ -10,6 +10,17 @@
  */
 
 export const EN_TEXT: Record<string, string> = {
+  "ПЕРСОНАЖИ": "Characters",
+  "Все персонажи": "All characters",
+  "Надет": "Equipped",
+  "Надеть": "Equip",
+  "СМОТРИШЬ": "PREVIEW",
+  "НАДЕТ СЕЙЧАС": "EQUIPPED",
+  "НОВЫЙ СКИН НАДЕТ": "NEW SKIN EQUIPPED",
+  "Этот скин уже на тебе": "This skin is already on you",
+  "Купить за": "Buy for",
+  "Смотреть": "Preview",
+  "до": "until",
   "На главную": "Home",
   "Уровень и опыт": "Level and experience",
   "Жетоны казино": "Casino chips",
@@ -286,8 +297,6 @@ export const EN_TEXT: Record<string, string> = {
   "Акцентный цвет": "Accent colour",
   "Ещё цвета — в": "More colours in",
   "Магазине → Темы": "Shop → Themes",
-  "Надет": "Equipped",
-  "Надеть": "Equip",
   "НАДЕТЬ": "EQUIP",
   "СНЯТЬ": "UNEQUIP",
   "Дубликат": "Duplicate",

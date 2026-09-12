@@ -158,8 +158,10 @@ export default function Friends() {
 
       </div>
       <div className="pc-col">
-        <SectionTitle>{tr("Все друзья")}</SectionTitle>
-        <div className="grid grid-cols-2" style={{ gap: 12 }}>
+        <SectionTitle>{tr("Все персонажи")}</SectionTitle>
+        {/* Плиткой по три: списком они выглядели как анкета, а на мониторе
+            половины ширины не хватало, чтобы разглядеть лица. */}
+        <div className="pc-pal-grid" style={{ gap: 12 }}>
           {s.friends.map((f) => {
             const isMain = f.id === s.mainFriendId;
             const cards = s.cards[f.id] || 0;

@@ -1748,6 +1748,218 @@ html.is-desktop .pc-cols > .pc-span {
   padding-top: 0.5rem;
 }
 
+/* ---------- ПЕРСОНАЖИ: плитка по три ----------
+   На телефоне остаётся два столбца (ширины больше нет), на мониторе — три,
+   как и просили вместо бесконечного списка. */
+.pc-pal-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+html.is-desktop .pc-pal-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.9rem;
+}
+
+/* ---------- МАГАЗИН на ПК ----------
+   Три правки сразу: валюта из шапки убрана (она в панели), выбор раздела
+   уехал в левый вертикальный список, кейсы легли плиткой, а коллекция
+   собрана списком. Скины — список слева и большая сцена справа. */
+.pc-shop {
+  display: grid;
+  gap: 1rem;
+}
+.pc-shop-nav {
+  display: flex;
+  gap: 0.5rem;
+}
+.pc-shop-tab {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  padding: 0.7rem 0.5rem;
+  border-radius: var(--r-md);
+  background: var(--btn-bg);
+  border: 1px solid var(--btn-brd);
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: background 0.18s, color 0.18s, border-color 0.18s;
+}
+.pc-shop-tab.on {
+  background: var(--acc);
+  border-color: transparent;
+  color: var(--acc-ink);
+  box-shadow: 0 8px 22px -10px var(--acc-glow);
+}
+.pc-shop-tab-label {
+  font-size: 0.68rem;
+  letter-spacing: 0.02em;
+  color: inherit;
+  white-space: nowrap;
+}
+.pc-shop-body {
+  min-width: 0;
+}
+html.is-desktop .pc-shop {
+  grid-template-columns: 12.5rem minmax(0, 1fr);
+  gap: 1.6rem;
+  align-items: start;
+}
+html.is-desktop .pc-shop-nav {
+  flex-direction: column;
+  gap: 0.4rem;
+  position: sticky;
+  top: 0;
+}
+html.is-desktop .pc-shop-tab {
+  justify-content: flex-start;
+  padding: 0.6rem 0.75rem;
+}
+
+/* кейсы — плитка, коллекция — список */
+html.is-desktop .pc-shop-packs {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+  gap: 0.75rem;
+}
+html.is-desktop .pc-shop-pack {
+  margin-bottom: 0 !important;
+}
+.pc-shop-coll {
+  display: grid;
+  gap: 0.4rem;
+}
+.pc-coll-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.4rem 0.55rem;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--surface-brd);
+  background: var(--surface);
+}
+html.is-desktop .pc-coll-row:hover {
+  border-color: var(--btn-brd);
+  background: var(--surface-2);
+}
+.pc-coll-name {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.pc-coll-n {
+  flex: 0 0 auto;
+  font-size: 0.75rem;
+}
+
+/* скины: список + сцена */
+.pc-shop-skins {
+  display: grid;
+  gap: 0.8rem;
+}
+.pc-skin-list {
+  display: grid;
+  gap: 0.5rem;
+  align-content: start;
+}
+.pc-skin-row {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  width: 100%;
+  text-align: left;
+  padding: 0.5rem 0.6rem;
+  border-radius: var(--r-md);
+  border: 1px solid var(--surface-brd);
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+  transition: border-color 0.16s, background 0.16s, opacity 0.16s;
+}
+.pc-skin-row:hover {
+  border-color: var(--btn-brd);
+}
+.pc-skin-row.look {
+  border-color: color-mix(in srgb, var(--acc) 55%, var(--surface-brd));
+  background: color-mix(in srgb, var(--acc) 8%, var(--surface));
+}
+.pc-skin-row:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.pc-skin-row-fig {
+  line-height: 0;
+  flex: 0 0 auto;
+}
+.pc-skin-row-id {
+  display: block;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.pc-skin-row-price {
+  flex: 0 0 auto;
+  font-size: 0.66rem;
+  padding: 0.3rem 0.5rem;
+  border-radius: 99px;
+  background: var(--btn-bg);
+  color: var(--text-dim);
+}
+.pc-skin-row.worn .pc-skin-row-price {
+  background: var(--acc);
+  color: var(--acc-ink);
+}
+.pc-skin-stage {
+  display: grid;
+  gap: 0.7rem;
+  padding: 1rem;
+  border-radius: var(--r-lg);
+  border: 1px solid var(--surface-brd);
+  background:
+    radial-gradient(120% 120% at 50% 0%, color-mix(in srgb, var(--acc) 10%, transparent), transparent 62%),
+    var(--surface);
+}
+html.is-desktop .pc-shop-skins {
+  grid-template-columns: minmax(0, 1fr) 18rem;
+  align-items: start;
+}
+html.is-desktop .pc-skin-stage {
+  position: sticky;
+  top: 0;
+}
+.pc-skin-stage-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+}
+.pc-skin-fig {
+  position: relative;
+  display: grid;
+  place-items: center;
+  min-height: 11rem;
+  padding: 0.6rem 0;
+}
+.pc-skin-flash {
+  position: absolute;
+  width: 8rem;
+  height: 8rem;
+  border-radius: 999px;
+  background: radial-gradient(circle, color-mix(in srgb, var(--acc) 55%, transparent), transparent 70%);
+  pointer-events: none;
+}
+.pc-skin-new {
+  text-align: center;
+  color: var(--acc);
+  font-size: 0.6rem;
+  letter-spacing: 0.1em;
+}
+.pc-skin-actions {
+  display: grid;
+  gap: 0.5rem;
+}
+
 /* ---------- страница «Прогресс»: ряд уровня и задания-полосы ---------- */
 .pc-prog-row {
   display: flex;

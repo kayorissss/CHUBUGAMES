@@ -1510,7 +1510,7 @@ function Stuff({ g, save }: { g: GambleStore; save: (p: Partial<GambleStore>) =>
       */}
       <Panel r="lg" style={{ padding: "10px 12px", marginBottom: 8 }}>
         <div className="t-caption" style={{ fontSize: 10.5, lineHeight: 1.4 }}>
-          {tr("Надетые украшения видно на главном друге во вкладке «Друзья».")}
+          {tr("Надетые украшения видно на главном друге во вкладке «Персонажи».")}
         </div>
       </Panel>
 

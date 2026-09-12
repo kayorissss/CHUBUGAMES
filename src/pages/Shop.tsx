@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { tr } from "../core/i18n";
 import { AnimatePresence, motion } from "framer-motion";
 import { useGame } from "../core/store";
@@ -6,6 +6,7 @@ import {
   HERO_SKINS, ACCENTS, CASES, RARITY_COLOR, RARITY_LABEL,
 } from "../core/content";
 import { fmt } from "../core/format";
+import { isDesktop } from "../core/desktop";
 import { Card, Tap, Button, SectionTitle, Screen } from "../ui/Glass";
 import HeadView from "../ui/HeadView";
 import { sfx, haptic } from "../core/fx";
@@ -41,64 +42,56 @@ export default function Shop() {
   const { s } = useGame();
   const activeTab = SHOP_TABS.find((t) => t.id === tab)!;
   return (
-    <Screen
-      title={tr("МАГАЗИН")}
-      right={
-        <Card r="md" className="shrink-0" style={{ padding: "8px 12px" }}>
+    <Screen title={tr("МАГАЗИН")}>
+      {/* Кошелёк из шапки магазина убран: на компьютере он уже в верхней
+          панели — «CHUBUGAMES | Ур. 3 | 💰 26к | 💎 310». На телефоне
+          панели нет, поэтому там счётчик валют остаётся на месте. */}
+      {!isDesktop() && (
+        <Card r="md" className="shrink-0" style={{ padding: "8px 12px", marginBottom: 12 }}>
           <div className="flex items-center" style={{ gap: 10 }}>
             <span className="t-num acc-text inline-flex items-center" style={{ fontSize: 14, gap: 5 }}>
-            <Icon name="coin" size={14} /> {fmt(s.coins)}
-          </span>
+              <Icon name="coin" size={14} /> {fmt(s.coins)}
+            </span>
             <span className="t-num inline-flex items-center" style={{ fontSize: 14, gap: 5 }}>
-            <Icon name="gem" size={14} /> {s.gems}
-          </span>
+              <Icon name="gem" size={14} /> {s.gems}
+            </span>
           </div>
         </Card>
-      }
-    >
-      {/* Вкладки: крупные, с иконкой и подписью — сразу видно, где находишься */}
-      <div className="flex pc-tabs-row" style={{ gap: 8, marginBottom: 16 }}>
-        {SHOP_TABS.map((t) => {
-          const on = tab === t.id;
-          return (
-            <button
-              key={t.id}
-              type="button"
-              onClick={() => { sfx.click(); haptic("light"); setTab(t.id); }}
-              className="flex-1 relative overflow-hidden"
-              style={{
-                padding: "11px 6px 10px",
-                borderRadius: "var(--r-md)",
-                background: on ? "var(--acc)" : "var(--btn-bg)",
-                color: on ? "var(--acc-ink)" : "var(--text-dim)",
-                border: `1px solid ${on ? "transparent" : "var(--btn-brd)"}`,
-                boxShadow: on ? "0 8px 22px -10px var(--acc-glow)" : undefined,
-                transition: "background 0.18s, color 0.18s",
-              }}
-            >
-              <span className="flex flex-col items-center" style={{ gap: 5 }}>
-                <Icon name={t.icon} size={17} />
-                <span
-                  className="t-label"
-                  style={{ fontSize: 9.5, color: "inherit", letterSpacing: "0.02em" }}
-                >
-                  {tr(t.label)}
-                </span>
-              </span>
-            </button>
-          );
-        })}
-      </div>
+      )}
 
-      {/* Где я сейчас: заголовок раздела с пояснением */}
-      <div style={{ marginBottom: 16 }}>
-        <div className="t-display-sm" style={{ fontSize: 19 }}>{tr(activeTab.title)}</div>
-        <div className="t-caption" style={{ marginTop: 3 }}>{tr(activeTab.hint)}</div>
-      </div>
+      <div className="pc-shop">
+        {/* Выбор раздела. На компьютере это вертикальный список слева:
+            три плитки на всю ширину сверху читались как баннеры, а не как
+            навигация, и каждый переход уезжал за край. */}
+        <nav className="pc-shop-nav" aria-label={tr("Разделы магазина")}>
+          {SHOP_TABS.map((t) => {
+            const on = tab === t.id;
+            return (
+              <button
+                key={t.id}
+                type="button"
+                aria-current={on ? "true" : undefined}
+                onClick={() => { sfx.click(); haptic("light"); setTab(t.id); }}
+                className={`pc-shop-tab ${on ? "on" : ""}`}
+              >
+                <span className="pc-shop-tab-ico"><Icon name={t.icon} size={16} /></span>
+                <span className="t-label pc-shop-tab-label">{tr(t.label)}</span>
+              </button>
+            );
+          })}
+        </nav>
+
+        <div className="pc-shop-body">
+          {/* Где я сейчас: заголовок раздела с пояснением */}
+          <div style={{ marginBottom: 16 }}>
+            <div className="t-display-sm" style={{ fontSize: 19 }}>{tr(activeTab.title)}</div>
+            <div className="t-caption" style={{ marginTop: 3 }}>{tr(activeTab.hint)}</div>
+          </div>
 
       {tab === "cases" && <Cases />}
-      {tab === "skins" && <Skins />}
-      {tab === "themes" && <Themes />}
+      {tab === "skins" && <Skins />}      {tab === "themes" && <Themes />}
+        </div>
+      </div>
     </Screen>
   );
 }
@@ -194,13 +187,17 @@ function Cases() {
   };
 
   return (
-    <>
+    <div className="pc-cols">
+      {/* Кейсы — плиткой в левой колонке: на мониторе три карточки столбиком
+        оставляли пустую половину экрана, а коллекция уезжала за скролл. */}
+      <div className="pc-blk pc-a pc-r1">
       <div className="t-body" style={{ marginBottom: 16 }}>
         {tr("Каждая карточка навсегда даёт")}{" "}
         <span className="acc-text">{tr("+0.4% ко всем монетам")}</span>.{" "}
         {tr("Дубликаты возвращают 35% стоимости.")}
       </div>
 
+      <div className="pc-shop-packs">
       {CASES.map((c, ci) => {
         const skin = CASE_SKIN[c.id] ?? CASE_SKIN.bronze;
         const afford = s.coins >= c.price;
@@ -216,7 +213,7 @@ function Cases() {
           >
             <Card
               r="lg"
-              className="relative overflow-hidden"
+              className="relative overflow-hidden pc-shop-pack"
               style={{
                 padding: 0,
                 marginBottom: 12,
@@ -318,43 +315,39 @@ function Cases() {
           </motion.div>
         );
       })}
+      </div>
+      </div>
 
-      <div style={{ marginTop: 22 }}>
+      {/* Коллекция — список справа: имена с числом карточек, а не сетка
+          из сорока одинаковых квадратов. */}
+      <div className="pc-blk pc-b pc-r1">
+      <div style={{ marginTop: 0 }}>
         <SectionTitle
           right={<span className="t-num" style={{ fontSize: 11, color: "var(--text-mute)" }}>{Object.keys(s.cards).length}/{s.friends.length}</span>}
         >{tr("Коллекция")}</SectionTitle>
       </div>
-      <div className="grid grid-cols-4" style={{ gap: 9 }}>
+      <div className="pc-shop-coll">
         {s.friends.map((f) => {
           const n = s.cards[f.id] || 0;
           return (
-            <Card
-              key={f.id} r="md" tone={2} className="text-center relative"
-              style={{ padding: "9px 5px", opacity: n ? 1 : 0.3 }}
-            >
-              <div style={{ filter: n ? "none" : "grayscale(1) brightness(0.5)" }}>
-                <HeadView friend={f} size={42} style={{ margin: "0 auto" }} />
-              </div>
-              <div
+            <div key={f.id} className="pc-coll-row" style={{ opacity: n ? 1 : 0.45 }}>
+              <span style={{ filter: n ? "none" : "grayscale(1) brightness(0.55)", lineHeight: 0 }}>
+                <HeadView friend={f} size={30} />
+              </span>
+              <span className="pc-coll-name t-title-sm clip1" style={{ fontSize: 12 }}>{f.name}</span>
+              <span
                 className="t-label clip1"
-                style={{ marginTop: 6, fontSize: 8, color: RARITY_COLOR[f.rarity] }}
+                style={{ fontSize: 8, color: RARITY_COLOR[f.rarity], flex: "0 0 auto" }}
               >
-                {f.name}
-              </div>
-              {n > 1 && (
-                <div
-                  className="absolute t-num"
-                  style={{
-                    top: 4, right: 5, fontSize: 9, padding: "1px 5px", borderRadius: 999,
-                    background: "var(--acc)", color: "var(--acc-ink)",
-                  }}
-                >
-                  ×{n}
-                </div>
-              )}
-            </Card>
+                {tr(RARITY_LABEL[f.rarity])}
+              </span>
+              <span className="t-num pc-coll-n" style={{ color: n ? "var(--acc)" : "var(--text-mute)" }}>
+                {n ? `×${n}` : "—"}
+              </span>
+            </div>
           );
         })}
+      </div>
       </div>
 
       {/* Анимация вскрытия */}
@@ -561,70 +554,148 @@ function Cases() {
           </motion.div>
         )}
       </AnimatePresence>
-    </>
+    </div>
   );
 }
 
 /* ============ СКИНЫ ============ */
 function Skins() {
   const { s, set, spendCoins, toast } = useGame();
-  const buy = (id: string, price: number, name: string) => {
-    if (s.ownedSkins.includes(id)) {
-      set((d) => { d.heroSkin = id; });
+  /**
+   * Скин, который смотрим справа. Отдельно от надетого — чтобы можно было
+   * разглядеть то, чего ещё нет.
+   */
+  const [look, setLook] = useState(s.heroSkin);
+  /** Момент после покупки: фигура «проявляется», и видно, что появилось */
+  const [reveal, setReveal] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!reveal) return;
+    const t = setTimeout(() => setReveal(null), 2200);
+    return () => clearTimeout(t);
+  }, [reveal]);
+
+  const shown = HERO_SKINS.find((x) => x.id === look) ?? HERO_SKINS[0];
+  const worn = s.heroSkin === shown.id;
+
+  const buy = (sk: (typeof HERO_SKINS)[number]) => {
+    setLook(sk.id);
+    if (s.ownedSkins.includes(sk.id)) {
+      set((d) => { d.heroSkin = sk.id; });
       sfx.buy();
       haptic("light");
       return;
     }
-    if (!spendCoins(price)) return;
-    set((d) => { d.ownedSkins.push(id); d.heroSkin = id; });
+    if (!spendCoins(sk.price)) return;
+    set((d) => { d.ownedSkins.push(sk.id); d.heroSkin = sk.id; });
     sfx.legend();
     haptic("success");
-    toast({ title: tr("Скин куплен"), sub: name, icon: "user", tone: "gold" });
+    setReveal(sk.id);
+    toast({ title: tr("Скин куплен"), sub: sk.name, icon: "user", tone: "gold" });
   };
 
   return (
-    <div className="grid grid-cols-2" style={{ gap: 12 }}>
-      {HERO_SKINS.map((sk) => {
-        const owned = s.ownedSkins.includes(sk.id);
-        const active = s.heroSkin === sk.id;
-        return (
-          <Tap
-            key={sk.id}
-            onClick={() => buy(sk.id, sk.price, sk.name)}
-            disabled={!owned && s.coins < sk.price}
-            solid r="lg" className="text-left w-full" sound="none"
-            style={{
-              padding: 13,
-              ...(active
-                ? { borderColor: "var(--acc)", boxShadow: "0 0 0 1px var(--acc) inset" }
-                : null),
-            }}
-          >
-            <div className="flex justify-center" style={{ height: 62, marginBottom: 10 }}>
-              <HeroPreview skin={sk} />
-            </div>
-            <div className="t-title-sm clip1">{sk.name}</div>
-            <div className="t-caption clip2" style={{ marginTop: 3, minHeight: 28 }}>
-              {sk.desc}
-            </div>
-            <div
-              className="t-num text-center"
-              style={{
-                marginTop: 11, padding: "8px 4px", fontSize: 11.5,
-                borderRadius: "var(--r-sm)",
-                background: active ? "var(--acc)" : owned ? "var(--btn-bg)" : `${RARITY_COLOR[sk.rarity]}1e`,
-                color: active ? "var(--acc-ink)" : owned ? "var(--text-dim)" : RARITY_COLOR[sk.rarity],
-              }}
+    <div className="pc-shop-skins">
+      {/* Список — слева: восемь карточек сеткой 2×4 заставляли искать,
+          что же ты сейчас надел. */}
+      <div className="pc-skin-list">
+        {HERO_SKINS.map((sk) => {
+          const owned = s.ownedSkins.includes(sk.id);
+          const active = s.heroSkin === sk.id;
+          const on = sk.id === look;
+          return (
+            <button
+              key={sk.id}
+              type="button"
+              onClick={() => { haptic("light"); buy(sk); }}
+              disabled={!owned && s.coins < sk.price}
+              className={`pc-skin-row ${on ? "look" : ""} ${active ? "worn" : ""}`}
             >
-              {active ? "Надет" : owned ? "Надеть" : (
-                    <span className="inline-flex items-center" style={{ gap: 5 }}>
-                      <Icon name="coin" size={12} /> {fmt(sk.price)}
-                    </span>
-                  )}
-            </div>
-          </Tap>
-        );
-      })}
+              <span className="pc-skin-row-fig"><HeroPreview w={30} skin={sk} /></span>
+              <span className="pc-skin-row-id">
+                <span className="t-title-sm clip1">{sk.name}</span>
+                <span className="t-caption clip1" style={{ fontSize: 9 }}>{sk.desc}</span>
+              </span>
+              <span className="t-num pc-skin-row-price">
+                {active ? tr("Надет") : owned ? tr("Надеть") : (
+                  <span className="inline-flex items-center" style={{ gap: 4 }}>
+                    <Icon name="coin" size={11} /> {fmt(sk.price)}
+                  </span>
+                )}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Сцена справа: как выглядит персонаж сейчас и что появилось после
+          покупки. Пока покупает — видит результат, а не угадывает. */}
+      <div className="pc-skin-stage">
+        <div className="pc-skin-stage-top">
+          <span className="t-label">{worn ? tr("НАДЕТ СЕЙЧАС") : tr("СМОТРИШЬ")}</span>
+          <span
+            className="t-label"
+            style={{ fontSize: 8, color: RARITY_COLOR[shown.rarity] }}
+          >
+            {tr(RARITY_LABEL[shown.rarity])}
+          </span>
+        </div>
+
+        <div className="pc-skin-fig">
+          {reveal === shown.id && (
+            <motion.span
+              className="pc-skin-flash"
+              initial={{ opacity: 0.85, scale: 0.6 }}
+              animate={{ opacity: 0, scale: 2.1 }}
+              transition={{ duration: 0.85, ease: "easeOut" }}
+              aria-hidden
+            />
+          )}
+          <motion.div
+            key={shown.id}
+            initial={{ opacity: 0, y: 14, scale: 0.92 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            transition={{ type: "spring", stiffness: 320, damping: 22 }}
+            style={{ lineHeight: 0 }}
+          >
+            <HeroPreview w={132} skin={shown} />
+          </motion.div>
+        </div>
+
+        <div className="t-display-sm" style={{ fontSize: 20, textAlign: "center" }}>{shown.name}</div>
+        <div className="t-caption" style={{ marginTop: 4, textAlign: "center" }}>{shown.desc}</div>
+
+        {reveal === shown.id && (
+          <motion.div
+            className="t-label pc-skin-new"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.12 }}
+          >
+            {tr("НОВЫЙ СКИН НАДЕТ")}
+          </motion.div>
+        )}
+
+        <div className="pc-skin-actions">
+          {!worn && (
+            <Button variant={s.ownedSkins.includes(shown.id) ? "secondary" : "primary"} full sound="none"
+              onClick={() => buy(shown)}
+              disabled={!s.ownedSkins.includes(shown.id) && s.coins < shown.price}
+            >
+              {s.ownedSkins.includes(shown.id)
+                ? tr("Надеть")
+                : (
+                  <span className="inline-flex items-center" style={{ gap: 6 }}>
+                    <Icon name="coin" size={13} /> {tr("Купить за")} {fmt(shown.price)}
+                  </span>
+                )}
+            </Button>
+          )}
+          {worn && (
+            <div className="t-caption text-center">{tr("Этот скин уже на тебе")}</div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
@@ -639,10 +710,10 @@ function Skins() {
  * настоящими кистями и стопами, тенью под ногами и бликом на теле,
  * чтобы «Сталь» и «Золотой» читались как металл.
  */
-function HeroPreview({ skin }: { skin: (typeof HERO_SKINS)[number] }) {
+function HeroPreview({ skin, w = 52 }: { skin: (typeof HERO_SKINS)[number]; w?: number }) {
   const id = skin.id;
   return (
-    <svg width="52" height="62" viewBox="0 0 52 62">
+    <svg width={w} height={Math.round((w * 62) / 52)} viewBox="0 0 52 62">
       <defs>
         <linearGradient id={`sk-${id}`} x1="0" y1="0" x2="1" y2="1">
           <stop offset="0%" stopColor={skin.body} />

@@ -471,11 +471,66 @@ ok(/\.pc-cols,[\s\S]{0,30}\.pc-col\s*\{\s*display: contents;/.test(pagesCss),
   'две колонки не трогают телефонную вёрстку (контейнеры display:contents)');
 ok(fs.readFileSync('src/pages/Settings.tsx', 'utf8').includes('pc-cols'),
   'настройки на ПК раскладываются в две колонки');
-ok(fs.readFileSync('src/pages/Friends.tsx', 'utf8').includes('pc-col'),
-  'друзья: карточка босса и список стоят рядом');
-ok(['Progress', 'Shop', 'Casino', 'Network'].every((pg) =>
+ok(fs.readFileSync('src/pages/Friends.tsx', 'utf8').includes('pc-pal-grid'),
+  'персонажи: плитка по три карточки вместо списка');
+{
+  /* ---------- ПК-интерфейс после разбора придирок (1.25.1) ---------- */
+  const bar = fs.readFileSync('src/ui/pc/PcTopBar.tsx', 'utf8');
+  ok(!/pc-bar-hint/.test(bar) && !/pc-bar-ver/.test(bar),
+    'в панели нет подсказки F11/Esc и номера версии');
+  ok(!/id: "boss"|id: "casino"|id: "fanfic"|id: "network"/.test(bar),
+    'в панели нет кнопок-дублей: босс, казино, фанфики и сеть — на своих местах');
+  ok(/onClick=\{\(\) => go\("home"\)\}/.test(bar), 'клик по CHUBUGAMES ведёт на главную');
+  ok(/Персонажи/.test(bar) && !/"Друзья"/.test(bar), 'вкладка «Персонажи» вместо «Друзья»');
+  ok(/pc-bar-tail/.test(bar), 'Настройки — в правом углу панели');
+  ok(/pc-bar-level/.test(bar) && /pc-bar-wallet/.test(bar),
+    'уровень с опытом и валюты живут в панели одной строкой');
+  ok(/"nav.friends": "Персонажи"/.test(fs.readFileSync('src/core/i18n.ts', 'utf8')),
+    'на телефоне вкладка тоже называется «Персонажи»');
+
+  const home = fs.readFileSync('src/pages/Home.tsx', 'utf8');
+  ok(/className="pc-boss"/.test(home) && home.indexOf('pc-boss') < home.indexOf('pc-games'),
+    'босс — отдельная зона над библиотекой игр, а не карточка в правой колонке');
+  ok(!/className="pc-head"/.test(home) || /html\.is-desktop \.pc-head \{/s.test(css),
+    'шапка уровня и монет на ПК скрыта (уровень и кошелёк — в панели)');
+
+  ok(!/^\s*width: min\(34rem/m.test(css) && /html\.is-desktop \.pc-play \{[^}]*width: 100%/s.test(css),
+    'игра на ПК занимает всё окно, а не колонку 34rem');
+  ok(/html\.is-desktop \.pc-play \{[^}]*transform: translateZ\(0\)/s.test(css),
+    'у игрового блока остаётся containing block — оверлеи не разлипаются по окну');
+
+  const set = fs.readFileSync('src/pages/Settings.tsx', 'utf8');
+  ok(/pc-blk pc-a pc-r1/.test(set) && /pc-blk pc-b pc-r1/.test(set),
+    'настройки расложены по зонам, а не двумя независимыми колонками');
+  ok(/<div className="pc-blk pc-b pc-r1">\n\s*<SectionTitle>\{t\("settings\.update"\)\}/.test(set),
+    'обновление — в правом верхнем углу настроек');
+  ok(/pc-foot-ver/.test(set) && /pc-foot-brand/.test(set),
+    'внизу настроек: знак по центру, версия в углу');
+  ok(!/<div className="pc-col">/.test(set), 'старых колонок pc-col в настройках больше нет');
+
+  const shop = fs.readFileSync('src/pages/Shop.tsx', 'utf8');
+  ok(/pc-shop-packs/.test(shop) && /pc-shop-coll/.test(shop),
+    'магазин: кейсы плиткой, коллекция списком');
+  ok(/pc-skin-fig/.test(shop) && /setReveal/.test(shop),
+    'магазин: после покупки скин проявляется на сцене справа');
+  ok(/\.pc-pal-grid \{[^}]*repeat\(3, minmax\(0, 1fr\)\)/s.test(css)
+    || /html\.is-desktop \.pc-pal-grid \{[^}]*repeat\(3/s.test(css),
+    'плитка персонажей на ПК — по три в ряд');
+}
+ok(['Progress', 'Casino', 'Network'].every((pg) =>
     fs.readFileSync(`src/pages/${pg}.tsx`, 'utf8').includes('pc-tabs-row')),
   'ряды вкладок на ПК — панель, а не тянущаяся на всю ширину полоска');
+// Магазин: вкладки уехали в левый вертикальный список — ряд чипов сверху
+// там выглядел тремя баннерами, а не навигацией.
+ok(fs.readFileSync('src/pages/Shop.tsx', 'utf8').includes('pc-shop-nav'),
+  'магазин: выбор раздела — вертикальный список слева');
+{
+  const shop = fs.readFileSync('src/pages/Shop.tsx', 'utf8');
+  ok(!/title=\{tr\("МАГАЗИН"\)}\s*right=/.test(shop),
+    'магазин: валюта из шапки убрана (она в верхней панели)');
+  ok(/pc-skin-stage/.test(shop) && /pc-skin-list/.test(shop),
+    'скины: список слева, превью персонажа справа');
+}
 ok(fs.readFileSync('src/pages/Fanfic.tsx', 'utf8').includes('pc-reader'),
   'читалка фанфиков ограничена по ширине строки');
 const glass23 = fs.readFileSync('src/ui/Glass.tsx', 'utf8');
