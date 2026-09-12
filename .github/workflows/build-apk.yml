@@ -399,6 +399,60 @@ jobs:
       # обновлений (тег latest) не трогается вообще: у debug-ключа другая
       # подпись, Android отказался бы ставить такой пакет поверх боевого, а
       # попытка «через удаление» стёрла бы прогресс игрока.
+      # Секретов подписи нет, а людям файл нужен уже сейчас. Тогда debug-сборка
+      # уезжает в ОТДЕЛЬНЫЙ pre-release с крупным предупреждением, а канал
+      # обновлений (тег latest) не трогается вообще: у debug-ключа другая
+      # подпись, Android отказался бы ставить такой пакет поверх боевого, а
+      # попытка «через удаление» стёрла бы прогресс игрока.
+      - name: Publish preview APK (no signing key)
+        if: steps.kind.outputs.release == 'true' && steps.signs.outputs.signed != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          APK="CHUBUGAMES-$APP_VER-preview.apk"
+          cp CHUBUGAMES.apk "$APK"
+          sha256sum "$APK" > "$APK.sha256"
+          SIZE=$(du -h "$APK" | cut -f1)
+          {
+            printf '%s\n\n' "## Это НЕ обновление. Это preview"
+            printf '%s\n' "Тот же код, что в теге v$APP_VER, но подписанный отладочным ключом:"
+            printf '%s\n\n' "постоянного релизного ключа в Secrets нет, поэтому нормальный APK собрать нечем."
+            printf '%s\n' "| Файл | Размер |"
+            printf '%s\n' "|---|---|"
+            printf '%s\n\n' "| \`$APK\` | $SIZE |"
+            printf '%s\n\n' "**Что будет, если поставить**"
+            printf '%s\n' "- поверх боевой версии Android откажет: подписи разные;"
+            printf '%s\n' "- если удалить текущую версию и поставить эту — прогресс сотрётся, он живёт внутри приложения;"
+            printf '%s\n' "- встроенная проверка обновлений эту ветку не видит: она смотрит на тег \`latest\`."
+            printf '%s\n\n' "Поэтому сначала «Настройки» → «Сохранение» → экспорт файла, потом установка preview, потом импорт."
+            printf '%s\n\n' "**Как вернуть нормальный канал (один раз, 5 минут)**"
+            printf '%s\n' "1. Значения четырёх секретов лежат в \`android-signing/PASTE-INTO-SECRETS.txt\` (файл в репозитории, самого ключа там нет);"
+            printf '%s\n' "2. GitHub → Settings → Secrets and variables → Actions → New repository secret, четыре имени: \`CHUB_KEYSTORE_B64\`, \`CHUB_KEYSTORE_PASSWORD\`, \`CHUB_KEY_ALIAS\`, \`CHUB_KEY_PASSWORD\`;"
+            printf '%s\n\n' "3. Re-run failed jobs на этом прогоне: тот же коммит соберётся как \`assembleRelease\`, подпишется и попадёт в \`latest\`."
+            printf '%s\n' "\`\`\`"
+            cat "$APK.sha256"
+            printf '%s\n' "\`\`\`"
+          } > PREVIEW_BODY.md
+          cat PREVIEW_BODY.md
+          gh release create "v$APP_VER-preview" --target "$GITHUB_SHA" --prerelease \
+            --title "Android $APP_VER — preview (debug-подпись)" \
+            --notes-file PREVIEW_BODY.md "$APK" "$APK.sha256"
+          echo "::warning::Секретов подписи нет — в Releases лёг только preview, latest не тронут"
+
+      - name: Upload APK (артефакт сборки)
+        uses: actions/upload-artifact@v4
+        with:
+          name: CHUBUGAMES-APK
+          path: |
+            CHUBUGAMES.apk
+            CHUBUGAMES.apk.sha256
+          retention-days: 90
+
+      # Секретов подписи нет, а людям файл нужен уже сейчас. Тогда debug-сборка
+      # уезжает в ОТДЕЛЬНЫЙ pre-release с крупным предупреждением, а канал
+      # обновлений (тег latest) не трогается вообще: у debug-ключа другая
+      # подпись, Android отказался бы ставить такой пакет поверх боевого, а
+      # попытка «через удаление» стёрла бы прогресс игрока.
       - name: Publish preview APK (no signing key)
         if: steps.kind.outputs.release == 'true' && steps.signs.outputs.signed != 'true'
         env:
