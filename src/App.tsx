@@ -370,7 +370,7 @@ function Shell() {
             initial="initial"
             animate="animate"
             exit="exit"
-            className={`fixed inset-0 z-[60] ${pc ? "pc-play-wrap" : ""}`}
+            className={`fixed inset-0 z-[60] ${pc ? "pc-play-wrap" : ""}${game === "europa" ? " is-europa" : ""}`}
           >
             <div className={pc ? "pc-play game-stage" : "game-stage h-full w-full"} ref={playRef}>
             {game === "burger" && <BurgerRain onExit={() => setGame(null)} />}

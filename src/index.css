@@ -2102,6 +2102,51 @@ html.is-desktop .pc-tile {
   contain-intrinsic-size: 0 11rem;
 }
 
+/* ---------- ИТОГ ЗАБЕГА: на ПК плашка альбомная, а не квадрат ----------
+   Претензия с первого же скриншота: «плашка поражения — больше и альбомная,
+   не квадратная». На широком окне квадрат 384 px выглядел как наклейка
+   посреди игры: очки мелкие, кнопки внизу. Теперь это широкая плашка:
+   слева итог и рекорд, справа награда и действия, кегль результата крупнее. */
+.go-plate-wrap {
+  width: 100%;
+  max-width: 24rem;
+}
+html.is-desktop .go-plate-wrap {
+  width: min(48rem, 92%);
+  max-width: none;
+}
+html.is-desktop .go-plate {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+  align-items: stretch;
+}
+html.is-desktop .go-plate-l {
+  text-align: left;
+  padding: 26px 26px 24px !important;
+  border-bottom: none !important;
+  border-right: 1px solid var(--surface-brd);
+}
+html.is-desktop .go-plate-l .t-display {
+  font-size: clamp(28px, 2.4vw, 40px);
+}
+html.is-desktop .go-plate-l .t-num {
+  font-size: 76px;
+}
+html.is-desktop .go-plate-r {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  padding: 22px 24px 24px !important;
+}
+html.is-desktop .go-plate-r > .flex {
+  margin-bottom: 14px !important;
+}
+html.low-fx .go-plate-l,
+html.low-fx .go-plate-r {
+  animation: none !important;
+}
+
 /* ---------- плитка игр ---------- */
 .pc-games-head {
   display: flex;
@@ -2776,23 +2821,22 @@ html.graphite {
 .eu-stage {
   flex: 1;
   min-height: 0;
-  display: flex;
-  align-items: stretch;
-  gap: 0;
+  position: relative;
+  display: block;
 }
+/* Карта занимает ВСЁ свободное место. Раньше она держала aspect-ratio и
+   max-width 74vh: на мониторе 16:9 по бокам стояла мёртвая пустота, а панель
+   справа при каждом открытии сдвигала её вбок. */
 .eu-map {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  position: absolute;
+  inset: 0;
   padding: 8px 10px;
 }
 .eu-map-inner {
   position: relative;
   width: 100%;
-  max-width: min(100%, 74vh);
-  max-height: 100%;
+  height: 100%;
+  cursor: crosshair;
   border-radius: var(--r-lg);
   border: 1px solid var(--surface-brd);
   background:
@@ -2950,37 +2994,157 @@ html.graphite {
 .eu-line.eu-ok { border-left-color: var(--ok); color: var(--ok); }
 .eu-line.eu-bad { border-left-color: var(--danger); color: var(--danger); }
 
-/* ── легенда значков (слева снизу) ── */
-.eu-hints {
+/* ── ПРИКАЗ ОБ УДАРЕ: выезжает ровно у точки нажатия ──
+   Схема, о которой просили: Shift+клик по своим зданиям собирает кулак,
+   клик по чужому зданию (или по месту на карте) — у самой точки появляется
+   плашка с целью, шансом, тем, кто идёт, и большой кнопкой «АТАКОВАТЬ».
+   Никакого «нижнего меню, где надо искать кнопку атаки» и никакого
+   «непонятно, что за в ударе». */
+.eu-order {
   position: absolute;
-  left: 8px;
-  bottom: 8px;
+  z-index: 8;
+  transform: translate(-50%, calc(-100% - 14px));
+  width: min(19rem, 84vw);
   display: flex;
-  flex-wrap: wrap;
-  gap: 4px 9px;
-  max-width: 72%;
-  padding: 6px 9px;
-  border-radius: var(--r-sm);
-  background: rgba(6, 6, 8, 0.6);
-  border: 1px solid var(--surface-brd);
-  pointer-events: none;
+  flex-direction: column;
+  gap: 7px;
+  padding: 9px 10px 10px;
+  border-radius: var(--r-md);
+  background: var(--toast-bg);
+  border: 1px solid var(--danger-brd);
+  box-shadow: 0 22px 48px -24px rgba(0, 0, 0, 0.95);
+  cursor: default;
 }
-.eu-hints span {
+/* хвостик к точке нажатия — чтобы было видно, К ЧЕМУ именно плашка */
+.eu-order::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: -6px;
+  width: 10px;
+  height: 10px;
+  transform: translateX(-50%) rotate(45deg);
+  background: var(--toast-bg);
+  border-right: 1px solid var(--danger-brd);
+  border-bottom: 1px solid var(--danger-brd);
+}
+.eu-order-head { display: flex; align-items: center; gap: 6px; }
+.eu-order-head .t-label { font-size: 7.5px; letter-spacing: 0.1em; color: var(--text-mute); }
+.eu-order-name { flex: 1; min-width: 0; font-size: 11.5px; font-weight: 800; }
+.eu-order-x {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+  border-radius: 6px;
+  background: var(--surface-3);
+  border: 1px solid var(--surface-brd);
+  color: var(--text-mute);
+  cursor: pointer;
+}
+.eu-order-x:hover { color: var(--text); background: var(--btn-bg-hi); }
+.eu-order-from { display: flex; flex-wrap: wrap; gap: 4px; }
+.eu-order-chip {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  font-size: 8.5px;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  color: var(--text-mute);
+  padding: 3px 7px;
+  border-radius: 999px;
+  background: var(--ok-soft);
+  border: 1px solid var(--ok-brd);
+  color: var(--ok);
+  font-size: 9px;
+  font-weight: 700;
 }
-.eu-hints .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
-.eu-hints .dot.me { background: var(--ok-brd); }
-.eu-hints .dot.enemy { background: var(--danger-brd); }
-.eu-hints .dot.ntrl { background: var(--surface-brd); }
-.eu-hints .ln { width: 14px; height: 2px; display: inline-block; }
-.eu-hints .ln.live { background: var(--acc); }
-.eu-hints .ring { width: 9px; height: 9px; border-radius: 3px; border: 1.5px dashed var(--acc); display: inline-block; }
+.eu-order-odds {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 8px;
+  border-radius: var(--r-sm);
+  background: var(--surface-2);
+  border: 1px solid var(--surface-brd);
+}
+.eu-order-odds .t-caption { margin-left: auto; font-size: 8.5px; }
+.eu-order-go {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: var(--r-md);
+  background: linear-gradient(170deg, var(--acc-hi), var(--acc) 52%, var(--acc-lo));
+  border: 1px solid color-mix(in srgb, var(--acc) 62%, #ffffff);
+  color: var(--acc-ink);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+  box-shadow: 0 12px 28px -14px var(--acc-glow);
+  transition: filter 0.15s ease, transform 0.12s ease;
+}
+.eu-order-go:hover:not(:disabled) { filter: brightness(1.06); }
+.eu-order-go:active:not(:disabled) { transform: scale(0.98); }
+.eu-order-go:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  background: var(--btn-bg);
+  border-color: var(--btn-brd);
+  color: var(--text-mute);
+  box-shadow: none;
+}
+.eu-order-go .eu-btn-key { position: static; transform: none; background: rgba(0, 0, 0, 0.16); color: inherit; }
+
+/* ── журнал событий вместо нижней плашки «в ударе» ──
+   Крутится колёсиком; по нему видно, чем закончился каждый раунд, а не
+   «что за строка внизу». */
+.eu-log {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 4.6rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  margin-top: 4px;
+  padding-right: 4px;
+  scrollbar-width: thin;
+}
+.eu-log-line {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 9.5px;
+  line-height: 1.45;
+  color: var(--text-dim);
+}
+.eu-log-line b { flex: 0 0 auto; font-size: 8px; color: var(--text-mute); letter-spacing: 0.04em; }
+.eu-log-line.eu-ok { color: var(--ok); }
+.eu-log-line.eu-bad { color: var(--danger); }
+.eu-log-line.eu-info { color: var(--text-mute); }
+
+/* строка-шпаргалка по клавишам: одна строка, а не «обучающая плашка» */
+.eu-keys {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  border-radius: var(--r-sm);
+  background: var(--surface-2);
+  border: 1px solid var(--surface-brd);
+  color: var(--text-mute);
+  font-size: 9.5px;
+  font-weight: 600;
+}
+
+/* Счётчик кадров в стратегии — СЛЕВА: справа стоит панель здания, и FPS
+   ложился ровно на неё. */
+.is-europa .fps-hud {
+  left: 0.75rem;
+  right: auto;
+}
 
 /* ── баннер раунда ── */
 .eu-banner {
@@ -2999,14 +3163,26 @@ html.graphite {
 .eu-banner-sub { margin-top: 3px; color: var(--text-dim); font-size: 8px; }
 
 /* ── правая панель ── */
+/* Панель — НАЛОЖЕНИЕ справа, а не колонка сетки: просьба была прямая,
+   «правая менюшка резко выезжает и дёргает вёрстку». Пока она стояла в
+   flex-ряду, её появление сужало карту на 306 px и подёргивало весь экран.
+   Теперь карта не двигается вовсе, панель лежит поверх и она плотная —
+   иначе текст читался «поверх дорог». */
 .eu-side {
-  width: 306px;
-  flex: 0 0 306px;
+  position: absolute;
+  z-index: 6;
+  top: 10px;
+  right: 10px;
+  bottom: 10px;
+  width: min(21rem, 46vw);
   min-height: 0;
-  border-left: 1px solid var(--surface-brd);
-  background: var(--surface);
+  border: 1px solid var(--surface-brd);
+  border-radius: var(--r-lg);
+  background: var(--toast-bg);
+  box-shadow: -22px 0 48px -32px rgba(0, 0, 0, 0.95);
   overflow-y: auto;
-  scrollbar-width: none;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
 }
 .eu-side::-webkit-scrollbar { display: none; }
 .eu-side-in { padding: 12px 13px 18px; display: flex; flex-direction: column; gap: 10px; }
@@ -3044,7 +3220,7 @@ html.graphite {
 .eu-row {
   position: relative;
   display: grid;
-  grid-template-columns: auto 18px 1fr auto;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1fr) auto;
   align-items: center;
   gap: 7px;
   padding: 8px 30px 8px 9px;
@@ -3059,9 +3235,29 @@ html.graphite {
 .eu-row:active:not(.off) { transform: scale(0.985); }
 .eu-row.off { opacity: 0.42; }
 .eu-row-k { display: inline-flex; align-items: center; gap: 5px; font-size: 9px; font-weight: 800; letter-spacing: 0.05em; }
-.eu-row-lvl { font-size: 11px; color: var(--acc-text); }
-.eu-row-hint { font-size: 8.5px; color: var(--text-mute); }
 .eu-row-cost { font-size: 10px; font-weight: 800; color: var(--gold); }
+/* Что починено: строка была «название · 3 · подсказка · 18» — четыре числа
+   подряд, и было непонятно, где цена, а где уровень. Теперь слева текущий
+   уровень с делениями-потолком, справа — «прокачать до N» и цена. */
+.eu-row-now { display: flex; align-items: center; gap: 5px; min-width: 0; }
+.eu-row-now .t-label { font-size: 7.5px; letter-spacing: 0.08em; color: var(--text-mute); }
+.eu-row-now b { font-size: 12px; color: var(--text); }
+.eu-row-dots { display: inline-flex; gap: 2px; }
+.eu-row-dots i { width: 4px; height: 9px; border-radius: 1px; background: var(--surface-3); display: inline-block; }
+.eu-row-dots i.on { background: var(--acc); }
+.eu-row-go { display: flex; align-items: center; justify-content: flex-end; gap: 6px; }
+.eu-row-go .t-label { font-size: 7.5px; letter-spacing: 0.06em; color: var(--text-mute); }
+.eu-row-go b { font-size: 12px; font-weight: 800; color: var(--acc-text); }
+.eu-row-max { font-size: 9px; color: var(--text-mute); letter-spacing: 0.08em; }
+/* «что кнопка, а что информация» — подписи секций в панели здания */
+.eu-cap {
+  font-size: 7.5px; font-weight: 800; letter-spacing: 0.14em;
+  text-transform: uppercase; color: var(--text-mute);
+  display: flex; align-items: center; gap: 6px;
+}
+.eu-cap::after { content: ""; flex: 1; height: 1px; background: var(--surface-brd); }
+.eu-cap-btn { color: var(--acc-text); }
+.eu-cap-btn::after { background: var(--acc-line); }
 .eu-row-key {
   position: absolute; right: 8px; top: 50%; transform: translateY(-50%);
   font-size: 8px; font-weight: 800; color: var(--text-mute);
@@ -3142,7 +3338,7 @@ html.graphite {
 
 /* ── нижняя строка: сводка удара + ход ── */
 .eu-foot {
-  display: flex; align-items: center; gap: 10px;
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 10px;
   padding: 8px 12px calc(var(--sab) + 10px);
   border-top: 1px solid var(--surface-brd);
   background: var(--surface);
@@ -3195,35 +3391,71 @@ html.graphite {
 }
 .eu-glory-bar { height: 6px; margin: 7px 0 6px; border-radius: 999px; background: var(--track); overflow: hidden; }
 .eu-glory-bar i { display: block; height: 100%; border-radius: 999px; background: linear-gradient(90deg, var(--acc), var(--gold)); }
-.eu-levels { display: grid; grid-template-columns: repeat(auto-fill, minmax(238px, 1fr)); gap: 9px; }
-.eu-lvl {
+/* ── ВЫБОР УРОВНЯ: карточка на уровень ──
+   Старый список («номер, название, три цифры», а остальные — молча под
+   замком) читался как «намешано с багами»: было непонятно, чем уровни
+   отличаются друг от друга и почему в них нельзя. Теперь у уровня есть
+   мини-карта (сколько зданий и чьи они), раунды, стартовая казна, характер
+   ИИ и явная кнопка; у закрытого вместо замка — причина. */
+.eu-levels2 { display: grid; grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr)); gap: 10px; }
+.eu-lvl2 {
   position: relative;
-  display: grid; grid-template-columns: auto 1fr auto;
-  align-items: center; gap: 11px;
-  padding: 12px 13px; text-align: left;
+  display: flex; flex-direction: column; gap: 9px;
+  padding: 12px 13px 13px;
   border-radius: var(--r-md);
   background: var(--surface); border: 1px solid var(--surface-brd);
   transition: border-color 0.16s ease, background 0.16s ease, transform 0.14s ease;
 }
-.eu-lvl:hover:not(.locked) { border-color: var(--acc-line); background: var(--surface-2); transform: translateY(-2px); }
-.eu-lvl:active:not(.locked) { transform: translateY(0) scale(0.99); }
-.eu-lvl-n {
-  width: 34px; height: 34px; flex: 0 0 34px;
+.eu-lvl2:hover { border-color: var(--acc-line); }
+.eu-lvl2.cur { border-color: var(--acc-line); box-shadow: 0 0 0 1px var(--acc-soft); }
+.eu-lvl2.locked { opacity: 0.62; }
+.eu-lvl2-top { display: flex; align-items: flex-start; gap: 10px; }
+.eu-lvl2-n {
+  flex: 0 0 auto;
+  width: 30px; height: 30px;
   display: inline-flex; align-items: center; justify-content: center;
   border-radius: var(--r-sm);
-  background: var(--acc-soft); color: var(--acc-text); font-size: 16px;
+  background: var(--acc); color: var(--acc-ink);
+  font-size: 15px; font-weight: 800;
 }
-.eu-lvl.locked .eu-lvl-n { background: var(--surface-3); color: var(--text-mute); }
-.eu-lvl-main { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
-.eu-lvl-meta { display: flex; gap: 9px; font-size: 8.5px; color: var(--text-mute); }
-.eu-lvl-go { color: var(--text-mute); line-height: 0; }
-.eu-how {
-  padding: 12px 14px; border-radius: var(--r-md);
-  background: var(--surface); border: 1px solid var(--surface-brd);
+.eu-lvl2.locked .eu-lvl2-n { background: var(--surface-3); color: var(--text-mute); }
+.eu-lvl2-name { display: block; font-size: 12px; font-weight: 800; }
+.eu-lvl2-sub { display: block; font-size: 9.5px; line-height: 1.4; color: var(--text-mute); margin-top: 2px; }
+.eu-lvl2-map {
+  position: relative; display: block; height: 58px;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--surface-brd);
+  background:
+    linear-gradient(to right, var(--surface-brd-soft) 1px, transparent 1px) 0 0 / 20% 100%,
+    linear-gradient(to bottom, var(--surface-brd-soft) 1px, transparent 1px) 0 0 / 100% 20%,
+    var(--surface-2);
+  overflow: hidden;
 }
-.eu-how ul { display: flex; flex-direction: column; gap: 6px; margin: 0; padding: 0; list-style: none; }
-.eu-how li { position: relative; padding-left: 14px; font-size: 10.5px; line-height: 1.5; color: var(--text-dim); }
-.eu-how li::before { content: ""; position: absolute; left: 0; top: 6px; width: 6px; height: 6px; border-radius: 2px; background: var(--acc); }
+.eu-lvl2-map i {
+  position: absolute; width: 7px; height: 7px; border-radius: 2px;
+  transform: translate(-50%, -50%); display: block;
+}
+.eu-lvl2-map i.me { background: var(--ok); }
+.eu-lvl2-map i.enemy { background: var(--danger); }
+.eu-lvl2-meta { display: flex; flex-wrap: wrap; gap: 4px 8px; font-size: 8.5px; color: var(--text-mute); }
+.eu-lvl2-meta b { font-size: 10px; color: var(--text); margin-right: 2px; }
+.eu-lvl2-meta .hot { color: var(--danger); }
+.eu-lvl2-go {
+  display: flex; align-items: center; justify-content: center; gap: 7px;
+  width: 100%; padding: 9px 10px;
+  border-radius: var(--r-sm);
+  background: var(--btn-bg); border: 1px solid var(--btn-brd); color: var(--btn-text);
+  font-size: 10px; font-weight: 800; letter-spacing: 0.06em; cursor: pointer;
+  transition: background 0.15s ease, transform 0.12s ease;
+}
+.eu-lvl2-go:not(:disabled):hover { background: var(--btn-bg-hi); }
+.eu-lvl2-go:not(:disabled):active { transform: scale(0.985); }
+.eu-lvl2-go:disabled { cursor: not-allowed; background: transparent; border-style: dashed; }
+.eu-lvl2-why {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 9px; font-weight: 700; letter-spacing: 0.02em; color: var(--text-mute);
+}
+
 
 /* чип назначенной клавиши — в настройках («Клавиши управления в играх») и в
    подсказках режима: ряды и сетка переиспользуются из панели стратегии, вторая
@@ -3242,27 +3474,32 @@ html.graphite {
 .eu-keychip button:hover { color: var(--danger); }
 
 /* на телефоне панель уезжает вниз шторкой: справа ей негде стоять */
+/* на телефоне панель — шторка снизу: справа ей негде стоять. Она тоже
+   наложение, поэтому карта под ней не ездит. */
 @media (max-width: 880px) {
-  .eu-stage { flex-direction: column; }
   .eu-map { padding: 6px 8px 0; }
-  .eu-map-inner { max-width: 100%; }
   .eu-side {
-    width: auto; flex: 0 0 auto;
+    top: auto;
+    left: 8px;
+    right: 8px;
+    bottom: 8px;
+    width: auto;
     max-height: 46%;
-    border-left: none;
-    border-top: 1px solid var(--surface-brd);
+    border-radius: var(--r-lg) var(--r-lg) var(--r-md) var(--r-md);
+    box-shadow: 0 -20px 44px -28px rgba(0, 0, 0, 0.95);
   }
   .eu-side-in { gap: 8px; padding: 10px 12px 14px; }
   .eu-stats { grid-template-columns: repeat(3, 1fr); }
-  .eu-hints { max-width: 100%; }
   .eu-console { max-width: 64%; }
+  .eu-order { width: min(17rem, 90vw); }
+  .is-europa .fps-hud { top: 0.5rem; }
 }
 
 /* лёгкий режим: убираем всё, что стоит кадров, но оставляем читаемость */
 html.low-fx .eu-road.live { animation: none; stroke-dasharray: none; }
 html.low-fx .eu-node:hover { transform: translate(-50%, -50%); }
 html.low-fx .eu-map-inner { background-image: none; }
-html.low-fx .eu-lvl:hover { transform: none; }
+html.low-fx .eu-lvl2:hover { transform: none; }
 
 /* ══════════════════════════════════════════════════════════════════════
    ЖИДКОЕ СТЕКЛО НА ТЕЛЕФОНЕ — объём, преломление, крупные скругления

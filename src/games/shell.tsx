@@ -635,12 +635,13 @@ export function GameOver({
         variants={modalCard}
         initial="initial"
         animate="animate"
-        className="w-full max-w-sm"
+        className="go-plate-wrap"
       >
         {/* Итог забега — непрозрачная карточка со ступенями поверхностей.
             Раньше это было полупрозрачное стекло: поверх пёстрой игры
             цифры читались плохо. */}
         <div
+          className="go-plate"
           style={{
             borderRadius: "var(--r-xl)",
             background: "var(--surface)",
@@ -651,7 +652,7 @@ export function GameOver({
         >
           {/* Шапка: заголовок и результат на подложке потемнее */}
           <div
-            className="text-center"
+            className="text-center go-plate-l"
             style={{
               padding: "22px 20px 20px",
               background: "var(--surface-2)",
@@ -712,7 +713,7 @@ export function GameOver({
           </div>
 
           {/* Награда */}
-          <div style={{ padding: "16px 20px 20px" }}>
+          <div className="go-plate-r" style={{ padding: "16px 20px 20px" }}>
             <div className="flex" style={{ gap: 10, marginBottom: 16 }}>
               {[
                 { v: coins, l: tr("монет"), i: "coin" as const, d: 0.28 },

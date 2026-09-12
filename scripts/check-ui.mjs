@@ -1020,8 +1020,8 @@ console.log('\n[30] ЧУБУПА УНИВЕРСАЛИС 5: кампания, о�
     'удар — список зданий, а не одно «выбранное»');
   ok(/shiftKey.*setStrike|setStrike[\s\S]{0,400}shiftKey/.test(eu) || /e\.shiftKey/.test(eu),
     'Shift+клик добавляет здание в общий удар');
-  ok(/strikePower\(froms\)/.test(eu) && /verdictFor\(froms/.test(eu),
-    'сила удара считается по всем выбранным зданиям');
+  ok(/strikePower\(provs\.filter\(\(p\) => strike\.includes\(p\.id\)\)\)/.test(eu) && /verdictFor\(srcs/.test(eu),
+    'сила удара считается по всем собранным зданиям, а не по последнему клику');
   ok(/froms.length > 1|many: best\.froms\.length/.test(eu + md),
     'множественный удар есть и у игрока, и у ИИ');
   ok(/applyBattleResult/.test(eu) && /applyBattleResult/.test(md),
@@ -1029,16 +1029,64 @@ console.log('\n[30] ЧУБУПА УНИВЕРСАЛИС 5: кампания, о�
 
   // панель прокачки СПРАВА, консоль СЛЕВА СВЕРХУ, подсказки СЛЕВА снизу
   const side30 = css30.slice(css30.indexOf('.eu-side {'), css30.indexOf('.eu-side::-webkit-scrollbar'));
-  ok(/width: 30\dpx/.test(side30) && /border-left: 1px solid/.test(side30),
-    'панель стоит справа и отделена линией, а не висит снизу');
-  ok(/eu-map[\s\S]{0,4000}<SidePanel/.test(eu), 'в разметке карта идёт до панели: панель справа');
+  /* Панель — наложение, а не колонка flex: именно из-за колонки она «дёргала
+     вёрстку», сужая карту на 306 px при каждом выборе здания. */
+  ok(/position: absolute/.test(side30) && /right: 10px/.test(side30) && !/flex: 0 0/.test(side30),
+    'панель здания — наложение справа: карта не сдвигается при её открытии');
+  ok(/\.eu-map \{\s*position: absolute;\s*inset: 0/.test(css30) && !/max-width: min\(100%, 74vh\)/.test(css30),
+    'карта растянута на всё свободное место, а не собрана в квадрат по высоте');
+  ok(/eu-map[\s\S]{0,7000}<SidePanel/.test(eu), 'в разметке карта идёт до панели: панель справа');
   const con30 = css30.slice(css30.indexOf('.eu-console {'), css30.indexOf('.eu-line {'));
   ok(/left: 8px/.test(con30) && /top: 8px/.test(con30), 'консоль событий — слева сверху');
   ok(/max-width: 5\d%|max-width: 6\d%/.test(con30), 'консоль не перекрывает карту целиком');
-  const hint30 = css30.slice(css30.indexOf('.eu-hints {'), css30.indexOf('.eu-banner {'));
-  ok(/left: 8px/.test(hint30) && /bottom: 8px/.test(hint30), 'легенда значков — в левом нижнем углу');
-  ok(/pointer-events: none/.test(con30) && /pointer-events: none/.test(hint30),
-    'консоль и легенда не перехватывают клики по карте');
+  ok(/pointer-events: none/.test(con30), 'консоль не перехватывает клики по карте');
+  /* Легенду «твоё/чужое/в ударе» и плашку «КАК ИГРАТЬ» убрали по просьбе:
+     они объясняли то, что и так видно в бою, и ели место под картой. */
+  ok(!/eu-hints/.test(css30) && !/eu-hints/.test(eu), 'легенды значков снизу больше нет');
+  ok(!/eu-how/.test(css30) && !/tr\("КАК ИГРАТЬ"\)/.test(eu), 'плашки «КАК ИГРАТЬ» в выборе уровня больше нет');
+
+  /* Приказ об ударе: собранное войско → клик по цели → плашка у точки нажатия */
+  ok(/className="eu-order"/.test(eu) && /setOrder\(\{ \.\.\.at, to: p\.id \}\)/.test(eu),
+    'клик по чужому зданию поднимает приказ ровно у точки нажатия');
+  ok(/className="eu-order-go"/.test(eu) && /onClick=\{\(\) => attack\(t\.id\)\}/.test(eu),
+    'в приказе есть большая кнопка «АТАКОВАТЬ», бьющая по выбранной цели');
+  ok(/pickGround/.test(eu) && /mapRef/.test(eu),
+    'клик по свободному месту карты тоже отдаёт приказ (ближайшая доступная цель)');
+  ok(/className="eu-log/.test(eu) && /\.eu-log \{[\s\S]{0,200}?overflow-y: auto/.test(css30) &&
+     /overscroll-behavior: contain/.test(css30),
+    'внизу — журнал событий с колёсиком, а не загадочная строка «в ударе»');
+
+  /* Залипание интерфейса после удара — то, из-за чего «дальше ничего не нажимается» */
+  ok(/const attack = \(to\?: number\) =>/.test(eu) && /if \(phase !== "play" \|\| battle\) return;/.test(eu),
+    'удар принимает цель и не принимает второй удар, пока бой анимируется');
+  ok(/\} finally \{[\s\S]{0,160}?setBattle\(null\)/.test(eu),
+    'итоги боя исполняются в try/finally: фаза возвращается всегда');
+  ok(/if \(phase === "battle" && !battle\) setPhase\("play"\)/.test(eu),
+    'есть самовосстановление: "battle" без самого боя больше не вешает интерфейс');
+
+  /* Прокачка: человекочитаемо, а не четыре числа подряд */
+  ok(/eu-row-now/.test(eu) && /прокачать до/.test(eu) && /\.eu-row-dots i\.on/.test(css30),
+    'в прокачке видно текущий уровень и «прокачать до N» с делениями-потолком');
+  ok(/eu-cap-btn/.test(eu), 'панель подписывает, где информация, а где кнопки');
+  ok(/onClose=\{\(\) => \{ setSel\(null\); setOrder\(null\); \}\}/.test(eu) &&
+     /setSel\(null\);\n      return;/.test(eu),
+    'панель здания закрывается: крестик и тап по пустому месту');
+
+  /* FPS в этом режиме — слева: справа стоит панель здания */
+  ok(/\.is-europa \.fps-hud \{[\s\S]{0,80}?left:/.test(css30),
+    'счётчик кадров в стратегии прижат к левому краю');
+  ok(/is-europa/.test(fs.readFileSync('src/App.tsx', 'utf8')),
+    'режим стратегии помечен классом на обёртке игры');
+
+  /* Выбор уровня */
+  ok(/className="eu-levels2"/.test(eu) && /eu-lvl2-why/.test(eu) && /eu-lvl2-map/.test(eu),
+    'уровни — карточки с мини-картой и внятной причиной блокировки');
+
+  /* Плашка итога на ПК — альбомная (претензия «больше и не квадратная») */
+  ok(/html\.is-desktop \.go-plate \{[\s\S]{0,120}?grid-template-columns/.test(css),
+    'плашка итога на компьютере альбомная: итог слева, награда и кнопки справа');
+  ok(/className="go-plate-wrap"/.test(fs.readFileSync('src/games/shell.tsx', 'utf8')),
+    'обёртка плашки итога переведена на класс, а не на max-w-sm');
 
   // производительность режима: никаких размытий иBackdrop-стёкол на карте
   const euCss = (css30.match(/\.eu-[a-z-]+ \{[^}]*\}/g) || []).join('\n');

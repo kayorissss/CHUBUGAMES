@@ -71,6 +71,12 @@ export default function Europa({ onExit }: { onExit: () => void }) {
   const [battle, setBattle] = useState<Battle | null>(null);
   const [banner, setBanner] = useState<{ round: number; inc: number } | null>(null);
   const [result, setResult] = useState({ score: 0, coins: 0, xp: 0 });
+  /**
+   * Приказ об ударе: куда ткнули и что выбрали целью. Дропдаун рисуется
+   * прямо у точки нажатия (просили именно так), координаты — проценты
+   * внутри карты, поэтому он не разъезжается при ресайзе окна.
+   */
+  const [order, setOrder] = useState<{ x: number; y: number; to: number } | null>(null);
   const [won, setWon] = useState(false);
 
   const best = s.games.europa?.best || 0;
@@ -250,12 +256,24 @@ export default function Europa({ onExit }: { onExit: () => void }) {
 
   /* ──────────────── удар ──────────────── */
 
-  const attack = () => {
-    if (phase !== "play" || !selP || selP.owner === "me") return;
-    if (!froms.length) { sfx.error(); say(tr("Некому наступать"), "bad"); return; }
-    const target = selP;
-    const srcs = froms;
-    const res = fight(srcs, target, siegeReady);
+  /**
+   * Удар по цели. Цель передаётся явно (из приказа у точки нажатия), иначе
+   * берётся выбранное здание.
+   *
+   * Раньше attack() был беззащитен против «уже идёт бой»: второй клик
+   * ставил второй же battle, старый таймаут доживал до нового состояния, и
+   * фаза залипала на "battle". Все кнопки игры живут условием
+   * phase === "play" — интерфейсу оставалось смотреть на застывшую карту.
+   * Отсюда и «один раз сработало, дальше ничего не нажимается».
+   */
+  const attack = (to?: number) => {
+    if (phase !== "play" || battle) return;
+    const target = provs.find((x) => x.id === (to ?? sel)) ?? null;
+    if (!target || target.owner === "me") return;
+    const srcs = attackersFor(target);
+    if (!srcs.length) { sfx.error(); say(tr("Некому наступать"), "bad"); return; }
+    const res = fight(srcs, target, srcs.some((f) => siege.includes(f.id)));
+    setOrder(null);
     setBattle({ to: target.id, froms: srcs.map((p) => p.id), res, step: 0 });
     setPhase("battle");
     sfx.tap();
@@ -268,6 +286,22 @@ export default function Europa({ onExit }: { onExit: () => void }) {
     const t1 = window.setTimeout(() => setBattle((b) => (b ? { ...b, step: 1 } : b)), lowFx ? 60 : 620);
     const t2 = window.setTimeout(() => setBattle((b) => (b ? { ...b, step: 2 } : b)), lowFx ? 90 : 980);
     const t3 = window.setTimeout(() => {
+      /* Итоги обязаны отпустить фазу обратно в "play" — даже если внутри
+         что-то упадёт (кривое состояние, фоновая вкладка, ошибка в модели).
+         Иначе игра остаётся с полностью выключенным интерфейсом. */
+      try {
+        resolveBattle(battle);
+      } finally {
+        setBattle(null);
+        setPhase((ph) => (ph === "battle" ? "play" : ph));
+      }
+    }, lowFx ? 140 : 2300);
+    return () => { window.clearTimeout(t1); window.clearTimeout(t2); window.clearTimeout(t3); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [battle]);
+
+  /** одна запись итогов боя: потери, гарнизон, разбитые стены, счёт */
+  const resolveBattle = (battle: Battle) => {
       const { to, froms: ids, res } = battle;
       /*
        * Итоги боя. Каждый, кто шёл в атаку, получает обратно свою долю
@@ -295,8 +329,6 @@ export default function Europa({ onExit }: { onExit: () => void }) {
         say(`${tr(obj?.name || "")}: ${tr("отбились")} · −${res.lostMine}`, "bad");
       }
       setStrike([]);
-      setBattle(null);
-      setPhase((ph) => (ph === "battle" ? "play" : ph));
       // победа может наступить прямо от захвата
       window.setTimeout(() => {
         setProvs((cur) => {
@@ -305,10 +337,14 @@ export default function Europa({ onExit }: { onExit: () => void }) {
           return cur;
         });
       }, 30);
-    }, lowFx ? 140 : 2300);
-    return () => { window.clearTimeout(t1); window.clearTimeout(t2); window.clearTimeout(t3); };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [battle]);
+  };
+
+  /* Страховка на случай, если шаг боя всё-таки не дошёл (вкладка ушла в
+     фон и таймауты съели): фаза "battle" без самого боя невозможна, а без
+     этой строки она выключала бы весь интерфейс до перезагрузки. */
+  useEffect(() => {
+    if (phase === "battle" && !battle) setPhase("play");
+  }, [phase, battle]);
 
   /* ──────────────── следующий ход ──────────────── */
 
@@ -318,6 +354,7 @@ export default function Europa({ onExit }: { onExit: () => void }) {
     const inc = mine.reduce((a, p) => a + income(p), 0);
     setGold((g) => g + inc);
     setScore((v) => v + mine.length * 12);
+    setOrder(null);
     say(`${tr("казна")} +${inc} · ${tr("зданий")} ${mine.length}/${provs.length}`, "info");
 
     setProvs((arr) => {
@@ -369,6 +406,7 @@ export default function Europa({ onExit }: { onExit: () => void }) {
         stepSel(dir[e.code]);
         return;
       }
+      if (e.code === "Escape") { setOrder(null); return; }
       if (e.code === "Space") { e.preventDefault(); nextTurn(); return; }
       if (e.key === "Enter") {
         e.preventDefault();
@@ -408,10 +446,75 @@ export default function Europa({ onExit }: { onExit: () => void }) {
     });
   };
 
+  /**
+   * Точка клика внутри карты, в процентах. Нужна, чтобы приказ выезжал ровно
+   * там, где игрок нажал, а не в углу экрана.
+   */
+  const pctAt = (el: HTMLElement | null, clientX: number, clientY: number) => {
+    const r = el?.getBoundingClientRect();
+    if (!r || !r.width || !r.height) return { x: 50, y: 50 };
+    return {
+      x: Math.max(8, Math.min(92, ((clientX - r.left) / r.width) * 100)),
+      y: Math.max(10, Math.min(92, ((clientY - r.top) / r.height) * 100)),
+    };
+  };
+
+  /** куда можно ударить прямо сейчас собранным кулаком */
+  const reachable = useMemo(
+    () => provs.filter((t) => t.owner !== "me" && attackersFor(t).length > 0),
+    [provs, attackersFor, strike],
+  );
+
+  const mapRef = useRef<HTMLDivElement | null>(null);
+  /** журнал прокручивается сам к новой записи */
+  const logRef = useRef<HTMLDivElement | null>(null);
+
+  /** клик по зданию: своё — выбор (Shift — добавить в удар), чужое — выбор
+      + приказ у точки нажатия, если в кулаке уже кто-то есть */
+  const pickNode = (p: Prov, e: React.MouseEvent) => {
+    if (e.shiftKey || e.button === 2) {
+      toggleStrike(p.id);
+      setSel(p.id);
+      return;
+    }
+    setSel(p.id);
+    sfx.tap();
+    haptic("light");
+    if (p.owner === "me" || !strike.length) { setOrder(null); return; }
+    if (!attackersFor(p).length) {
+      setOrder(null);
+      say(tr("Отсюда до этого не дойти — собери войско у соседа"), "bad");
+      return;
+    }
+    const at = pctAt(mapRef.current, e.clientX, e.clientY);
+    setOrder({ ...at, to: p.id });
+  };
+
+  /** клик по свободному месту карты: цель — ближайший доступный сосед кулака */
+  const pickGround = (e: React.MouseEvent) => {
+    const at = pctAt(mapRef.current, e.clientX, e.clientY);
+    if (!strike.length || !reachable.length) {
+      /* Тап по пустому месту снимает выбор. Без этого на телефоне шторка
+         панели висела бы над картой без единого способа её убрать. */
+      setOrder(null);
+      setSel(null);
+      return;
+    }
+    let best = reachable[0];
+    let bd = Infinity;
+    for (const t of reachable) {
+      const d = (t.x * 100 - at.x) ** 2 + (t.y * 100 - at.y) ** 2;
+      if (d < bd) { bd = d; best = t; }
+    }
+    setSel(best.id);
+    setOrder({ ...at, to: best.id });
+  };
+
   const toggleStrike = (id: number) => {
     const p = provs.find((x) => x.id === id);
     if (!p || p.owner !== "me") return;
     setStrike((arr) => (arr.includes(id) ? arr.filter((x) => x !== id) : [...arr, id]));
+    setOrder(null);
     sfx.click();
   };
 
@@ -448,7 +551,12 @@ export default function Europa({ onExit }: { onExit: () => void }) {
       <div className="eu-stage">
         {/* ── карта ── */}
         <div className="eu-map">
-          <div className="eu-map-inner" style={{ aspectRatio: "1 / 1.02" }}>
+          {/* Раньше карта держала aspect-ratio 1:1.02 и потому на широком
+              мониторе была квадратом с пустотой по бокам. Теперь она
+              занимает ВСЁ свободное место: узлы стоят в процентах, дороги
+              тянутся viewBox-ом, иконки — фиксированные пиксели, поэтому
+              растяжение не «размазывает» сетку. */}
+          <div className="eu-map-inner" ref={mapRef} onClick={pickGround}>
             <Roads provs={provs} battle={battle} strike={strike} froms={froms} selId={sel} />
             {provs.map((p) => (
               <MapNode
@@ -458,7 +566,7 @@ export default function Europa({ onExit }: { onExit: () => void }) {
                 queued={strike.includes(p.id)}
                 siegeReady={siege.includes(p.id)}
                 target={!!battle && battle.to === p.id}
-                onPick={() => { setSel(p.id); sfx.tap(); haptic("light"); }}
+                onPick={(e) => pickNode(p, e)}
                 onQueue={() => toggleStrike(p.id)}
               />
             ))}
@@ -474,17 +582,62 @@ export default function Europa({ onExit }: { onExit: () => void }) {
               ))}
             </div>
 
-            {/* легенда значков — слева снизу, чтобы не лезть в правила */}
-            <div className="eu-hints">
-              <span><i className="dot me" /> {tr("твоё")}</span>
-              <span><i className="dot enemy" /> {tr("чужое")}</span>
-              <span><i className="dot ntrl" /> {tr("нейтралы")}</span>
-              <span><Icon name="shield" size={9} /> {tr("войско")}</span>
-              <span><Icon name="brain" size={9} /> {tr("умники: разведка")}</span>
-              <span><Icon name="lock" size={9} /> {tr("стены")}</span>
-              <span><i className="ln live" /> {tr("можно ударить")}</span>
-              <span><i className="ring" /> {tr("в ударе")}</span>
-            </div>
+            {/* ПРИКАС ОБ УДАРЕ — выезжает ровно у точки нажатия (схема,
+                которую просили: собрать войско Shift+кликом, ткнуть в цель,
+                нажать АТАКОВАТЬ). Подсказки-легенда снизу убрана: она
+                объясняла значки, которых игрок и так не видит в бою, а
+                смысл действий теперь объясняет сам приказ. */}
+            <AnimatePresence>
+              {order && (() => {
+                const t = provs.find((x) => x.id === order.to);
+                if (!t) return null;
+                const srcs = attackersFor(t);
+                const v = srcs.length ? verdictFor(srcs, t, srcs.some((f) => siege.includes(f.id))) : null;
+                return (
+                  <motion.div
+                    className="eu-order"
+                    style={{ left: `${order.x}%`, top: `${order.y}%` }}
+                    initial={{ opacity: 0, y: lowFx ? 0 : 10, scale: lowFx ? 1 : 0.94 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: lowFx ? 0 : 6, scale: lowFx ? 1 : 0.97 }}
+                    transition={{ duration: lowFx ? 0.01 : 0.18, ease: "easeOut" }}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <div className="eu-order-head">
+                      <span className="t-label">{tr("УДАРИТЬ ПО")}</span>
+                      <span className="eu-order-name clip1">{tr(t.name)}</span>
+                      <button type="button" className="eu-order-x" onClick={() => setOrder(null)} aria-label={tr("Отмена")}>
+                        <Icon name="cross" size={11} />
+                      </button>
+                    </div>
+                    <div className="eu-order-from">
+                      {srcs.map((f) => (
+                        <span key={f.id} className="eu-order-chip">
+                          {tr(f.name)} · <b className="t-num">{f.army - 1}</b>
+                        </span>
+                      ))}
+                    </div>
+                    <div className="eu-order-odds">
+                      <span className={`eu-odds-n ${v ? v.tone : "info"}`}>
+                        {v ? `${Math.round(v.chance * 100)}%` : "—"}
+                      </span>
+                      <span className={`eu-odds-v ${v ? v.tone : ""}`}>{v ? tr(v.label) : tr("некому идти")}</span>
+                      {v && <span className="t-caption">{tr("ожидать потерь")} ~{v.loss}</span>}
+                    </div>
+                    <button
+                      type="button"
+                      className="eu-order-go"
+                      disabled={!srcs.length || phase !== "play"}
+                      onClick={() => attack(t.id)}
+                    >
+                      <Icon name="fist" size={14} />
+                      {tr("АТАКОВАТЬ")}
+                      <span className="eu-btn-key">↵</span>
+                    </button>
+                  </motion.div>
+                );
+              })()}
+            </AnimatePresence>
 
             <AnimatePresence>
               {banner && (
@@ -531,6 +684,7 @@ export default function Europa({ onExit }: { onExit: () => void }) {
                 threats={threats}
                 siegeReady={siegeReady}
                 play={phase === "play"}
+                onClose={() => { setSel(null); setOrder(null); }}
               />
             </motion.aside>
           )}
@@ -540,9 +694,9 @@ export default function Europa({ onExit }: { onExit: () => void }) {
       {/* ── нижняя строка: сводка удара и следующий ход ── */}
       <div className="eu-foot">
         <div className="eu-foot-left">
-          {strike.length > 0 ? (
+          {strike.length > 0 && (
             <div className="eu-strike">
-              <span className="t-label">{tr("В УДАРЕ")}</span>
+              <span className="t-label">{tr("СОБРАНО В УДАР")}</span>
               {strike.map((id) => {
                 const p = provs.find((x) => x.id === id);
                 if (!p) return null;
@@ -554,14 +708,20 @@ export default function Europa({ onExit }: { onExit: () => void }) {
                 );
               })}
               <span className="t-caption" style={{ fontSize: 9 }}>
-                {tr("сила")} {Math.round(strikePower(froms)) || Math.round(strikePower(provs.filter((p) => strike.includes(p.id))))}
+                {tr("сила")} {Math.round(strikePower(provs.filter((p) => strike.includes(p.id))))}
               </span>
             </div>
-          ) : (
-            <div className="t-caption" style={{ fontSize: 9.5 }}>
-              {tr("Shift+клик по своему зданию — отправить его в общий удар")}
-            </div>
           )}
+          {/* Журнал всей кампании вместо загадочной плашки «в ударе»:
+              чем именно закончился каждый ход, можно листнуть колёсиком. */}
+          <div className="eu-log scroll" ref={logRef} data-n={log.length}>
+            {log.map((l, i) => (
+              <div key={`${l.turn}-${i}`} className={`eu-log-line eu-${l.tone}`}>
+                <b className="t-num">Х{String(l.turn).padStart(2, "0")}</b>
+                <span className="clip1">{l.txt}</span>
+              </div>
+            ))}
+          </div>
         </div>
         <button type="button" className="eu-next" onClick={nextTurn} disabled={phase !== "play"}>
           <Icon name="chevron" size={13} />
@@ -675,7 +835,7 @@ function Roads({ provs, battle, strike, froms, selId }: {
 
 export function MapNode({ p, active, queued, siegeReady, target, onPick, onQueue }: {
   p: Prov; active: boolean; queued: boolean; siegeReady: boolean; target: boolean;
-  onPick: () => void; onQueue: () => void;
+  onPick: (e: React.MouseEvent) => void; onQueue: () => void;
 }) {
   const k = kindOf(p.kind);
   return (
@@ -690,8 +850,8 @@ export function MapNode({ p, active, queued, siegeReady, target, onPick, onQueue
         p.moved ? "spent" : "",
       ].join(" ")}
       style={{ left: `${p.x * 100}%`, top: `${p.y * 100}%` }}
-      onClick={(e) => { if (e.shiftKey) onQueue(); else onPick(); }}
-      onContextMenu={(e) => { e.preventDefault(); onQueue(); }}
+      onClick={(e) => { e.stopPropagation(); onPick(e); }}
+      onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); onQueue(); }}
       title={`${tr(k.name)} · ${tr(k.troop)} — ${tr(k.note)}`}
     >
       <span className="eu-node-icon"><Icon name={k.icon} size={13} /></span>
@@ -775,7 +935,7 @@ export function BattleMark({ battle, provs, step, lowFx }: {
   );
 }
 
-export function SidePanel({ p, provs, gold, onBuy, onRecruit, onSpecial, onToggleStrike, queued, onAttack, froms, vw, threats, siegeReady, play }: {
+export function SidePanel({ p, provs, gold, onBuy, onRecruit, onSpecial, onToggleStrike, queued, onAttack, froms, vw, threats, siegeReady, play, onClose }: {
   p: Prov; provs: Prov[]; gold: number;
   onBuy: (w: "dev" | "wall" | "barr" | "intel") => void;
   onRecruit: (n: number) => void;
@@ -788,6 +948,7 @@ export function SidePanel({ p, provs, gold, onBuy, onRecruit, onSpecial, onToggl
   threats: { p: Prov; pow: number; canHit: boolean }[];
   siegeReady: boolean;
   play: boolean;
+  onClose: () => void;
 }) {
   const k = kindOf(p.kind);
   const mine = p.owner === "me";
@@ -803,9 +964,17 @@ export function SidePanel({ p, provs, gold, onBuy, onRecruit, onSpecial, onToggl
         <span className={`eu-owner ${mine ? "me" : p.owner === "ntrl" ? "ntrl" : "enemy"}`}>
           {mine ? tr("МОЁ") : p.owner === "ntrl" ? tr("НЕЙТРАЛЫ") : tr("ЧУЖОЕ")}
         </span>
+        {/* панель — наложение; крестик обязателен, иначе её нечем закрыть,
+            когда она закрыла половину карты */}
+        <button type="button" className="eu-order-x" onClick={onClose} aria-label={tr("Закрыть")}>
+          <Icon name="cross" size={11} />
+        </button>
       </div>
       <div className="t-caption eu-side-troop">{tr(k.troop)} — {tr(k.note)}</div>
 
+      {/* «что кнопка, что информация» — подписано прямо на месте: раньше
+          ряды с числами и ряды с кнопками выглядели одинаково */}
+      <div className="eu-cap">{tr("о здании")}</div>
       <div className="eu-stats">
         <Stat label={tr("войско")} value={`${p.army}/${cap(p)}`} icon="shield" />
         <Stat label={tr("доход")} value={mine ? income(p) : "—"} icon="coin" />
@@ -819,19 +988,43 @@ export function SidePanel({ p, provs, gold, onBuy, onRecruit, onSpecial, onToggl
 
       {mine ? (
         <>
+          <div className="eu-cap eu-cap-btn">{tr("что сделать")}</div>
           <div className="eu-rows">
             {(Object.keys(UP) as (keyof typeof UP)[]).map((w, i) => {
               const cost = w === "dev" ? devCost(p, provs) : w === "wall" ? wallCost(p, provs) : w === "barr" ? barrCost(p, provs) : intelCost(p, provs);
               const can = gold >= cost && p[w] < (w === "dev" ? 8 : w === "wall" ? 6 : w === "barr" ? 5 : 4);
-              return (
-                <button key={w} type="button" className={`eu-row ${can ? "" : "off"}`} disabled={!can || !play} onClick={() => onBuy(w)}>
-                  <span className="eu-row-k"><Icon name={UP[w].icon} size={12} />{tr(UP[w].name)}</span>
-                  <span className="eu-row-lvl t-num">{p[w]}</span>
-                  <span className="eu-row-hint clip1">{tr(UP[w].hint)}</span>
-                  <span className="eu-row-cost t-num">{cost}</span>
-                  <span className="eu-row-key">{i + 1}</span>
-                </button>
-              );
+              const max = w === "dev" ? 8 : w === "wall" ? 6 : w === "barr" ? 5 : 4;
+                const full = p[w] >= max;
+                return (
+                  <button
+                    key={w}
+                    type="button"
+                    className={`eu-row ${can ? "" : "off"}`}
+                    disabled={!can || !play}
+                    onClick={() => onBuy(w)}
+                    title={tr(UP[w].hint)}
+                  >
+                    <span className="eu-row-k">
+                      <Icon name={UP[w].icon} size={12} />
+                      {tr(UP[w].name)}
+                      <span className="eu-row-key">{i + 1}</span>
+                    </span>
+                    {/* не «18» и не «3», а человекочитаемо: что есть и что станет */}
+                    <span className="eu-row-now">
+                      <span className="t-label">{tr("сейчас")}</span>
+                      <b className="t-num">{p[w]}</b>
+                      <span className="eu-row-dots" aria-hidden>
+                        {Array.from({ length: max }).map((_, d) => <i key={d} className={d < p[w] ? "on" : ""} />)}
+                      </span>
+                    </span>
+                    <span className="eu-row-go">
+                      {full
+                        ? <b className="eu-row-max">{tr("ПОТОЛОК")}</b>
+                        : (<><span className="t-label">{tr("прокачать до")}</span><b className="t-num">{p[w] + 1}</b></>)}
+                      {!full && <span className="eu-row-cost t-num">{cost}</span>}
+                    </span>
+                  </button>
+                );
             })}
           </div>
 
@@ -973,42 +1166,63 @@ export function LevelPick({ unlocked, rank, glory, onStart, onExit }: {
           </div>
         </div>
 
-        <div className="eu-levels">
+        {/* Выбор уровня. Было: список «номер — название — три цифры», где
+            непонятно, чем уровни отличаются и почему остальные закрыты
+            (замок без объяснения = «намешано с багами»). Стало: карточка на
+            уровень, с числом зданий, раундами, стартовой казной, характером
+            ИИ, картой-превью и явной кнопкой «НАЧАТЬ»; у закрытого уровня
+            вместо замка — честная причина. */}
+        <div className="eu-levels2">
           {LEVELS.map((l) => {
             const open = l.id <= unlocked;
+            const cur = l.id === Math.min(unlocked, LEVELS.length);
+            const enemy = l.provs.filter((x) => x.owner !== "me").length;
             return (
-              <button
-                key={l.id}
-                type="button"
-                className={`eu-lvl ${open ? "" : "locked"}`}
-                disabled={!open}
-                onClick={() => open && onStart(l)}
-              >
-                <span className="eu-lvl-n t-display">{l.id}</span>
-                <span className="eu-lvl-main">
-                  <span className="t-title-sm clip1">{tr(l.name)}</span>
-                  <span className="t-caption clip1" style={{ fontSize: 9.5 }}>{tr(l.sub)}</span>
-                  <span className="eu-lvl-meta">
-                    <span>{l.provs.length} {tr("зданий")}</span>
-                    <span>{l.turns} {tr("раундов")}</span>
-                    <span>{l.aiAggro >= 1 ? tr("злой ИИ") : l.aiAggro >= 0.7 ? tr("ИИ на грани") : tr("ИИ спокойный")}</span>
+              <div key={l.id} className={`eu-lvl2 ${open ? "" : "locked"} ${cur ? "cur" : ""}`}>
+                <div className="eu-lvl2-top">
+                  <span className="eu-lvl2-n t-display">{l.id}</span>
+                  <span className="min-w-0">
+                    <span className="eu-lvl2-name t-title-sm clip1">{tr(l.name)}</span>
+                    <span className="eu-lvl2-sub clip1">{tr(l.sub)}</span>
                   </span>
+                </div>
+                {/* мини-карта: сколько зданий и чьи они — видно до входа */}
+                <span className="eu-lvl2-map" aria-hidden>
+                  {l.provs.map((x, xi) => (
+                    <i key={xi} className={x.owner === "me" ? "me" : "enemy"} style={{ left: `${x.x * 100}%`, top: `${x.y * 100}%` }} />
+                  ))}
                 </span>
-                <span className="eu-lvl-go">{open ? <Icon name="chevron" size={14} /> : <Icon name="lock" size={14} />}</span>
-              </button>
+                <div className="eu-lvl2-meta">
+                  <span><b className="t-num">{l.provs.length}</b> {tr("зданий")}</span>
+                  <span><b className="t-num">{l.turns}</b> {tr("раундов")}</span>
+                  <span><b className="t-num">{l.gold}</b> {tr("казна")}</span>
+                  <span className={l.aiAggro >= 1 ? "hot" : ""}>
+                    {l.aiAggro >= 1 ? tr("злой ИИ") : l.aiAggro >= 0.7 ? tr("ИИ на грани") : tr("ИИ спокойный")} · {enemy}
+                  </span>
+                </div>
+                <button type="button" className="eu-lvl2-go" disabled={!open} onClick={() => open && onStart(l)}>
+                  {open
+                    ? (<><Icon name="fist" size={13} />{tr("НАЧАТЬ")}</>)
+                    : (
+                      <span className="eu-lvl2-why">
+                        <Icon name="lock" size={12} />
+                        {`${tr("нужно пройти уровень")} ${l.id - 1}`}
+                      </span>
+                    )}
+                </button>
+              </div>
             );
           })}
         </div>
 
-        <div className="eu-how">
-          <div className="t-label" style={{ marginBottom: 6 }}>{tr("КАК ИГРАТЬ")}</div>
-          <ul>
-            <li>{tr("Клик по зданию — справа откроется прокачка: развитие, стены, казармы, разведка и наём войска")}</li>
-            <li>{tr("Shift+клик по СВОЕМУ зданию — отправить его в общий удар; так можно собрать в кулак два-три корпуса")}</li>
-            <li>{tr("Клик по ЧУЖОМУ — видно шанс взятия и чего ждать: равный бой, опасно или самоубийство")}</li>
-            <li>{tr("Клавиатура: стрелки — ходить по дорогам, Enter — удар, пробел — следующий раунд, 1…4 — качать, 5/6 — нанимать, Q — в удар")}</li>
-            <li>{tr("Захваченное здание оставляет гарнизон у соседа: блицкриг без запаса наказывается")}</li>
-          </ul>
+        {/* Плашку «КАК ИГРАТЬ» убрали по просЬбе. Правила теперь объясняет
+            сама игра: у своего здания Shift+клик собирает корпус в кулак, у
+            чужого — приказ с шансом и кнопкой «АТАКОВАТЬ», в журнале снизу
+            видно, что произошло. Одна строка про клавиши осталась — она не
+            «обучение», а шпаргалка. */}
+        <div className="eu-keys clip1">
+          <Icon name="info" size={11} />
+          {tr("клавиши: стрелки/WASD — идти по дорогам · Enter — удар · пробел — следующий раунд · 1…4 — качать · 5/6 — наём · Q — в удар")}
         </div>
       </div>
     </div>
