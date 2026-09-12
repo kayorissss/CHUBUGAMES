@@ -498,6 +498,25 @@ ok(wfDesk.includes('Remove outdated assets'),
   const [c, d] = order(wfApk);
   ok(c > -1 && d > -1 && c < d, 'на Android сначала выкладываем APK, потом убираем старое имя');
 }
+// Плавающие теги latest/desktop обязаны указывать на коммит, из которого
+// реально собран файл: иначе страница релиза показывает майский коммит, а
+// «Source code (zip/tar.gz)» не соответствует выложенному exe/apk.
+{
+  const d = fs.readFileSync('.github/workflows/build-desktop.yml', 'utf8');
+  const a = fs.readFileSync('.github/workflows/build-apk.yml', 'utf8');
+  ok(/Point the floating tag at the built commit/.test(d) && /git\/refs\/tags\/desktop/.test(d),
+    'на ПК релизный тег передвигается на собранный коммит');
+  ok(/Point the floating tag at the built commit/.test(a) && /git\/refs\/tags\/latest/.test(a),
+    'на Android релизный тег передвигается на собранный коммит');
+  ok(/--title "PC-сборка \$APP_VER"/.test(d) && /--title "Android-сборка \$APP_VER"/.test(a),
+    'оба релиза называются вместе с версией, а не «просто сборка»');
+  ok(/gh release edit latest[^\n]*--latest/.test(a),
+    'бейдж «Latest» закреплён за Android-сборкой явно');
+  ok(!/--draft/.test(d) && !/--draft/.test(a),
+    'дата публикации не подделывается проходом через draft: есть риск оставить релиз неопубликованным');
+  ok(/Собрано:/.test(d) && /Собрано:/.test(a),
+    'в теле обоих релизов есть метка сборки — дата, коммит и номер прогона');
+}
 ok(wfDesk.includes('sha256sum'),
   'в описании релиза публикуются хеши файлов');
 ok(dmain.includes('IS_PORTABLE'),
