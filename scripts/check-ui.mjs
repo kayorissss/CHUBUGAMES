@@ -1651,5 +1651,28 @@ console.log('\n[41] 1.27: вкладки настроек и полный пер
     'правило перевода задокументировано в шапке словаря (имена собственные — нет, режимы — да)');
 }
 
+console.log('\n[42] 1.27: версия, список изменений и перевод идут в одном месте');
+{
+  const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+  const ver = fs.readFileSync('src/core/version.ts', 'utf8');
+  const chlog = fs.readFileSync('src/core/changelog.ts', 'utf8');
+  const notes = fs.readFileSync('RELEASE_NOTES.md', 'utf8');
+  const readme = fs.readFileSync('README.md', 'utf8');
+  const m = ver.match(/APP_VERSION = "([^"]+)"/);
+  ok(m && m[1] === pkg.version, `APP_VERSION (${m && m[1]}) = версия package.json (${pkg.version})`);
+  ok(chlog.includes('"' + pkg.version + '": ['),
+    'в CHANGELOG есть запись текущей версии — экран «что нового» покажется сам');
+  ok(notes.includes('### Что нового в ' + pkg.version),
+    'RELEASE_NOTES начинается с описания текущей версии');
+  ok(/1\.27/.test(readme), 'README рассказывает про текущий релиз (дизайн и починки)');
+  ok(pkg.author && pkg.author.name === 'KAYORISAN', 'издатель в package.json не потерялся');
+  /* телефонная ветка стекла не должна была пострадать от редизайна ПК */
+  const css = fs.readFileSync('src/index.css', 'utf8');
+  ok(/html\.light:not\(\.is-desktop\)/.test(css),
+    'мобильная светлая тема стекла осталась отдельным правилом');
+  ok(/html\.is-desktop \.glass \{/.test(css) && /html\.is-desktop \.glass\.glass-acc \{/.test(css),
+    'плотность стекла на ПК и возврат залипки акценту живут рядом — правило не перебивает себя');
+}
+
 console.log(fails===0?'\n✅ ВСЕ ПРОВЕРКИ ВЁРСТКИ ПРОЙДЕНЫ\n':`\n❌ ПРОВАЛЕНО: ${fails}\n`);
 process.exit(fails?1:0);
