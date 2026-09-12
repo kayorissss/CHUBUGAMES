@@ -434,9 +434,18 @@ jobs:
             printf '%s\n' "\`\`\`"
           } > PREVIEW_BODY.md
           cat PREVIEW_BODY.md
-          gh release create "v$APP_VER-preview" --target "$GITHUB_SHA" --prerelease \
-            --title "Android $APP_VER — preview (debug-подпись)" \
-            --notes-file PREVIEW_BODY.md "$APK" "$APK.sha256"
+          # Ошибку gh выводим аннотацией: лог прогона с telefonu не всегда
+          # достаён, а предупреждение в аннотациях видно и в UI, и через API.
+          if ! gh release create "v$APP_VER-preview" --target "$GITHUB_SHA" --prerelease \
+               --title "Android $APP_VER — preview (debug-подпись)" \
+               --notes-file PREVIEW_BODY.md 2> gh.err; then
+            echo "::error::gh release create: $(tr '\n' '|' < gh.err | cut -c1-400)"
+            exit 1
+          fi
+          if ! gh release upload "v$APP_VER-preview" "$APK" "$APK.sha256" --clobber 2> up.err; then
+            echo "::error::gh release upload: $(tr '\n' '|' < up.err | cut -c1-400)"
+            exit 1
+          fi
           echo "::warning::Секретов подписи нет — в Releases лёг только preview, latest не тронут"
 
       - name: Upload APK (артефакт сборки)
