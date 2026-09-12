@@ -259,7 +259,7 @@ export const HERO_SKINS: HeroSkin[] = [
   { id: "steel", name: "Сталь", desc: "Металлический блеск 2026", price: 22000, rarity: "rare", body: "#9aa3b2", accentPart: "#e8eef7", hat: 0 },
   { id: "king", name: "Король", desc: "+5% монет во всех играх", price: 60000, rarity: "epic", body: "#f0e6c8", accentPart: "#ffb020", hat: 2 },
   { id: "gent", name: "Джентльмен", desc: "Уклоняется с достоинством", price: 120000, rarity: "epic", body: "#1c1c21", accentPart: "#f2f2f5", hat: 3 },
-  { id: "ghost", name: "Призрак", desc: "+8% шанс уклона в Burger Rain", price: 300000, rarity: "legend", body: "#cfe8ff", accentPart: "#8fd0ff", hat: 4 },
+  { id: "ghost", name: "Призрак", desc: "+8% монет в Burger Rain", price: 300000, rarity: "legend", body: "#cfe8ff", accentPart: "#8fd0ff", hat: 4 },
   { id: "gold", name: "Золотой", desc: "+15% монет во всех играх", price: 1000000, rarity: "legend", body: "#ffcf4d", accentPart: "#fff3c4", hat: 2 },
 ];
 

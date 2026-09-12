@@ -308,12 +308,15 @@ ok(md.includes('Math.min(cleared, 12)'),'множитель выживания �
 const mp=fs.readFileSync('src/ui/ModesPanel.tsx','utf8');
 ok(mp.includes('startSurvival')&&mp.includes('startSprint'),'новые режимы выведены на главную');
 const shp=fs.readFileSync('src/pages/Shop.tsx','utf8');
-ok(shp.includes('nearEnd'),'у кейсов есть фаза замедления перед открытием');
-ok(shp.includes('conic-gradient'),'редкий дроп подсвечивается лучами');
+ok(/transition: transform 2\.[0-9]s cubic-bezier/.test(fs.readFileSync('src/index.css','utf8')) && !/nearEnd/.test(shp),
+  'у кейса длинное честное торможение ленты, без «мелкой тряски экрана»');
+ok(!/conic-gradient/.test(shp) && !/Искры вокруг легендарки/.test(shp),
+  'вращающихся лучей и искр в вскрытии больше нет — «мультяшность» убрана');
 ok(shp.includes('SHOP_TABS'),'вкладки магазина крупные, с иконками');
 ok(shp.includes('activeTab.title'),'видно, в каком разделе магазина находишься');
 ok(shp.includes('CASE_SKIN'),'кейсы различаются по виду');
-ok(shp.includes('setFlash'),'в момент вскрытия кейса срабатывает вспышка');
+ok(!/setFlash/.test(shp) && /pc-pack-sweep/.test(shp),
+  'полноэкранной вспышки нет: один спокойный проход света по ленте');
 
 /* ── [17] Спорт-игры ── */
 console.log('\n[17] Спорт-игры');
@@ -1672,6 +1675,98 @@ console.log('\n[42] 1.27: версия, список изменений и пе�
     'мобильная светлая тема стекла осталась отдельным правилом');
   ok(/html\.is-desktop \.glass \{/.test(css) && /html\.is-desktop \.glass\.glass-acc \{/.test(css),
     'плотность стекла на ПК и возврат залипки акценту живут рядом — правило не перебивает себя');
+}
+
+console.log('\n[43] 1.27: магазин — кейсы без свечения, взрослое вскрытие, понятные скины');
+{
+  const css = fs.readFileSync('src/index.css', 'utf8');
+  const shp = fs.readFileSync('src/pages/Shop.tsx', 'utf8');
+  const content = fs.readFileSync('src/core/content.ts', 'utf8');
+  const cases = shp.slice(shp.indexOf('function Cases()'), shp.indexOf('function Skins()'));
+  const skins = shp.slice(shp.indexOf('function Skins()'));
+
+  /* ── свечения за иконками убраны ── */
+  ok(!/boxShadow: `0 10px 26px -12px \$\{skin\.ink\}`/.test(cases),
+    'за иконкой кейса нет цветного ореола (просили убрать: «выглядит мерзко»)');
+  ok(!/linear-gradient\(135deg, \$\{skin\.glow\}/.test(cases),
+    'цветная светящаяся подложка под всей карточкой кейса убрана');
+  ok(/className="pc-pack-ico/.test(cases) && /\.pc-pack-ico \{[^}]*inset 0 1px 0/.test(css),
+    'иконка кейса — плоская металлическая плашка с внутренней кромкой');
+  ok(/className="pc-pack-edge"/.test(cases) && /\.pc-pack-edge \{[^}]*height: 2px/.test(css),
+    'кейсы различаются узкой цветной линией сверху вместо свечения');
+  ok(!/animate=\{\{ y: \[0, -4, 0\] \}\}/.test(cases),
+    'иконка кейса не «дышит» вечно — бесконечные петли на витрине убраны');
+
+  /* ── модалка вскрытия ── */
+  ok(/className="pc-case-modal"/.test(cases) && /\.pc-case-modal \{[^}]*min\(60rem/.test(css),
+    'модалка кейса в магазине — та же широкая оболочка, что в казино');
+  ok(/className="pc-case-mhead"/.test(cases) && /pc-case-mx/.test(cases),
+    'у модалки есть шапка с названием и крестиком (закрыть можно)');
+  ok(/pc-case-row-pct/.test(cases) && /СОДЕРЖИМОЕ/.test(cases),
+    'в модалке видно содержимое и шансы числом — пока лента ещё идёт');
+  ok(/s\.friends\.filter\(\(f\) => f\.rarity === r\)/.test(cases),
+    'список содержимого строится из реального пула карточек, а не на глаз');
+  ok(/className="pc-shop-cell/.test(cases) && /pc-shop-cell-name clip1">\{f\.name\}/.test(cases),
+    'в ленте у каждой головы есть подпись — лента читается, а не мельтешит');
+  ok(!/rotateY: 90/.test(cases) && !/scale: 0\.6/.test(cases),
+    'итог не «выпрыгивает» через rotateY/scale — появление мягкое');
+  ok(!/repeat: Infinity/.test(cases.slice(cases.indexOf('pc-case-mbody'))),
+    'внутри модалки вскрытия нет ни одной бесконечной анимации');
+  ok(/requestAnimationFrame\(\(\) => setArmed\(true\)\)/.test(cases),
+    'лента трогается на следующем кадре — переход считается от нулевой точки');
+  ok(/className="pc-case-ghost"[\s\S]{0,400}?ЕЩЁ РАЗ/.test(cases) && /open\(pack\.id\)/.test(cases),
+    'из итога можно открыть тот же кейс ещё раз, не закрывая модалку');
+  ok(/html\.low-fx \.pc-pack-sweep \{ display: none; \}/.test(css),
+    'в лёгком режиме проход света выключен');
+
+  /* ── скины ── */
+  ok(/onClick=\{\(\) => \{ sfx\.tap\(\); haptic\("light"\); setLook\(sk\.id\); \}\}/.test(skins),
+    'клик по строке скина только разглядывает: не надевает и не покупает');
+  ok(!/disabled=\{!owned && s\.coins < sk\.price\}/.test(skins) && /\.pc-skin-row\.poor \{/.test(css),
+    'недоступный скин можно посмотреть — он приглушён, но не выключен');
+  ok(/className="pc-skin-facts"/.test(skins) && /SKIN_EFFECT/.test(skins),
+    'в витрине подписано, что скин меняет в цифрах и где его видно');
+  // карта эффектов объявлена над компонентом — берём из всего файла, а не из среза Skins()
+  const eff = shp.slice(shp.indexOf('const SKIN_EFFECT'), shp.indexOf('};', shp.indexOf('const SKIN_EFFECT')));
+  for (const id of ['king', 'gold', 'ghost']) {
+    ok(new RegExp(id + ': "\\+').test(eff), `эффект скина ${id} описан так же, как он посчитан в коде`);
+  }
+  ok(/\+8% монет в Burger Rain/.test(content) && !/шанс уклона в Burger Rain/.test(content),
+    'описание «Призрака» совпадает с кодом: у него +8% монет, а не «шанс уклона»');
+  ok(/autoRate/.test(fs.readFileSync('src/core/save.ts', 'utf8')) && /1\.05/.test(fs.readFileSync('src/core/save.ts', 'utf8')),
+    'скины king/gold действительно умножают монеты (подпись не врёт)');
+}
+
+console.log('\n[44] 1.27: поддержка — спокойно, на токенах, по-человечески в двух колонках');
+{
+  const css = fs.readFileSync('src/index.css', 'utf8');
+  const don = fs.readFileSync('src/pages/Donate.tsx', 'utf8');
+  const donCode = don.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\n\s*\/\/[^\n]*/g, '');
+  ok(!/rgba\(\s*255,\s*176,\s*32/.test(donCode) && !/255,\s*107,\s*90/.test(donCode) &&
+     !/#[0-9a-fA-F]{3,6}/.test(donCode),
+    'в поддержке нет вбитых цветов хексами: плашка перекрашивается токенами темы');
+  ok(/\.pc-don-hero \{[\s\S]{0,600}?--gold-brd/.test(css) &&
+     /\.pc-don-ico \{[\s\S]{0,400}?--gold-soft/.test(css),
+    'золото поддержки живёт в CSS переменными, а не строками в разметке');
+  ok(!/repeat: Infinity/.test(don),
+    'бесконечных «дышащих» циклов на странице нет — экран не жужжит и не ест кадры');
+  /* два абзаца раньше были написаны мимо tr() → при английском язык страницы ломался */
+  const raw = don.match(/>\s*[А-ЯЁа-яё][^<{]*[а-яё]{3,}[^<>{}]*<\/(div|span)>/g) || [];
+  const untranslated = raw.filter((x) => !/\{tr\(/.test(x));
+  ok(untranslated.length === 0,
+    untranslated.length ? `текст поддержки без tr(): ${untranslated[0].slice(0, 60)}` : 'весь текст поддержки проходит через tr()');
+  const en = fs.readFileSync('src/core/i18n-en.ts', 'utf8');
+  for (const key of [
+    'CHUBUGAMES бесплатный и без обязательной рекламы',
+    'Поддержка добровольная и ни на что не влияет в игре',
+    'идеи, баги, предложения',
+  ]) {
+    ok(en.includes(key), `в переводе есть строка поддержки «${key.slice(0, 32)}…»`);
+  }
+  ok(/className={`pc-don \$\{pc \? "pc-don-wide" : ""\}`}/.test(don) &&
+     /\.pc-don\.pc-don-wide \{[\s\S]{0,80}?grid-template-columns/.test(css),
+    'на мониторе поддержка — две колонки, а не узкая полоса под левым краем');
+  ok(/aria-label=\{tr\("Закрыть"\)\}/.test(don), 'кнопка закрытия поддержки доступна с клавиатуры/скринридера');
 }
 
 console.log(fails===0?'\n✅ ВСЕ ПРОВЕРКИ ВЁРСТКИ ПРОЙДЕНЫ\n':`\n❌ ПРОВАЛЕНО: ${fails}\n`);

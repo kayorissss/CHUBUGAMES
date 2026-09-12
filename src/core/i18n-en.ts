@@ -1379,6 +1379,10 @@ export const EN_TEXT: Record<string, string> = {
   "НАЗНАЧИТЬ": "ASSIGN",
   "ОТМЕНА": "CANCEL",
   "Назначенные клавиши работают в любой игре: они водят палец по полю, а пробел нажимает.": "Assigned keys work in every game: they move the finger across the field, Space presses.",
+  "CHUBUGAMES бесплатный и без обязательной рекламы. Если игра зашла — можно закинуть на развитие. Любая сумма помогает и мотивирует пилить дальше.": "CHUBUGAMES is free and has no forced ads. If the game clicked for you, you can chip in to keep it growing. Any amount helps and keeps the workshop running.",
+  "Поддержка добровольная и ни на что не влияет в игре — никаких платных преимуществ здесь нет.": "Support is voluntary and changes nothing in the game — there are no paid advantages here.",
+  "идеи, баги, предложения — @kayorisan": "ideas, bugs, suggestions — @kayorisan",
+  "Связь": "Contact",
   "убрать": "remove",
 
   /* ── названия, теги и описания игр из GAME_META ──────────────────────

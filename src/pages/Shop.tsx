@@ -3,7 +3,7 @@ import { tr } from "../core/i18n";
 import { AnimatePresence, motion } from "framer-motion";
 import { useGame } from "../core/store";
 import {
-  HERO_SKINS, ACCENTS, CASES, RARITY_COLOR, RARITY_LABEL,
+  HERO_SKINS, ACCENTS, CASES, RARITY_COLOR, RARITY_LABEL, type CaseDef,
 } from "../core/content";
 import { fmt } from "../core/format";
 import { isDesktop } from "../core/desktop";
@@ -118,17 +118,21 @@ function Cases() {
   const [rolling, setRolling] = useState<null | { friend: Friend; rarity: Rarity; dupe: boolean }>(null);
   const [spinning, setSpinning] = useState(false);
   const [reel, setReel] = useState<Friend[]>([]);
-  /** Что выпадет — знаем заранее, чтобы подсветить финал и добавить напряжения */
-  const [pending, setPending] = useState<Rarity>("common");
-  /** «почти доехали» — на этой фазе лента ползёт и экран дрожит */
-  const [nearEnd, setNearEnd] = useState(false);
-  /** Короткая вспышка в момент, когда барабан встал */
-  const [flash, setFlash] = useState(false);
+  /** какой кейс открыт — нужен шапке модалки, кнопке «ещё раз» и содержимому */
+  const [pack, setPack] = useState<CaseDef | null>(null);
+  /**
+   * С этого момента лента едет к призовой ячейке. Отдельный флаг, а не
+   * `spinning`: CSS-переход считается от уже нарисованного положения, поэтому
+   * сначала React обязан успеть показать ленту в нуле.
+   */
+  const [armed, setArmed] = useState(false);
 
   const open = (caseId: string) => {
     const c = CASES.find((x) => x.id === caseId)!;
     if (!spendCoins(c.price)) return;
     setSpinning(true);
+    setPack(c);
+    setArmed(false);
     sfx.caseOpen();
     haptic("medium");
 
@@ -154,15 +158,8 @@ function Cases() {
     for (let i = 0; i < 26; i++) strip.push(s.friends[Math.floor(Math.random() * s.friends.length)]);
     strip[22] = picked;
     setReel(strip);
-    setPending(rarity);
-    setNearEnd(false);
-    // За 900 мс до остановки включаем «замедление»: барабан почти встал,
-    // экран мелко дрожит — именно здесь и рождается ожидание.
-    const nearT = setTimeout(() => {
-      setNearEnd(true);
-      haptic("light");
-    }, 2100);
-    void nearT;
+    // лента трогается на следующем кадре — переход от нулевой точки
+    requestAnimationFrame(() => setArmed(true));
 
     setTimeout(() => {
       const dupe = (s.cards[picked.id] || 0) > 0;
@@ -174,11 +171,7 @@ function Cases() {
       });
       addXp(60);
       setSpinning(false);
-      setNearEnd(false);
       setRolling({ friend: picked, rarity, dupe });
-      // вспышка цветом редкости — момент вскрытия читается физически
-      setFlash(true);
-      setTimeout(() => setFlash(false), 420);
       if (rarity === "legend") sfx.legend();
       else sfx.achieve();
       haptic("success");
@@ -220,34 +213,20 @@ function Cases() {
                 border: `1px solid ${skin.line}`,
               }}
             >
-              {/* цветная подложка — кейсы отличаются с одного взгляда */}
-              <div
-                className="absolute pointer-events-none"
-                style={{
-                  inset: 0,
-                  background: `linear-gradient(135deg, ${skin.glow}, transparent 58%)`,
-                }}
-              />
+              {/* Свечения за иконками нет вовсе (просьба буквальная: «мерзко»).
+                  Кейсы различаются металлической плашкой с тонкой кромкой
+                  редкости и узкой цветной линией сверху — этого хватает,
+                  ореол под иконкой только грязнил. */}
+              <span className="pc-pack-edge" style={{ background: skin.ink }} aria-hidden />
               <div className="relative" style={{ padding: 15 }}>
                 <div className="flex items-start" style={{ gap: 13 }}>
                   {/* сам «кейс» */}
-                  <motion.span
-                    className="shrink-0 flex items-center justify-center"
-                    animate={{ y: [0, -4, 0] }}
-                    transition={{
-                      duration: 3.2, repeat: Infinity,
-                      ease: "easeInOut", delay: ci * 0.4,
-                    }}
-                    style={{
-                      width: 58, height: 58,
-                      borderRadius: "var(--r-md)",
-                      background: skin.box,
-                      color: skin.ink,
-                      boxShadow: `0 10px 26px -12px ${skin.ink}`,
-                    }}
+                  <span
+                    className="pc-pack-ico shrink-0 flex items-center justify-center"
+                    style={{ background: skin.box, color: skin.ink, borderColor: skin.line }}
                   >
-                    <Icon name="case" size={28} />
-                  </motion.span>
+                    <Icon name="case" size={26} />
+                  </span>
 
                   <div className="flex-1 min-w-0">
                     <div className="t-title-sm clip1">{c.name}</div>
@@ -350,207 +329,165 @@ function Cases() {
       </div>
       </div>
 
-      {/* Анимация вскрытия */}
+      {/* ── ВСКРЫТИЕ ──
+          Что убрано и почему (просьба: «анимация слишком мультяшная, нужна
+          взрослая и красивая», «модалка меньше чем нужно и кривая»):
+            • мелкое дрожание всего экрана на финале и мигающая подпись
+              «Почти…» — это мультфильм, а не казино;
+            • бесконечный пульс выигрышной головы (scale 1 → 1.14), вращающиеся
+              26-секундные лучи и 14 искр по кругу — шум без информации;
+            • полноэкранная цветная вспышка и «выпрыгивание» карточки через
+              rotateY 90° + scale 0.6.
+          Что осталось: длинное честное торможение ленты, одна световая
+          колонна по центру, мягкое появление итога и спокойная рамка цветом
+          редкости — без искр и тряски.
+          Оболочка модалки — та же, что у кейсов казино (.pc-case-*), чтобы
+          приложение не распадалось на два стиля: широкая, с шапкой, двумя
+          колонками (лента/итог и разбор содержимого) и рядом кнопок снизу. */}
       <AnimatePresence>
-        {(spinning || rolling) && (
+        {(spinning || rolling) && pack && (
           <motion.div
-            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[80] flex items-center justify-center px-5"
-            style={{ background: "var(--scrim-strong)", backdropFilter: "blur(20px)" }}
-            onClick={() => !spinning && setRolling(null)}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="pc-case-scrim"
+            onClick={() => { if (!spinning) { setRolling(null); setPack(null); } }}
           >
-            {flash && (
-              <motion.div
-                className="fixed inset-0 pointer-events-none"
-                initial={{ opacity: 0.85 }}
-                animate={{ opacity: 0 }}
-                transition={{ duration: 0.42 }}
-                style={{
-                  background: `radial-gradient(circle at 50% 50%, ${RARITY_COLOR[pending]}, transparent 70%)`,
-                  zIndex: 90,
-                }}
-              />
-            )}
-            {spinning ? (
-              <motion.div
-                className="w-full max-w-sm"
-                // на финише экран мелко дрожит — «вот-вот встанет»
-                animate={nearEnd ? { x: [0, -2.5, 2.5, -1.5, 1.5, 0] } : {}}
-                transition={nearEnd ? { duration: 0.28, repeat: Infinity } : {}}
-              >
-                <motion.div
-                  className="t-label text-center"
-                  style={{ marginBottom: 14 }}
-                  animate={nearEnd ? { opacity: [1, 0.45, 1] } : {}}
-                  transition={{ duration: 0.7, repeat: Infinity }}
+            <motion.div
+              initial={{ opacity: 0, y: 16, scale: 0.985 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 8, scale: 0.99 }}
+              transition={{ duration: 0.24, ease: [0.2, 0.8, 0.2, 1] }}
+              className="pc-case-modal"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="pc-case-mhead">
+                <span className="t-label pc-case-mkicker">{tr("КЕЙС")}</span>
+                <span className="t-display pc-case-mname">{pack.name}</span>
+                <span
+                  className="pc-case-state"
+                  style={{ color: rolling ? RARITY_COLOR[rolling.rarity] : "var(--text-mute)" }}
                 >
-                  {nearEnd ? tr("Почти…") : tr("Открываем…")}
-                </motion.div>
-                <Card
-                  r="lg"
-                  className="relative overflow-hidden"
-                  style={{
-                    height: 120,
-                    // к концу рамка окрашивается в цвет выпавшей редкости
-                    borderColor: nearEnd ? `${RARITY_COLOR[pending]}88` : undefined,
-                    boxShadow: nearEnd ? `0 0 44px -10px ${RARITY_COLOR[pending]}` : undefined,
-                    transition: "border-color 0.5s, box-shadow 0.5s",
-                  }}
+                  {rolling ? RARITY_LABEL[rolling.rarity] : tr("КРУТИТСЯ")}
+                </span>
+                <button
+                  type="button"
+                  className="pc-case-mx"
+                  onClick={() => { if (!spinning) { setRolling(null); setPack(null); } }}
+                  aria-label={tr("Закрыть")}
+                  disabled={spinning}
                 >
-                  {/* световой столб по центру — за ним и «останавливается» приз */}
-                  <motion.div
-                    className="absolute pointer-events-none"
-                    animate={{ opacity: nearEnd ? [0.25, 0.55, 0.25] : 0.18 }}
-                    transition={{ duration: 0.9, repeat: Infinity }}
-                    style={{
-                      left: "50%", top: 0, bottom: 0, width: 92, marginLeft: -46,
-                      background: `linear-gradient(90deg, transparent, ${RARITY_COLOR[pending]}, transparent)`,
-                    }}
-                  />
-                  <motion.div
-                    className="flex items-center gap-3 absolute"
-                    style={{ top: 22, left: 0, padding: "0 40%" }}
-                    initial={{ x: 0 }}
-                    animate={{ x: -22 * 86 + 40 }}
-                    // Резкое торможение в самом конце: почти вся дистанция
-                    // пролетает быстро, последние головы ползут — так ожидание
-                    // приходится на момент, когда уже видно соседние карточки.
-                    transition={{ duration: 2.95, ease: [0.07, 0.85, 0.12, 1] }}
-                  >
-                    {reel.map((f, i) => (
-                      <motion.div
-                        key={i}
-                        style={{ width: 74, flexShrink: 0 }}
-                        animate={
-                          nearEnd && i === 22
-                            ? { scale: [1, 1.14, 1], filter: "saturate(1.35)" }
-                            : {}
-                        }
-                        transition={{ duration: 0.8, repeat: Infinity }}
+                  <Icon name="cross" size={14} />
+                </button>
+              </div>
+
+              <div className="pc-case-mbody">
+                <div className="pc-case-mleft">
+                  {rolling ? (
+                    <div
+                      className="pc-pack-result"
+                      style={{ ["--rc" as never]: RARITY_COLOR[rolling.rarity] }}
+                    >
+                      <HeadView friend={rolling.friend} size={124} style={{ margin: "0 auto" }} />
+                      <div className="t-display pc-pack-result-name">{rolling.friend.name}</div>
+                      <div className="t-caption">{rolling.friend.nick}</div>
+                      <div className={`pc-pack-dupe ${rolling.dupe ? "" : "ok"}`}>
+                        <Icon name={rolling.dupe ? "refresh" : "check"} size={12} />
+                        {rolling.dupe
+                          ? tr("Дубликат · компенсация выдана")
+                          : tr("Новый друг в коллекции")}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="pc-case-strip pc-shop-reel">
+                      <div
+                        className="pc-case-strip-tape"
+                        style={{ transform: armed ? "translateX(calc(var(--step) * -22))" : "translateX(0)" }}
                       >
-                        <HeadView friend={f} size={74} />
-                      </motion.div>
-                    ))}
-                  </motion.div>
-                  <div
-                    className="absolute"
-                    style={{
-                      left: "50%", top: 0, bottom: 0, width: 3, marginLeft: -1.5,
-                      background: nearEnd ? RARITY_COLOR[pending] : "var(--acc)",
-                      boxShadow: `0 0 18px ${nearEnd ? RARITY_COLOR[pending] : "var(--acc-glow)"}`,
-                      transition: "background 0.4s",
-                    }}
-                  />
-                </Card>
-              </motion.div>
-            ) : rolling ? (
-              <motion.div
-                initial={{ scale: 0.6, opacity: 0, rotateY: 90 }}
-                animate={{ scale: 1, opacity: 1, rotateY: 0 }}
-                transition={{ type: "spring", stiffness: 240, damping: 20 }}
-                className="w-full max-w-xs relative"
-              >
-                {/* Расходящиеся лучи — только для редкого и выше, чтобы
-                    обычная карточка не выглядела как джекпот. */}
-                {rolling.rarity !== "common" && (
-                  <motion.div
-                    className="absolute pointer-events-none"
-                    initial={{ opacity: 0, scale: 0.4, rotate: 0 }}
-                    animate={{ opacity: 0.5, scale: 1, rotate: 360 }}
-                    transition={{
-                      opacity: { duration: 0.5 },
-                      scale: { duration: 0.6, ease: "backOut" },
-                      rotate: { duration: 26, repeat: Infinity, ease: "linear" },
-                    }}
-                    style={{
-                      // Круг, а не квадрат: у прямоугольного блока при вращении
-                      // видно углы — «крутится квадрат». Плюс край растворяем
-                      // маской, чтобы лучи гасли, а не обрывались границей.
-                      left: "50%",
-                      top: "50%",
-                      width: "190%",
-                      aspectRatio: "1",
-                      marginLeft: "-95%",
-                      marginTop: "-95%",
-                      borderRadius: "50%",
-                      WebkitMaskImage:
-                        "radial-gradient(closest-side, #000 34%, rgba(0,0,0,0.55) 62%, transparent 80%)",
-                      maskImage:
-                        "radial-gradient(closest-side, #000 34%, rgba(0,0,0,0.55) 62%, transparent 80%)",
-                      background: `conic-gradient(from 0deg, transparent 0deg, ${RARITY_COLOR[rolling.rarity]}55 12deg, transparent 24deg, transparent 45deg, ${RARITY_COLOR[rolling.rarity]}55 57deg, transparent 69deg, transparent 90deg, ${RARITY_COLOR[rolling.rarity]}55 102deg, transparent 114deg, transparent 135deg, ${RARITY_COLOR[rolling.rarity]}55 147deg, transparent 159deg, transparent 180deg, ${RARITY_COLOR[rolling.rarity]}55 192deg, transparent 204deg, transparent 225deg, ${RARITY_COLOR[rolling.rarity]}55 237deg, transparent 249deg, transparent 270deg, ${RARITY_COLOR[rolling.rarity]}55 282deg, transparent 294deg, transparent 315deg, ${RARITY_COLOR[rolling.rarity]}55 327deg, transparent 339deg)`,
-                      filter: "blur(2px)",
-                    }}
-                  />
-                )}
-                {/* Искры вокруг легендарки */}
-                {rolling.rarity === "legend" &&
-                  Array.from({ length: 14 }).map((_, i) => {
-                    const a = (i / 14) * Math.PI * 2;
+                        {reel.map((f, i) => (
+                          <span
+                            key={i}
+                            className={`pc-shop-cell ${armed && i === 22 ? "prize" : ""}`}
+                            style={{ borderColor: `${RARITY_COLOR[f.rarity]}88` }}
+                            title={f.name}
+                          >
+                            <HeadView friend={f} size={52} />
+                            <span className="pc-shop-cell-name clip1">{f.name}</span>
+                          </span>
+                        ))}
+                      </div>
+                      <span className="pc-case-needle" aria-hidden />
+                      {spinning && <span className="pc-case-hood" aria-hidden />}
+                      {/* один спокойный проход света вместо вспышки на весь экран */}
+                      <span className="pc-pack-sweep" aria-hidden />
+                    </div>
+                  )}
+
+                  <div className="t-caption pc-case-hint">
+                    {rolling
+                      ? tr("Карточка уже в коллекции: каждая новая даёт +0.4% ко всем монетам.")
+                      : tr("Лента тормозит сама — никаких трясок и искр, только свет на призовой ячейке.")}
+                  </div>
+                </div>
+
+                {/* правая колонка: что внутри и какие шансы — читаются, пока
+                    лента ещё идёт, а не после */}
+                <div className="pc-case-mright">
+                  <div className="t-label pc-case-rcap">{tr("СОДЕРЖИМОЕ")}</div>
+                  {(["legend", "epic", "rare", "common"] as Rarity[]).map((r) => {
+                    const pool = s.friends.filter((f) => f.rarity === r);
                     return (
-                      <motion.span
-                        key={i}
-                        className="absolute pointer-events-none"
-                        initial={{ opacity: 0, x: 0, y: 0, scale: 0.4 }}
-                        animate={{
-                          opacity: [0, 1, 0],
-                          x: Math.cos(a) * 150,
-                          y: Math.sin(a) * 150,
-                          scale: [0.4, 1, 0.3],
-                        }}
-                        transition={{
-                          duration: 1.5,
-                          delay: 0.15 + (i % 5) * 0.07,
-                          repeat: Infinity,
-                          repeatDelay: 1.1,
-                        }}
-                        style={{
-                          left: "50%", top: "50%",
-                          width: 7, height: 7, borderRadius: 999,
-                          background: RARITY_COLOR.legend,
-                          boxShadow: `0 0 12px ${RARITY_COLOR.legend}`,
-                        }}
-                      />
+                      <div key={r} className="pc-case-row" style={{ ["--rc" as never]: RARITY_COLOR[r] }}>
+                        <span className="pc-case-row-pct t-num">
+                          {(pack.odds[r] * 100).toFixed(pack.odds[r] < 0.02 ? 1 : 0)}%
+                        </span>
+                        <span className="min-w-0">
+                          <span className="t-label pc-case-row-r">{RARITY_LABEL[r]} · {pool.length}</span>
+                          <span className="pc-case-row-names">
+                            {pool.length === 0
+                              ? tr("нет в этом кейсе")
+                              : `${pool.slice(0, 4).map((f) => f.name).join(" · ")}${pool.length > 4 ? ` · +${pool.length - 4}` : ""}`}
+                          </span>
+                        </span>
+                      </div>
                     );
                   })}
-                <Card
-                  r="xl" className="text-center relative"
-                  style={{
-                    padding: 24,
-                    boxShadow: `0 0 60px -14px ${RARITY_COLOR[rolling.rarity]}`,
-                    borderColor: `${RARITY_COLOR[rolling.rarity]}66`,
-                  }}
-                >
-                  <motion.div
-                    className="t-label"
-                    initial={{ opacity: 0, y: -8 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.3 }}
-                    style={{ fontSize: 9.5, color: RARITY_COLOR[rolling.rarity] }}
-                  >
-                    {RARITY_LABEL[rolling.rarity]}
-                  </motion.div>
-                  <motion.div
-                    className="my-4"
-                    initial={{ scale: 0.55, y: 18 }}
-                    animate={{ scale: 1, y: [0, -8, 0] }}
-                    transition={{
-                      scale: { type: "spring", stiffness: 300, damping: 13, delay: 0.1 },
-                      y: { repeat: Infinity, duration: 2.4, delay: 0.5 },
-                    }}
-                  >
-                    <HeadView friend={rolling.friend} size={132} style={{ margin: "0 auto" }} />
-                  </motion.div>
-                  <div className="t-display-sm" style={{ marginTop: 4 }}>{rolling.friend.name}</div>
-                  <div className="t-caption" style={{ marginTop: 4 }}>{rolling.friend.nick}</div>
-                  {rolling.dupe && (
-                    <div className="t-label" style={{ marginTop: 10 }}>{tr("Дубликат · компенсация выдана")}</div>
-                  )}
-                  <div style={{ marginTop: 20 }}>
-                    <Button variant="primary" size="lg" full onClick={() => setRolling(null)}>{tr("Забрать")}</Button>
+                  <div className="pc-case-mid">
+                    <span className="t-caption">
+                      {tr("цена")} <b className="t-num">{fmt(pack.price)}</b> · {tr("дубликат возвращает")} 35%
+                    </span>
                   </div>
-                </Card>
-              </motion.div>
-            ) : null}
+                </div>
+              </div>
+
+              <div className="pc-case-mfoot">
+                {rolling ? (
+                  <>
+                    <button
+                      type="button"
+                      className="pc-case-ghost"
+                      onClick={() => { sfx.click(); open(pack.id); }}
+                      disabled={s.coins < pack.price}
+                    >
+                      <Icon name="refresh" size={13} />
+                      {tr("ЕЩЁ РАЗ")} · {fmt(pack.price)}
+                    </button>
+                    <button
+                      type="button"
+                      className="pc-case-open"
+                      onClick={() => { sfx.coin?.(); setRolling(null); setPack(null); }}
+                    >
+                      {tr("ЗАБРАТЬ")}
+                    </button>
+                  </>
+                ) : (
+                  <button type="button" className="pc-case-ghost" disabled>
+                    <Icon name="clock" size={13} />
+                    {tr("КРУТИТСЯ…")}
+                  </button>
+                )}
+              </div>
+            </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
@@ -559,6 +496,19 @@ function Cases() {
 }
 
 /* ============ СКИНЫ ============ */
+
+/**
+ * Что скин меняет в цифрах — один список, сверенный с кодом:
+ * `autoRate` в core/save.ts умножает монеты для king/gold, Burger Rain —
+ * для ghost. Всё остальное только выглядит, и игрок должен читать именно
+ * это, а не догадываться.
+ */
+const SKIN_EFFECT: Record<string, string> = {
+  king: "+5% ко всем монетам",
+  gold: "+15% ко всем монетам",
+  ghost: "+8% монет в Burger Rain",
+};
+
 function Skins() {
   const { s, set, spendCoins, toast } = useGame();
   /**
@@ -577,6 +527,7 @@ function Skins() {
 
   const shown = HERO_SKINS.find((x) => x.id === look) ?? HERO_SKINS[0];
   const worn = s.heroSkin === shown.id;
+  const owned0 = s.ownedSkins.includes(shown.id);
 
   const buy = (sk: (typeof HERO_SKINS)[number]) => {
     setLook(sk.id);
@@ -607,9 +558,12 @@ function Skins() {
             <button
               key={sk.id}
               type="button"
-              onClick={() => { haptic("light"); buy(sk); }}
-              disabled={!owned && s.coins < sk.price}
-              className={`pc-skin-row ${on ? "look" : ""} ${active ? "worn" : ""}`}
+              /* Ряд — ТОЛЬКО просмотр. Раньше клик по строке мгновенно
+                 надевал скин, а если он не куплен — ещё и списывал монеты:
+                 «непонятно с ними» ровно из-за этого (хотелось разглядеть,
+                 получилось — купить). Теперь выбирают кнопкой в витрине. */
+              onClick={() => { sfx.tap(); haptic("light"); setLook(sk.id); }}
+              className={`pc-skin-row ${on ? "look" : ""} ${active ? "worn" : ""} ${!owned && s.coins < sk.price ? "poor" : ""}`}
             >
               <span className="pc-skin-row-fig"><HeroPreview w={30} skin={sk} /></span>
               <span className="pc-skin-row-id">
@@ -665,6 +619,24 @@ function Skins() {
         <div className="t-display-sm" style={{ fontSize: 20, textAlign: "center" }}>{shown.name}</div>
         <div className="t-caption" style={{ marginTop: 4, textAlign: "center" }}>{shown.desc}</div>
 
+        {/* «где применяются и что меняется» — подписано прямо в витрине */}
+        <div className="pc-skin-facts">
+          <span>
+            <Icon name={shown.id === "default" || shown.id === "shadow" || shown.id === "cap" || shown.id === "steel" || shown.id === "gent" ? "eye" : "coin"} size={12} />
+            {SKIN_EFFECT[shown.id] ? tr(SKIN_EFFECT[shown.id]) : tr("только внешний вид, на игру не влияет")}
+          </span>
+          <span>
+            <Icon name="user" size={12} />
+            {tr("видно: в Burger Rain, на плитке уровня в Прогрессе и здесь, в витрине")}
+          </span>
+          <span>
+            <Icon name="check" size={12} />
+            {owned0
+              ? tr("куплен — можно надевать и снимать когда угодно")
+              : tr("не куплен — кнопка снизу купит и наденет")}
+          </span>
+        </div>
+
         {reveal === shown.id && (
           <motion.div
             className="t-label pc-skin-new"
@@ -682,17 +654,20 @@ function Skins() {
               onClick={() => buy(shown)}
               disabled={!s.ownedSkins.includes(shown.id) && s.coins < shown.price}
             >
-              {s.ownedSkins.includes(shown.id)
+              {owned0
                 ? tr("Надеть")
                 : (
                   <span className="inline-flex items-center" style={{ gap: 6 }}>
-                    <Icon name="coin" size={13} /> {tr("Купить за")} {fmt(shown.price)}
+                    <Icon name="coin" size={13} /> {tr("Купить за")} {fmt(shown.price)} {tr("и надеть")}
                   </span>
                 )}
             </Button>
           )}
           {worn && (
-            <div className="t-caption text-center">{tr("Этот скин уже на тебе")}</div>
+            <div className="pc-skin-worn">
+              <Icon name="check" size={13} />
+              {tr("Этот скин уже на тебе — сменить можно любой другой строкой")}
+            </div>
           )}
         </div>
       </div>

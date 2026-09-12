@@ -3153,6 +3153,258 @@ html.low-fx .pc-slot.win { animation: none; }
 html.low-fx .pc-slot-flash { display: none; }
 html.low-fx .pc-slot-reel.lit { box-shadow: 0 0 0 1.5px var(--gold); }
 
+/* ============================================================
+   ПОДДЕРЖКА: спокойно, на токенах, две колонки на ПК
+   ============================================================ */
+.pc-don {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+.pc-don-col {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  min-width: 0;
+}
+/* на мониторе — две колонки: решение слева, «куда идут деньги» и автор
+   справа; одна колонка на 400 px под левым краем оставляла мёртвую пустоту */
+html.is-desktop .pc-don.pc-don-wide {
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
+  gap: 1rem 1.6rem;
+  align-items: start;
+}
+.pc-don-hero {
+  position: relative;
+  overflow: hidden;
+  padding: 1.5rem 1.35rem 1.35rem !important;
+  text-align: center;
+  /* золото — токенами: плашка перекрашивается вместе с темой и акцентом
+     (раньше сюда был вбит rgba(255,176,32,…), и она висела наклейкой) */
+  border: 1px solid var(--gold-brd) !important;
+  background:
+    radial-gradient(120% 80% at 50% 0%, var(--gold-soft), transparent 70%),
+    var(--surface) !important;
+}
+.pc-don-ico {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 3.6rem;
+  height: 3.6rem;
+  margin-bottom: 0.8rem;
+  border-radius: var(--r-md);
+  background: var(--gold-soft);
+  border: 1px solid var(--gold-brd);
+  color: var(--gold);
+}
+.pc-don-title { font-size: 1.5rem; margin-bottom: 0.4rem; }
+.pc-don-lead {
+  color: var(--text-dim);
+  line-height: 1.6;
+  margin-bottom: 1.1rem;
+  font-size: 0.8rem;
+}
+.pc-don-sums {
+  display: flex;
+  gap: 0.4rem;
+  margin-bottom: 0.7rem;
+  position: relative;
+}
+.pc-don-sum {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 0.6rem 0;
+  border-radius: var(--r-sm);
+  background: var(--surface-2);
+  border: 1px solid var(--btn-brd);
+  color: var(--text);
+  font-size: 0.78rem;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+.pc-don-sum:hover { background: var(--gold-soft); border-color: var(--gold-brd); color: var(--gold); }
+.pc-don-note { margin-top: 0.6rem; color: var(--text-mute); }
+.pc-don-plain {
+  padding: 0.6rem 0.75rem;
+  border-radius: var(--r-sm);
+  background: var(--surface-2);
+  border: 1px solid var(--surface-brd);
+  color: var(--text-mute);
+  font-size: 0.66rem;
+  line-height: 1.5;
+  text-align: center;
+}
+.pc-don-cap { margin-bottom: 0.4rem; font-size: 0.55rem; letter-spacing: 0.14em; color: var(--text-mute); }
+.pc-don-perks { display: flex; flex-direction: column; gap: 0.4rem; }
+.pc-don-perk,
+.pc-don-author {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.65rem 0.7rem;
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  border: 1px solid var(--surface-brd);
+  color: var(--text);
+  text-align: left;
+  width: 100%;
+}
+.pc-don-author { cursor: pointer; transition: border-color 0.15s ease, background 0.15s ease; }
+.pc-don-author:hover { border-color: var(--acc-line); background: var(--surface-2); }
+.pc-don-perk-ico {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.1rem;
+  height: 2.1rem;
+  flex: 0 0 auto;
+  border-radius: var(--r-sm);
+  background: var(--surface-2);
+  border: 1px solid var(--btn-brd);
+  color: var(--acc-text);
+}
+.pc-don-perk-desc { margin-top: 2px; font-size: 0.64rem; color: var(--text-mute); }
+@media (max-width: 720px) {
+  .pc-don-sums { flex-wrap: wrap; }
+  .pc-don-sum { flex: 1 1 40%; }
+}
+
+/* ============================================================
+   МАГАЗИН: скины — что кнопка, где видно, что меняет
+   ============================================================ */
+/* строка списка больше не «неактивна, если не по карману»: её можно
+   разглядеть в любом случае — просто видно, что дорого */
+.pc-skin-row.poor { opacity: 0.62; }
+.pc-skin-row.poor:hover { opacity: 1; }
+/* блок фактов о скине: эффект, где видно, куплен ли */
+.pc-skin-facts {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin-top: 0.6rem;
+  padding: 0.55rem 0.65rem;
+  border-radius: var(--r-sm);
+  background: var(--surface-2);
+  border: 1px solid var(--surface-brd);
+}
+.pc-skin-facts span {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.4rem;
+  font-size: 0.66rem;
+  line-height: 1.4;
+  color: var(--text-dim);
+}
+.pc-skin-facts svg { flex: 0 0 auto; margin-top: 1px; color: var(--text-mute); }
+.pc-skin-worn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  padding: 0.6rem 0.7rem;
+  border-radius: var(--r-sm);
+  background: var(--ok-soft);
+  border: 1px solid var(--ok-brd);
+  color: var(--ok);
+  font-size: 0.66rem;
+  font-weight: 700;
+  text-align: left;
+}
+
+/* ============================================================
+   МАГАЗИН: кейсы без свечения, вскрытие — широкое и спокойное
+   ============================================================ */
+/* узкая цветная линия сверху карточки заменяет ореол: кейсы различаются
+   сразу, но ничего не светится за иконками */
+.pc-pack-edge {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 2px;
+  opacity: 0.85;
+}
+.pc-pack-ico {
+  width: 3.4rem;
+  height: 3.4rem;
+  border-radius: var(--r-md);
+  border: 1px solid var(--surface-brd);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12), inset 0 -6px 12px rgba(0, 0, 0, 0.28);
+}
+/* статус в шапке модалки: «КРУТИТСЯ» или выпавшая редкость */
+.pc-case-state {
+  flex: 0 0 auto;
+  font-size: 0.58rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+}
+.pc-shop-reel { height: 7.6rem; }
+.pc-shop-reel .pc-case-strip-tape { --cw: 6.4rem; }
+.pc-shop-cell {
+  flex: 0 0 auto;
+  width: var(--cw);
+  height: 6.4rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  border: 1.5px solid var(--btn-brd);
+}
+.pc-shop-cell.prize {
+  border-color: var(--gold);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--gold) 28%, transparent);
+}
+.pc-shop-cell-name { max-width: 92%; font-size: 0.5rem; font-weight: 700; color: var(--text-mute); }
+/* один спокойный проход света по ленте — вместо полноэкранной вспышки */
+.pc-pack-sweep {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(105deg, transparent 32%, color-mix(in srgb, var(--gold) 20%, transparent) 48%, transparent 64%);
+  animation: pcshopsweep 2.6s cubic-bezier(0.2, 0.7, 0.1, 1) 1 both;
+}
+@keyframes pcshopsweep {
+  from { transform: translateX(-55%); opacity: 0; }
+  35% { opacity: 1; }
+  to { transform: translateX(55%); opacity: 0; }
+}
+.pc-pack-result {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 1.1rem;
+  border-radius: var(--r-md);
+  background:
+    radial-gradient(70% 60% at 50% 0%, color-mix(in srgb, var(--rc, var(--acc)) 14%, transparent), transparent 72%),
+    var(--surface-2);
+  border: 1px solid color-mix(in srgb, var(--rc, var(--acc)) 55%, transparent);
+}
+.pc-pack-result-name { font-size: 1.2rem; line-height: 1.15; }
+.pc-pack-dupe {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.25rem 0.55rem;
+  border-radius: 999px;
+  background: var(--surface-3);
+  border: 1px solid var(--surface-brd);
+  color: var(--text-mute);
+  font-size: 0.6rem;
+  font-weight: 700;
+}
+.pc-pack-dupe.ok { background: var(--ok-soft); border-color: var(--ok-brd); color: var(--ok); }
+@media (max-width: 900px) {
+  .pc-shop-reel .pc-case-strip-tape { --cw: 5.4rem; }
+}
+html.low-fx .pc-pack-sweep { display: none; }
+html.low-fx .pc-shop-pack:hover { transform: none; }
+
 /* ---------- ИТОГ ЗАБЕГА: на ПК плашка альбомная, а не квадрат ----------
    Претензия с первого же скриншота: «плашка поражения — больше и альбомная,
    не квадратная». На широком окне квадрат 384 px выглядел как наклейка
