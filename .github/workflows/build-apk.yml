@@ -433,7 +433,12 @@ jobs:
               -f ref="refs/tags/latest" -f sha="$GITHUB_SHA"
           fi
           echo "тег latest -> $GITHUB_SHA"
-          gh release edit latest --title "Android-сборка $APP_VER" --target "$GITHUB_SHA"
+          # Знак «Latest» на странице релизов сознательно держится за Android:
+          # тег latest — это ещё и точка, куда смотрит встроенная проверка
+          # обновлений на телефоне. Без явного флага GitHub отдаёт бейдж тому
+          # релизу, который последним вышел из draft, — и он однажды уехал на
+          # ПК-сборку.
+          gh release edit latest --title "Android-сборка $APP_VER" --target "$GITHUB_SHA" --latest
       # Тег latest остаётся точкой публикации: на него ведут ссылка внутри
       # самого приложения (updater спрашивает releases/tags/latest), ссылки в
       # README и закладки тех, кто качал игру раньше. Меняется только то, что
