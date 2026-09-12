@@ -1308,7 +1308,9 @@ html.is-desktop .pc-xtra:hover {
 html.is-desktop .pc-home {
   display: grid;
   grid-template-columns: minmax(0, 1fr) var(--pc-rail);
-  grid-template-rows: minmax(0, 1fr);
+  /* три зоны: слева сверху — босс, слева под ним — библиотека (скроллится
+     сама), справа во всю высоту — панель сведений */
+  grid-template-rows: auto minmax(0, 1fr);
   gap: var(--pc-gap);
   height: 100%;
   padding: var(--pc-gap) var(--pc-pad) var(--pc-gap) var(--pc-pad);
@@ -1325,7 +1327,7 @@ html.is-desktop .pc-home {
 html.is-desktop .pc-games {
   display: block;
   grid-column: 1;
-  grid-row: 1;
+  grid-row: 2;
   min-width: 0;
   height: 100%;
   overflow-y: auto;
@@ -1337,7 +1339,7 @@ html.is-desktop .pc-blocks {
   flex-direction: column;
   gap: 0.75rem;
   grid-column: 2;
-  grid-row: 1;
+  grid-row: 1 / span 2;
   min-height: 0;
   height: 100%;
   overflow-y: auto;
@@ -1378,29 +1380,104 @@ html.is-desktop .only-mobile {
   display: none !important;
 }
 
-/* ---------- шапка профиля (в правой колонке выглядит карточкой) ---------- */
+/* ---------- уровень и валюты: на ПК их в колонке не показываем ----------
+   В панели сверху уже есть «Ур. N», полоса опыта и кошелёк. Второе место с
+   тем же содержимым и рождало ощущение «справа полный ужас»: половина колонки
+   была занята дублями. На телефоне панели нет — там шапка остаётся. */
 html.is-desktop .pc-head {
-  /* !important нужен: у шапки в разметке стоит inline paddingTop под
-     безопасную зону телефона, а на ПК её быть не должно */
-  padding: 0.85rem !important;
-  border-radius: var(--r-lg);
-  border: 1px solid var(--surface-brd);
-  background:
-    radial-gradient(120% 140% at 100% 0%, color-mix(in srgb, var(--acc) 12%, transparent), transparent 58%),
-    var(--surface);
-  margin-bottom: 0 !important;
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  gap: 0.25rem 0.7rem;
-  align-items: center;
+  display: none !important;
 }
+/* Сводка «уклоны / тапы / монеты всего» — верх правой колонки: compact */
 html.is-desktop .pc-head-stats {
-  grid-column: 1 / -1;
   gap: 0.5rem !important;
   margin-bottom: 0 !important;
 }
 html.is-desktop .pc-head-stats > * {
   padding: 0.5rem 0.55rem !important;
+}
+
+/* ---------- босс над библиотекой ----------
+   Широкая полоса: лицо, имя, сколько осталось, кто заступит следующим и
+   кнопка. На телефоне те же ряды складываются в два — флекс переносится. */
+.pc-boss {
+  display: contents;
+}
+html.is-desktop .pc-boss {
+  display: block;
+  grid-column: 1;
+  grid-row: 1;
+  min-width: 0;
+}
+.pc-boss-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.8rem;
+  padding: 0.8rem 0.9rem;
+}
+.pc-boss-face {
+  flex: 0 0 auto;
+  line-height: 0;
+}
+.pc-boss-id {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 9rem;
+  min-width: 0;
+}
+.pc-boss-when {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  flex: 0 1 8.5rem;
+  min-width: 0;
+}
+.pc-boss-bar {
+  display: block;
+  width: 100%;
+}
+.pc-boss-next {
+  display: none;
+  align-items: center;
+  gap: 0.45rem;
+  flex: 0 0 auto;
+  padding-left: 0.7rem;
+  border-left: 1px solid var(--surface-brd);
+  flex-direction: column;
+}
+.pc-boss-cta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  flex: 0 0 auto;
+  margin-left: auto;
+  padding: 0.55rem 0.95rem;
+  border-radius: 99px;
+  font-size: 0.8rem;
+  font-weight: 800;
+  line-height: 1;
+  white-space: nowrap;
+  background: var(--btn-bg);
+  color: var(--text-dim);
+  border: 1px solid var(--btn-brd);
+}
+.pc-boss-cta.on {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: var(--danger-ink);
+}
+/* на ПК места достаточно — показываем и «кто заступит следующим» */
+html.is-desktop .pc-boss-next {
+  display: flex;
+}
+
+/* телефон: лицо мельче, следующий босс не нужен, кнопка — на всю вторую строку */
+@media (max-width: 720px) {
+  .pc-boss-cta {
+    flex: 1 1 100%;
+    margin-left: 0;
+  }
 }
 
 /* ---------- плитка игр ---------- */
@@ -1541,21 +1618,22 @@ html.is-desktop .pc-blocks .t-label {
 
 /* ---------- экран мини-игры: портретная колонка как «экран устройства» ---------- */
 html.is-desktop .pc-play-wrap {
-  display: flex;
-  justify-content: center;
-  align-items: stretch;
-  background:
-    radial-gradient(1100px 700px at 50% -18%, color-mix(in srgb, var(--acc) 10%, transparent), transparent 58%),
-    var(--n-000);
+  display: block;
+  /* фон вокруг игры почти не виден (игра на всё окно), но нужен: пока идёт
+     анимация выхода, под игрой должна оставаться тьма, а не домашняя сетка */
+  background: var(--n-000);
 }
+/* Сама игра — на всё окно, альбомно.
+   Здесь когда-то было width: min(34rem, 100%) с боковыми рамками — «экран
+   телефона посреди монитора», из-за чего игры выглядели вертикальными,
+   обрезанными по размеру и маленькие на большом экране. Канвас в shell.tsx
+   измеряет контейнер (getBoundingClientRect), поэтому играм всё равно,
+   какая у них форма: они пересчитываются под неё. */
 html.is-desktop .pc-play {
   position: relative;
-  width: min(34rem, 100%);
+  width: 100%;
   height: 100%;
   background: var(--bg);
-  border-left: 1px solid var(--surface-brd);
-  border-right: 1px solid var(--surface-brd);
-  box-shadow: 0 0 90px -20px rgba(0, 0, 0, 0.9);
   /* transform создаёт containing block: все fixed-оверлеи игры (пауза,
      итоги, правила) останутся внутри колонки, а не разлипнутся по окну */
   transform: translateZ(0);

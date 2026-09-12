@@ -204,161 +204,6 @@ export default function Home({
       {/* Ежечасный сундук — повод заглянуть между парами */}
       <ChestCard />
 
-      {/* Сборник фанфиков — читалка с озвучкой */}
-      {onOpen && (
-        <Tap
-          onClick={() => onOpen("fanfic")}
-          r="lg"
-          className="w-full"
-          style={{ padding: 12, marginBottom: 10, display: "block" }}
-          sound="click"
-        >
-          <span className="flex items-center" style={{ gap: 11 }}>
-            <span
-              className="shrink-0 flex items-center justify-center"
-              style={{
-                width: 36, height: 36, borderRadius: "var(--r-sm)",
-                background: "var(--violet-soft)", color: "var(--violet)",
-              }}
-            >
-              <Icon name="note" size={17} />
-            </span>
-            <span className="flex-1 min-w-0">
-              <span className="t-title-sm block clip1">{tr("Фанфики")}</span>
-              <span className="t-caption block clip1" style={{ marginTop: 2, fontSize: 9.5 }}>
-                {tr("Читалка с озвучкой и подсветкой строки")}
-              </span>
-            </span>
-            <Icon name="chevron" size={14} />
-          </span>
-        </Tap>
-      )}
-
-      {/* Босс — главная плашка экрана */}
-      {onOpen && (
-        <Tap
-          onClick={() => onOpen("boss")}
-          r="xl"
-          className="w-full overflow-hidden relative"
-          style={{
-            padding: 0, marginBottom: 18, display: "block",
-            border: bossOn
-              ? "1.5px solid var(--danger-brd)"
-              : "1px solid var(--surface-brd)",
-            background: bossOn ? "var(--danger-soft)" : "var(--surface)",
-            boxShadow: bossOn ? "0 14px 40px -18px rgba(255,90,60,0.75)" : undefined,
-          }}
-          sound={bossOn ? "power" : "click"}
-        >
-          {/* пульс за головой, только когда босс реально доступен */}
-          {bossOn && (
-            <motion.div
-              className="absolute pointer-events-none"
-              animate={{ opacity: [0.2, 0.42, 0.2] }}
-              transition={{ duration: 2.4, repeat: Infinity, ease: "easeInOut" }}
-              style={{
-                inset: 0,
-                background:
-                  "radial-gradient(circle at 22% 42%, var(--danger-brd), transparent 60%)",
-              }}
-            />
-          )}
-
-          <div className="relative" style={{ padding: 18 }}>
-            <div className="flex items-center" style={{ gap: 14 }}>
-              <motion.span
-                className="shrink-0 relative"
-                style={{ lineHeight: 0, opacity: bossOn ? 1 : 0.55 }}
-                animate={bossOn ? { y: [0, -5, 0] } : {}}
-                transition={{ duration: 2.8, repeat: Infinity, ease: "easeInOut" }}
-              >
-                <HeadView friend={{ look: boss.look } as never} size={72} />
-              </motion.span>
-
-              <span className="flex-1 min-w-0">
-                <span
-                  className="t-label block"
-                  style={{ fontSize: 9, color: bossOn ? "var(--danger)" : undefined }}
-                >
-                  {bossOn
-                    ? tr("БОСС ПОЯВИЛСЯ")
-                    : bossLive ? tr("СМЕНА ЗАКРЫТА") : tr("СЛЕДУЮЩИЙ БОСС")}
-                </span>
-                <span
-                  className="t-display-sm block clip1"
-                  style={{ fontSize: 22, marginTop: 4 }}
-                >
-                  {boss.name}
-                </span>
-                <span className="t-caption block clip2" style={{ marginTop: 3 }}>
-                  {boss.nick}
-                </span>
-              </span>
-            </div>
-
-            {/* таймер и следующий по расписанию */}
-            <div
-              className="flex items-center"
-              style={{
-                gap: 10, marginTop: 14, paddingTop: 13,
-                borderTop: "1px solid var(--surface-brd)",
-              }}
-            >
-              <span className="flex-1 min-w-0">
-                <span className="t-label block" style={{ fontSize: 8.5 }}>
-                  {bossOn ? tr("УСПЕТЬ ДО СМЕНЫ") : tr("ПРИДЁТ ЧЕРЕЗ")}
-                </span>
-                <span
-                  className="t-num block"
-                  style={{ fontSize: 20, marginTop: 2, color: bossOn ? "var(--danger)" : undefined }}
-                >
-                  {fmtLeft(bossOn ? windowLeft() : nextBossIn())}
-                </span>
-              </span>
-
-              {/* кто заступит следующим */}
-              <span className="flex items-center shrink-0" style={{ gap: 7 }}>
-                <span className="text-right">
-                  <span className="t-label block" style={{ fontSize: 8.5 }}>{tr("ДАЛЬШЕ")}</span>
-                  <span className="t-caption block clip1" style={{ marginTop: 2, maxWidth: 92 }}>
-                    {nextBoss.name}
-                  </span>
-                </span>
-                <span style={{ lineHeight: 0, opacity: 0.72 }}>
-                  <HeadView friend={{ look: nextBoss.look } as never} size={30} />
-                </span>
-              </span>
-            </div>
-
-            <div style={{ marginTop: 11 }}>
-              <Bar
-                pct={bossOn ? windowLeft() / BOSS_WINDOW_MS : 1 - nextBossIn() / BOSS_EVERY_MS}
-                h={5}
-              />
-            </div>
-
-            <div
-              className="flex items-center justify-center"
-              style={{
-                gap: 7, marginTop: 14, padding: "11px 16px",
-                borderRadius: 999,
-                background: bossOn ? "var(--danger)" : "var(--btn-bg)",
-                color: bossOn ? "var(--danger-ink)" : "var(--text-dim)",
-                border: bossOn ? "1px solid var(--danger)" : "1px solid var(--btn-brd)",
-                fontSize: 13, fontWeight: 800, lineHeight: 1,
-              }}
-            >
-              <Icon name={bossOn ? "skull" : "clock"} size={14} />
-              {/* Событие идёт весь час: после победы кнопка не гаснет,
-                  а предлагает добить ещё раз. */}
-              {bossOn
-                ? bossKills > 0 ? `${tr("ДОБИТЬ")} · ${tr("завалил")} ×${bossKills}` : tr("В БОЙ")
-                : tr("ЖДЁМ СМЕНУ")}
-            </div>
-          </div>
-        </Tap>
-      )}
-
       {/* Казино — крупная плашка, сразу понятно, что это казино */}
       {onOpen && (
         <Tap
@@ -508,6 +353,111 @@ export default function Home({
         </Tap>
       )}
 
+      {/* Сборник фанфиков — читалка с озвучкой */}
+      {onOpen && (
+        <Tap
+          onClick={() => onOpen("fanfic")}
+          r="lg"
+          className="w-full"
+          style={{ padding: 12, marginBottom: 10, display: "block" }}
+          sound="click"
+        >
+          <span className="flex items-center" style={{ gap: 11 }}>
+            <span
+              className="shrink-0 flex items-center justify-center"
+              style={{
+                width: 36, height: 36, borderRadius: "var(--r-sm)",
+                background: "var(--violet-soft)", color: "var(--violet)",
+              }}
+            >
+              <Icon name="note" size={17} />
+            </span>
+            <span className="flex-1 min-w-0">
+              <span className="t-title-sm block clip1">{tr("Фанфики")}</span>
+              <span className="t-caption block clip1" style={{ marginTop: 2, fontSize: 9.5 }}>
+                {tr("Читалка с озвучкой и подсветкой строки")}
+              </span>
+            </span>
+            <Icon name="chevron" size={14} />
+          </span>
+        </Tap>
+      )}
+
+      </div>
+
+      {/* БОСС — над библиотекой, в левой колонке. Это главное событие часа,
+          и держать его в правой колонке между сундуком и казино было
+          нечестно по отношению к играм: плашка уезжала за скролл. */}
+      <div className="pc-boss">
+        {onOpen && (
+          <Tap
+            onClick={() => onOpen("boss")}
+            r="xl"
+            className="w-full overflow-hidden relative pc-boss-card"
+            style={{
+              padding: 0, marginBottom: 4, display: "block",
+              border: bossOn
+                ? "1.5px solid var(--danger-brd)"
+                : "1px solid var(--surface-brd)",
+              background: bossOn ? "var(--danger-soft)" : "var(--surface)",
+              boxShadow: bossOn ? "0 14px 40px -18px rgba(255,90,60,0.75)" : undefined,
+            }}
+            sound={bossOn ? "power" : "click"}
+          >
+            {bossOn && (
+              <motion.span
+                className="absolute pointer-events-none"
+                animate={{ opacity: [0.2, 0.42, 0.2] }}
+                transition={{ duration: 2.4, repeat: Infinity, ease: "easeInOut" }}
+                style={{ inset: 0, background: "radial-gradient(circle at 12% 45%, var(--danger-brd), transparent 62%)" }}
+              />
+            )}
+
+            <span className="pc-boss-row relative">
+              <motion.span
+                className="pc-boss-face"
+                animate={bossOn ? { y: [0, -4, 0] } : {}}
+                transition={{ duration: 2.8, repeat: Infinity, ease: "easeInOut" }}
+                style={{ opacity: bossOn ? 1 : 0.6 }}
+              >
+                <HeadView friend={{ look: boss.look } as never} size={bossOn ? 54 : 46} />
+              </motion.span>
+
+              <span className="pc-boss-id">
+                <span className="t-label" style={{ fontSize: 8.5, color: bossOn ? "var(--danger)" : undefined }}>
+                  {bossOn ? tr("БОСС ПОЯВИЛСЯ") : bossLive ? tr("СМЕНА ЗАКРЫТА") : tr("СЛЕДУЮЩИЙ БОСС")}
+                </span>
+                <span className="t-display-sm clip1" style={{ fontSize: 20, marginTop: 3 }}>{boss.name}</span>
+                <span className="t-caption clip1" style={{ marginTop: 2 }}>{boss.nick}</span>
+              </span>
+
+              <span className="pc-boss-when">
+                <span className="t-label" style={{ fontSize: 8 }}>{bossOn ? tr("УСПЕТЬ ДО СМЕНЫ") : tr("ПРИДЁТ ЧЕРЕЗ")}</span>
+                <span className="t-num" style={{ fontSize: 18, marginTop: 2, color: bossOn ? "var(--danger)" : undefined }}>
+                  {fmtLeft(bossOn ? windowLeft() : nextBossIn())}
+                </span>
+                <span className="pc-boss-bar">
+                  <Bar pct={bossOn ? windowLeft() / BOSS_WINDOW_MS : 1 - nextBossIn() / BOSS_EVERY_MS} h={4} />
+                </span>
+              </span>
+
+              <span className="pc-boss-next">
+                <span className="t-label" style={{ fontSize: 8 }}>{tr("ДАЛЬШЕ")}</span>
+                <span className="t-caption clip1" style={{ maxWidth: 84 }}>{nextBoss.name}</span>
+                <span style={{ opacity: 0.7, lineHeight: 0 }}>
+                  <HeadView friend={{ look: nextBoss.look } as never} size={26} />
+                </span>
+              </span>
+
+              <span className={`pc-boss-cta ${bossOn ? "on" : ""}`}>
+                <Icon name={bossOn ? "skull" : "clock"} size={14} />
+                {bossOn
+                  ? bossKills > 0 ? `${tr("ДОБИТЬ")} ×${bossKills}` : tr("В БОЙ")
+                  : tr("ЖДЁМ СМЕНУ")}
+              </span>
+            </span>
+          </Tap>
+        )}
       </div>
 
       <AnimatePresence>
