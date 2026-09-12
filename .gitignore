@@ -22,3 +22,4 @@ android-signing/*.jks
 android-signing/keystore.properties
 android-signing/PASTE-INTO-SECRETS.txt
 **/chubgames.p12
+.tmp-ui-render/

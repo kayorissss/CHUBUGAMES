@@ -3,6 +3,7 @@ import { motion } from "framer-motion";
 import { useGame } from "../core/store";
 import { Card, Button, SectionTitle, Screen, Divider } from "../ui/Glass";
 import DesktopSettings from "../ui/DesktopSettings";
+import KeymapCard from "../ui/KeymapCard";
 import { isDesktop, hasKeyboard } from "../core/desktop";
 import UpdateCheckRow from "../ui/UpdateCheckRow";
 import {
@@ -356,6 +357,9 @@ export default function Settings({
               on={s.settings.keys !== false}
               onToggle={() => set((d) => { d.settings.keys = !(d.settings.keys !== false); })}
             />
+            {/* Какие клавиши ведут к каким действиям — тут же, где и сам
+                тумблер: нашёл глазами, настроил, не прыгая по разделам. */}
+            <KeymapCard />
           </>
         )}
       </Card>

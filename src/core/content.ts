@@ -446,7 +446,7 @@ export const GAME_META = [
   { id: "moto" as const, name: "МОТО АРТЁМА", tag: "Гонка", desc: "Держи газ, следи за перегревом. На финише — нитки под шею.", unlockLvl: 0, icon: "speed" as IconName },
   { id: "fuel" as const, name: "ГДЕ БЕНЗИН", tag: "Стратегия", desc: "Объезжай заправки на остатке. В РФ сейчас беда с ним.", unlockLvl: 0, icon: "bolt" as IconName },
   { id: "hands" as const, name: "ВОРОВСКИЕ РУЧКИ", tag: "Реакция", desc: "Чужие руки лезут в твой портфель. Бей по ним, свою не задень.", unlockLvl: 0, icon: "fist" as IconName },
-  { id: "europa" as const, name: "ЧУБУПА УНИВЕРСАЛИС 4", tag: "Стратегия", desc: "Захвати весь колледж за 30 ходов. Деканат так просто не сдастся.", unlockLvl: 0, icon: "flag" as IconName },
+  { id: "europa" as const, name: "ЧУБУПА УНИВЕРСАЛИС 5", tag: "Стратегия", desc: "5 уровней кампании, здания со своим войском, общий удар и ранг. Деканат так просто не сдастся.", unlockLvl: 0, icon: "flag" as IconName },
   { id: "chess" as const, name: "ШАХМАТЫ С ШИТОВЫМ", tag: "Настольные", desc: "Полные шахматы против препода. Три уровня, и на третьем он не жалеет.", unlockLvl: 0, icon: "brain" as IconName },
   { id: "checkers" as const, name: "ШАШКИ У СТАСА", tag: "Настольные", desc: "Русские шашки. Бить обязательно, дамка ходит через всю доску.", unlockLvl: 0, icon: "dice" as IconName },
   { id: "nards" as const, name: "НАРДЫ С АРТУРОМ", tag: "Настольные", desc: "Длинные нарды. Артур Тигранович играет в них с детства.", unlockLvl: 0, icon: "clover" as IconName },

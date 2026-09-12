@@ -1,90 +1,99 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useGame } from "../core/store";
 import { sfx, haptic } from "../core/fx";
 import { GameOver, GameHUD, Countdown, HudStat } from "./shell";
 import Icon from "../ui/Icon";
 import { tr } from "../core/i18n";
+import { isLowFx } from "../core/perf";
+import { codesFor } from "../core/keymap";
+import {
+  LEVELS, KIND, aiTurn, applyBattleResult, type Kind, type Level, type Prov, type Verdict,
+  armyCost, barrCost, cap, defensePower, devCost, freshProvs, fight, gloryFor,
+  income, intelCost, kindOf, rankOf, sabotageable, strikePower, verdictFor, wallCost,
+} from "./europa/model";
 
 /**
- * ЧУБУПА УНИВЕРСАЛИС 4 — пошаговая стратегия за общагу.
+ * ЧУБУПА УНИВЕРСАЛИС 5 — пошаговая стратегия за колледж.
  *
- * Карта провинций колледжа. Каждый ход: казна пополняется с твоих
- * провинций, ты тратишь очки на развитие, армию или дипломатию, а потом
- * можешь напасть на соседнюю провинцию.
+ * Что изменилось по сравнению с четвёртой частью (по просьбам игрока):
+ *   • кампания из пяти уровней вместо одной карты;
+ *   • здания разные: спортзал бьёт, столовая кормит, деканат держит;
+ *   • в удар можно собрать СРАЗУ НЕСКОЛЬКО своих зданий — войска
+ *     складываются в один удар, поэтому «общага + спортзал» берёт то, что
+ *     поодиночке не взять;
+ *   • клик по зданию открывает справа меню прокачки: четыре ветки, наём
+ *     войска, спецдействие, соседи и оценка угрозы;
+ *   • бой анимирован: точки-бойцы идут по дороге к цели, вспышка, потом
+ *     итог — взял или отбились, и сколько легло с обеих сторон;
+ *   • слева сверху — консоль: что произошло и за какой раунд;
+ *   • ранг считается по славе через все партии;
+ *   • полностью играется клавиатурой (стрелки — по дорогам, Enter — удар,
+ *     пробел — следующий ход, 1…4 — прокачка).
  *
- * Бой считается честно: сила = армия * (1 + развитие/10) * бросок. Если
- * атака захлебнулась — теряешь половину войска, поэтому лезть без запаса
- * нельзя. Соседи тоже растут каждый ход, так что тянуть тоже нельзя.
- *
- * Цель — захватить все провинции за 30 ходов.
+ * Правила живут в europa/model.ts, здесь только отрисовка и состояние.
+ * Анимации сознательно дешёвые: transform и opacity, без blur и теней,
+ * чтобы режим не ронял FPS на слабом компьютере.
  */
 
-interface Prov {
-  id: number;
-  name: string;
-  x: number; y: number;         // 0..1 на карте
-  owner: "me" | "ai";
-  dev: number;                  // развитие: доход и оборона
-  army: number;
-  links: number[];
-  moved?: boolean;              // провинция уже наступала в этом ходу
+type Phase = "pick" | "count" | "play" | "battle" | "over";
+
+interface LogLine {
+  txt: string;
+  tone: "ok" | "bad" | "info";
+  turn: number;
 }
 
-const MAP: Omit<Prov, "owner" | "dev" | "army">[] = [
-  { id: 0, name: "ОБЩАГА", x: 0.5, y: 0.78, links: [1, 2, 3] },
-  { id: 1, name: "СТОЛОВАЯ", x: 0.22, y: 0.62, links: [0, 2, 4] },
-  { id: 2, name: "СПОРТЗАЛ", x: 0.78, y: 0.62, links: [0, 1, 5] },
-  { id: 3, name: "КУРИЛКА", x: 0.5, y: 0.5, links: [0, 4, 5, 6] },
-  { id: 4, name: "БИБЛИОТЕКА", x: 0.2, y: 0.36, links: [1, 3, 6] },
-  { id: 5, name: "МАСТЕРСКИЕ", x: 0.8, y: 0.36, links: [2, 3, 7] },
-  { id: 6, name: "АКТОВЫЙ ЗАЛ", x: 0.35, y: 0.18, links: [3, 4, 7] },
-  { id: 7, name: "ДЕКАНАТ", x: 0.68, y: 0.14, links: [5, 6] },
-];
-
-const MAX_TURNS = 30;
-
-/* Баланс подобран перебором (2000 партий на конфигурацию).
-   Раньше побеждал бездумный штурм: 94% против 2% у развития. Причина —
-   захват обнулял армию наступающего, поэтому копить смысла не было,
-   а качать развитие тем более. Теперь часть войска остаётся гарнизоном,
-   развитие даёт заметный доход, а провинция наступает раз в ход.
-   Итог: сбалансированная игра 50%, голый штурм 31%, отсидка 9%. */
-const GARRISON = 0.35;      // доля выживших, остающаяся в тылу
-const ATK_DEV = 0.12;       // вклад развития в атаку
-const DEF_DEV = 0.2;        // вклад развития в оборону
-const INC_BASE = 6;
-const INC_DEV = 9;          // доход с развития — смысл его качать
-/* Число атак за ход ограничено флагом moved: каждая провинция наступает один раз. */
-
-function freshProvs(): Prov[] {
-  return MAP.map((p) => ({
-    ...p,
-    owner: p.id === 0 ? "me" : "ai",
-    dev: p.id === 7 ? 4 : p.id === 0 ? 2 : 1 + Math.floor(Math.random() * 2),
-    army: p.id === 0 ? 12 : p.id === 7 ? 16 : 5 + Math.floor(Math.random() * 6),
-    moved: false,
-  }));
+interface Battle {
+  to: number;
+  froms: number[];
+  res: ReturnType<typeof fight>;
+  /** фаза: марш → столкновение → итог */
+  step: 0 | 1 | 2;
 }
 
 export default function Europa({ onExit }: { onExit: () => void }) {
-  const { s, addCoins, addXp, finishGame, questProgress } = useGame();
-  const [phase, setPhase] = useState<"count" | "play" | "over">("count");
+  const { s, set, addCoins, addXp, finishGame, questProgress } = useGame();
+  const [lv, setLv] = useState<Level>(LEVELS[1]);
+  const [phase, setPhase] = useState<Phase>("pick");
   const [cd, setCd] = useState(3);
-  const [provs, setProvs] = useState<Prov[]>(freshProvs);
-  const [gold, setGold] = useState(40);
+  const [provs, setProvs] = useState<Prov[]>(() => freshProvs(LEVELS[1]));
+  const [gold, setGold] = useState(44);
   const [turn, setTurn] = useState(1);
-  const [sel, setSel] = useState<number | null>(0);
+  const [sel, setSel] = useState<number | null>(null);
+  /** мои здания, отправленные в сегодняшний удар */
+  const [strike, setStrike] = useState<number[]>([]);
+  /** мастерские, подготовившие осаду: следующий удар игнорирует стены */
+  const [siege, setSiege] = useState<number[]>([]);
   const [score, setScore] = useState(0);
-  const [log, setLog] = useState<{ txt: string; ok: boolean }[]>([]);
+  const [taken, setTaken] = useState(0);
+  const [log, setLog] = useState<LogLine[]>([]);
+  const [battle, setBattle] = useState<Battle | null>(null);
+  const [banner, setBanner] = useState<{ round: number; inc: number } | null>(null);
   const [result, setResult] = useState({ score: 0, coins: 0, xp: 0 });
   const [won, setWon] = useState(false);
 
   const best = s.games.europa?.best || 0;
+  const unlocked = Math.max(1, s.games.europa?.prog || 1);
+  const glory = (s.games.europa?.totalScore || 0) + (s.games.europa?.mx || 0);
+  const rank = rankOf(glory);
+  const lowFx = isLowFx();
+
   const startT = useRef(Date.now());
   const ended = useRef(false);
   const scoreRef = useRef(0);
   scoreRef.current = score;
+  const takenRef = useRef(0);
+  takenRef.current = taken;
+  const turnRef = useRef(1);
+  turnRef.current = turn;
+
+  const mine = provs.filter((p) => p.owner === "me");
+  const selP = sel !== null ? provs.find((p) => p.id === sel) : undefined;
+
+  const say = useCallback((txt: string, tone: LogLine["tone"] = "info") => {
+    setLog((l) => [{ txt, tone, turn: turnRef.current }, ...l].slice(0, 7));
+  }, []);
 
   useEffect(() => {
     if (phase !== "count") return;
@@ -94,9 +103,15 @@ export default function Europa({ onExit }: { onExit: () => void }) {
     return () => clearTimeout(t);
   }, [phase, cd]);
 
-  const say = useCallback((txt: string, ok: boolean) => {
-    setLog((l) => [{ txt, ok }, ...l].slice(0, 4));
-  }, []);
+  const startLevel = (l: Level) => {
+    setLv(l);
+    setProvs(freshProvs(l));
+    setGold(l.gold);
+    setTurn(1); setSel(0); setStrike([]); setSiege([]);
+    setScore(0); setTaken(0); setLog([]); setBattle(null); setWon(false);
+    setCd(3); setPhase("count");
+    ended.current = false;
+  };
 
   const end = useCallback((victory: boolean, sc: number) => {
     if (ended.current) return;
@@ -112,443 +127,446 @@ export default function Europa({ onExit }: { onExit: () => void }) {
     addXp(xp);
     finishGame("europa", total, Date.now() - startT.current);
     questProgress("plays", 1);
-  }, [addCoins, addXp, finishGame, questProgress, s.prestige]);
-
-  const mine = provs.filter((p) => p.owner === "me");
-  const selP = sel !== null ? provs.find((p) => p.id === sel) : undefined;
-  /** Сколько провинций уже захвачено — показываем прогресс к победе */
-  const mineCount = provs.filter((p) => p.owner === "me").length;
-
-  /** Можно ли атаковать: есть моя соседняя провинция с войском */
-  const attackFrom = (target: Prov): Prov | undefined => {
-    const cands = target.links
-      .map((id) => provs.find((p) => p.id === id)!)
-      .filter((p) => p.owner === "me" && p.army > 1 && !p.moved);
-    return cands.sort((a, b) => b.army - a.army)[0];
-  };
-
-  const devCost = (p: Prov) => 18 + p.dev * 12;
-  const armyCost = 14;
-
-  const buyDev = () => {
-    if (!selP || selP.owner !== "me" || phase !== "play") return;
-    const cost = devCost(selP);
-    if (gold < cost) { sfx.error(); say(tr("Не хватает золота"), false); return; }
-    setGold((g) => g - cost);
-    setProvs((arr) => arr.map((p) => (p.id === selP.id ? { ...p, dev: p.dev + 1 } : p)));
-    setScore((v) => v + 30);
-    sfx.buy();
-    haptic("light");
-    say(`${tr(selP.name)}: ${tr("развитие")} +1`, true);
-  };
-
-  const buyArmy = () => {
-    if (!selP || selP.owner !== "me" || phase !== "play") return;
-    if (gold < armyCost) { sfx.error(); say(tr("Не хватает золота"), false); return; }
-    setGold((g) => g - armyCost);
-    setProvs((arr) => arr.map((p) => (p.id === selP.id ? { ...p, army: p.army + 4 } : p)));
-    sfx.buy();
-    haptic("light");
-  };
-
-  /** Атака: считаем силы честно, с броском */
-  const attack = () => {
-    if (!selP || selP.owner === "me" || phase !== "play") return;
-    const from = attackFrom(selP);
-    if (!from) { sfx.error(); say(tr("Некому наступать"), false); return; }
-
-    const atk = (from.army - 1) * (1 + from.dev * ATK_DEV) * (0.75 + Math.random() * 0.5);
-    const def = selP.army * (1 + selP.dev * DEF_DEV) * (0.8 + Math.random() * 0.4);
-
-    if (atk > def) {
-      const losses = Math.max(1, Math.round((from.army - 1) * (def / (atk + def))));
-      const surv = Math.max(1, from.army - 1 - losses);
-      // Часть войска остаётся гарнизоном, остальное занимает провинцию —
-      // иначе захват оставлял тыл пустым и наступать было невыгодно.
-      const keep = Math.max(1, Math.round(surv * GARRISON));
-      setProvs((arr) =>
-        arr.map((p) => {
-          if (p.id === from.id) return { ...p, army: keep, moved: true };
-          if (p.id === selP.id)
-            return { ...p, owner: "me", army: Math.max(1, surv - keep + 1), moved: true };
-          return p;
-        }),
-      );
-      setScore((v) => v + 180 + selP.dev * 40);
-      sfx.crit();
-      haptic("success");
-      say(`${tr(selP.name)} ${tr("взят")}`, true);
-    } else {
-      const losses = Math.round((from.army - 1) * 0.55);
-      setProvs((arr) =>
-        arr.map((p) =>
-          p.id === from.id ? { ...p, army: Math.max(1, p.army - losses), moved: true } : p,
-        ),
-      );
-      sfx.error();
-      haptic("error");
-      say(`${tr(selP.name)}: ${tr("отбились")}`, false);
+    // слава за кампанию: ранг растёт от неё, а не от одного удачного хода
+    set((d) => { d.games.europa.mx = (d.games.europa.mx || 0) + gloryFor(takenRef.current, turnRef.current, victory, lv.id); });
+    if (victory) {
+      set((d) => {
+        const cur = d.games.europa.prog || 1;
+        d.games.europa.prog = Math.min(LEVELS.length + 1, Math.max(cur, lv.id + 1));
+      });
     }
+  }, [addCoins, addXp, finishGame, questProgress, set, s.prestige, lv.id]);
+
+  /** все мои соседние здания, которые могут ударить по цели */
+  const attackersFor = useCallback((target: Prov): Prov[] => {
+    const pool = strike.length
+      ? provs.filter((p) => strike.includes(p.id) && p.owner === "me" && target.links.includes(p.id) && p.army > 1 && !p.moved)
+      : provs.filter((p) => p.owner === "me" && target.links.includes(p.id) && p.army > 1 && !p.moved);
+    return pool.sort((a, b) => strikePower([b]) - strikePower([a]));
+  }, [provs, strike]);
+
+  const froms = selP && selP.owner !== "me" ? attackersFor(selP) : [];
+  const siegeReady = froms.some((p) => siege.includes(p.id));
+  const vw: Verdict | null = selP && selP.owner !== "me" && froms.length
+    ? verdictFor(froms, selP, siegeReady)
+    : null;
+
+  /** чем мне угрожают соседи выбранного здания */
+  const threats = useMemo(() => {
+    if (!selP) return [];
+    return selP.links
+      .map((id) => provs.find((p) => p.id === id)!)
+      .filter((p) => p && p.owner !== "me" && p.army > 2)
+      .map((p) => ({ p, pow: Math.round(strikePower([p])), canHit: p.army - 1 > defensePower(selP, false) * 0.75 }))
+      .sort((a, b) => b.pow - a.pow)
+      .slice(0, 3);
+  }, [selP, provs]);
+
+  /* ─────────────── экономика хода ─────────────── */
+
+  const buy = (what: "dev" | "wall" | "barr" | "intel") => {
+    if (!selP || selP.owner !== "me" || phase !== "play") return;
+    const p = selP;
+    const cost =
+      what === "dev" ? devCost(p, provs)
+        : what === "wall" ? wallCost(p, provs)
+          : what === "barr" ? barrCost(p, provs)
+            : intelCost(p, provs);
+    const max = what === "dev" ? 8 : what === "wall" ? 6 : what === "barr" ? 5 : 4;
+    if (p[what] >= max) { sfx.error(); say(`${tr(p.name)}: ${tr("потолок")}`, "bad"); return; }
+    if (gold < cost) { sfx.error(); say(tr("Не хватает золота"), "bad"); return; }
+    setGold((g) => g - cost);
+    setProvs((arr) => arr.map((x) => (x.id === p.id ? { ...x, [what]: x[what] + 1 } : x)));
+    setScore((v) => v + 30);
+    sfx.buy(); haptic("light");
+    say(`${tr(p.name)} · ${tr(UP[what].name)} ${p[what] + 1}`, "ok");
   };
 
-  /** Конец хода: доход, рост ИИ, возможная контратака */
+  const recruit = (n: number) => {
+    if (!selP || selP.owner !== "me" || phase !== "play") return;
+    const p = selP;
+    const room = cap(p) - p.army;
+    const want = n === 0 ? room : Math.min(n, room);
+    if (want <= 0) { sfx.error(); say(`${tr(p.name)}: ${tr("казармы забиты")}`, "bad"); return; }
+    const unit = armyCost(p, provs);
+    let cnt = 0;
+    while (cnt < want && gold - cnt * unit >= unit) cnt++;
+    if (cnt <= 0) { sfx.error(); say(tr("Не хватает золота"), "bad"); return; }
+    setGold((g) => g - cnt * unit);
+    setProvs((arr) => arr.map((x) => (x.id === p.id ? { ...x, army: x.army + cnt } : x)));
+    sfx.buy(); haptic("light");
+    say(`${tr(p.name)}: +${cnt} ${tr(KIND[p.kind].troop)}`, "ok");
+  };
+
+  const doSpecial = () => {
+    if (!selP || selP.owner !== "me" || phase !== "play") return;
+    const k = kindOf(selP.kind);
+    if (!k.action) return;
+    if (selP.used) { sfx.error(); say(`${tr(p_used(selP))}`, "bad"); return; }
+    const cost = k.action === "agitate" ? 45 : k.action === "reinforce" ? 30 : 24;
+    if (gold < cost) { sfx.error(); say(tr("Не хватает золота"), "bad"); return; }
+
+    const neighbors = selP.links.map((id) => provs.find((p) => p.id === id)!).filter(Boolean);
+
+    if (k.action === "siege") {
+      setGold((g) => g - cost);
+      setSiege((arr) => (arr.includes(selP.id) ? arr : [...arr, selP.id]));
+      setProvs((arr) => arr.map((x) => (x.id === selP.id ? { ...x, used: true } : x)));
+      sfx.tap(); say(`${tr(selP.name)}: ${tr("осадные телеги готовы")}`, "ok");
+      return;
+    }
+    if (k.action === "sabotage") {
+      const tgt = sabotageable(provs, selP);
+      if (!tgt) { sfx.error(); say(tr("Курить не на кого"), "bad"); return; }
+      setGold((g) => g - cost);
+      setProvs((arr) => arr.map((x) =>
+        x.id === tgt.id ? { ...x, army: Math.max(1, x.army - 2), wall: Math.max(0, x.wall - 1) } : x.id === selP.id ? { ...x, used: true } : x));
+      sfx.crit(); say(`${tr(tgt.name)}: ${tr("дымовуха")} −2 ${tr("войска")} −1 ${tr("стена")}`, "ok");
+      return;
+    }
+    if (k.action === "agitate") {
+      const tgt = neighbors.find((x) => x.owner === "ai" && x.army <= 3 + selP.intel * 2);
+      if (!tgt) { sfx.error(); say(tr("Переманить некого: или сильны, или свои"), "bad"); return; }
+      setGold((g) => g - cost);
+      setProvs((arr) => arr.map((x) => x.id === tgt.id ? { ...x, owner: "me", moved: true } : x.id === selP.id ? { ...x, used: true } : x));
+      setTaken((v) => v + 1);
+      setScore((v) => v + 140);
+      sfx.legend(); haptic("success");
+      say(`${tr(tgt.name)}: ${tr("перешли на нашу сторону")}`, "ok");
+      return;
+    }
+    // reinforce: кухня и качалка кормят соседей
+    const help = neighbors.filter((x) => x.owner === "me");
+    if (!help.length) { sfx.error(); say(tr("Своих рядом нет"), "bad"); return; }
+    setGold((g) => g - cost);
+    setProvs((arr) => arr.map((x) => {
+      if (x.id === selP.id) return { ...x, used: true };
+      if (help.some((h) => h.id === x.id)) return { ...x, army: Math.min(cap(x), x.army + 3) };
+      return x;
+    }));
+    sfx.buy();
+    say(`${tr(selP.name)}: ${tr("подкормили")} ${help.length} × +3`, "ok");
+  };
+
+  /* ──────────────── удар ──────────────── */
+
+  const attack = () => {
+    if (phase !== "play" || !selP || selP.owner === "me") return;
+    if (!froms.length) { sfx.error(); say(tr("Некому наступать"), "bad"); return; }
+    const target = selP;
+    const srcs = froms;
+    const res = fight(srcs, target, siegeReady);
+    setBattle({ to: target.id, froms: srcs.map((p) => p.id), res, step: 0 });
+    setPhase("battle");
+    sfx.tap();
+    haptic("medium");
+  };
+
+  /* шаги анимации боя: марш → столкновение → итог */
+  useEffect(() => {
+    if (!battle) return;
+    const t1 = window.setTimeout(() => setBattle((b) => (b ? { ...b, step: 1 } : b)), lowFx ? 60 : 620);
+    const t2 = window.setTimeout(() => setBattle((b) => (b ? { ...b, step: 2 } : b)), lowFx ? 90 : 980);
+    const t3 = window.setTimeout(() => {
+      const { to, froms: ids, res } = battle;
+      /*
+       * Итоги боя. Каждый, кто шёл в атаку, получает обратно свою долю
+       * вернувшихся — иначе два здания, собравшиеся в один удар, забирали
+       * бы разное: сильнейший молча терял бы всё, слабый ничего.
+       */
+      const obj = provs.find((p) => p.id === to);
+      /*
+       * Итог исполняет модель: доля потерь каждому, кто шёл в удар, гарнизон
+       * победителю, разбитые стены. У ИИ ровно этот же код — иначе «честный
+       * размен» был бы словами.
+       */
+      setProvs((arr) => {
+        const next = arr.map((p) => ({ ...p }));
+        applyBattleResult(next, ids, to, res);
+        return next;
+      });
+      if (res.win) {
+        setTaken((v) => v + 1);
+        setScore((v) => v + 180 + (obj?.dev || 1) * 40);
+        sfx.crit(); haptic("success");
+        say(`${tr(obj?.name || "")} ${tr("взят")} · −${res.lostMine} ${tr("казны")} +${income({ ...p0(obj), dev: (obj?.dev || 1) + 1 })}`, "ok");
+      } else {
+        sfx.error(); haptic("error");
+        say(`${tr(obj?.name || "")}: ${tr("отбились")} · −${res.lostMine}`, "bad");
+      }
+      setStrike([]);
+      setBattle(null);
+      setPhase((ph) => (ph === "battle" ? "play" : ph));
+      // победа может наступить прямо от захвата
+      window.setTimeout(() => {
+        setProvs((cur) => {
+          const c = cur.filter((p) => p.owner === "me").length;
+          if (c === cur.length) end(true, scoreRef.current);
+          return cur;
+        });
+      }, 30);
+    }, lowFx ? 140 : 2300);
+    return () => { window.clearTimeout(t1); window.clearTimeout(t2); window.clearTimeout(t3); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [battle]);
+
+  /* ──────────────── следующий ход ──────────────── */
+
   const nextTurn = () => {
     if (phase !== "play") return;
     sfx.tap();
-
-    const income = mine.reduce((a, p) => a + INC_BASE + p.dev * INC_DEV, 0);
-    setGold((g) => g + income);
+    const inc = mine.reduce((a, p) => a + income(p), 0);
+    setGold((g) => g + inc);
     setScore((v) => v + mine.length * 12);
+    say(`${tr("казна")} +${inc} · ${tr("зданий")} ${mine.length}/${provs.length}`, "info");
 
     setProvs((arr) => {
-      const next = arr.map((p) => ({ ...p, moved: false }));
-      // ИИ усиливается, приоритет — пограничные провинции
-      for (const p of next) {
-        if (p.owner !== "ai") continue;
-        const border = p.links.some((id) => next.find((x) => x.id === id)?.owner === "me");
-        p.army += border ? 3 : 1;
-        if (Math.random() < 0.2) p.dev += 1;
-      }
-      // контратака ИИ на слабое место
-      const targets = next.filter(
-        (p) => p.owner === "me" && p.links.some((id) => next.find((x) => x.id === id)?.owner === "ai"),
-      );
-      if (targets.length) {
-        const t = targets.sort((a, b) => a.army - b.army)[0];
-        const src = t.links
-          .map((id) => next.find((x) => x.id === id)!)
-          .filter((p) => p.owner === "ai")
-          .sort((a, b) => b.army - a.army)[0];
-        if (src && src.army > t.army * 1.4) {
-          const a = (src.army - 1) * (0.8 + Math.random() * 0.4);
-          const d = t.army * (1 + t.dev * DEF_DEV) * (0.85 + Math.random() * 0.4);
-          if (a > d) {
-            t.owner = "ai";
-            t.army = Math.max(1, Math.round(src.army * 0.4));
-            src.army = Math.max(1, Math.round(src.army * 0.5));
-            say(`${tr(t.name)}: ${tr("потерян")}`, false);
-            haptic("error");
-          } else {
-            src.army = Math.max(1, Math.round(src.army * 0.6));
-            say(`${tr(t.name)}: ${tr("атака отбита")}`, true);
-          }
-        }
+      const next = arr.map((p) => ({ ...p, moved: false, used: false }));
+      const mv = aiTurn(next, lv.aiPower, lv.aiAggro);
+      if (mv) {
+        const from = next.find((p) => p.id === mv.from)!;
+        const to = next.find((p) => p.id === mv.to)!;
+        say(`${tr(to.name)}: ${tr("атаковал")} ${tr(from.name)}`, "bad");
+        haptic("error");
       }
       return next;
     });
 
     const nt = turn + 1;
     setTurn(nt);
+    setBanner({ round: nt, inc });
+    window.setTimeout(() => setBanner(null), 1500);
+    // телеги куплены — они с нами до конца уровня; сбрасываем только очередь удара
+    setStrike([]);
 
-    setTimeout(() => {
+    window.setTimeout(() => {
       setProvs((cur) => {
-        const myCount = cur.filter((p) => p.owner === "me").length;
-        if (myCount === 0) end(false, scoreRef.current);
-        else if (myCount === cur.length) end(true, scoreRef.current);
-        else if (nt > MAX_TURNS) end(false, scoreRef.current);
+        const c = cur.filter((p) => p.owner === "me").length;
+        if (c === 0) end(false, scoreRef.current);
+        else if (c === cur.length) end(true, scoreRef.current);
+        else if (nt > lv.turns) end(false, scoreRef.current);
         return cur;
       });
-    }, 50);
+    }, 80);
   };
 
-  const restart = () => {
-    ended.current = false;
-    setProvs(freshProvs()); setGold(40); setTurn(1); setSel(0);
-    setScore(0); setLog([]); setWon(false); setCd(3); setPhase("count");
+  /* ──────────────── клавиатура ──────────────── */
+
+  useEffect(() => {
+    if (phase === "pick" || phase === "over") return;
+    const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null;
+      if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA")) return;
+      /* Ходить по дорогам можно клавишами из настроек («Клавиши управления в
+         играх»): стрелки работают всегда, а WASD — это только значение по
+         умолчанию. Французская раскладка или цифровой блок — те же права. */
+      const dir: Record<string, [number, number]> = {};
+      for (const [act, vec] of [["up", [0, -1]], ["down", [0, 1]], ["left", [-1, 0]], ["right", [1, 0]]] as const) {
+        for (const code of codesFor(act)) dir[code] = vec as [number, number];
+      }
+      if (dir[e.code]) {
+        e.preventDefault();
+        stepSel(dir[e.code]);
+        return;
+      }
+      if (e.code === "Space") { e.preventDefault(); nextTurn(); return; }
+      if (e.key === "Enter") {
+        e.preventDefault();
+        if (selP && selP.owner !== "me") attack();
+        else if (selP) toggleStrike(selP.id);
+        return;
+      }
+      if (e.key === "q" || e.key === "Q" || e.key === "й" || e.key === "Й") {
+        if (selP) { toggleStrike(selP.id); }
+        return;
+      }
+      if (e.key === "x" || e.key === "X" || e.key === "ч" || e.key === "Ч") { doSpecial(); return; }
+      const n = Number(e.key);
+      if (n >= 1 && n <= 4) { buy((["dev", "wall", "barr", "intel"] as const)[n - 1]); return; }
+      if (e.key === "5") { recruit(3); return; }
+      if (e.key === "6") { recruit(0); return; }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  });
+
+  /** стрелка уводит выбор в соседнее здание в указанном направлении */
+  const stepSel = ([dx, dy]: [number, number]) => {
+    setSel((cur) => {
+      const from = cur === null ? null : provs.find((p) => p.id === cur);
+      if (!from) return 0;
+      let bestId = from.id;
+      let bestDot = -2;
+      for (const id of from.links) {
+        const q = provs.find((p) => p.id === id)!;
+        const vx = q.x - from.x, vy = q.y - from.y;
+        const len = Math.hypot(vx, vy) || 1;
+        const dot = (vx / len) * dx + (vy / len) * dy;
+        if (dot > bestDot) { bestDot = dot; bestId = id; }
+      }
+      return bestDot > 0.1 ? bestId : cur;
+    });
   };
+
+  const toggleStrike = (id: number) => {
+    const p = provs.find((x) => x.id === id);
+    if (!p || p.owner !== "me") return;
+    setStrike((arr) => (arr.includes(id) ? arr.filter((x) => x !== id) : [...arr, id]));
+    sfx.click();
+  };
+
+  /* ──────────────── отрисовка ──────────────── */
+
+  if (phase === "pick") {
+    return (
+      <LevelPick
+        unlocked={unlocked}
+        rank={rank}
+        glory={glory}
+        onStart={startLevel}
+        onExit={onExit}
+      />
+    );
+  }
 
   return (
-    <div className="absolute inset-0 flex flex-col" style={{ background: "var(--bg)" }}>
-      <GameHUD score={score} best={best} onExit={onExit} label={tr("ОЧКИ")}
+    <div className="eu-root absolute inset-0 flex flex-col" style={{ background: "var(--bg)" }}>
+      <GameHUD
+        score={score}
+        best={best}
+        onExit={() => { setPhase("pick"); onExit(); }}
+        label={tr("ОЧКИ")}
         extra={
           <>
             <HudStat label={tr("ЗОЛОТО")} value={gold} tone="warn" min={48} />
-            <HudStat label={tr("ХОД")} value={`${turn}/${MAX_TURNS}`} min={48} />
+            <HudStat label={tr("РАУНД")} value={`${turn}/${lv.turns}`} min={52} />
+            <HudStat label={tr("ЗДАНИЙ")} value={`${mine.length}/${provs.length}`} min={52} />
           </>
         }
       />
 
-      <div
-        className="flex-1 flex flex-col overflow-y-auto"
-        style={{ padding: "calc(var(--sat) + 74px) 14px calc(var(--sab) + 26px)" }}
-      >
-        {/* карта */}
-        <div
-          style={{
-            position: "relative", width: "100%", aspectRatio: "1 / 1.05",
-            borderRadius: "var(--r-lg)", background: "var(--surface)",
-            border: "1px solid var(--surface-brd)", overflow: "hidden",
-            marginBottom: 12,
-          }}
-        >
-          {/* связи */}
-          <svg
-            viewBox="0 0 100 105"
-            preserveAspectRatio="none"
-            style={{ position: "absolute", inset: 0, width: "100%", height: "100%" }}
-          >
-            <defs>
-              {/* наконечник для стрелок наступления */}
-              <marker
-                id="eu-arrow" viewBox="0 0 10 10" refX="9" refY="5"
-                markerWidth="4" markerHeight="4" orient="auto-start-reverse"
-              >
-                <path d="M0 0 L10 5 L0 10 z" fill="#ff6b4d" />
-              </marker>
-            </defs>
-
-            {/*
-              Дороги между провинциями. Пользователь жаловался, что
-              «непонятно направление движения»: раньше все связи были
-              одинаковыми серыми палочками. Теперь дорога, по которой
-              МОЖНО наступать прямо сейчас (моя провинция с войском ->
-              соседняя чужая), рисуется красной стрелкой С НАКОНЕЧНИКОМ,
-              показывающим, куда пойдёт удар.
-            */}
-            {MAP.flatMap((p) =>
-              p.links
-                .filter((id) => id > p.id)
-                .map((id) => {
-                  const q = MAP.find((x) => x.id === id)!;
-                  const pp = provs.find((x) => x.id === p.id);
-                  const qq = provs.find((x) => x.id === id);
-                  if (!pp || !qq) return null;
-                  // в какую сторону возможно наступление по этой дороге
-                  const pToQ = pp.owner === "me" && qq.owner === "ai" && pp.army > 1 && !pp.moved;
-                  const qToP = qq.owner === "me" && pp.owner === "ai" && qq.army > 1 && !qq.moved;
-                  const live = pToQ || qToP;
-                  // стрелка всегда от моей провинции к чужой
-                  const a = pToQ ? p : q;
-                  const b = pToQ ? q : p;
-                  return (
-                    <line
-                      key={`${p.id}-${id}`}
-                      x1={a.x * 100} y1={a.y * 105}
-                      x2={b.x * 100} y2={b.y * 105}
-                      stroke={live ? "#ff6b4d" : "var(--surface-brd)"}
-                      strokeWidth={live ? "0.9" : "0.5"}
-                      strokeDasharray={live ? "2 1.4" : undefined}
-                      markerEnd={live ? "url(#eu-arrow)" : undefined}
-                      opacity={live ? 0.9 : 1}
-                    />
-                  );
-                }),
-            )}
-          </svg>
-
-          {provs.map((p) => {
-            const isMine = p.owner === "me";
-            const active = sel === p.id;
-            return (
-              <button
+      <div className="eu-stage">
+        {/* ── карта ── */}
+        <div className="eu-map">
+          <div className="eu-map-inner" style={{ aspectRatio: "1 / 1.02" }}>
+            <Roads provs={provs} battle={battle} strike={strike} froms={froms} selId={sel} />
+            {provs.map((p) => (
+              <MapNode
                 key={p.id}
-                type="button"
-                onClick={() => { setSel(p.id); sfx.tap(); }}
-                style={{
-                  position: "absolute",
-                  left: `${p.x * 100}%`, top: `${p.y * 100}%`,
-                  transform: "translate(-50%, -50%)",
-                  padding: "7px 9px", minWidth: 66,
-                  borderRadius: "var(--r-sm)",
-                  background: isMine ? "rgba(89,255,158,0.16)" : "rgba(255,107,77,0.14)",
-                  border: `1.5px solid ${
-                    active ? "#fff" : isMine ? "rgba(89,255,158,0.6)" : "rgba(255,107,77,0.5)"
-                  }`,
-                  textAlign: "center",
-                }}
-              >
-                <div
-                  className="t-label clip1"
-                  style={{ fontSize: 7.5, color: isMine ? "var(--ok)" : "var(--danger)" }}
-                >
-                  {tr(p.name)}
-                </div>
-                {/*
-                  Значки с расшифровкой. Раньше на фишке было голое число
-                  и безымянные точки — пользователь не понимал, что это.
-                  Теперь: щит = войско, звёздочка = развитие.
-                */}
-                <div className="flex items-center justify-center" style={{ gap: 3, marginTop: 3 }}>
-                  <span style={{ color: "var(--text-mute)", lineHeight: 0 }}>
-                    <Icon name="shield" size={8} />
-                  </span>
-                  <span className="t-num" style={{ fontSize: 11 }}>{p.army}</span>
-                </div>
-                <div className="flex items-center justify-center" style={{ gap: 3, marginTop: 1 }}>
-                  <span style={{ color: "var(--gold)", lineHeight: 0 }}>
-                    <Icon name="sparkle" size={7} />
-                  </span>
-                  <span className="t-num" style={{ fontSize: 9, color: "var(--gold)" }}>{p.dev}</span>
-                </div>
-              </button>
-            );
-          })}
-        </div>
-
-        {/*
-          ЛЕГЕНДА И ЗАДАЧА. Жалоба: «непонятно что делать, значки,
-          направление движения». Держим короткую расшифровку прямо под
-          картой, чтобы не лезть в правила.
-        */}
-        <div
-          style={{
-            padding: "10px 12px", borderRadius: "var(--r-md)",
-            background: "var(--surface)", border: "1px solid var(--surface-brd)",
-            marginBottom: 10,
-          }}
-        >
-          <div className="t-caption" style={{ fontSize: 10.5, lineHeight: 1.4, marginBottom: 8 }}>
-            {mineCount === MAP.length
-              ? tr("Все провинции твои")
-              : sel === null
-                ? tr("Ткни в провинцию на карте: зелёная — твоя, красная — чужая")
-                : selP && selP.owner === "me"
-                  ? tr("Своя провинция: докупи войско или развитие, они тратят золото")
-                  : tr("Чужая провинция: жми НАПАСТЬ, удар пойдёт по красной стрелке")}
-          </div>
-          <div className="flex items-center flex-wrap" style={{ gap: 10 }}>
-            <span className="flex items-center" style={{ gap: 4 }}>
-              <span style={{ color: "var(--text-mute)", lineHeight: 0 }}><Icon name="shield" size={9} /></span>
-              <span className="t-caption" style={{ fontSize: 9 }}>{tr("войско")}</span>
-            </span>
-            <span className="flex items-center" style={{ gap: 4 }}>
-              <span style={{ color: "var(--gold)", lineHeight: 0 }}><Icon name="sparkle" size={9} /></span>
-              <span className="t-caption" style={{ fontSize: 9 }}>{tr("развитие")}</span>
-            </span>
-            <span className="flex items-center" style={{ gap: 4 }}>
-              <span style={{ width: 12, height: 2, background: "#ff6b4d", display: "block" }} />
-              <span className="t-caption" style={{ fontSize: 9 }}>{tr("куда можно напасть")}</span>
-            </span>
-            <span className="flex items-center" style={{ gap: 4 }}>
-              <span className="t-num" style={{ fontSize: 9, color: "var(--ok)" }}>{mineCount}</span>
-              <span className="t-caption" style={{ fontSize: 9 }}>/ {MAP.length} {tr("провинций")}</span>
-            </span>
-          </div>
-        </div>
-
-        {/* панель провинции */}
-        {selP && (
-          <div
-            style={{
-              padding: "12px 13px", borderRadius: "var(--r-md)",
-              background: "var(--surface)", border: "1px solid var(--surface-brd)",
-              marginBottom: 10,
-            }}
-          >
-            <div className="flex items-center" style={{ gap: 8, marginBottom: 10 }}>
-              <span className="t-body clip1 flex-1" style={{ fontSize: 12.5 }}>{tr(selP.name)}</span>
-              <span
-                className="t-label shrink-0"
-                style={{
-                  fontSize: 8, padding: "3px 8px", borderRadius: 999,
-                  background: selP.owner === "me" ? "rgba(89,255,158,0.14)" : "rgba(255,107,77,0.14)",
-                  color: selP.owner === "me" ? "var(--ok)" : "var(--danger)",
-                }}
-              >
-                {selP.owner === "me" ? tr("МОЯ") : tr("ЧУЖАЯ")}
-              </span>
-            </div>
-
-            <div className="flex" style={{ gap: 14, marginBottom: 11 }}>
-              <span className="t-caption" style={{ color: "var(--text-mute)" }}>
-                {tr("войско")} {selP.army}
-              </span>
-              <span className="t-caption" style={{ color: "var(--text-mute)" }}>
-                {tr("развитие")} {selP.dev}
-              </span>
-              <span className="t-caption" style={{ color: "var(--text-mute)" }}>
-                {tr("доход")} {INC_BASE + selP.dev * INC_DEV}
-              </span>
-            </div>
-
-            {selP.owner === "me" ? (
-              <div className="flex" style={{ gap: 8 }}>
-                <button
-                  type="button"
-                  onClick={buyArmy}
-                  disabled={gold < armyCost}
-                  className="t-label"
-                  style={{
-                    flex: 1, padding: "11px 8px", borderRadius: "var(--r-sm)",
-                    background: "var(--btn-bg)", border: "1px solid var(--btn-brd)",
-                    color: "var(--text)", fontSize: 9,
-                    opacity: gold < armyCost ? 0.4 : 1,
-                  }}
-                >
-                  +4 {tr("ВОЙСКА")} · {armyCost}
-                </button>
-                <button
-                  type="button"
-                  onClick={buyDev}
-                  disabled={gold < devCost(selP)}
-                  className="t-label"
-                  style={{
-                    flex: 1, padding: "11px 8px", borderRadius: "var(--r-sm)",
-                    background: "var(--btn-bg)", border: "1px solid var(--btn-brd)",
-                    color: "var(--text)", fontSize: 9,
-                    opacity: gold < devCost(selP) ? 0.4 : 1,
-                  }}
-                >
-                  +1 {tr("РАЗВИТИЕ")} · {devCost(selP)}
-                </button>
-              </div>
-            ) : (
-              <button
-                type="button"
-                onClick={attack}
-                disabled={!attackFrom(selP)}
-                className="t-label"
-                style={{
-                  width: "100%", padding: "12px 8px", borderRadius: "var(--r-sm)",
-                  background: attackFrom(selP) ? "var(--danger)" : "var(--btn-bg)",
-                  border: `1px solid ${attackFrom(selP) ? "var(--danger)" : "var(--btn-brd)"}`,
-                  color: attackFrom(selP) ? "#0b0b0e" : "var(--text-mute)", fontSize: 9.5,
-                  opacity: attackFrom(selP) ? 1 : 0.5,
-                }}
-              >
-                {attackFrom(selP)
-                  ? `${tr("НАПАСТЬ ИЗ")} ${tr(attackFrom(selP)!.name)}`
-                  : tr("НЕТ СОСЕДНЕЙ АРМИИ")}
-              </button>
-            )}
-          </div>
-        )}
-
-        {/* лог */}
-        {log.length > 0 && (
-          <div className="flex flex-col" style={{ gap: 5, marginBottom: 10 }}>
-            {log.map((l, i) => (
-              <div
-                key={i}
-                className="t-caption clip1"
-                style={{
-                  padding: "7px 10px", borderRadius: "var(--r-sm)",
-                  background: "var(--surface)",
-                  color: l.ok ? "var(--ok)" : "var(--danger)",
-                  opacity: 1 - i * 0.18,
-                }}
-              >
-                {l.txt}
-              </div>
+                p={p}
+                active={sel === p.id}
+                queued={strike.includes(p.id)}
+                siegeReady={siege.includes(p.id)}
+                target={!!battle && battle.to === p.id}
+                onPick={() => { setSel(p.id); sfx.tap(); haptic("light"); }}
+                onQueue={() => toggleStrike(p.id)}
+              />
             ))}
-          </div>
-        )}
 
-        <motion.button
-          type="button"
-          whileTap={{ scale: 0.97 }}
-          onClick={nextTurn}
-          className="t-label"
-          style={{
-            width: "100%", padding: "15px 8px", borderRadius: "var(--r-md)",
-            background: "var(--acc)", border: "1px solid var(--acc)",
-            color: "var(--acc-ink)", fontSize: 10.5, marginTop: "auto",
-            display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-          }}
-        >
+            {battle && <BattleMark battle={battle} provs={provs} step={battle.step} lowFx={lowFx} />}
+
+            {/* консоль событий — слева сверху, как просят */}
+            <div className="eu-console">
+              {log.map((l, i) => (
+                <div key={`${l.turn}-${i}`} className={`eu-line eu-${l.tone}`} style={{ opacity: 1 - i * 0.13 }}>
+                  <b>Х{String(l.turn).padStart(2, "0")}</b> {l.txt}
+                </div>
+              ))}
+            </div>
+
+            {/* легенда значков — слева снизу, чтобы не лезть в правила */}
+            <div className="eu-hints">
+              <span><i className="dot me" /> {tr("твоё")}</span>
+              <span><i className="dot enemy" /> {tr("чужое")}</span>
+              <span><i className="dot ntrl" /> {tr("нейтралы")}</span>
+              <span><Icon name="shield" size={9} /> {tr("войско")}</span>
+              <span><Icon name="brain" size={9} /> {tr("умники: разведка")}</span>
+              <span><Icon name="lock" size={9} /> {tr("стены")}</span>
+              <span><i className="ln live" /> {tr("можно ударить")}</span>
+              <span><i className="ring" /> {tr("в ударе")}</span>
+            </div>
+
+            <AnimatePresence>
+              {banner && (
+                <motion.div
+                  className="eu-banner"
+                  initial={{ opacity: 0, y: lowFx ? 0 : 10, scale: lowFx ? 1 : 0.94 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, scale: lowFx ? 1 : 1.04 }}
+                  transition={{ duration: lowFx ? 0.01 : 0.22 }}
+                >
+                  <div className="t-display eu-banner-n">{tr("РАУНД")} {banner.round}</div>
+                  <div className="t-label eu-banner-sub">
+                    +{banner.inc} {tr("казны")} · {tr("зданий")} {mine.length}/{provs.length}
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        </div>
+
+        {/* ── панель справа: прокачка, наём, инфо, угроза ── */}
+        <AnimatePresence>
+          {selP && (
+            <motion.aside
+              key={selP.id}
+              className="eu-side"
+              initial={{ opacity: 0, x: lowFx ? 0 : 22 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: lowFx ? 0 : 16 }}
+              transition={{ duration: lowFx ? 0.01 : 0.2, ease: "easeOut" }}
+            >
+              <SidePanel
+                p={selP}
+                provs={provs}
+                gold={gold}
+                onBuy={buy}
+                onRecruit={recruit}
+                onSpecial={doSpecial}
+                onToggleStrike={() => toggleStrike(selP.id)}
+                queued={strike.includes(selP.id)}
+                onAttack={attack}
+                froms={froms}
+                vw={vw}
+                threats={threats}
+                siegeReady={siegeReady}
+                play={phase === "play"}
+              />
+            </motion.aside>
+          )}
+        </AnimatePresence>
+      </div>
+
+      {/* ── нижняя строка: сводка удара и следующий ход ── */}
+      <div className="eu-foot">
+        <div className="eu-foot-left">
+          {strike.length > 0 ? (
+            <div className="eu-strike">
+              <span className="t-label">{tr("В УДАРЕ")}</span>
+              {strike.map((id) => {
+                const p = provs.find((x) => x.id === id);
+                if (!p) return null;
+                return (
+                  <button key={id} type="button" className="eu-chip" onClick={() => toggleStrike(id)}>
+                    {tr(p.name)} · {p.army - 1}
+                    <Icon name="cross" size={9} />
+                  </button>
+                );
+              })}
+              <span className="t-caption" style={{ fontSize: 9 }}>
+                {tr("сила")} {Math.round(strikePower(froms)) || Math.round(strikePower(provs.filter((p) => strike.includes(p.id))))}
+              </span>
+            </div>
+          ) : (
+            <div className="t-caption" style={{ fontSize: 9.5 }}>
+              {tr("Shift+клик по своему зданию — отправить его в общий удар")}
+            </div>
+          )}
+        </div>
+        <button type="button" className="eu-next" onClick={nextTurn} disabled={phase !== "play"}>
           <Icon name="chevron" size={13} />
-          {tr("СЛЕДУЮЩИЙ ХОД")} · +{mine.reduce((a, p) => a + INC_BASE + p.dev * INC_DEV, 0)}
-        </motion.button>
+          {tr("СЛЕДУЮЩИЙ РАУНД")} · +{mine.reduce((a, p) => a + income(p), 0)}
+        </button>
       </div>
 
       <AnimatePresence>{phase === "count" && <Countdown n={cd} />}</AnimatePresence>
@@ -559,12 +577,440 @@ export default function Europa({ onExit }: { onExit: () => void }) {
           best={best}
           coins={result.coins}
           xp={result.xp}
-          onRetry={restart}
+          onRetry={() => startLevel(lv)}
           onExit={onExit}
-          title={won ? tr("ВЕСЬ КОЛЛЕДЖ ТВОЙ") : tr("КАМПАНИЯ ПРОВАЛЕНА")}
-          sub={won ? tr("Деканат пал последним") : tr("Ходы кончились")}
+          title={won ? `${tr("УРОВЕНЬ")} ${lv.id}: ${tr("КОЛЛЕДЖ ТВОЙ")}` : tr("КАМПАНИЯ ПРОВАЛЕНА")}
+          sub={won
+            ? `${tr("ранг")}: ${rank.rank.name} · ${taken} ${tr("зданий взято")}`
+            : turn > lv.turns ? tr("Раунды кончились") : tr("Общага потеряна")}
         />
       )}
+    </div>
+  );
+}
+
+/* ═══════════════════════════ ветки прокачки ═══════════════════════════ */
+
+/** доход здания сразу после захвата — для строки в консоли */
+function p0(obj: Prov | undefined): Prov {
+  return obj || { id: -1, name: "", kind: "dorm", x: 0, y: 0, owner: "me", dev: 0, wall: 0, barr: 0, intel: 0, army: 1, links: [], moved: false, used: false };
+}
+
+const UP = {
+  dev: { name: "РАЗВИТИЕ", icon: "sparkle" as const, hint: "доход и немного обороны" },
+  wall: { name: "СТЕНЫ", icon: "lock" as const, hint: "режут входящий удар" },
+  barr: { name: "КАЗАРМЫ", icon: "home" as const, hint: "больше войска и дешевле" },
+  intel: { name: "РАЗВЕДКА", icon: "eye" as const, hint: "точный прогноз и +шанс" },
+};
+
+/** чем здание полезно спецдействием — одна строка в панель */
+function specialName(k: Kind): string {
+  const a = KIND[k].action;
+  if (a === "siege") return "ОСАДА — следующий удар игнорирует стены";
+  if (a === "agitate") return "АГИТАЦИЯ — переманить слабого соседа";
+  if (a === "sabotage") return "САБОТАЖ — соседу −2 войска и −1 стена";
+  if (a === "reinforce") return "ПОДКОРМКА — соседним своим +3 войска";
+  return "";
+}
+
+function p_used(p: Prov): string {
+  return `${p.name}: действие уже использовано в этом раунде`;
+}
+
+
+
+/* ═══════════════════════════ части интерфейса ═══════════════════════════ */
+
+function Roads({ provs, battle, strike, froms, selId }: {
+  provs: Prov[]; battle: Battle | null; strike: number[];
+  froms: Prov[]; selId: number | null;
+}) {
+  const lines: ReactElement[] = [];
+  const seen = new Set<string>();
+  for (const p of provs) {
+    for (const id of p.links) {
+      if (id < p.id) continue;
+      const key = `${p.id}-${id}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const q = provs.find((x) => x.id === id);
+      if (!q) continue;
+      const meToThem = (p.owner === "me" && q.owner !== "me") || (q.owner === "me" && p.owner !== "me");
+      /* «живая» дорога — та, по которой от выбранного здания можно идти в бой:
+         от моего соседа к цели и наоборот. Стрелка на конце обязательна: без
+         неё линия «мой ↔ чужой» читается как «мы allied». */
+      const canGo = (x: Prov) => x.owner === "me" && x.army > 1 && !x.moved;
+      const live = meToThem && !battle && (
+        (canGo(p) && q.id === selId) || (canGo(q) && p.id === selId)
+      );
+      // дорога уже заявленного в общий удар здания — отдельная, плотная
+      const queued = meToThem && !battle && selId !== null && (
+        (strike.includes(p.id) && q.id === selId) || (strike.includes(q.id) && p.id === selId)
+      );
+      const attacking = !!battle && ((battle.froms.includes(p.id) && battle.to === id) || (battle.froms.includes(q.id) && battle.to === p.id));
+      const mineEdge = p.owner === "me" && q.owner === "me" && (froms.some((f) => f.id === p.id) || froms.some((f) => f.id === q.id));
+      const a = p.owner === "me" ? p : q;
+      const b = p.owner === "me" ? q : p;
+      lines.push(
+        <line
+          key={key}
+          x1={a.x * 100} y1={a.y * 100} x2={b.x * 100} y2={b.y * 100}
+          className={`eu-road${live ? " live" : ""}${queued ? " queued" : ""}${attacking ? " war" : ""}${mineEdge ? " union" : ""}`}
+          markerEnd={live || queued || attacking ? "url(#eu-arrow)" : undefined}
+        />,
+      );
+    }
+  }
+  return (
+    <svg className="eu-svg" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden>
+      <defs>
+        <marker id="eu-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="4" markerHeight="4" orient="auto-start-reverse">
+          <path d="M0 0 L10 5 L0 10 z" className="eu-arrow" />
+        </marker>
+      </defs>
+      {lines}
+    </svg>
+  );
+}
+
+export function MapNode({ p, active, queued, siegeReady, target, onPick, onQueue }: {
+  p: Prov; active: boolean; queued: boolean; siegeReady: boolean; target: boolean;
+  onPick: () => void; onQueue: () => void;
+}) {
+  const k = kindOf(p.kind);
+  return (
+    <button
+      type="button"
+      className={[
+        "eu-node",
+        p.owner === "me" ? "me" : p.owner === "ntrl" ? "ntrl" : "enemy",
+        active ? "active" : "",
+        queued ? "queued" : "",
+        target ? "target" : "",
+        p.moved ? "spent" : "",
+      ].join(" ")}
+      style={{ left: `${p.x * 100}%`, top: `${p.y * 100}%` }}
+      onClick={(e) => { if (e.shiftKey) onQueue(); else onPick(); }}
+      onContextMenu={(e) => { e.preventDefault(); onQueue(); }}
+      title={`${tr(k.name)} · ${tr(k.troop)} — ${tr(k.note)}`}
+    >
+      <span className="eu-node-icon"><Icon name={k.icon} size={13} /></span>
+      <span className="eu-node-name t-label clip1">{tr(p.name)}</span>
+      <span className="eu-node-army t-num">{p.army}</span>
+      <span className="eu-node-bits">
+        <i title={tr("стены")}><Icon name="lock" size={8} />{p.wall || ""}</i>
+        <i title={tr("развитие")}><Icon name="sparkle" size={8} />{p.dev || ""}</i>
+      </span>
+      {siegeReady && <span className="eu-node-tag t-label">{tr("осада")}</span>}
+    </button>
+  );
+}
+
+/**
+ * САМ БОЙ: точки-бойцы идут от своих зданий к цели, в конце вспышка и
+ * табличка итога. Дешёвая по железу: двигаются восемь-двенадцать
+ * трансформаций, никаких фильтров.
+ */
+export function BattleMark({ battle, provs, step, lowFx }: {
+  battle: Battle; provs: Prov[]; step: 0 | 1 | 2; lowFx: boolean;
+}) {
+  const to = provs.find((p) => p.id === battle.to);
+  if (!to) return null;
+  const dots: ReactElement[] = [];
+  battle.froms.forEach((id, si) => {
+    const from = provs.find((p) => p.id === id);
+    if (!from) return;
+    const n = Math.min(6, Math.max(2, Math.round((from.army - 1) / 2)));
+    for (let i = 0; i < n; i++) {
+      // разброс по колонне: без него отряд выглядит одной точкой
+      const jx = (((i * 37) % 9) - 4) * 0.16;
+      const jy = (((i * 53) % 7) - 3) * 0.16;
+      dots.push(
+        <motion.circle
+          key={`${id}-${i}`}
+          className={`eu-dot ${battle.res.win ? "win" : "lose"}`}
+          initial={{ cx: from.x * 100 + jx, cy: from.y * 100 + jy, opacity: 0.35 }}
+          animate={{
+            cx: step === 0 && !lowFx ? from.x * 100 + jx : to.x * 100 + jx * 2.2,
+            cy: step === 0 && !lowFx ? from.y * 100 + jy : to.y * 100 + jy * 2.2,
+            opacity: 1,
+          }}
+          transition={{ duration: lowFx ? 0.01 : 0.62, delay: lowFx ? 0 : i * 0.035 + si * 0.05, ease: "easeIn" }}
+        />,
+      );
+    }
+  });
+  return (
+    <div className="eu-battle">
+      <svg className="eu-battle-svg" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden>
+        {dots}
+        {step >= 1 && (
+          <motion.circle
+            className="eu-clash"
+            cx={to.x * 100}
+            cy={to.y * 100}
+            initial={{ r: lowFx ? 6 : 1, opacity: 0.95 }}
+            animate={{ r: lowFx ? 6 : 8.5, opacity: 0 }}
+            transition={{ duration: lowFx ? 0.02 : 0.72, ease: "easeOut" }}
+          />
+        )}
+      </svg>
+      {step >= 2 && (
+        <motion.div
+          className={`eu-result ${battle.res.win ? "win" : "lose"}`}
+          initial={{ opacity: 0, y: lowFx ? 0 : 12, scale: lowFx ? 1 : 0.92 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          transition={{ duration: lowFx ? 0.01 : 0.2 }}
+        >
+          <div className="t-display" style={{ fontSize: 16 }}>
+            {battle.res.win ? tr("ВЗЯТО") : tr("ОТБИЛИСЬ")}
+          </div>
+          <div className="t-caption" style={{ fontSize: 9.5 }}>
+            {tr("у нас −")}{battle.res.lostMine} · {tr("у них −")}{battle.res.lostTheirs}
+            {" · "}{Math.round(battle.res.atkRoll)} : {Math.round(battle.res.defRoll)}
+          </div>
+        </motion.div>
+      )}
+    </div>
+  );
+}
+
+export function SidePanel({ p, provs, gold, onBuy, onRecruit, onSpecial, onToggleStrike, queued, onAttack, froms, vw, threats, siegeReady, play }: {
+  p: Prov; provs: Prov[]; gold: number;
+  onBuy: (w: "dev" | "wall" | "barr" | "intel") => void;
+  onRecruit: (n: number) => void;
+  onSpecial: () => void;
+  onToggleStrike: () => void;
+  queued: boolean;
+  onAttack: () => void;
+  froms: Prov[];
+  vw: Verdict | null;
+  threats: { p: Prov; pow: number; canHit: boolean }[];
+  siegeReady: boolean;
+  play: boolean;
+}) {
+  const k = kindOf(p.kind);
+  const mine = p.owner === "me";
+  const unit = armyCost(p, provs);
+  const room = cap(p) - p.army;
+  return (
+    <div className="eu-side-in">
+      <div className="flex items-center" style={{ gap: 8 }}>
+        <span className="eu-side-icon" style={{ color: mine ? "var(--ok)" : p.owner === "ntrl" ? "var(--text-mute)" : "var(--danger)" }}>
+          <Icon name={k.icon} size={16} />
+        </span>
+        <span className="t-body clip1 flex-1" style={{ fontSize: 12.5 }}>{tr(p.name)}</span>
+        <span className={`eu-owner ${mine ? "me" : p.owner === "ntrl" ? "ntrl" : "enemy"}`}>
+          {mine ? tr("МОЁ") : p.owner === "ntrl" ? tr("НЕЙТРАЛЫ") : tr("ЧУЖОЕ")}
+        </span>
+      </div>
+      <div className="t-caption eu-side-troop">{tr(k.troop)} — {tr(k.note)}</div>
+
+      <div className="eu-stats">
+        <Stat label={tr("войско")} value={`${p.army}/${cap(p)}`} icon="shield" />
+        <Stat label={tr("доход")} value={mine ? income(p) : "—"} icon="coin" />
+        <Stat label={tr("стены")} value={p.wall} icon="lock" />
+        <Stat label={tr("развитие")} value={p.dev} icon="sparkle" />
+        <Stat label={tr("казармы")} value={p.barr} icon="home" />
+        <Stat label={tr("разведка")} value={p.intel} icon="eye" />
+        <Stat label={tr("оборона")} value={Math.round(defensePower(p, false))} icon="target" />
+        <Stat label={tr("удар соседям")} value={Math.round(strikePower([p]))} icon="fist" />
+      </div>
+
+      {mine ? (
+        <>
+          <div className="eu-rows">
+            {(Object.keys(UP) as (keyof typeof UP)[]).map((w, i) => {
+              const cost = w === "dev" ? devCost(p, provs) : w === "wall" ? wallCost(p, provs) : w === "barr" ? barrCost(p, provs) : intelCost(p, provs);
+              const can = gold >= cost && p[w] < (w === "dev" ? 8 : w === "wall" ? 6 : w === "barr" ? 5 : 4);
+              return (
+                <button key={w} type="button" className={`eu-row ${can ? "" : "off"}`} disabled={!can || !play} onClick={() => onBuy(w)}>
+                  <span className="eu-row-k"><Icon name={UP[w].icon} size={12} />{tr(UP[w].name)}</span>
+                  <span className="eu-row-lvl t-num">{p[w]}</span>
+                  <span className="eu-row-hint clip1">{tr(UP[w].hint)}</span>
+                  <span className="eu-row-cost t-num">{cost}</span>
+                  <span className="eu-row-key">{i + 1}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="eu-recruit">
+            <span className="t-label">{tr("НАНЯТЬ")} · {unit} {tr("за бойца")}</span>
+            <div className="flex" style={{ gap: 6 }}>
+              <button type="button" disabled={!play || room <= 0} className="eu-btn" onClick={() => onRecruit(1)}>+1</button>
+              <button type="button" disabled={!play || room <= 0} className="eu-btn" onClick={() => onRecruit(3)}>+3</button>
+              <button type="button" disabled={!play || room <= 0} className="eu-btn wide" onClick={() => onRecruit(0)}>
+                {tr("ВСЕ")} · {room}
+              </button>
+              <span className="eu-btn-key">5 / 6</span>
+            </div>
+            <div className="t-caption" style={{ fontSize: 9 }}>
+              {tr("казармы")} {p.barr} · {tr("свободно")} {Math.max(0, room)}
+            </div>
+          </div>
+
+          {k.action && (
+            <button type="button" className={`eu-btn eu-special ${p.used ? "off" : ""}`} disabled={!play || p.used} onClick={onSpecial}>
+              <Icon name="bolt" size={12} />
+              <span className="clip1">{tr(specialName(p.kind))}</span>
+              <span className="eu-row-cost t-num">{k.action === "agitate" ? 45 : k.action === "reinforce" ? 30 : 24}</span>
+            </button>
+          )}
+
+          <button type="button" className={`eu-btn eu-queue ${queued ? "on" : ""}`} disabled={!play} onClick={onToggleStrike}>
+            <Icon name="fist" size={12} />
+            {queued ? tr("УБРАТЬ ИЗ УДАРА") : tr("ОТПРАВИТЬ В УДАР")}
+            <span className="eu-btn-key">Q</span>
+          </button>
+        </>
+      ) : (
+        <>
+          <div className="eu-odds">
+            <div className="flex items-center" style={{ gap: 8 }}>
+              <span className="t-label">{tr("ШАНС ВЗЯТЬ")}</span>
+              <span className={`eu-odds-n ${vw ? vw.tone : "info"}`}>{vw ? `${Math.round(vw.chance * 100)}%` : "—"}</span>
+              <span className={`eu-odds-v ${vw ? vw.tone : ""}`}>{vw ? tr(vw.label) : tr("некому идти")}</span>
+            </div>
+            <div className="eu-odds-bar"><i style={{ width: `${vw ? Math.round(vw.chance * 100) : 0}%` }} className={vw ? vw.tone : ""} /></div>
+            {vw && (
+              <div className="t-caption" style={{ fontSize: 9.5 }}>
+                {tr("пойдёт")} {froms.length} {tr("здания")} · {vw.men} {tr("бойцов")} · {tr("ожидать потерь")} ~{vw.loss}
+                {siegeReady && ` · ${tr("стены сломаны осадой")}`}
+              </div>
+            )}
+            {vw && vw.tone !== "good" && (
+              <div className={`eu-warn ${vw.tone}`}>
+                <Icon name={vw.tone === "mad" ? "skull" : "warn"} size={11} />
+                {vw.tone === "mad"
+                  ? tr("Туда не надо: кладбище качков гарантировано")
+                  : tr("Может не взять — подкрепи соседей или качай осаду")}
+              </div>
+            )}
+          </div>
+
+          <button type="button" className="eu-btn eu-attack" disabled={!play || !froms.length} onClick={onAttack}>
+            <Icon name="fist" size={13} />
+            {froms.length
+              ? `${tr("УДАРИТЬ")} · ${froms.map((f) => tr(f.name)).join(" + ")}`
+              : tr("НЕТ СОСЕДНЕГО ВОЙСКА")}
+            <span className="eu-btn-key">↵</span>
+          </button>
+
+          <div className="t-caption eu-side-neigh">
+            {tr("соседи:")}: {p.links.map((id) => provs.find((x) => x.id === id)).filter(Boolean).map((x) => tr(x!.name)).join(", ")}
+          </div>
+        </>
+      )}
+
+      {threats.length > 0 && (
+        <div className="eu-threats">
+          <div className="t-label">{tr("КТО СМОТРИТ НА ТЕБЯ")}</div>
+          {threats.map(({ p: t, pow, canHit }) => (
+            <div key={t.id} className={`eu-threat ${canHit ? "hot" : ""}`}>
+              <span className="clip1 flex-1">{tr(t.name)}</span>
+              <span className="t-num">{pow}</span>
+              <span className="t-label">{canHit ? tr("бьёт") : tr("не дотянет")}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Stat({ label, value, icon }: { label: string; value: string | number; icon: Parameters<typeof Icon>[0]["name"] }) {
+  return (
+    <div className="eu-stat">
+      <span className="eu-stat-i"><Icon name={icon} size={10} /></span>
+      <span className="eu-stat-l">{label}</span>
+      <span className="eu-stat-v t-num">{value}</span>
+    </div>
+  );
+}
+
+/* ═══════════════════════ выбор уровня кампании ═══════════════════════ */
+
+export function LevelPick({ unlocked, rank, glory, onStart, onExit }: {
+  unlocked: number;
+  rank: ReturnType<typeof rankOf>;
+  glory: number;
+  onStart: (l: Level) => void;
+  onExit: () => void;
+}) {
+  return (
+    <div className="eu-pick absolute inset-0 flex flex-col" style={{ background: "var(--bg)" }}>
+      <div className="eu-pick-top">
+        <button type="button" className="eu-back" onClick={onExit} aria-label={tr("Назад")}>
+          <Icon name="chevron" size={16} />
+        </button>
+        <div className="flex-1 min-w-0">
+          <div className="t-display" style={{ fontSize: 17 }}>ЧУБУПА УНИВЕРСАЛИС 5</div>
+          <div className="t-caption" style={{ fontSize: 10 }}>{tr("Захват колледжа: 5 уровней, общий ранг")}</div>
+        </div>
+        <div className="eu-rank">
+          <span><Icon name={rank.rank.icon} size={12} /></span>
+          <div>
+            <div className="t-label" style={{ fontSize: 7.5 }}>{tr("РАНГ")}</div>
+            <div className="t-title-sm" style={{ fontSize: 11 }}>{rank.rank.name}</div>
+          </div>
+        </div>
+      </div>
+
+      <div className="eu-pick-body scroll">
+        <div className="eu-glory">
+          <div className="flex items-center justify-between">
+            <span className="t-label">{tr("СЛАВА")}</span>
+            <span className="t-num" style={{ fontSize: 13 }}>{glory}</span>
+          </div>
+          <div className="eu-glory-bar">
+            <i style={{ width: `${Math.min(100, rank.next ? (glory / rank.next.at) * 100 : 100)}%` }} />
+          </div>
+          <div className="t-caption" style={{ fontSize: 9 }}>
+            {rank.next
+              ? `${tr("до ранга")} ${rank.next.name} — ${rank.left} ${tr("славы")}`
+              : tr("Выше ранга нет: ты и есть универсалис")}
+          </div>
+        </div>
+
+        <div className="eu-levels">
+          {LEVELS.map((l) => {
+            const open = l.id <= unlocked;
+            return (
+              <button
+                key={l.id}
+                type="button"
+                className={`eu-lvl ${open ? "" : "locked"}`}
+                disabled={!open}
+                onClick={() => open && onStart(l)}
+              >
+                <span className="eu-lvl-n t-display">{l.id}</span>
+                <span className="eu-lvl-main">
+                  <span className="t-title-sm clip1">{tr(l.name)}</span>
+                  <span className="t-caption clip1" style={{ fontSize: 9.5 }}>{tr(l.sub)}</span>
+                  <span className="eu-lvl-meta">
+                    <span>{l.provs.length} {tr("зданий")}</span>
+                    <span>{l.turns} {tr("раундов")}</span>
+                    <span>{l.aiAggro >= 1 ? tr("злой ИИ") : l.aiAggro >= 0.7 ? tr("ИИ на грани") : tr("ИИ спокойный")}</span>
+                  </span>
+                </span>
+                <span className="eu-lvl-go">{open ? <Icon name="chevron" size={14} /> : <Icon name="lock" size={14} />}</span>
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="eu-how">
+          <div className="t-label" style={{ marginBottom: 6 }}>{tr("КАК ИГРАТЬ")}</div>
+          <ul>
+            <li>{tr("Клик по зданию — справа откроется прокачка: развитие, стены, казармы, разведка и наём войска")}</li>
+            <li>{tr("Shift+клик по СВОЕМУ зданию — отправить его в общий удар; так можно собрать в кулак два-три корпуса")}</li>
+            <li>{tr("Клик по ЧУЖОМУ — видно шанс взятия и чего ждать: равный бой, опасно или самоубийство")}</li>
+            <li>{tr("Клавиатура: стрелки — ходить по дорогам, Enter — удар, пробел — следующий раунд, 1…4 — качать, 5/6 — нанимать, Q — в удар")}</li>
+            <li>{tr("Захваченное здание оставляет гарнизон у соседа: блицкриг без запаса наказывается")}</li>
+          </ul>
+        </div>
+      </div>
     </div>
   );
 }

@@ -727,20 +727,36 @@ html.low-fx .fps-hud-scale { color: var(--text-dim); }
   pointer-events: none;
   z-index: 0;
 }
+/*
+ * ПЯТНА СВЕТА. Раньше каждое было круг с filter: blur(70px) размером
+ * 60–70% экрана, и этот blur пересчитывался каждый кадр, потому что
+ * пятно ещё и двигалось с scale(). На встроенном GPU это ровно те
+ * «1 FPS на главной», о которых писал игрок: три слоя по миллиону
+ * пикселей, перетираемых 60 раз в секунду.
+ *
+ * Теперь размытия нет вообще: мягкий край рисует сам radial-gradient —
+ * он стоит одну растеризацию и лежит в слое. Движение осталось, но
+ * без scale: translate3d по composited-слою GPU почти не трогает.
+ */
 .aurora span {
   position: absolute;
   display: block;
-  border-radius: 50%;
-  filter: blur(70px);
-  opacity: 0.5;
+  opacity: 0.55;
   will-change: transform;
+  transform: translateZ(0);
+  /* шире, чем было с blur: градиент сам по себе мягкий */
+  border-radius: 50%;
 }
 .aurora .b1 {
   width: 62vw;
   height: 62vw;
   left: -18vw;
   top: -12vh;
-  background: radial-gradient(circle, var(--acc-glow), transparent 68%);
+  background: radial-gradient(circle,
+    var(--acc-glow) 0%,
+    var(--acc-glow) 26%,
+    rgba(255, 122, 24, 0.12) 58%,
+    transparent 76%);
   animation: drift1 26s ease-in-out infinite;
 }
 .aurora .b2 {
@@ -748,7 +764,11 @@ html.low-fx .fps-hud-scale { color: var(--text-dim); }
   height: 56vw;
   right: -20vw;
   top: 26vh;
-  background: radial-gradient(circle, rgba(140, 145, 170, 0.4), transparent 68%);
+  background: radial-gradient(circle,
+    rgba(140, 145, 170, 0.36) 0%,
+    rgba(140, 145, 170, 0.22) 38%,
+    rgba(140, 145, 170, 0.07) 62%,
+    transparent 78%);
   animation: drift2 34s ease-in-out infinite;
 }
 .aurora .b3 {
@@ -756,21 +776,28 @@ html.low-fx .fps-hud-scale { color: var(--text-dim); }
   height: 70vw;
   left: -10vw;
   bottom: -26vh;
-  background: radial-gradient(circle, rgba(90, 92, 110, 0.42), transparent 70%);
+  background: radial-gradient(circle,
+    rgba(90, 92, 110, 0.4) 0%,
+    rgba(90, 92, 110, 0.24) 40%,
+    rgba(90, 92, 110, 0.07) 64%,
+    transparent 80%);
   animation: drift3 30s ease-in-out infinite;
 }
 @keyframes drift1 {
-  0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
-  50% { transform: translate3d(14vw, 10vh, 0) scale(1.16); }
+  0%, 100% { transform: translate3d(0, 0, 0); }
+  50% { transform: translate3d(9vw, 6vh, 0); }
 }
+
 @keyframes drift2 {
-  0%, 100% { transform: translate3d(0, 0, 0) scale(1.08); }
-  50% { transform: translate3d(-16vw, -12vh, 0) scale(0.92); }
+  0%, 100% { transform: translate3d(0, 0, 0); }
+  50% { transform: translate3d(-11vw, -8vh, 0); }
 }
+
 @keyframes drift3 {
-  0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
-  50% { transform: translate3d(12vw, -14vh, 0) scale(1.2); }
+  0%, 100% { transform: translate3d(0, 0, 0); }
+  50% { transform: translate3d(8vw, -9vh, 0); }
 }
+
 html.no-fx .aurora span { animation: none !important; }
 html.no-fx .glass {
   backdrop-filter: none;
@@ -947,6 +974,33 @@ html.low-fx .key-cursor {
   background: var(--acc-soft);
   border-color: var(--acc-line);
   color: var(--acc-text);
+}
+
+/*
+ * Стекло на компьютере. Размытие фона (backdrop-filter) стоит полного
+ * прохода по площади панели, а панелей на экране несколько: на встроенном
+ * GPU это ещё один способ получить 1 FPS на главной. Оформительски нам
+ * «жидкое стекло» уже не нужно — поверхности и так ступенчатые и
+ * непрозрачные, поэтому на ПК стекло становится плотной панелью: вид тот
+ * же, кадров в разы больше. На телефоне размытие остаётся: там оно одно
+ * небольшое пятно и не мешает.
+ */
+html.is-desktop .glass {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  background: var(--glass-bg-strong);
+}
+html.is-desktop .glass-strong {
+  background: var(--surface-2);
+}
+
+/* Пульсации, которые всё-таки остались, не должны заставлять перерисовывать
+   соседей: поднимаем их на отдельный слой. */
+.pulse-ring::after,
+.animate-float,
+.pc-dice {
+  will-change: transform;
+  transform: translateZ(0);
 }
 
 .divider {
@@ -2361,3 +2415,505 @@ html.graphite {
   --nav-bg: #23232b;
   --nav-brd: #393945;
 }
+
+/* ══════════════════════════════════════════════════════════════════════
+   ЧУБУПА УНИВЕРСАЛИС 5 — карта, панель прокачки, консоль, бой
+
+   Стиль сознательно «плоский и железный»: тёмные ступенчатые поверхности,
+   оранжевый акцент, никаких размытий. Причина не только во вкусе: на главном
+   экране мы уже обжигались на backdrop-filter и blur — режим стратегии и так
+   держит карту, кучу зданий и анимацию боя, поэтому здесь всё на transform,
+   opacity и обычных границах.
+   ══════════════════════════════════════════════════════════════════════ */
+
+.eu-root { overflow: hidden; }
+.eu-stage {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+}
+.eu-map {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 10px;
+}
+.eu-map-inner {
+  position: relative;
+  width: 100%;
+  max-width: min(100%, 74vh);
+  max-height: 100%;
+  border-radius: var(--r-lg);
+  border: 1px solid var(--surface-brd);
+  background:
+    radial-gradient(circle at 50% 96%, var(--acc-soft), transparent 58%),
+    var(--surface);
+  overflow: hidden;
+  /* клетка «карты штаба»: одна линия на 8% — дешвая, зато читается масштаб */
+  background-image:
+    linear-gradient(to right, var(--surface-brd-soft) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--surface-brd-soft) 1px, transparent 1px);
+  background-size: 8% 8%, 8% 8%;
+}
+
+/* ── дороги ── */
+.eu-svg,
+.eu-battle-svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+.eu-road {
+  stroke: var(--surface-brd);
+  stroke-width: 0.45;
+  fill: none;
+}
+.eu-road.union { stroke: var(--ok-brd); stroke-width: 0.7; }
+.eu-road.live {
+  stroke: var(--acc);
+  stroke-width: 0.85;
+  stroke-dasharray: 2.2 1.6;
+  opacity: 0.95;
+  animation: eu-dash 1.1s linear infinite;
+}
+.eu-road.war { stroke: var(--danger); stroke-width: 1.1; opacity: 1; }
+.eu-road.queued { stroke: var(--acc); stroke-width: 1; opacity: 1; }
+.eu-arrow { fill: var(--acc); }
+@keyframes eu-dash {
+  from { stroke-dashoffset: 0; }
+  to { stroke-dashoffset: -7.6; }
+}
+
+/* ── здания ── */
+.eu-node {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  min-width: 62px;
+  padding: 6px 8px 5px;
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+  border: 1.5px solid var(--surface-brd);
+  text-align: center;
+  line-height: 1.15;
+  transition: transform 0.14s ease, border-color 0.16s ease, background 0.16s ease;
+  will-change: transform;
+}
+.eu-node:hover { transform: translate(-50%, -50%) scale(1.05); }
+.eu-node:active { transform: translate(-50%, -50%) scale(0.97); }
+.eu-node.me { border-color: var(--ok-brd); background: linear-gradient(180deg, rgba(89, 255, 158, 0.1), transparent 70%), var(--surface-2); }
+.eu-node.enemy { border-color: var(--danger-brd); background: linear-gradient(180deg, rgba(255, 107, 77, 0.12), transparent 70%), var(--surface-2); }
+.eu-node.ntrl { border-color: var(--surface-brd); opacity: 0.9; }
+.eu-node.active { border-color: #fff; }
+.eu-node.queued { border-color: var(--acc); }
+.eu-node.target { border-color: var(--danger); }
+.eu-node.spent { opacity: 0.55; }
+.eu-node-icon { display: block; color: var(--text-dim); line-height: 0; margin-bottom: 2px; }
+.eu-node.me .eu-node-icon { color: var(--ok); }
+.eu-node.enemy .eu-node-icon { color: var(--danger); }
+.eu-node-name {
+  display: block;
+  font-size: 7px;
+  letter-spacing: 0.06em;
+  color: var(--text-dim);
+  max-width: 74px;
+}
+.eu-node-army {
+  display: block;
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--text);
+  margin-top: 1px;
+}
+.eu-node-bits {
+  display: flex;
+  justify-content: center;
+  gap: 5px;
+  margin-top: 2px;
+  color: var(--text-mute);
+}
+.eu-node-bits i { display: inline-flex; align-items: center; gap: 1px; font-size: 8px; font-style: normal; }
+.eu-node-tag {
+  display: block;
+  margin-top: 2px;
+  font-size: 7px;
+  color: var(--acc-text);
+}
+/* кольцо «в ударе» — рисунком, а не тенью: тень под анимацией стоит дорого */
+.eu-node.queued::after {
+  content: "";
+  position: absolute;
+  inset: -5px;
+  border-radius: inherit;
+  border: 1.5px dashed var(--acc);
+  opacity: 0.8;
+  pointer-events: none;
+}
+.eu-node.target::after { border-style: solid; border-color: var(--danger); }
+
+/* ── бой ── */
+.eu-battle { position: absolute; inset: 0; pointer-events: none; }
+.eu-dot { fill: var(--acc); }
+.eu-dot.lose { fill: var(--danger); }
+.eu-clash { fill: none; stroke: #fff; stroke-width: 0.5; }
+.eu-result {
+  position: absolute;
+  left: 50%;
+  top: 12%;
+  transform: translateX(-50%);
+  padding: 9px 16px;
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+  border: 1px solid var(--ok-brd);
+  color: var(--ok);
+  text-align: center;
+  white-space: nowrap;
+}
+.eu-result.lose { border-color: var(--danger-brd); color: var(--danger); }
+
+/* ── консоль событий (слева сверху) ── */
+.eu-console {
+  position: absolute;
+  left: 8px;
+  top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  max-width: 56%;
+  pointer-events: none;
+}
+.eu-line {
+  font-family: var(--font-num);
+  font-size: 9.5px;
+  line-height: 1.35;
+  padding: 3px 7px;
+  border-radius: 5px;
+  background: rgba(6, 6, 8, 0.66);
+  border-left: 2px solid var(--surface-brd);
+  color: var(--text-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.eu-line b { color: var(--text-mute); font-weight: 700; margin-right: 3px; }
+.eu-line.eu-ok { border-left-color: var(--ok); color: var(--ok); }
+.eu-line.eu-bad { border-left-color: var(--danger); color: var(--danger); }
+
+/* ── легенда значков (слева снизу) ── */
+.eu-hints {
+  position: absolute;
+  left: 8px;
+  bottom: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 9px;
+  max-width: 72%;
+  padding: 6px 9px;
+  border-radius: var(--r-sm);
+  background: rgba(6, 6, 8, 0.6);
+  border: 1px solid var(--surface-brd);
+  pointer-events: none;
+}
+.eu-hints span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 8.5px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--text-mute);
+}
+.eu-hints .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+.eu-hints .dot.me { background: var(--ok-brd); }
+.eu-hints .dot.enemy { background: var(--danger-brd); }
+.eu-hints .dot.ntrl { background: var(--surface-brd); }
+.eu-hints .ln { width: 14px; height: 2px; display: inline-block; }
+.eu-hints .ln.live { background: var(--acc); }
+.eu-hints .ring { width: 9px; height: 9px; border-radius: 3px; border: 1.5px dashed var(--acc); display: inline-block; }
+
+/* ── баннер раунда ── */
+.eu-banner {
+  position: absolute;
+  left: 50%;
+  top: 44%;
+  transform: translateX(-50%);
+  padding: 12px 22px;
+  border-radius: var(--r-lg);
+  background: var(--surface-2);
+  border: 1px solid var(--acc-line);
+  text-align: center;
+  pointer-events: none;
+}
+.eu-banner-n { font-size: 19px; color: var(--acc-text); }
+.eu-banner-sub { margin-top: 3px; color: var(--text-dim); font-size: 8px; }
+
+/* ── правая панель ── */
+.eu-side {
+  width: 306px;
+  flex: 0 0 306px;
+  min-height: 0;
+  border-left: 1px solid var(--surface-brd);
+  background: var(--surface);
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+.eu-side::-webkit-scrollbar { display: none; }
+.eu-side-in { padding: 12px 13px 18px; display: flex; flex-direction: column; gap: 10px; }
+.eu-side-icon {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 28px; height: 28px; border-radius: var(--r-sm);
+  background: var(--surface-2); border: 1px solid var(--surface-brd);
+}
+.eu-owner {
+  font-size: 7.5px; font-weight: 700; letter-spacing: 0.1em;
+  padding: 3px 8px; border-radius: 999px;
+  background: var(--surface-3); color: var(--text-mute);
+}
+.eu-owner.me { background: var(--ok-soft); color: var(--ok); }
+.eu-owner.enemy { background: var(--danger-soft); color: var(--danger); }
+.eu-owner.ntrl { background: var(--surface-3); color: var(--text-mute); }
+.eu-side-troop { font-size: 9.5px; line-height: 1.45; color: var(--text-mute); margin-top: -4px; }
+
+.eu-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+}
+.eu-stat {
+  display: flex; align-items: center; gap: 5px;
+  padding: 6px 8px; border-radius: var(--r-sm);
+  background: var(--surface-2);
+  border: 1px solid var(--surface-brd-soft);
+}
+.eu-stat-i { color: var(--text-mute); line-height: 0; }
+.eu-stat-l { flex: 1; font-size: 8.5px; letter-spacing: 0.05em; color: var(--text-mute); text-transform: uppercase; }
+.eu-stat-v { font-size: 12px; font-weight: 800; color: var(--text); }
+
+.eu-rows { display: flex; flex-direction: column; gap: 5px; }
+.eu-row {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto 18px 1fr auto;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 30px 8px 9px;
+  border-radius: var(--r-sm);
+  background: var(--btn-bg);
+  border: 1px solid var(--btn-brd);
+  color: var(--btn-text);
+  text-align: left;
+  transition: background 0.15s ease, transform 0.12s ease, border-color 0.15s ease;
+}
+.eu-row:hover:not(.off) { background: var(--btn-bg-hi); border-color: var(--acc-line); }
+.eu-row:active:not(.off) { transform: scale(0.985); }
+.eu-row.off { opacity: 0.42; }
+.eu-row-k { display: inline-flex; align-items: center; gap: 5px; font-size: 9px; font-weight: 800; letter-spacing: 0.05em; }
+.eu-row-lvl { font-size: 11px; color: var(--acc-text); }
+.eu-row-hint { font-size: 8.5px; color: var(--text-mute); }
+.eu-row-cost { font-size: 10px; font-weight: 800; color: var(--gold); }
+.eu-row-key {
+  position: absolute; right: 8px; top: 50%; transform: translateY(-50%);
+  font-size: 8px; font-weight: 800; color: var(--text-mute);
+  padding: 1px 4px; border-radius: 4px; background: var(--surface-3);
+}
+
+.eu-recruit {
+  display: flex; flex-direction: column; gap: 6px;
+  padding: 9px 10px; border-radius: var(--r-sm);
+  background: var(--surface-2); border: 1px solid var(--surface-brd);
+}
+.eu-recruit > .t-label { font-size: 8px; color: var(--text-dim); }
+.eu-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  padding: 10px 10px; border-radius: var(--r-sm);
+  background: var(--btn-bg); border: 1px solid var(--btn-brd);
+  color: var(--btn-text); font-size: 9px; font-weight: 800; letter-spacing: 0.04em;
+  transition: background 0.15s ease, transform 0.12s ease, border-color 0.15s ease;
+}
+.eu-btn:hover:not(:disabled) { background: var(--btn-bg-hi); border-color: var(--acc-line); }
+.eu-btn:active:not(:disabled) { transform: scale(0.98); }
+.eu-btn:disabled, .eu-btn.off { opacity: 0.42; }
+.eu-btn.wide { flex: 1; }
+.eu-btn-key { font-size: 8px; font-weight: 700; color: var(--text-mute); padding: 0 2px; }
+.eu-special { width: 100%; text-align: left; justify-content: flex-start; }
+.eu-special > span:nth-child(2) { flex: 1; font-weight: 700; }
+.eu-queue { width: 100%; }
+.eu-queue.on { background: var(--acc); border-color: var(--acc); color: var(--acc-ink); }
+.eu-attack {
+  width: 100%; padding: 13px 10px;
+  background: var(--danger); border-color: var(--danger); color: #0b0b0e;
+  font-size: 10px;
+}
+.eu-attack:hover:not(:disabled) { background: var(--danger); border-color: #fff; }
+.eu-attack > span:first-of-type { flex: 1; text-align: left; }
+
+.eu-odds {
+  display: flex; flex-direction: column; gap: 6px;
+  padding: 10px; border-radius: var(--r-sm);
+  background: var(--surface-2); border: 1px solid var(--surface-brd);
+}
+.eu-odds-n { font-family: var(--font-num); font-size: 17px; font-weight: 800; }
+.eu-odds-n.good { color: var(--ok); }
+.eu-odds-n.even { color: var(--warn); }
+.eu-odds-n.bad, .eu-odds-n.mad { color: var(--danger); }
+.eu-odds-n.info { color: var(--text-mute); font-size: 13px; }
+.eu-odds-v {
+  margin-left: auto; font-size: 8px; font-weight: 800; letter-spacing: 0.08em;
+  padding: 3px 8px; border-radius: 999px;
+  background: var(--surface-3); color: var(--text-dim);
+}
+.eu-odds-v.good { background: var(--ok-soft); color: var(--ok); }
+.eu-odds-v.even { background: var(--warn-soft); color: var(--warn); }
+.eu-odds-v.bad, .eu-odds-v.mad { background: var(--danger-soft); color: var(--danger); }
+.eu-odds-bar { height: 5px; border-radius: 999px; background: var(--track); overflow: hidden; }
+.eu-odds-bar i { display: block; height: 100%; border-radius: 999px; background: var(--acc); transition: width 0.2s ease; }
+.eu-odds-bar i.good { background: var(--ok); }
+.eu-odds-bar i.even { background: var(--warn); }
+.eu-odds-bar i.bad, .eu-odds-bar i.mad { background: var(--danger); }
+.eu-warn {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 9px; line-height: 1.4;
+  padding: 7px 9px; border-radius: var(--r-sm);
+  background: var(--danger-soft); color: var(--danger);
+}
+
+.eu-side-neigh { font-size: 9px; color: var(--text-mute); line-height: 1.45; }
+.eu-threats { display: flex; flex-direction: column; gap: 4px; }
+.eu-threats > .t-label { font-size: 7.5px; color: var(--text-mute); letter-spacing: 0.1em; }
+.eu-threat {
+  display: flex; align-items: center; gap: 7px;
+  padding: 6px 8px; border-radius: var(--r-sm);
+  background: var(--surface-2); border: 1px solid var(--surface-brd-soft);
+  font-size: 9.5px; color: var(--text-dim);
+}
+.eu-threat.hot { border-color: var(--danger-brd); color: var(--danger); }
+.eu-threat .t-num { font-weight: 800; }
+
+/* ── нижняя строка: сводка удара + ход ── */
+.eu-foot {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 12px calc(var(--sab) + 10px);
+  border-top: 1px solid var(--surface-brd);
+  background: var(--surface);
+}
+.eu-foot-left { flex: 1; min-width: 0; }
+.eu-strike { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+.eu-strike > .t-label { font-size: 7.5px; color: var(--text-mute); letter-spacing: 0.1em; }
+.eu-chip {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 4px 8px; border-radius: 999px;
+  background: var(--acc-soft); border: 1px solid var(--acc-line);
+  color: var(--acc-text); font-size: 9px; font-weight: 700;
+}
+.eu-chip svg { opacity: 0.6; }
+.eu-next {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  padding: 12px 18px; border-radius: var(--r-md);
+  background: var(--acc); border: 1px solid var(--acc); color: var(--acc-ink);
+  font-size: 10px; font-weight: 800; letter-spacing: 0.05em; white-space: nowrap;
+  transition: transform 0.12s ease, filter 0.15s ease;
+}
+.eu-next:hover:not(:disabled) { filter: brightness(1.08); }
+.eu-next:active:not(:disabled) { transform: scale(0.98); }
+.eu-next:disabled { opacity: 0.5; }
+
+/* ── выбор уровня ── */
+.eu-pick { overflow: hidden; }
+.eu-pick-top {
+  display: flex; align-items: center; gap: 10px;
+  padding: calc(var(--sat) + 10px) 14px 10px;
+  border-bottom: 1px solid var(--surface-brd);
+}
+.eu-back {
+  width: 34px; height: 34px; flex: 0 0 34px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: var(--r-sm);
+  background: var(--btn-bg); border: 1px solid var(--btn-brd); color: var(--btn-text);
+  transform: rotate(180deg);
+}
+.eu-rank {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 11px; border-radius: 999px;
+  background: var(--surface-2); border: 1px solid var(--gold-brd);
+  color: var(--gold);
+}
+.eu-pick-body { flex: 1; min-height: 0; padding: 12px 14px calc(var(--sab) + 18px); display: flex; flex-direction: column; gap: 12px; }
+.eu-glory {
+  padding: 11px 13px; border-radius: var(--r-md);
+  background: var(--surface); border: 1px solid var(--surface-brd);
+}
+.eu-glory-bar { height: 6px; margin: 7px 0 6px; border-radius: 999px; background: var(--track); overflow: hidden; }
+.eu-glory-bar i { display: block; height: 100%; border-radius: 999px; background: linear-gradient(90deg, var(--acc), var(--gold)); }
+.eu-levels { display: grid; grid-template-columns: repeat(auto-fill, minmax(238px, 1fr)); gap: 9px; }
+.eu-lvl {
+  position: relative;
+  display: grid; grid-template-columns: auto 1fr auto;
+  align-items: center; gap: 11px;
+  padding: 12px 13px; text-align: left;
+  border-radius: var(--r-md);
+  background: var(--surface); border: 1px solid var(--surface-brd);
+  transition: border-color 0.16s ease, background 0.16s ease, transform 0.14s ease;
+}
+.eu-lvl:hover:not(.locked) { border-color: var(--acc-line); background: var(--surface-2); transform: translateY(-2px); }
+.eu-lvl:active:not(.locked) { transform: translateY(0) scale(0.99); }
+.eu-lvl-n {
+  width: 34px; height: 34px; flex: 0 0 34px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: var(--r-sm);
+  background: var(--acc-soft); color: var(--acc-text); font-size: 16px;
+}
+.eu-lvl.locked .eu-lvl-n { background: var(--surface-3); color: var(--text-mute); }
+.eu-lvl-main { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.eu-lvl-meta { display: flex; gap: 9px; font-size: 8.5px; color: var(--text-mute); }
+.eu-lvl-go { color: var(--text-mute); line-height: 0; }
+.eu-how {
+  padding: 12px 14px; border-radius: var(--r-md);
+  background: var(--surface); border: 1px solid var(--surface-brd);
+}
+.eu-how ul { display: flex; flex-direction: column; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.eu-how li { position: relative; padding-left: 14px; font-size: 10.5px; line-height: 1.5; color: var(--text-dim); }
+.eu-how li::before { content: ""; position: absolute; left: 0; top: 6px; width: 6px; height: 6px; border-radius: 2px; background: var(--acc); }
+
+/* чип назначенной клавиши — в настройках («Клавиши управления в играх») и в
+   подсказках режима: ряды и сетка переиспользуются из панели стратегии, вторая
+   вёрстка под один список не нужна */
+.eu-keychip {
+  display: inline-flex; align-items: center; gap: 3px;
+  margin: 1px 3px 1px 0; padding: 2px 6px;
+  border-radius: 5px;
+  background: var(--surface-3); border: 1px solid var(--surface-brd);
+  font-family: var(--font-num); font-size: 9px; font-weight: 700;
+  color: var(--text-dim);
+}
+.eu-keychip button {
+  display: inline-flex; align-items: center; color: var(--text-mute); line-height: 0;
+}
+.eu-keychip button:hover { color: var(--danger); }
+
+/* на телефоне панель уезжает вниз шторкой: справа ей негде стоять */
+@media (max-width: 880px) {
+  .eu-stage { flex-direction: column; }
+  .eu-map { padding: 6px 8px 0; }
+  .eu-map-inner { max-width: 100%; }
+  .eu-side {
+    width: auto; flex: 0 0 auto;
+    max-height: 46%;
+    border-left: none;
+    border-top: 1px solid var(--surface-brd);
+  }
+  .eu-side-in { gap: 8px; padding: 10px 12px 14px; }
+  .eu-stats { grid-template-columns: repeat(3, 1fr); }
+  .eu-hints { max-width: 100%; }
+  .eu-console { max-width: 64%; }
+}
+
+/* лёгкий режим: убираем всё, что стоит кадров, но оставляем читаемость */
+html.low-fx .eu-road.live { animation: none; stroke-dasharray: none; }
+html.low-fx .eu-node:hover { transform: translate(-50%, -50%); }
+html.low-fx .eu-map-inner { background-image: none; }
+html.low-fx .eu-lvl:hover { transform: none; }

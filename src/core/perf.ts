@@ -278,6 +278,7 @@ export function writeQuality(q: Quality): void {
 export function remeasureNow(onDecided?: (low: boolean) => void): void {
   clearMeasured();
   resetAdapt();
+  uiWatchReset();
   writePerfMode("auto");
   writeRenderMode("auto");
   applyPerfMode();
@@ -295,6 +296,93 @@ export function renderScaleInfo(cssW: number, cssH: number) {
     low: isLowFx(),
     adapt,
   };
+}
+
+/* ============ СЛЕЖКА ЗА КАДРЫ САМОГО ИНТЕРФЕЙСА ============
+
+   Автозамер при старте смотрит на интерфейс 3 секунды и успокаивается.
+   этого мало: главная страница на слабом видеоадаптере может «просесть»
+   позже (открылась правая колонка, поехали пульсации босса), а игры
+   вообще живут в своём окне. Поэтому счётчик кадров работает всё время,
+   пока открыт интерфейс, и если кадров реально мало — включает лёгкий
+   режим сам и запоминает это: следующий запуск начнётся уже лёгким.
+
+   Намеренно одна directional-стрелка: утяжелять режим обратно «на лету»
+   нельзя, иначе картинка начнёт мигать туда-сюда. Возврат красоты —
+   только руками в настройках.
+ */
+
+const UI_WINDOW_MS = 500;
+const UI_FLOOR = 42;
+/** сколько подряд «плохих» окон нужно, чтобы решение было не на один случайный лаг */
+const UI_BAD_WINDOWS = 3;
+
+let uiRaf = 0;
+let uiLast = 0;
+let uiFrames = 0;
+let uiAcc = 0;
+let uiBad = 0;
+let uiDecided = false;
+
+/** средние кадры интерфейса за последнее окно — для подписи в настройках */
+let uiFps = 0;
+export function uiFpsValue(): number {
+  return uiFps;
+}
+
+/** сколько кадров/с рисует интерфейс (не игра): 0 — ещё не мерили */
+export function startUiWatch(onDegrade?: (fps: number) => void): () => void {
+  if (typeof requestAnimationFrame === "undefined") return () => {};
+
+  const tick = (t: number) => {
+    uiRaf = requestAnimationFrame(tick);
+    if (!uiLast) { uiLast = t; return; }
+    const dt = t - uiLast;
+    uiLast = t;
+    if (dt <= 0 || dt > 2000) { uiFrames = 0; uiAcc = 0; return; }
+
+    /*
+     * Пока идёт канвас-игра, кадры считает её собственный цикл (fpsFeed),
+     * и решение о нагрузке принимает адаптив разрешения. Дублировать это
+     * слежкой за интерфейсом нельзя: мы бы «чинили» главный экран, которого
+     * сейчас и нет на экране.
+     */
+    if (t - fFedAt < 400) { uiFrames = 0; uiAcc = 0; uiBad = 0; return; }
+
+    uiFrames++;
+    uiAcc += dt;
+    if (uiAcc < UI_WINDOW_MS) return;
+
+    const fps = Math.round((uiFrames * 1000) / uiAcc);
+    uiFps = fps;
+    uiFrames = 0;
+    uiAcc = 0;
+
+    if (readPerfMode() !== "auto") return;   // человек выбрал руками
+    if (fps < UI_FLOOR) uiBad++; else uiBad = 0;
+    if (uiDecided || uiBad < UI_BAD_WINDOWS) return;
+
+    uiDecided = true;
+    writeMeasured(true);
+    const low = applyPerfMode();
+    onDegrade?.(low ? fps : 0);
+  };
+
+  uiRaf = requestAnimationFrame(tick);
+  return () => {
+    cancelAnimationFrame(uiRaf);
+    uiRaf = 0;
+    uiLast = 0;
+    uiFrames = 0;
+    uiAcc = 0;
+    uiBad = 0;
+  };
+}
+
+/** разрешить слежке снова принимать решение (после «Замерить заново») */
+export function uiWatchReset(): void {
+  uiDecided = false;
+  uiBad = 0;
 }
 
 /* ================= СЧЁТЧИК КАДРОВ ==================

@@ -1,3 +1,5 @@
+import { actionFor } from "./keymap";
+
 /**
  * КЛАВИАТУРА И МЫШЬ В ИГРАХ (компьютерная версия).
  *
@@ -46,11 +48,14 @@ export interface KeyState {
  *
  * Наш слой туда ставить нельзя: вышло бы двойное нажатие — стрелка
  * передвинула бы и героя, и виртуальный палец, а пробел в «Забеге» ещё и
- * заставил бы прыгнуть дважды. Для этих четырёх игр слой не ставится вовсе,
+ * заставил бы прыгнуть дважды. Чубупа Универсалис — стратегия: там стрелки
+ * шагают по дорогам между зданиями, и палец водить нечем. Для этих четырёх игр слой не ставится вовсе,
  * и кольцо-указатель там не нужен.
  */
 export const NATIVE_KEY_GAMES: ReadonlySet<string> = new Set([
   "burger", "merge", "dino", "radomir",
+  // стратегия: там стрелки ходят ПО ДОРОГАМ между зданиями, а не водят палец
+  "europa",
 ]);
 
 export function handlesKeysNatively(id: string | null): boolean {
@@ -67,14 +72,14 @@ const state: KeyState = {
 const SPEED = 720;
 const BOOST = 2;
 
-const MAP: Record<string, keyof KeyState> = {
-  KeyW: "up", ArrowUp: "up",
-  KeyS: "down", ArrowDown: "down",
-  KeyA: "left", ArrowLeft: "left",
-  KeyD: "right", ArrowRight: "right",
-  Space: "act", Enter: "act", NumpadEnter: "act",
-  ShiftLeft: "boost", ShiftRight: "boost",
-};
+/*
+ * Соответствие «клавиша → действие» живёт в core/keymap.ts: игрок может
+ * назначить что угодно (французская раскладка, цифровой блок, одна рука),
+ * а стрелки, пробел и Shift работают всегда, даже если ничего не настроено.
+ */
+function keyAction(code: string): keyof KeyState | undefined {
+  return actionFor(code) as keyof KeyState | undefined;
+}
 
 /**
  * Запись в поле состояния. Отдельная функция, а не `state[k] = true`:
@@ -201,7 +206,7 @@ export function initGameKeys(root: HTMLElement): () => void {
 
   const onDown = (e: KeyboardEvent) => {
     if (inField(e.target)) return;
-    const k = MAP[e.code];
+    const k = keyAction(e.code);
     if (!k) return;
     // стрелки и пробел иначе скроллят страницу и «нажимают» фокусную кнопку
     e.preventDefault();
@@ -214,7 +219,7 @@ export function initGameKeys(root: HTMLElement): () => void {
   };
 
   const onUp = (e: KeyboardEvent) => {
-    const k = MAP[e.code];
+    const k = keyAction(e.code);
     if (!k) return;
     if (!state[k]) return;
     setKey(k, false);

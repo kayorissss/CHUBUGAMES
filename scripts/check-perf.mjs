@@ -33,14 +33,23 @@ const ok = (c, m) => { console.log((c ? '  ✓ ' : '  ✗ ') + m); if (!c) fails
 
 const out = fs.mkdtempSync(path.join(os.tmpdir(), 'chub-perf-'));
 try {
-  await esbuild.build({
-    entryPoints: ['src/core/perf.ts', 'src/core/keymouse.ts'],
-    bundle: true,
-    format: 'esm',
-    platform: 'browser',
-    outdir: out,
-    logLevel: 'error',
-  });
+  // каждый модуль — своим проходом: у них разные папки, и esbuild иначе
+  // сохранит дерева выхода (core/perf.js, games/europa/model.js…), а нам
+  // нужны предсказуемые имена
+  for (const [entry, name] of [
+    ['src/core/perf.ts', 'perf.js'],
+    ['src/core/keymouse.ts', 'keymouse.js'],
+    ['src/games/europa/model.ts', 'model.js'],
+  ]) {
+    await esbuild.build({
+      entryPoints: [entry],
+      bundle: true,
+      format: 'esm',
+      platform: 'browser',
+      outfile: path.join(out, name),
+      logLevel: 'error',
+    });
+  }
 
   /* ── заглушки окружения (их надо поставить до импорта модулей) ── */
   const mkEl = (tag) => {
@@ -91,6 +100,7 @@ try {
 
   const perf = await import(pathToFileURL(path.join(out, 'perf.js')).href);
   const km = await import(pathToFileURL(path.join(out, 'keymouse.js')).href);
+  const eu = await import(pathToFileURL(path.join(out, 'model.js')).href);
 
   console.log('\n[1] Разрешение рисования считается из бюджета пикселей');
   perf.writeQuality('auto');
@@ -172,9 +182,144 @@ try {
   ok(!km.readKeys().right, 'после закрытия игры клавиши снова обычные');
 
   console.log('\n[5] Игры со своими клавишами не получают двойное нажатие');
-  for (const id of ['burger', 'merge', 'dino', 'radomir'])
+  for (const id of ['burger', 'merge', 'dino', 'radomir', 'europa'])
     ok(km.handlesKeysNatively(id), `${id}: слой не ставится, клавиши читает сама игра`);
   ok(!km.handlesKeysNatively('pool'), 'а в бильярде слой нужен: там раньше была только мышь');
+console.log('\n[6] Чубупа Универсалис: карта, бой, баланс');
+ok(eu.LEVELS.length >= 5, `уровней кампании: ${eu.LEVELS.length}`);
+{
+  // карта обязана быть двусторонней: «дорога туда есть, а обратно нет» —
+  // это не стратегия, а обещание, которое игра не выполняет
+  let asym = 0; let badLink = 0; let dupl = 0;
+  for (const lv of eu.LEVELS) {
+    const ps = eu.freshProvs(lv);
+    const names = new Set();
+    for (const p of ps) {
+      if (names.has(p.name)) dupl++;
+      names.add(p.name);
+      for (const id of p.links) {
+        const q = ps.find((x) => x.id === id);
+        if (!q) { badLink++; continue; }
+        if (!q.links.includes(p.id)) asym++;
+      }
+    }
+    if (!ps.some((p) => p.owner === 'me')) badLink++;
+  }
+  ok(badLink === 0, 'ссылки ведут на существующие здания, у игрока есть стартовое');
+  ok(asym === 0, 'дороги двусторонние');
+  ok(dupl === 0, 'названия зданий внутри уровня не повторяются');
+}
+{
+  const ps = eu.freshProvs(eu.LEVELS[1]);
+  const a = ps[0], b = ps[1], c = ps[2];
+  ok(eu.strikePower([a, b]) > eu.strikePower([a]),
+    `два здания в ударе сильнее одного (${Math.round(eu.strikePower([a]))} → ${Math.round(eu.strikePower([a, b]))})`);
+  const weak = { ...c, army: 10, dev: 1, wall: 0, intel: 0, barr: 0, owner: 'ai' };
+  const tough = { ...c, army: 10, dev: 3, wall: 3 };
+  const mine = [{ ...a, army: 11, dev: 1, barr: 0, intel: 0 }];
+  const vEasy = eu.verdictFor(mine, weak, false);
+  const vHard = eu.verdictFor(mine, tough, false);
+  ok(vHard.chance < vEasy.chance, 'развитие и стены врага честно снижают шанс');
+  ok(vHard.tone === 'bad' || vHard.tone === 'mad', `10 против 10 с развитием 3 — «${vHard.label}», а не «взять»`);
+  ok(vEasy.loss > 0, 'прогноз называет и ожидаемые потери');
+  ok(eu.verdictFor(mine, tough, true).chance > vHard.chance, 'осада бьёт по стенам: с телегами шанс выше');
+}
+{
+  // бой: потери честные, никто не уходит в минус, захват оставляет гарнизон
+  let win = 0; let neg = 0; let zeroGarrison = 0;
+  for (let i = 0; i < 400; i++) {
+    const ps = eu.freshProvs(eu.LEVELS[1]);
+    const from = { ...ps[0], army: 18, dev: 2, barr: 1, intel: 1 };
+    const to = { ...ps[1], army: 6, dev: 1, wall: 1, owner: 'ai' };
+    const r = eu.fight([from], to, false);
+    if (r.win) win++;
+    if (r.lostMine < 0 || r.lostTheirs < 0 || r.keepBack < 0 || r.occupy < 0) neg++;
+    if (r.win && r.keepBack < 1) zeroGarrison++;
+  }
+  let even = 0;
+  for (let i = 0; i < 400; i++) {
+    const ps = eu.freshProvs(eu.LEVELS[1]);
+    const r = eu.fight([{ ...ps[0], army: 10, dev: 1, barr: 0, intel: 0 }], { ...ps[1], army: 9, dev: 1, wall: 0, owner: 'ai' }, false);
+    if (r.win) even++;
+  }
+  ok(win >= 380, `перевес 18 на 6 выигрывает ${Math.round(win / 4)} % боёв — большой перевес должен быть предсказуем`);
+  ok(even > 60 && even < 340, `равные силы — это азарт, а не арифметика: ${Math.round(even / 4)} %`);
+  ok(neg === 0, 'потери никогда не уходят в минус');
+  ok(zeroGarrison === 0, 'захватчик всегда оставляет гарнизон в тылу');
+}
+{
+  const ps = eu.freshProvs(eu.LEVELS[2]);
+  const mine = ps.filter((p) => p.owner === 'me');
+  ok(mine.every((p) => eu.income(p) > 0), 'каждое своё здание приносит казну');
+  ok(ps.filter((p) => p.owner !== 'me').every((p) => eu.income(p) === 0), 'чужие здания кормят не тебя');
+  const p0 = mine[0];
+  ok(eu.cap({ ...p0, barr: p0.barr + 1 }) > eu.cap(p0), 'казармы поднимают потолок войска');
+  ok(eu.armyCost({ ...p0, army: p0.army + 10 }, ps) > eu.armyCost(p0, ps), 'чем больше войско, тем дороже боец');
+}
+{
+  let neg = 0; let moved = 0;
+  for (let i = 0; i < 300; i++) {
+    const ps = eu.freshProvs(eu.LEVELS[4]);
+    if (eu.aiTurn(ps, 1.5, 1.1)) moved++;
+    if (ps.some((p) => p.army < 1)) neg++;
+  }
+  ok(neg === 0, 'после хода ИИ войско не становится нулём');
+  ok(moved > 40, `ИИ на последнем уровне реально атакует (${moved} из 300)`);
+}
+{
+  let prev = 0; let broken = 0;
+  for (const r of eu.RANKS) { if (r.at <= prev && prev !== 0) broken++; prev = r.at; }
+  ok(broken === 0, `рангов ${eu.RANKS.length}, пороги растут`);
+  ok(eu.rankOf(0).rank.at === 0 && eu.rankOf(1e9).rank === eu.RANKS[eu.RANKS.length - 1], 'первый и последний ранг на месте');
+  ok(eu.gloryFor(6, 4, true, 2) > eu.gloryFor(6, 4, false, 2), 'победа даёт больше славы, чем отсиживание');
+}
+{
+  // полная партия вслепую: жадная стратегия обязана выигрывать первый
+  // уровень и спотыкаться на последнем — иначе либо «игра в одни ворота»,
+  // либо «зачем начинать»
+  const simLevel = (idx, minChance) => {
+    let wins = 0; let crash = 0; const runs = 40;
+    for (let g = 0; g < runs; g++) {
+      try {
+        const lv = eu.LEVELS[idx];
+        const ps = eu.freshProvs(lv);
+        let gold = lv.gold;
+        for (let t = 1; t <= lv.turns; t++) {
+          gold += ps.reduce((a, p) => a + eu.income(p), 0);
+          for (const p of ps) { p.moved = false; p.used = false; }
+          // «хороший игрок»: сначала развитие там, где больше всего соседей-врагов,
+          // потом живая сила; иначе бот играет глупее человека и баланс не проверить
+          for (const p of ps.filter((x) => x.owner === 'me')) {
+            const foes = p.links.filter((id) => ps[id] && ps[id].owner !== 'me').length;
+            while (foes > 0 && p.dev < 6 && gold >= eu.devCost(p, ps) * 3) { gold -= eu.devCost(p, ps); p.dev += 1; }
+            const c = eu.armyCost(p, ps);
+            while (gold >= c && p.army < eu.cap(p)) { p.army += 1; gold -= c; }
+          }
+          for (const tgt of ps.filter((x) => x.owner !== 'me')) {
+            const froms = tgt.links.map((id) => ps.find((x) => x.id === id))
+              .filter((x) => x && x.owner === 'me' && x.army > 1 && !x.moved);
+            if (!froms.length) continue;
+            if (eu.verdictFor(froms, tgt, false).chance < minChance) continue;
+            const r = eu.fight(froms, tgt, false);
+            const back = r.men > 0 ? r.keepBack / r.men : 0;
+            for (const f of froms) { f.army = Math.max(1, 1 + Math.round((f.army - 1) * back)); f.moved = true; }
+            if (r.win) { tgt.owner = 'me'; tgt.army = Math.max(1, r.occupy); }
+            else tgt.army = Math.max(1, tgt.army - r.lostTheirs);
+          }
+          eu.aiTurn(ps, lv.aiPower, lv.aiAggro);
+          if (ps.every((p) => p.owner === 'me')) { wins++; break; }
+          if (!ps.some((p) => p.owner === 'me')) break;
+        }
+      } catch { crash++; }
+    }
+    return { pct: Math.round((wins / runs) * 100), crash };
+  };
+  const e1 = simLevel(0, 0.55);
+  const e5 = simLevel(4, 0.55);
+  ok(e1.crash === 0 && e5.crash === 0, 'партии на голой модели не падают');
+  ok(e1.pct >= 55, `обучающий уровень умная стратегия берёт в ${e1.pct} % случаев — игрок не должен тонуть в первом же раунде`);
+  ok(e5.pct < e1.pct && e5.pct > 5, `последний уровень сложнее первого, но играбелен (${e5.pct} % против ${e1.pct} %)`);
+}
 } finally {
   fs.rmSync(out, { recursive: true, force: true });
 }

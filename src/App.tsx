@@ -18,13 +18,16 @@ import {
   syncInstalledVersion,
 } from "./core/notify";
 import { upcomingBosses } from "./core/bosses";
-import { applyPerfMode, isLowFx, measurePerfOnce, resetFps } from "./core/perf";
+import {
+  applyPerfMode, isLowFx, measurePerfOnce, resetFps, startUiWatch,
+} from "./core/perf";
 import { initDesktopKeys, initStage, isDesktop, hasKeyboard } from "./core/desktop";
 import BootScreen from "./ui/BootScreen";
 import PcTopBar from "./ui/pc/PcTopBar";
 import { FpsHud, KeyCursor } from "./ui/PcHud";
 import { initGameKeys, handlesKeysNatively } from "./core/keymouse";
 import { setPlaying } from "./core/play";
+import { tr } from "./core/i18n";
 import FanficPage from "./pages/Fanfic";
 import Home from "./pages/Home";
 import { ModesProvider } from "./core/modes";
@@ -77,7 +80,7 @@ import type { GameId } from "./core/types";
  */
 
 function Shell() {
-  const { s } = useGame();
+  const { s, toast } = useGame();
   /** ПК-раскладка: верхняя панель вместо нижнего меню, две колонки на главной */
   const pc = isDesktop();
   const [splash, setSplash] = useState(true);
@@ -158,6 +161,24 @@ function Shell() {
     if (s.settings.notifyNews) void scheduleNewsNotifications();
     else void cancelNewsNotifications();
   }, [s.settings.notifyNews]);
+
+  /*
+   * Слежка за кадрами интерфейса. Главная страница — не игра: там нет
+   * канваса, который сам умеет ужиматься, поэтому если монитор не тянет
+   * пульсации, стекло и тени, лёгкий режим обязан включиться сам.
+   */
+  useEffect(() => {
+    return startUiWatch((fps) => {
+      if (!fps) return;
+      setLowFx(true);
+      toast({
+        title: tr("Интерфейс тормозил — включён лёгкий режим"),
+        sub: `${fps} FPS · ${tr("убрали стекло, тени и пульсации")}`,
+        icon: "speed",
+        tone: "normal",
+      });
+    });
+  }, [toast]);
 
   // системная кнопка/жест «назад» закрывает игру, а не приложение
   useEffect(() => {

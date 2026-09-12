@@ -1,6 +1,7 @@
 import fs from 'fs';
 import { execSync } from 'child_process';
 import path from 'path';
+import { pathToFileURL } from 'url';
 let fails=0;
 const ok=(c,m)=>{console.log((c?'  ✓ ':'  ✗ ')+m); if(!c)fails++;};
 
@@ -926,10 +927,16 @@ ok(/writeQuality/.test(pf28) && /part="perf"/.test(set25),
 
 console.log('\n[29] Клавиатура и мышь в играх');
 const km29 = fs.readFileSync('src/core/keymouse.ts', 'utf8');
+// клавиши живут в keymap.ts (их можно переназначить), а слой keymouse.ts
+// только спрашивает у него «какое это действие»
+const kp29 = fs.readFileSync('src/core/keymap.ts', 'utf8');
 for (const [k, n] of [['KeyW','W'],['KeyA','A'],['KeyS','S'],['KeyD','D'],
                       ['ArrowUp','↑'],['ArrowDown','↓'],['ArrowLeft','←'],['ArrowRight','→'],
                       ['Space','пробел'],['Enter','Enter'],['ShiftLeft','SHIFT']])
-  ok(km29.includes(k), `клавиша ${n} работает в играх`);
+  ok(km29.includes(k) || kp29.includes(k), `клавиша ${n} работает в играх`);
+ok(/export function bind/.test(kp29) && /export function actionFor/.test(kp29),
+  'клавишу можно назначить самому, и слой ввода это учитывает');
+ok(!/KeyW/.test(km29), 'слой больше не держит хардкод клавиш — иначе настройка игнорировалась бы');
 ok(/pointerdown/.test(km29) && /pointerup/.test(km29) && /"click"/.test(km29),
   'пробел шлёт pointerdown/pointerup и click — нажимаются и канвас, и DOM-кнопки');
 ok(/!== "CANVAS"/.test(km29), 'на канвасе лишнего клика нет: прицел-перетаскивание не ломается');
@@ -948,6 +955,199 @@ ok(/state\.usingKeys = false;/.test(km29),
   'движение мыши снимает клавиатурное кольцо: можно целиться мышью');
 ok(/top: calc\(var\(--sat, 0px\) \+ 58px\)/.test(css),
   'счётчик FPS стоит под шапкой игры, а не поверх «рекорда»');
+
+console.log('\n[30] ЧУБУПА УНИВЕРСАЛИС 5: кампания, общий удар, панель, консоль');
+{
+  const md = fs.readFileSync('src/games/europa/model.ts', 'utf8');
+  const eu = fs.readFileSync('src/games/Europa.tsx', 'utf8');
+  const css30 = fs.readFileSync('src/index.css', 'utf8');
+
+  ok(fs.existsSync('src/games/europa/model.ts'), 'правила режима вынесены из React в модель');
+  ok(/export const LEVELS/.test(md) && (md.match(/^    id: \d+,$/gm) || []).length >= 5,
+    'уровней не меньше пяти (1)…');
+  ok(!/const LEVELS =/.test(eu), 'UI не держит свою копию карты — уровни в модели');
+  ok(/prog \|\| 1/.test(eu) && /prog = Math\.min/.test(eu),
+    'прогресс кампании открыт в сохранении: победил — открылся следующий уровень');
+
+  // общий удар несколькими зданиями
+  ok(/setStrike\(\)/.test(eu) === false && /useState<number\[\]>\(\[\]\)/.test(eu),
+    'удар — список зданий, а не одно «выбранное»');
+  ok(/shiftKey.*setStrike|setStrike[\s\S]{0,400}shiftKey/.test(eu) || /e\.shiftKey/.test(eu),
+    'Shift+клик добавляет здание в общий удар');
+  ok(/strikePower\(froms\)/.test(eu) && /verdictFor\(froms/.test(eu),
+    'сила удара считается по всем выбранным зданиям');
+  ok(/froms.length > 1|many: best\.froms\.length/.test(eu + md),
+    'множественный удар есть и у игрока, и у ИИ');
+  ok(/applyBattleResult/.test(eu) && /applyBattleResult/.test(md),
+    'итог боя исполняет модель — у игрока и ИИ один и тот же закон потерь');
+
+  // панель прокачки СПРАВА, консоль СЛЕВА СВЕРХУ, подсказки СЛЕВА снизу
+  const side30 = css30.slice(css30.indexOf('.eu-side {'), css30.indexOf('.eu-side::-webkit-scrollbar'));
+  ok(/width: 30\dpx/.test(side30) && /border-left: 1px solid/.test(side30),
+    'панель стоит справа и отделена линией, а не висит снизу');
+  ok(/eu-map[\s\S]{0,4000}<SidePanel/.test(eu), 'в разметке карта идёт до панели: панель справа');
+  const con30 = css30.slice(css30.indexOf('.eu-console {'), css30.indexOf('.eu-line {'));
+  ok(/left: 8px/.test(con30) && /top: 8px/.test(con30), 'консоль событий — слева сверху');
+  ok(/max-width: 5\d%|max-width: 6\d%/.test(con30), 'консоль не перекрывает карту целиком');
+  const hint30 = css30.slice(css30.indexOf('.eu-hints {'), css30.indexOf('.eu-banner {'));
+  ok(/left: 8px/.test(hint30) && /bottom: 8px/.test(hint30), 'легенда значков — в левом нижнем углу');
+  ok(/pointer-events: none/.test(con30) && /pointer-events: none/.test(hint30),
+    'консоль и легенда не перехватывают клики по карте');
+
+  // производительность режима: никаких размытий иBackdrop-стёкол на карте
+  const euCss = (css30.match(/\.eu-[a-z-]+ \{[^}]*\}/g) || []).join('\n');
+  ok(!/backdrop-filter|filter:\s*blur/.test(euCss),
+    'в стиле режима нет blur и backdrop-filter — карта не должна жечь кадры');
+  ok(/will-change: transform/.test(euCss), 'узлы карты анимируются transform-ом');
+  ok(/html\.low-fx \.eu-/.test(css30), 'в лёгком режиме декор карты выключается');
+  ok(/isLowFx\(\)/.test(eu) && /lowFx \? /.test(eu),
+    'анимации боя слушают лёгкий режим: на слабом железе они мгновенные');
+
+  // анимация боя: марш → столкновение → итог
+  ok(/motion\.circle/.test(eu) && /eu-dot/.test(eu), 'войска идут точками по полю (SVG, без перерасчёта layout)');
+  ok(/eu-clash/.test(eu) && /eu-result/.test(eu), 'есть вспышка столкновения и плашка итога');
+  ok(/strike\.includes\(p\.id\)/.test(eu) && /\.eu-road\.queued/.test(css30),
+    'дорога заявленного в общий удар здания подсвечивается — очередь удара видно на карте');
+  ok(/: 620\)/.test(eu) && /: 980\)/.test(eu) && /: 2300\)/.test(eu),
+    'бой разложен по времени: марш, удар, итог');
+  ok(/ВЗЯТО|ОТБИЛИСЬ/.test(eu), 'итог назван словами: взято или отбились');
+
+  // оценка опасности чужого здания
+  ok(/ПЕРЕВЕС|ОПАСНО|САМОУБИЙСТВО/.test(md), 'вердикт называется словами, а не только числом');
+  ok(/eu-warn/.test(eu), 'предупреждение об опасности вынесено в отдельный блок');
+  ok(/КТО СМОТРИТ НА ТЕБЯ/.test(eu), 'показано, кто в этот момент может ударить по тебе');
+
+  // у каждого здания своё войско и своя роль
+  ok((md.match(/name: "/g) || []).length > 40, 'зданий и уровней много, а не три копии');
+  ok((md.match(/ \{ name: "[^"]+", at: \d+, icon:/g) || []).length >= 6, 'рангов не меньше шести');
+  ok(/troop:/.test(md) && (md.match(/troop: "/g) || []).length >= 10,
+    'у каждого типа здания своё войско и название его «банды»');
+  ok(/action: "(reinforce|siege|agitate|sabotage)"/.test(md), 'у зданий есть спецдействия');
+
+  // раунды и сколько получил
+  ok(/РАУНД/.test(eu) && /banner/.test(eu), 'сверху показан номер раунда и сколько казны пришло');
+  ok(/раундов/.test(eu) && /turns/.test(md), 'остаток раундов виден в панели');
+
+  // ранг
+  ok(/rankOf\(glory\)/.test(eu) && /gloryFor\(/.test(md),
+    'ранг считается по сумме славы за все партии');
+  // клавиши режима
+  ok(/for \(const code of codesFor\(act\)\)/.test(eu),
+    'ходьба по дорогам берёт клавиши из настроек, а не из хардкода');
+  ok(/code === "Space"/.test(eu) && /e\.key === "Enter"/.test(eu),
+    'пробел закрывает раунд, Enter бьёт — с клавиатуры играть можно целиком');
+  ok(/handlesKeysNatively|europa/.test(fs.readFileSync('src/core/keymouse.ts', 'utf8')),
+    'слой клавиш не дублирует ввод в стратегию');
+  ok(/n >= 1 && n <= 4/.test(eu) && /recruit\(3\)/.test(eu) && /recruit\(0\)/.test(eu),
+    'цифры 1…4 качают здания, 5 и 6 нанимают с клавиатуры');
+
+  // тексты и подписи
+  const rules30 = fs.readFileSync('src/core/rules.ts', 'utf8');
+  const ru = rules30.slice(rules30.indexOf('europa: {'), rules30.indexOf('europa: {') + 1600);
+  ok(/5 уровней|от первого этажа/.test(ru), 'правила описывают кампанию, а не одну карту');
+  ok(/Shift\+клик/.test(ru), 'в правилах сказано про общий удар');
+  const en30 = fs.readFileSync('src/core/i18n-en.ts', 'utf8');
+  for (const k of ['ОТПРАВИТЬ В УДАР', 'КТО СМОТРИТ НА ТЕБЯ', 'СЛЕДУЮЩИЙ РАУНД', 'КАК ИГРАТЬ']) {
+    ok(en30.includes(`"${k}":`), `переведено: ${k}`);
+  }
+}
+{
+  // переassignирование клавиш: настройка есть, работает через общий слой
+  const kmap = fs.readFileSync('src/core/keymap.ts', 'utf8');
+  const km30 = fs.readFileSync('src/core/keymouse.ts', 'utf8');
+  const st30 = fs.readFileSync('src/pages/Settings.tsx', 'utf8');
+  const card = fs.readFileSync('src/ui/KeymapCard.tsx', 'utf8');
+  ok(fs.existsSync('src/core/keymap.ts'), 'назначение клавиш вынесено в общий модуль');
+  ok(/export function bind/.test(kmap) && /export function unbind/.test(kmap) && /export function resetKeymap/.test(kmap),
+    'клавишу можно назначить, снять и всё вернуть');
+  ok(/ALWAYS: Record<KeyAction/.test(kmap), 'стрелки, пробел и Shift остаются всегда — потерять управление нельзя');
+  ok(/actionFor\(e\.code\)|keyAction\(e\.code\)/.test(km30), 'слой ввода читает настройки, а не хардкод');
+  ok(st30.includes('<KeymapCard />'), 'карточка клавиш стоит в настройках');
+  ok(/жми любую клавишу/.test(card), 'режим назначения объясняет, что делать');
+  ok(/"F12"/.test(card) && /MetaLeft/.test(card),
+    'служебные клавиши (Alt, Win, F1…F12) назначать запрещено — можно заклинить систему');
+}
+
+console.log('\n[31] Экраны режима собраны по-настоящему (renderToStaticMarkup)');
+{
+  // Проверка не «поиск подстрок в исходнике», а реальная сборка разметки:
+  // esbuild packует Europa.tsx, React рисует его на Node, и мы смотрим, что
+  // получилось. Так видно пустой панель, отсутствующий шанс боя и цену,
+  // уехавшую в NaN.
+  // черновик держим в репозитории (в .tmp-ui-render и под .gitignore-подобным
+  // именем): esbuild должен видеть node_modules, а на delete мы не надеемся
+  const outDir = path.join(process.cwd(), '.tmp-ui-render');
+  fs.mkdirSync(outDir, { recursive: true });
+  const entry = path.join(outDir, 'entry.tsx');
+  fs.writeFileSync(entry, [
+    'import { renderToStaticMarkup } from "react-dom/server";',
+    'import React from "react";',
+    'import { MapNode, SidePanel, BattleMark, LevelPick } from "../src/games/Europa";',
+    'import { freshProvs, LEVELS, fight, verdictFor, rankOf } from "../src/games/europa/model";',
+    'const P = (id, over) => Object.assign(JSON.parse(JSON.stringify(freshProvs(LEVELS[id])[0])), over);',
+    'export function render() {',
+    '  const out = {};',
+    '  const ps = freshProvs(LEVELS[1]);',
+    '  const me = ps[0], foe = ps.find((x) => x.owner !== "me");',
+    '  const res = fight([me], foe, false);',
+    '  out.map = renderToStaticMarkup(React.createElement(MapNode, {',
+    '    p: me, active: true, queued: true, siegeReady: false, target: false,',
+    '    onPick() {}, onQueue() {},',
+    '  }));',
+    '  out.mine = renderToStaticMarkup(React.createElement(SidePanel, {',
+    '    p: me, provs: ps, gold: 120, onBuy() {}, onRecruit() {}, onSpecial() {},',
+    '    onToggleStrike() {}, queued: false, onAttack() {}, froms: [], vw: null,',
+    '    threats: [], siegeReady: false, play: true,',
+    '  }));',
+    '  out.foe = renderToStaticMarkup(React.createElement(SidePanel, {',
+    '    p: foe, provs: ps, gold: 120, onBuy() {}, onRecruit() {}, onSpecial() {},',
+    '    onToggleStrike() {}, queued: false, onAttack() {}, froms: [me],',
+    '    vw: verdictFor([me], foe, false), threats: [], siegeReady: false, play: true,',
+    '  }));',
+    '  out.battle = renderToStaticMarkup(React.createElement(BattleMark, {',
+    '    battle: { to: foe.id, froms: [me.id], res, step: 2 }, provs: ps, step: 2, lowFx: false,',
+    '  }));',
+    '  out.pick = renderToStaticMarkup(React.createElement(LevelPick, {',
+    '    unlocked: 2, rank: rankOf(900), glory: 900, onStart() {}, onExit() {},',
+    '  }));',
+    '  return out;',
+    '}',
+  ].join('\n'));
+  let r31 = null;
+  try {
+    const esbuild = await import('esbuild');
+    await esbuild.build({
+      entryPoints: [entry],
+      outfile: path.join(outDir, 'out.mjs'),
+      bundle: true, format: 'esm', platform: 'node', jsx: 'automatic',
+      external: ['react', 'react-dom'], logLevel: 'error',
+    });
+    const g = globalThis;
+    g.localStorage = { store: new Map(), getItem(k) { return this.store.get(k) ?? null; }, setItem(k, v) { this.store.set(k, String(v)); }, removeItem(k) { this.store.delete(k); } };
+    g.matchMedia = g.matchMedia || (() => ({ matches: false, addEventListener() {}, removeEventListener() {} }));
+    g.ResizeObserver = g.ResizeObserver || class { observe() {} unobserve() {} disconnect() {} };
+    r31 = (await import(pathToFileURL(path.join(outDir, 'out.mjs')).href)).render();
+  } catch (e) {
+    ok(false, `экраны режима собраны: ${String(e.message).slice(0, 120)}`);
+  }
+  if (r31) {
+    ok(/eu-node/.test(r31.map) && />8</.test(r31.map) && /eu-node-army/.test(r31.map),
+      'узел карты показывает название здания и его войско');
+    ok(/queued/.test(r31.map) && /active/.test(r31.map), 'узел умеет выглядеть «выбранным» и «в ударе»');
+    ok(/eu-row/.test(r31.mine) && (r31.mine.match(/eu-row /g) || []).length >= 4,
+      'панель своего здания даёт все четыре ветки прокачки');
+    ok(/НАНЯТЬ|RECRUIT/.test(r31.mine), 'в панели есть наём войска');
+    ok(!/NaN|undefined%/.test(r31.mine + r31.foe + r31.map), 'в панели нет NaN и «undefined» — цены и проценты живые');
+    ok(/ШАНС|ОDDS|odds/i.test(r31.foe) && /%/.test(r31.foe), 'по чужому зданию показан шанс взятия в процентах');
+    ok(/УДАРИТЬ|STRIKE/.test(r31.foe), 'по чужому зданию есть кнопка удара');
+    ok(/eu-dot/.test(r31.battle), 'бой рисует точки-отряды');
+    ok(/ВЗЯТО|ОТБИЛИСЬ/.test(r31.battle), 'бой показывает итог словами');
+    ok((r31.battle.match(/eu-dot/g) || []).length >= 2, 'в удар идёт несколько точек, а не одна');
+    ok((r31.pick.match(/eu-lvl/g) || []).length >= 10, `экран выбора уровня показывает все пять уровней`);
+    ok(/locked/.test(r31.pick), 'закрытые уровни помечены как закрытые');
+  }
+  fs.rmSync(outDir, { recursive: true, force: true });
+}
 
 console.log(fails===0?'\n✅ ВСЕ ПРОВЕРКИ ВЁРСТКИ ПРОЙДЕНЫ\n':`\n❌ ПРОВАЛЕНО: ${fails}\n`);
 process.exit(fails?1:0);
