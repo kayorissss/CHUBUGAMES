@@ -4452,10 +4452,48 @@ html.graphite {
 .eu-node.target::after { border-style: solid; border-color: var(--danger); }
 
 /* ── бой ── */
+/* ── ЗАМЕС: две колонны сходятся на середине дороги ──
+   Раньше `.eu-dot` был один цвет и одна волна, и со стороны это выглядело
+   как «точки доехали до кружка». Теперь у атаки и у гарнизона свои цвета,
+   у удара две волны с задержкой, а потери всплывают над обеими сторонами. */
 .eu-battle { position: absolute; inset: 0; pointer-events: none; }
-.eu-dot { fill: var(--acc); }
+.eu-dot {
+  stroke-width: 0.35;
+  paint-order: stroke;
+}
+.eu-dot.atk {
+  fill: var(--acc);
+  stroke: color-mix(in srgb, var(--acc) 45%, #ffffff);
+  filter: drop-shadow(0 0 1.4px var(--acc-glow));
+}
+.eu-dot.def {
+  fill: var(--danger);
+  stroke: color-mix(in srgb, var(--danger) 40%, #ffffff);
+}
 .eu-dot.lose { fill: var(--danger); }
-.eu-clash { fill: none; stroke: #fff; stroke-width: 0.5; }
+/* в момент удара точки тяжелеют — иначе «столкновение» не видно на масштабе карты */
+.eu-dot.clash { stroke-width: 0.7; }
+.eu-clash {
+  fill: none;
+  stroke: #ffffff;
+  stroke-width: 0.55;
+}
+.eu-clash.two { stroke: var(--acc); stroke-width: 0.85; }
+/* числа потерь — у своей колонны и у гарнизона, а не только в плашке итога */
+.eu-loss {
+  position: absolute;
+  transform: translate(-50%, -140%);
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  background: rgba(6, 6, 8, 0.72);
+  border: 1px solid var(--surface-brd);
+  white-space: nowrap;
+}
+.eu-loss.atk { color: var(--acc-text); border-color: var(--acc-line); }
+.eu-loss.def { color: var(--danger); border-color: var(--danger-brd); }
 .eu-result {
   position: absolute;
   left: 50%;
@@ -4470,6 +4508,7 @@ html.graphite {
   white-space: nowrap;
 }
 .eu-result.lose { border-color: var(--danger-brd); color: var(--danger); }
+html.low-fx .eu-dot { filter: none; }
 
 /* ── консоль событий (слева сверху) ── */
 .eu-console {

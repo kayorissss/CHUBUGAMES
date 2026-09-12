@@ -1845,5 +1845,33 @@ console.log('\n[46] 1.27: ежедневный вход — страница с 
   ok(/КРАСНАЯ|pc-seg-dot/.test(prog), 'точка «есть награда» на вкладке ежедневных наград осталась');
 }
 
+console.log('\n[47] 1.27: в ЧУБУПА УНИВЕРСАЛИС видно поединок');
+{
+  const css = fs.readFileSync('src/index.css', 'utf8');
+  const eu = fs.readFileSync('src/games/Europa.tsx', 'utf8');
+  const bm = eu.slice(eu.indexOf('export function BattleMark'), eu.indexOf('export function SidePanel'));
+
+  ok(/className=\{`eu-dot def/.test(bm),
+    'у цели есть свой гарнизон на поле: бой выглядит столкновением, а не «переездом»');
+  ok(/const mx = \(ax \+ to\.x\) \/ 2 \* 100/.test(bm) && /const my = \(ay \+ to\.y\) \/ 2 \* 100/.test(bm),
+    'удар принимается в середине дороги — стороны реально сходятся, а не врезаются в здание');
+  ok(/const atkPos = step === 0 \? 0\.42 : step === 1 \? 0\.5 : win \? 1 : 0\.3/.test(bm) &&
+     /const defPos = step === 0 \? 0\.62 : step === 1 \? 0\.5 : win \? 0\.92 : 0\.66/.test(bm),
+    'шаги боя: марш → сход → итог со вдавливанием победителя и отбросом проигравшего');
+  ok(bm.split('eu-clash').length >= 3 && /\.eu-clash\.two/.test(css),
+    'удар рисуют две волны с задержкой — он читается ударом, а не миганием');
+  ok(/className="eu-loss atk"/.test(bm) && /className="eu-loss def"/.test(bm) &&
+     /\.eu-loss \{/.test(css),
+    'потери всплывают над обеими колоннами, а не только в плашке итога');
+  ok(/\.eu-dot\.atk \{[^}]*--acc/.test(css) && /\.eu-dot\.def \{[^}]*--danger/.test(css),
+    'свои и чужие в бою различаются цветами сторон');
+  ok(/\.eu-dot\.clash \{[^}]*stroke-width/.test(css),
+    'в момент удара точки тяжелеют — на масштабе карты иначе столкновение не видно');
+  ok(/html\.low-fx \.eu-dot \{ filter: none; \}/.test(css) && /lowFx \? 0\.01 : 0\.5/.test(bm),
+    'в лёгком режиме замес собирается за один кадр и без свечения');
+  ok(!/animate=\{\{[^}]*repeat: Infinity/.test(bm),
+    'в бою нет бесконечных петель — анимация конечна и не ест кадры во время хода');
+}
+
 console.log(fails===0?'\n✅ ВСЕ ПРОВЕРКИ ВЁРСТКИ ПРОЙДЕНЫ\n':`\n❌ ПРОВАЛЕНО: ${fails}\n`);
 process.exit(fails?1:0);

@@ -871,35 +871,87 @@ export function MapNode({ p, active, queued, siegeReady, target, onPick, onQueue
  * табличка итога. Дешёвая по железу: двигаются восемь-двенадцать
  * трансформаций, никаких фильтров.
  */
+/**
+ * ЗАМЕС.
+ *
+ * Просьба: «не видно, что происходит — нужен заметный поединок». Раньше по
+ * дороге ехали точки атакующих в цель, и только там разрасталось кольцо:
+ * защитников не было вовсе, поэтому бой читался как «переезд», а не как
+ * столкновение двух сторон.
+ *
+ * Теперь: навстречу выходят ОБОЕ — мои идут от своих зданий, гарнизон цели
+ * выходит из цели; сходятся на середине дороги (шаг 0 — марш, шаг 1 — удар и
+ * ударная волна ровно в точке схода, шаг 2 — итог: победитель вдавливает
+ * противника до самой цели, проигравшего отбрасывает назад и гасит).
+ * Числа потерь всплывают у каждой стороны, поэтому итог виден не только в
+ * плашке, но и на поле. Всё на transform/opacity/cx-cy, в лёгком режиме
+ * (lowFx) — один кадр без движения.
+ */
 export function BattleMark({ battle, provs, step, lowFx }: {
   battle: Battle; provs: Prov[]; step: 0 | 1 | 2; lowFx: boolean;
 }) {
   const to = provs.find((p) => p.id === battle.to);
   if (!to) return null;
+  const win = battle.res.win;
+  /** где сходятся: середина дороги между осью атаки и целью */
+  const mine = battle.froms.map((id) => provs.find((x) => x.id === id)!).filter(Boolean);
+  if (!mine.length) return null;
+  const ax = mine.reduce((a, p) => a + p.x, 0) / mine.length;
+  const ay = mine.reduce((a, p) => a + p.y, 0) / mine.length;
+  const mx = (ax + to.x) / 2 * 100;
+  const my = (ay + to.y) / 2 * 100;
+
+  /** доля пути: 0 — у своего здания, 1 — у цели */
+  const atkPos = step === 0 ? 0.42 : step === 1 ? 0.5 : win ? 1 : 0.3;
+  const defPos = step === 0 ? 0.62 : step === 1 ? 0.5 : win ? 0.92 : 0.66;
+  const dur = lowFx ? 0.01 : 0.5;
+
   const dots: ReactElement[] = [];
-  battle.froms.forEach((id, si) => {
-    const from = provs.find((p) => p.id === id);
-    if (!from) return;
+  mine.forEach((from, si) => {
     const n = Math.min(6, Math.max(2, Math.round((from.army - 1) / 2)));
+    const px = to.x * 100 - from.x * 100;
+    const py = to.y * 100 - from.y * 100;
     for (let i = 0; i < n; i++) {
-      // разброс по колонне: без него отряд выглядит одной точкой
-      const jx = (((i * 37) % 9) - 4) * 0.16;
-      const jy = (((i * 53) % 7) - 3) * 0.16;
+      // разброс по колонне: без неё отряд выглядит одной точкой
+      const jx = (((i * 37) % 9) - 4) * 0.9;
+      const jy = (((i * 53) % 7) - 3) * 0.9;
       dots.push(
         <motion.circle
-          key={`${id}-${i}`}
-          className={`eu-dot ${battle.res.win ? "win" : "lose"}`}
-          initial={{ cx: from.x * 100 + jx, cy: from.y * 100 + jy, opacity: 0.35 }}
+          key={`a${from.id}-${i}`}
+          className={`eu-dot atk${step >= 1 ? " clash" : ""}`}
+          r={1.15}
+          initial={false}
           animate={{
-            cx: step === 0 && !lowFx ? from.x * 100 + jx : to.x * 100 + jx * 2.2,
-            cy: step === 0 && !lowFx ? from.y * 100 + jy : to.y * 100 + jy * 2.2,
-            opacity: 1,
+            cx: from.x * 100 + px * atkPos + jx,
+            cy: from.y * 100 + py * atkPos + jy,
+            opacity: step === 2 && !win ? 0.45 : 1,
           }}
-          transition={{ duration: lowFx ? 0.01 : 0.62, delay: lowFx ? 0 : i * 0.035 + si * 0.05, ease: "easeIn" }}
+          transition={{ duration: dur, delay: lowFx ? 0 : si * 0.04 + i * 0.02, ease: "easeInOut" }}
         />,
       );
     }
   });
+  // гарнизон цели: столько же точек, но цвета владельца и — выход цели
+  const dn = Math.min(6, Math.max(2, Math.round(to.army / 2)));
+  for (let i = 0; i < dn; i++) {
+    const jx = (((i * 41) % 9) - 4) * 0.9;
+    const jy = (((i * 29) % 7) - 3) * 0.9;
+    dots.push(
+      <motion.circle
+        key={`d${to.id}-${i}`}
+        className={`eu-dot def${step >= 1 ? " clash" : ""}`}
+        r={1.15}
+        initial={false}
+        animate={{
+          cx: to.x * 100 + (ax - to.x) * 100 * (1 - defPos) + jx,
+          cy: to.y * 100 + (ay - to.y) * 100 * (1 - defPos) + jy,
+          opacity: step === 2 && win ? 0.3 : 1,
+        }}
+        transition={{ duration: dur, delay: lowFx ? 0 : i * 0.03, ease: "easeInOut" }}
+      />,
+    );
+  }
+
   return (
     <div className="eu-battle">
       <svg className="eu-battle-svg" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden>
@@ -907,27 +959,63 @@ export function BattleMark({ battle, provs, step, lowFx }: {
         {step >= 1 && (
           <motion.circle
             className="eu-clash"
-            cx={to.x * 100}
-            cy={to.y * 100}
-            initial={{ r: lowFx ? 6 : 1, opacity: 0.95 }}
-            animate={{ r: lowFx ? 6 : 8.5, opacity: 0 }}
-            transition={{ duration: lowFx ? 0.02 : 0.72, ease: "easeOut" }}
+            cx={mx}
+            cy={my}
+            initial={{ r: lowFx ? 6 : 0.8, opacity: 0.95 }}
+            animate={{ r: lowFx ? 6 : 11, opacity: 0 }}
+            transition={{ duration: lowFx ? 0.02 : 0.78, ease: "easeOut" }}
+          />
+        )}
+        {step >= 1 && (
+          /* вторая волна — с задержкой: удар читается как удар, а не как мигание */
+          <motion.circle
+            className="eu-clash two"
+            cx={mx}
+            cy={my}
+            initial={{ r: lowFx ? 4 : 0.8, opacity: 0.7 }}
+            animate={{ r: lowFx ? 4 : 7.5, opacity: 0 }}
+            transition={{ duration: lowFx ? 0.02 : 0.62, delay: lowFx ? 0 : 0.12, ease: "easeOut" }}
           />
         )}
       </svg>
+
+      {/* потери — прямо над полем: у своей колонны и у гарнизона */}
+      {step >= 2 && (
+        <>
+          <motion.div
+            className="eu-loss atk"
+            initial={{ opacity: 0, y: lowFx ? 0 : 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: lowFx ? 0.01 : 0.2 }}
+            style={{ left: `${ax * 100}%`, top: `${ay * 100}%` }}
+          >
+            −{battle.res.lostMine}
+          </motion.div>
+          <motion.div
+            className="eu-loss def"
+            initial={{ opacity: 0, y: lowFx ? 0 : 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: lowFx ? 0.01 : 0.2, delay: lowFx ? 0 : 0.06 }}
+            style={{ left: `${to.x * 100}%`, top: `${to.y * 100}%` }}
+          >
+            −{battle.res.lostTheirs}
+          </motion.div>
+        </>
+      )}
+
       {step >= 2 && (
         <motion.div
-          className={`eu-result ${battle.res.win ? "win" : "lose"}`}
-          initial={{ opacity: 0, y: lowFx ? 0 : 12, scale: lowFx ? 1 : 0.92 }}
+          className={`eu-result ${win ? "win" : "lose"}`}
+          initial={{ opacity: 0, y: lowFx ? 0 : 12, scale: lowFx ? 1 : 0.94 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
-          transition={{ duration: lowFx ? 0.01 : 0.2 }}
+          transition={{ duration: lowFx ? 0.01 : 0.22 }}
         >
           <div className="t-display" style={{ fontSize: 16 }}>
-            {battle.res.win ? tr("ВЗЯТО") : tr("ОТБИЛИСЬ")}
+            {win ? tr("ВЗЯТО") : tr("ОТБИЛИСЬ")}
           </div>
           <div className="t-caption" style={{ fontSize: 9.5 }}>
-            {tr("у нас −")}{battle.res.lostMine} · {tr("у них −")}{battle.res.lostTheirs}
-            {" · "}{Math.round(battle.res.atkRoll)} : {Math.round(battle.res.defRoll)}
+            {tr("штурм")} {Math.round(battle.res.atkRoll)} : {tr("оборона")} {Math.round(battle.res.defRoll)}
+            {" · "}{tr("у нас −")}{battle.res.lostMine} · {tr("у них −")}{battle.res.lostTheirs}
           </div>
         </motion.div>
       )}
