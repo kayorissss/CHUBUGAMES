@@ -390,6 +390,8 @@ jobs:
             printf '```\n'
             cat CHUBUGAMES.apk.sha256
             printf '```\n'
+          printf '\n---\n\n'
+          printf 'Собрано: %s · коммит `%s` · сборка #%s в GitHub Actions. Если на странице релиза дата «released this» старее — это дата создания самого релиза, она не пересоздаётся; ориентируйся на эту строку и на SHA-256 выше.\n' "$(date -u '+%Y-%m-%d %H:%M UTC')" "${GITHUB_SHA:0:7}" "$GITHUB_RUN_NUMBER"
           } > RELEASE_BODY.md
           cat RELEASE_BODY.md
 
@@ -409,13 +411,16 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       # Плавающий тег — это не про историю, а про «что выложено прямо сейчас».
-      # Теги desktop/latest когда-то были созданы на коммите мая и с тех пор
-      # не двигались, поэтому страница релиза выглядела как старая сборка:
-      # в шапке «released this …» дата прошлого выпуска, рядом показан коммит
-      # семимесячной давности, а «Source code (zip/tar.gz)» качал исходники не
-      # того, из чего собран этот exe. Двигаем тег на коммит прогона и
-      # возвращаем релизу актуальную дату публикации: GitHub считает
-      # «published» по переходу из draft, сама она не обновится.
+      # Теги desktop/latest были созданы на коммите мая и с тех пор не
+      # двигались: страница релиза выглядела как древняя сборка (в шапке дата
+      # прошлого выпуска и майский коммит), а «Source code (zip/tar.gz)» качал
+      # исходники не того, из чего собран этот exe. Двигаем тег на коммит
+      # прогона — тогда и архивы, и «Compare», и шапка соответствуют файлу.
+      #
+      # Дату «released this» специально не подделываем: переход draft → published
+      # через gh release edit published_at не обновляет (проверено на черновом
+      # релизе), а риск остаться в состоянии draft — это 404 для всех, кто качает.
+      # Актуальность сборки видна по строке «Собрано: …» в теле релиза.
       - name: Point the floating tag at the built commit
         if: steps.kind.outputs.release == 'true'
         shell: bash
@@ -428,9 +433,7 @@ jobs:
               -f ref="refs/tags/latest" -f sha="$GITHUB_SHA"
           fi
           echo "тег latest -> $GITHUB_SHA"
-          gh release edit latest --draft=true --title "Android-сборка $APP_VER"
-          gh release edit latest --draft=false --title "Android-сборка $APP_VER" --latest
-
+          gh release edit latest --title "Android-сборка $APP_VER" --target "$GITHUB_SHA"
       # Тег latest остаётся точкой публикации: на него ведут ссылка внутри
       # самого приложения (updater спрашивает releases/tags/latest), ссылки в
       # README и закладки тех, кто качал игру раньше. Меняется только то, что
