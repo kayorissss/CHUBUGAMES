@@ -36,8 +36,13 @@ import { readGamble } from "../../core/gamble";
  * валюты скрываются медиазапросами, а не наползанием друг на друга).
  */
 
-/** Разделы. Порядок = порядок вкладок на телефоне, цифры 1–5 те же. */
-const TABS: { id: Tab; label: string; icon: IconName }[] = [
+/**
+ * Разделы. Казино — не «вторая страница» главной, а постоянный раздел: его
+ * просили поднять в панель перед «Прогрессом», потому что с главной оно
+ * уехало, а искать его в двух переходах — неудобно.
+ */
+const TABS: { id: Tab | "casino"; label: string; icon: IconName; sub?: boolean }[] = [
+  { id: "casino", label: "Казино", icon: "ticket", sub: true },
   { id: "progress", label: "Прогресс", icon: "chart" },
   { id: "shop", label: "Магазин", icon: "shop" },
   { id: "friends", label: "Персонажи", icon: "users" },
@@ -135,14 +140,14 @@ export default function PcTopBar({
       {/* Разделы */}
       <nav className="pc-bar-tabs" aria-label={tr("Разделы")}>
         {TABS.map((it) => {
-          const on = tab === it.id && !sub;
+          const on = it.sub ? sub === it.id : tab === it.id && !sub;
           return (
             <button
               key={it.id}
               type="button"
               className={`pc-tab ${on ? "on" : ""}`}
               aria-current={on ? "page" : undefined}
-              onClick={() => go(it.id)}
+              onClick={() => (it.sub ? (sfx.click(), haptic("light"), onOpen?.("casino")) : go(it.id as Tab))}
             >
               {on && (
                 <motion.span

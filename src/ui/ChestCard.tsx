@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Panel, Tap } from "./Glass";
 import Icon from "./Icon";
 import { useGame } from "../core/store";
 import { tr } from "../core/i18n";
@@ -15,8 +14,16 @@ import {
  * ЕЖЕЧАСНЫЙ СУНДУК.
  *
  * Повод заглянуть между парами: раз в час копится небольшая награда.
- * Специально сделан слабее одного забега — он дополняет игру, а не
- * заменяет её (расчёт в friendship.ts).
+ * Специально сделан слабее одного забега — он дополняет игру, а не заменяет
+ * её (расчёт в friendship.ts).
+ *
+ * Почему переверстан (жалоба «ежечасный сундук вообще стрёмный»): раньше это
+ * была горизонтальная полоска на всю ширину — иконка 40 px, текст в одну
+ * строку и тонкая полоска прогресса. Ни накопления, ни ожидания, ни «что
+ * внутри»: выглядело как уведомление, а не как награда. Теперь это отдельная
+ * карточка-сейф: крупный таймер, ряд ячеек накопления (12 делений — видно,
+ * как час заполняется), явная награда двумя чипами и кнопка, которая светится
+ * ровно тогда, когда можно забрать.
  */
 
 function mmss(ms: number) {
@@ -25,6 +32,9 @@ function mmss(ms: number) {
   const s = t % 60;
   return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
 }
+
+/** 12 ячеек накопления: сколько заполнено — видно без линейки */
+const CELLS = 12;
 
 export default function ChestCard() {
   const { s, addCoins, toast } = useGame();
@@ -41,6 +51,8 @@ export default function ChestCard() {
   const ready = chestReady(st);
   const left = chestLeft(st);
   const rw = chestReward(s.level, st.chestCount);
+  const frac = Math.max(0, Math.min(1, 1 - left / CHEST_MS));
+  const filled = ready ? CELLS : Math.floor(frac * CELLS);
 
   const take = () => {
     if (!ready) return;
@@ -64,96 +76,85 @@ export default function ChestCard() {
     });
   };
 
-  const frac = 1 - left / CHEST_MS;
-
   return (
-    <Panel
-      r="lg"
-      style={{
-        padding: 13,
-        marginBottom: 10,
-        position: "relative",
-        overflow: "hidden",
-        border: ready ? "1px solid var(--gold-brd)" : undefined,
-        background: ready ? "var(--gold-soft)" : undefined,
-      }}
-    >
+    <div className={`chest2 ${ready ? "ready" : ""}`}>
       {/* вспышка при открытии */}
       <AnimatePresence>
         {burst && (
           <motion.div
             initial={{ opacity: 0.85, scale: 0.6 }}
-            animate={{ opacity: 0, scale: 2.2 }}
+            animate={{ opacity: 0, scale: 2.1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.9 }}
-            className="absolute pointer-events-none"
-            style={{
-              inset: 0,
-              background: "radial-gradient(circle at 22% 50%, var(--gold), transparent 62%)",
-            }}
+            className="chest2-burst"
           />
         )}
       </AnimatePresence>
 
-      <div className="flex items-center" style={{ gap: 11, position: "relative" }}>
+      <div className="chest2-head">
         <motion.span
-          animate={ready ? { rotate: [0, -7, 7, -4, 0], scale: [1, 1.06, 1] } : {}}
-          transition={{ duration: 1.1, repeat: ready ? Infinity : 0, repeatDelay: 1.6 }}
-          className="shrink-0 flex items-center justify-center"
-          style={{
-            width: 40, height: 40, borderRadius: "var(--r-sm)",
-            background: ready ? "var(--gold)" : "var(--surface-2)",
-            border: `1px solid ${ready ? "var(--gold)" : "var(--surface-brd)"}`,
-            color: ready ? "var(--acc-ink)" : "var(--text-mute)",
-          }}
+          className="chest2-ico"
+          animate={ready ? { rotate: [0, -6, 6, -3, 0], scale: [1, 1.07, 1] } : {}}
+          transition={{ duration: 1.2, repeat: ready ? Infinity : 0, repeatDelay: 1.8 }}
         >
           <Icon name="case" size={20} />
         </motion.span>
-
-        <span className="flex-1 min-w-0">
-          <span className="t-title-sm clip1 block">{tr("Ежечасный сундук")}</span>
-          <span className="t-caption clip1 block" style={{ marginTop: 2, fontSize: 9.5 }}>
-            {ready
-              ? `+${fmt(rw.coins)} ${tr("и")} ${rw.chips} ${tr("жетонов")}`
-              : `${tr("будет через")} ${mmss(left)}`}
+        <div className="min-w-0">
+          <div className="t-label chest2-kicker">{tr("ЕЖЕЧАСНЫЙ СУНДУК")}</div>
+          <div className="t-caption chest2-state">
+            {ready ? tr("можно забирать") : `${tr("откроется через")} ${mmss(left)}`}
+          </div>
+        </div>
+        {st.chestCount > 0 && (
+          <span className="chest2-count" title={tr("открыто сундуков")}>
+            ×{st.chestCount}
           </span>
-
-          {!ready && (
-            <span
-              className="block"
-              style={{
-                height: 4, borderRadius: 99, marginTop: 6,
-                background: "var(--surface-3)", overflow: "hidden",
-              }}
-            >
-              <span
-                className="block"
-                style={{
-                  height: "100%",
-                  width: `${Math.round(frac * 100)}%`,
-                  background: "var(--acc)",
-                }}
-              />
-            </span>
-          )}
-        </span>
-
-        <Tap
-          onClick={take}
-          disabled={!ready}
-          accent={ready}
-          r="sm"
-          center
-          className="t-label shrink-0"
-          style={{
-            padding: "11px 15px", fontSize: 9.5,
-            opacity: ready ? 1 : 0.45,
-          }}
-          sound="none"
-        >
-          {ready ? tr("ЗАБРАТЬ") : tr("ЖДЁМ")}
-        </Tap>
+        )}
       </div>
-    </Panel>
+
+      <div className={`chest2-timer ${ready ? "go" : ""}`}>
+        {ready ? tr("ГОТОВ") : mmss(left)}
+      </div>
+
+      {/* накопление: 12 ячеек вместо тонкой полоски — видно прогресс часа */}
+      <div className="chest2-cells" aria-hidden>
+        {Array.from({ length: CELLS }).map((_, i) => (
+          <span
+            key={i}
+            className={`chest2-cell ${i < filled ? "on" : ""}`}
+            style={{ transitionDelay: `${i * 24}ms` }}
+          />
+        ))}
+      </div>
+
+      <div className="chest2-prize">
+        <span className="chest2-chip">
+          <Icon name="coin" size={12} />+{fmt(rw.coins)}
+        </span>
+        <span className="chest2-chip violet">
+          <Icon name="ticket" size={12} />+{rw.chips}
+        </span>
+      </div>
+
+      <button
+        type="button"
+        className={`chest2-btn ${ready ? "on" : ""}`}
+        onClick={take}
+        disabled={!ready}
+        onMouseEnter={() => ready && haptic("light")}
+      >
+        {ready ? (
+          <>
+            <Icon name="bolt" size={15} />
+            {tr("ЗАБРАТЬ")}
+          </>
+        ) : (
+          <>
+            <Icon name="clock" size={15} />
+            {tr("ЖДЁМ")}
+          </>
+        )}
+      </button>
+    </div>
   );
 }

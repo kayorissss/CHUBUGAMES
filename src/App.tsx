@@ -7,6 +7,7 @@ import Nav, { type Tab } from "./components/Nav";
 /** Подстраницы поверх вкладок */
 export type SubPage = "network" | "casino" | "donate" | "boss" | "fanfic";
 import { Toasts, OfflineModal } from "./components/Overlays";
+import PcBoost from "./ui/pc/PcBoost";
 import UpdateBanner from "./ui/UpdateBanner";
 import WhatsNew from "./ui/WhatsNew";
 import {
@@ -422,6 +423,11 @@ function Shell() {
       <OfflineModal />
       {!game && <UpdateBanner />}
       {!game && <WhatsNew />}
+
+      {/* Бонус за ролик — маленькая плашка в правом нижнем углу поверх всей
+          библиотеки (просили именно так): она нужна там, где игрок устал, а
+          не только на главной. Внутри игры её нет, чтобы не перекрывать сцену. */}
+      {pc && !game && <PcBoost />}
 
       <AnimatePresence>
         {splash && (

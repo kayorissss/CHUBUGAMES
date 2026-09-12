@@ -1,0 +1,440 @@
+/* ---------- ВНИМАНИЕ СВЕРХУ: баннер босса + сундук ----------
+   На ПК это одна линия на всю ширину: тонкий баннер босса и карточка
+   сундука справа. На телефоне — два блока друг под другом. */
+.pc-hero {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  margin-bottom: 1rem;
+}
+html.is-desktop .pc-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 15.5rem;
+  gap: 0.75rem;
+  align-items: stretch;
+  grid-column: 1;
+  grid-row: 1;
+  margin-bottom: 0.9rem;
+}
+
+/* сам баннер: постер | кто и зачем | таймер и вход | полоса смены */
+.boss2 {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.85rem;
+  padding: 0.75rem 0.95rem 0.9rem;
+  border-radius: var(--r-lg);
+  background:
+    radial-gradient(120% 140% at 6% 50%, color-mix(in srgb, var(--danger) 12%, transparent), transparent 58%),
+    linear-gradient(100deg, var(--surface-2), var(--surface) 62%);
+  border: 1px solid var(--surface-brd);
+  box-shadow: 0 18px 40px -30px rgba(0, 0, 0, 0.9);
+  overflow: hidden;
+}
+.boss2.live {
+  border-color: color-mix(in srgb, var(--danger) 46%, var(--surface-brd));
+  box-shadow: 0 20px 44px -26px rgba(255, 90, 60, 0.55);
+}
+.boss2-glow {
+  position: absolute;
+  inset: -40% -10% auto auto;
+  width: 22rem;
+  height: 22rem;
+  pointer-events: none;
+  background: radial-gradient(circle, color-mix(in srgb, var(--danger) 34%, transparent), transparent 62%);
+  animation: boss2glow 3.4s ease-in-out infinite;
+}
+@keyframes boss2glow {
+  0%, 100% { opacity: 0.35; transform: translate3d(0, 0, 0); }
+  50% { opacity: 0.7; transform: translate3d(-1.2rem, 0.4rem, 0); }
+}
+.boss2-poster {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 5.4rem;
+  height: 5.4rem;
+  border-radius: var(--r-md);
+  background:
+    radial-gradient(90% 80% at 50% 18%, color-mix(in srgb, var(--acc) 22%, transparent), transparent 70%),
+    var(--n-000);
+  border: 1px solid color-mix(in srgb, var(--acc) 26%, var(--surface-brd));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+.boss2-mid {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 0;
+}
+.boss2-kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.56rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  color: var(--text-mute);
+}
+.boss2.live .boss2-kicker {
+  color: var(--danger);
+}
+.boss2-pulse {
+  width: 0.42rem;
+  height: 0.42rem;
+  border-radius: 999px;
+  background: var(--danger);
+  animation: boss2pulse 1.6s ease-out infinite;
+}
+@keyframes boss2pulse {
+  0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--danger) 55%, transparent); }
+  70% { box-shadow: 0 0 0 0.5rem rgba(255, 107, 90, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(255, 107, 90, 0); }
+}
+.boss2-name {
+  font-size: 1.28rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+  color: var(--text);
+}
+.boss2-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin-top: 0.15rem;
+}
+.boss2-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.28rem;
+  padding: 0.16rem 0.42rem;
+  border-radius: var(--r-sm);
+  background: var(--surface-3);
+  border: 1px solid var(--surface-brd);
+  color: var(--text-dim);
+  font-size: 0.58rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+.boss2-tag.ok {
+  background: var(--ok-soft);
+  border-color: var(--ok-brd);
+  color: var(--ok);
+}
+.boss2-right {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+}
+.boss2-when {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.1rem;
+  color: var(--text-mute);
+}
+.boss2-time {
+  font-size: 1.02rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+  white-space: nowrap;
+}
+.boss2.live .boss2-time {
+  color: var(--danger);
+}
+.boss2-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.62rem 0.9rem;
+  border-radius: var(--r-md);
+  background: var(--btn-bg);
+  border: 1px solid var(--btn-brd);
+  color: var(--text);
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 0.16s, transform 0.12s, box-shadow 0.16s;
+}
+.boss2-cta:hover {
+  background: var(--btn-bg-hi);
+}
+.boss2-cta.on {
+  background: linear-gradient(170deg, var(--acc-hi), var(--acc) 52%, var(--acc-lo));
+  border-color: color-mix(in srgb, var(--acc) 62%, #ffffff);
+  color: var(--acc-ink);
+  box-shadow: 0 10px 26px -14px var(--acc-glow);
+}
+.boss2-cta:active {
+  transform: scale(0.975);
+}
+/* полоса смены — по ней видно остаток времени, не отрывая глаз от текста */
+.boss2-bar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 3px;
+  background: var(--n-000);
+}
+.boss2-bar > span {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--acc) 70%, #fff), var(--acc));
+  transition: width 0.9s linear;
+}
+.boss2.live .boss2-bar > span {
+  background: linear-gradient(90deg, var(--danger), color-mix(in srgb, var(--danger) 60%, #fff));
+}
+
+/* телефон: постер меньше, правая колонка уходит под текст */
+@media (max-width: 720px) {
+  .boss2 {
+    grid-template-columns: auto minmax(0, 1fr);
+    row-gap: 0.6rem;
+    padding: 0.8rem 0.85rem 1rem;
+  }
+  .boss2-poster {
+    width: 3.9rem;
+    height: 3.9rem;
+  }
+  .boss2-right {
+    grid-column: 1 / -1;
+    justify-content: space-between;
+    width: 100%;
+  }
+  .boss2-cta {
+    flex: 1 1 auto;
+    justify-content: center;
+  }
+}
+
+/* ---------- ЕЖЕЧАСНЫЙ СУНДУК ---------- */
+.chest2 {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  padding: 0.8rem 0.9rem 0.9rem;
+  border-radius: var(--r-lg);
+  background: linear-gradient(160deg, var(--surface-2), var(--surface) 70%);
+  border: 1px solid var(--surface-brd);
+  box-shadow: 0 18px 40px -32px rgba(0, 0, 0, 0.9);
+  overflow: hidden;
+}
+.chest2.ready {
+  border-color: var(--gold-brd);
+  box-shadow: 0 20px 44px -26px color-mix(in srgb, var(--gold) 42%, transparent);
+}
+.chest2-burst {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(circle at 30% 50%, var(--gold), transparent 62%);
+}
+.chest2-head {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+.chest2-ico {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.4rem;
+  height: 2.4rem;
+  flex-shrink: 0;
+  border-radius: var(--r-sm);
+  background: var(--surface-3);
+  border: 1px solid var(--surface-brd);
+  color: var(--text-mute);
+}
+.chest2.ready .chest2-ico {
+  background: var(--gold);
+  border-color: var(--gold);
+  color: #1b1204;
+}
+.chest2-kicker {
+  color: var(--text-mute);
+  letter-spacing: 0.1em;
+}
+.chest2-state {
+  margin-top: 1px;
+  font-size: 0.6rem;
+  color: var(--text-dim);
+}
+.chest2-count {
+  margin-left: auto;
+  align-self: flex-start;
+  padding: 0.1rem 0.35rem;
+  border-radius: var(--r-sm);
+  background: var(--surface-3);
+  color: var(--text-mute);
+  font-size: 0.58rem;
+  font-weight: 800;
+}
+.chest2-timer {
+  font-size: 1.6rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  letter-spacing: -0.01em;
+  color: var(--text);
+}
+.chest2-timer.go {
+  color: var(--gold);
+}
+/* накопление: 12 ячеек вместо тонкой полоски — видно, как идёт час */
+.chest2-cells {
+  display: flex;
+  gap: 0.2rem;
+}
+.chest2-cell {
+  flex: 1 1 0;
+  height: 0.5rem;
+  border-radius: 2px;
+  background: var(--surface-3);
+  transition: background 0.3s, box-shadow 0.3s;
+}
+.chest2-cell.on {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--gold) 80%, #fff), var(--gold));
+  box-shadow: 0 0 10px -3px var(--gold-brd);
+}
+.chest2-prize {
+  display: flex;
+  gap: 0.35rem;
+}
+.chest2-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.24rem 0.5rem;
+  border-radius: var(--r-sm);
+  background: var(--fill-1);
+  border: 1px solid var(--surface-brd);
+  color: var(--text-dim);
+  font-size: 0.62rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+.chest2-chip.violet {
+  color: var(--violet);
+  border-color: var(--violet-brd);
+  background: var(--violet-soft);
+}
+.chest2-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  width: 100%;
+  padding: 0.6rem 0.7rem;
+  border-radius: var(--r-md);
+  background: var(--btn-bg);
+  border: 1px solid var(--btn-brd);
+  color: var(--text-mute);
+  font-size: 0.66rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  cursor: default;
+  transition: background 0.16s, transform 0.12s;
+}
+.chest2-btn.on {
+  cursor: pointer;
+  background: linear-gradient(170deg, color-mix(in srgb, var(--gold) 82%, #fff), var(--gold) 60%, color-mix(in srgb, var(--gold) 74%, #000));
+  border-color: color-mix(in srgb, var(--gold) 60%, #fff);
+  color: #1b1204;
+  box-shadow: 0 10px 26px -14px var(--gold-brd);
+}
+.chest2-btn.on:active {
+  transform: scale(0.98);
+}
+
+/* ---------- БОНУС ЗА РОЛИК: маленькая плашка в правом нижнем углу ----------
+   Раньше это была широкая карточца в правой колонке главной: она спорила
+   вниманием с играми и исчезала, стоило открыть любой раздел. Теперь это
+   компактный чип поверх интерфейса на всех экранах библиотеки: сумма,
+   счётчик попыток и одна кнопка. */
+.pc-boost {
+  position: fixed;
+  z-index: 78;
+  right: 1rem;
+  bottom: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.5rem 0.55rem 0.5rem 0.7rem;
+  border-radius: 999px;
+  background: var(--toast-bg);
+  border: 1px solid var(--ok-brd);
+  box-shadow: 0 18px 40px -22px rgba(0, 0, 0, 0.95);
+}
+.pc-boost-ico {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.65rem;
+  height: 1.65rem;
+  border-radius: 999px;
+  background: var(--ok-soft);
+  color: var(--ok);
+}
+.pc-boost-text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.15;
+}
+.pc-boost-sum {
+  font-size: 0.82rem;
+  font-weight: 800;
+  color: var(--ok);
+  font-variant-numeric: tabular-nums;
+}
+.pc-boost-cap {
+  font-size: 0.55rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--text-mute);
+}
+.pc-boost-go {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.42rem 0.7rem;
+  border-radius: 999px;
+  border: 1px solid var(--ok-brd);
+  background: var(--ok-soft);
+  color: var(--ok);
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  transition: background 0.16s, transform 0.12s;
+}
+.pc-boost-go:hover {
+  background: color-mix(in srgb, var(--ok) 22%, transparent);
+}
+.pc-boost-go:active {
+  transform: scale(0.96);
+}
+.pc-boost-dots {
+  display: flex;
+  gap: 0.18rem;
+}
+.pc-boost-dots i {
+  width: 0.3rem;
+  height: 0.3rem;
+  border-radius: 999px;
+  background: var(--n-400);
+}
+.pc-boost-dots i.on {
+  background: var(--ok);
+}

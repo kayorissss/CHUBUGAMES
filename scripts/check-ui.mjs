@@ -440,12 +440,14 @@ ok(topbar.includes('CHUBUGAMES') && topbar.includes('F11'),
   'в панели есть знак, кошелёк и подсказка по клавишам');
 ok(topbar.includes('"progress"') && topbar.includes('"settings"'),
   'панель переключает все пять разделов');
-ok(/grid-template-columns:\s*minmax\(0, 1fr\) var\(--pc-rail\)/.test(cssPc23),
-  'на главной слева — игры, справа — сведения');
+ok(/html\.is-desktop \.pc-home \{[\s\S]{0,320}?grid-template-columns:\s*minmax\(0, 1fr\);/.test(cssPc23),
+  'главная на ПК — одна колонка во всю ширину (правая «колонка сведений» убрана)');
+ok(/\.pc-hero[\s\S]{0,220}?minmax\(0, 1fr\) 15\.5rem/.test(cssPc23),
+  'баннер босса и сундук — одна линия: баннер тянется, сундук в своей узкой колонке');
 ok(cssPc23.includes('.pc-tiles') && /repeat\(auto-fill,\s*minmax\(15\.5rem/.test(cssPc23),
   'плитка мини-игр считается от ширины окна, а не растягивается');
-ok(/\.pc-blocks,[\s\S]{0,40}\.pc-games\s*\{\s*display: contents;/.test(cssPc23),
-  'телефон и ПК делят одну разметку: контейнеры пустые до медиа-условия');
+ok(/\.pc-games \{\s*display: contents;/.test(cssPc23) && /html\.is-desktop \.pc-games \{\s*display: block;/.test(cssPc23),
+  'телефон и ПК делят одну разметку: контейнер пустой до медиа-условия');
 ok(cssPc23.includes('.pc-play-wrap') && cssPc23.includes('.pc-play'),
   'игра на ПК оформлена как экран устройства по центру');
 ok(home.includes('GameTile') && home.includes('onOpenProfile'),
@@ -500,8 +502,8 @@ ok(fs.readFileSync('src/pages/Friends.tsx', 'utf8').includes('pc-pal-grid'),
   const bar = fs.readFileSync('src/ui/pc/PcTopBar.tsx', 'utf8');
   ok(!/pc-bar-hint/.test(bar) && !/pc-bar-ver/.test(bar),
     'в панели нет подсказки F11/Esc и номера версии');
-  ok(!/id: "boss"|id: "casino"|id: "fanfic"|id: "network"/.test(bar),
-    'в панели нет кнопок-дублей: босс, казино, фанфики и сеть — на своих местах');
+  ok(!/id: "boss"|id: "fanfic"|id: "network"/.test(bar),
+    'в панели нет кнопок-дублей: босс, фанфики и сеть — на своих местах');
   ok(/onClick=\{\(\) => go\("home"\)\}/.test(bar), 'клик по CHUBUGAMES ведёт на главную');
   ok(/Персонажи/.test(bar) && !/"Друзья"/.test(bar), 'вкладка «Персонажи» вместо «Друзья»');
   ok(/pc-bar-tail/.test(bar), 'Настройки — в правом углу панели');
@@ -511,8 +513,31 @@ ok(fs.readFileSync('src/pages/Friends.tsx', 'utf8').includes('pc-pal-grid'),
     'на телефоне вкладка тоже называется «Персонажи»');
 
   const home = fs.readFileSync('src/pages/Home.tsx', 'utf8');
-  ok(/className="pc-boss"/.test(home) && home.indexOf('pc-boss') < home.indexOf('pc-games'),
-    'босс — отдельная зона над библиотекой игр, а не карточка в правой колонке');
+  ok(/className="pc-hero"/.test(home) && home.indexOf('pc-hero') < home.indexOf('pc-games'),
+    'босс и сундук — отдельная линия над библиотекой, а не карточка в колонке');
+  ok(/\bboss2\b/.test(home) && /boss2-name/.test(css),
+    'баннер босса — тонкая полоса с постером, именем, таймером и входом в бой');
+  ok(/ChestCard/.test(home) && /\.chest2-cells/.test(css),
+    'ежечасный сундук — карточка с ячейками накопления, а не полоска');
+  /* всё, что дублировало верхнюю панель или уехало в неё, не должно вернуться */
+  /* Всё, что дублировало верхнюю панель или уехало в неё, не должно
+     вернуться на главную. Сморим на классы и вызовы, а не на слова: в
+     комментариях как раз объяснено, что именно убрали. */
+  for (const [re, what] of [
+    [/\bStat\b|pc-head-stats/, 'строка «уклонов, тапов и монет всего»'],
+    [/readGamble\(\)/, 'кошелёк казино на главной'],
+    [/AdModal/, 'карточка рекламы в колонке'],
+    [/FanficCard|fanfic-feed/, 'плашка фанфиков'],
+  ]) {
+    ok(!re.test(home), `на главной нет лишнего: ${what}`);
+  }
+  const boost = fs.readFileSync('src/ui/pc/PcBoost.tsx', 'utf8');
+  ok(/className="pc-boost"/.test(boost) && /\.pc-boost \{[\s\S]{0,220}?position: fixed/.test(css),
+    'бонус за ролик — плашка в углу поверх библиотеки, а не карточка на главной');
+  ok(/pc && !game && <PcBoost \/>/.test(fs.readFileSync('src/App.tsx', 'utf8')),
+    'плашка буста монтируется один раз на уровне приложения и прячется в игре');
+  ok(/id: "casino",\s*label: "Казино",[\s\S]{0,80}?id: "progress"/.test(bar),
+    'Казино — в верхней панели перед «Прогрессом»');
   ok(!/className="pc-head"/.test(home) || /html\.is-desktop \.pc-head \{/s.test(css),
     'шапка уровня и монет на ПК скрыта (уровень и кошелёк — в панели)');
 
