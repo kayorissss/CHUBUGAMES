@@ -41,6 +41,18 @@ export default function Settings({
 }) {
   const { s, set, hardReset, toast, t } = useGame();
   const [confirmReset, setConfirmReset] = useState(false);
+  /**
+   * Раздел настроек. Раньше это был один бесконечный список из девяти
+   * блоков: чтобы поменять громкость, надо было ПРОЛИСТАТЬ dangerous-зону,
+   * сохранения, уведомления и инструменты. Плюс на ПК блоки стояли в сетке
+   * с фиксированными строками (pc-rN), и когда один блок вырастал, его
+   * соседи наползали углами — ровно жалоба «текст и плашки друг на друге».
+   * Теперь группы режутся вкладками, а внутри группы — обычная сетка
+   * `align-items: start`, где строки не фиксированы.
+   */
+  const [sec, setSec] = useState<"screen" | "game" | "profile" | "system">(
+    () => (localStorage.getItem("chubgames.settingsTab") as "screen") || "screen",
+  );
   const fileRef = useRef<HTMLInputElement>(null);
 
   const exportSave = async () => {
@@ -142,16 +154,44 @@ export default function Settings({
           (колонка) и pc-rN (строка) решают, куда блок встанет на мониторе,
           поэтому «Экран» и «Обновление» идут на одной высоте и ничего не
           сползает, когда один из блоков вырастает. */}
-      <div className="pc-cols">
+      {/* Вкладки — тот же сегментный ряд, что в Магазине и Прогрессе. */}
+      <div className="pc-seg" role="tablist">
+        {([
+          { id: "screen", label: "Экран", icon: "sun" },
+          { id: "game", label: "Игра", icon: "speed" },
+          { id: "profile", label: "Профиль", icon: "user" },
+          { id: "system", label: "Система", icon: "gear" },
+        ] as const).map((it) => (
+          <button
+            key={it.id}
+            type="button"
+            role="tab"
+            aria-selected={sec === it.id}
+            className={`pc-seg-item ${sec === it.id ? "on" : ""}`}
+            onClick={() => {
+              sfx.click();
+              haptic("light");
+              setSec(it.id);
+              try { localStorage.setItem("chubgames.settingsTab", it.id); } catch { /* приватный режим */ }
+            }}
+          >
+            <Icon name={it.icon} size={14} />
+            <span className="t-label clip1">{tr(it.label)}</span>
+          </button>
+        ))}
+      </div>
 
-      {isDesktop() && (
-      <div className="pc-blk pc-a pc-r1">
+      <div className="pc-cols pc-set-cols">
+
+      {isDesktop() && sec === "screen" && (
+      <div className="pc-blk pc-set-item">
       <SectionTitle>{tr("Экран")}</SectionTitle>
       <DesktopSettings part="screen" />
       </div>
       )}
 
-      <div className="pc-blk pc-b pc-r1">
+{sec === "system" && (
+      <div className="pc-blk pc-set-item">
       <SectionTitle>{t("settings.update")}</SectionTitle>
       {isDesktop() ? (
         <DesktopSettings part="update" />
@@ -161,8 +201,10 @@ export default function Settings({
         </Card>
       )}
       </div>
+      )}
 
-      <div className="pc-blk pc-a pc-r2">
+{sec === "profile" && (
+      <div className="pc-blk pc-set-item">
       <SectionTitle>{t("settings.save")}</SectionTitle>
       <Card r="lg" style={{ padding: 14, marginBottom: 22 }}>
         <div className="t-body" style={{ marginBottom: 14 }}>
@@ -180,15 +222,19 @@ export default function Settings({
         </div>
       </Card>
       </div>
+      )}
 
-      <div className="pc-blk pc-b pc-r2">
+{sec === "system" && (
+      <div className="pc-blk pc-set-item">
       <SectionTitle>{tr("Уведомления")}</SectionTitle>
       <Card r="lg" style={{ marginBottom: 22, overflow: "hidden" }}>
         <NotifyBlock />
       </Card>
       </div>
+      )}
 
-      <div className="pc-blk pc-a pc-r3">
+{sec === "screen" && (
+      <div className="pc-blk pc-set-item">
       <SectionTitle>{t("settings.appearance")}</SectionTitle>
       <Card r="lg" style={{ marginBottom: 22, overflow: "hidden" }}>
         {/* Базовых темы три: чёрный, тёмно-серый и белый. Акцентный цвет
@@ -270,8 +316,10 @@ export default function Settings({
         </div>
       </Card>
       </div>
+      )}
 
-      <div className="pc-blk pc-b pc-r3">
+{sec === "profile" && (
+      <div className="pc-blk pc-set-item">
       <SectionTitle>{t("settings.danger")}</SectionTitle>
       <Card r="lg" style={{ padding: 14, marginBottom: 22 }}>
         {!confirmReset ? (
@@ -303,8 +351,10 @@ export default function Settings({
         )}
       </Card>
       </div>
+      )}
 
-      <div className="pc-blk pc-a pc-r4">
+{sec === "system" && (
+      <div className="pc-blk pc-set-item">
       <SectionTitle>{tr("Инструменты")}</SectionTitle>
       <Card r="lg" style={{ padding: 0, marginBottom: 22, overflow: "hidden" }}>
         <NavRow
@@ -315,8 +365,10 @@ export default function Settings({
         />
       </Card>
       </div>
+      )}
 
-      <div className="pc-blk pc-b pc-r4">
+{sec === "game" && (
+      <div className="pc-blk pc-set-item">
       <SectionTitle>{t("settings.game")}</SectionTitle>
       <Card r="lg" style={{ marginBottom: 22, overflow: "hidden" }}>
         <DiffPicker
@@ -369,8 +421,9 @@ export default function Settings({
           а замер там только мучает устройство. */}
       <DesktopSettings part="perf" />
       </div>
+      )}
 
-      <div className="pc-blk pc-span pc-r5">
+      <div className="pc-blk pc-set-span">
       <Card r="lg" style={{ padding: 14, marginBottom: 22 }}>
         <div className="flex items-center" style={{ gap: 13 }}>
           <div

@@ -3446,6 +3446,28 @@ html.is-desktop .pc-cols > .pc-r3 { grid-row: 3; }
 html.is-desktop .pc-cols > .pc-r4 { grid-row: 4; }
 html.is-desktop .pc-cols > .pc-r5 { grid-row: 5; }
 html.is-desktop .pc-cols > .pc-r6 { grid-row: 6; }
+/* НАСТРОЙКИ: вкладки режут список на группы, а внутри группы — обычная
+   двухколонка с auto-строками. Прежняя раскладка ставила блоки по жёстким
+   строкам (pc-r1…pc-r6): как только «Игра» вырастала на экран, её сосед
+   на той же строке наползал углами — ровно жалоба «текст и плашки друг на
+   друге, криво». */
+html.is-desktop .pc-cols.pc-set-cols {
+  gap: 1.1rem 1.6rem;
+  grid-auto-rows: min-content;
+}
+.pc-set-item {
+  min-width: 0;
+}
+html.is-desktop .pc-cols > .pc-set-span {
+  grid-column: 1 / -1;
+  padding-top: 0.5rem;
+}
+html.is-desktop .pc-cols > .pc-set-span > * {
+  max-width: 52rem;
+  margin-left: auto;
+  margin-right: auto;
+}
+
 /* «Об игре» — на всю ширину и по центру, как его просили */
 html.is-desktop .pc-cols > .pc-span > * {
   max-width: 52rem;

@@ -6,7 +6,9 @@
  * строку в tr(), не выдумывая ключ и не трогая вёрстку. Нет строки в этом
  * словаре — покажется русский оригинал, интерфейс не сломается.
  *
- * Имена друзей, названия игр и прозвища НЕ переводятся: это имена собственные.
+ * Имена друзей и прозвища НЕ переводятся: это имена собственные. Названия
+ * мини-игр — переводятся: для игрока это названия режимов, и полурусский
+ * список на главной выглядел сломанным языком.
  */
 
 export const EN_TEXT: Record<string, string> = {
@@ -1378,4 +1380,55 @@ export const EN_TEXT: Record<string, string> = {
   "ОТМЕНА": "CANCEL",
   "Назначенные клавиши работают в любой игре: они водят палец по полю, а пробел нажимает.": "Assigned keys work in every game: they move the finger across the field, Space presses.",
   "убрать": "remove",
+
+  /* ── названия, теги и описания игр из GAME_META ──────────────────────
+     Раньше этот кусок словаря отсутствовал: язык переключался, а список
+     мини-игр на главной оставался русским от «ЛЁХА-БУРГЕР» до «БАШНЯ
+     ЛЁХИ» — ровно на это и жаловались. Имена собственные (прозвища
+     парней) остаются как есть, а то, что игрок читает как *название
+     режима*, переводится. */
+  "ЛЁХА-БУРГЕР": "LYOKHA BURGER",
+  "Уклоняйся": "Dodge",
+  "Лёха плюётся бургерами с двух метров. Не поймай ни одного.":
+    "Lyokha fires burgers from two metres. Don't catch a single one.",
+  "ЧУБКЛИКЕР": "CHUB CLICKER",
+  "Тапай по морде. Копи миллиарды. Не спи.":
+    "Tap the mug. Bank billions. Don't nap.",
+  "ЗУБЫ АРТЁМА": "ARTYOM'S TEETH",
+  "Держи палец и копи. Артём кусается — успей убрать руку.":
+    "Hold to charge. Artyom bites — pull your hand back in time.",
+  "ПОБЕГ ОТ ШИТОВА": "RUN FROM SHITOV",
+  "Бег": "Run",
+  "Препод бежит за тобой по колледжу. Прыгай через системники.":
+    "A teacher chases you through the college. Jump the server racks.",
+  "РИТМ РАДОМИРА": "RADOMIR'S RHYTHM",
+  "Ритм": "Rhythm",
+  "Лови ноты под трек. Радомир стесняется, но танцует.":
+    "Catch the notes on beat. Radomir is shy, but he dances.",
+  "СЛИЯНИЕ ГОЛОВ": "HEAD MERGE",
+  "Пазл": "Puzzle",
+  "Сливай одинаковых пацанов в новых. 2048 из голов.":
+    "Merge matching guys into new ones. 2048, made of heads.",
+  "ПРИБЕЙ ДРУГА": "WHACK A BUDDY",
+  "Реакция": "Reflex",
+  "Головы лезут из люков. Прибей. Но не всех.":
+    "Heads pop out of the hatches. Smack them. Not all of them.",
+  "БАШНЯ ЛЁХИ": "LYOKHA'S TOWER",
+  "Точность": "Precision",
+  "Складывай бургеры в башню. Промахнулся — край срезало.":
+    "Stack burgers into a tower. Miss, and the overhang gets trimmed.",
+  "СТОЛОВКА": "CANTEEN",
+  "Раздавай подносы по цветам. Очередь не ждёт.":
+    "Hand out trays by colour. The queue won't wait.",
+  "КТО ЭТО БЫЛ": "WHO WAS THAT",
+  "Память": "Memory",
+  "Головы мигают по очереди. Повтори порядок.":
+    "Heads flash one by one. Repeat the order.",
+  "ПОЛЁТ РАДОМИРА": "RADOMIR'S FLIGHT",
+  "Тапай, чтобы не упасть. Пролетай между партами.":
+    "Tap to stay aloft. Slip between the desks.",
+  "ОБОРОНА ОБЩАГИ": "DORM DEFENSE",
+  "Защита": "Defense",
+  "Тапай по врагам, пока они не дошли до двери.":
+    "Tap the enemies before they reach the door.",
 };

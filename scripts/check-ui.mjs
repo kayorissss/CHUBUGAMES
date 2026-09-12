@@ -547,10 +547,12 @@ ok(fs.readFileSync('src/pages/Friends.tsx', 'utf8').includes('pc-pal-grid'),
     'у игрового блока остаётся containing block — оверлеи не разлипаются по окну');
 
   const set = fs.readFileSync('src/pages/Settings.tsx', 'utf8');
-  ok(/pc-blk pc-a pc-r1/.test(set) && /pc-blk pc-b pc-r1/.test(set),
-    'настройки расложены по зонам, а не двумя независимыми колонками');
-  ok(/<div className="pc-blk pc-b pc-r1">\n\s*<SectionTitle>\{t\("settings\.update"\)\}/.test(set),
-    'обновление — в правом верхнем углу настроек');
+  ok(/className="pc-seg" role="tablist"/.test(set) && /pc-set-item/.test(set),
+    'настройки разбиты на вкладки-сегменты (как в Магазине), блоки — ячейки сетки');
+  ok(!/pc-blk pc-[ab] pc-r\d/.test(set),
+    'в настройках больше нет жёстких строк pc-rN: блоки не наползают, когда один вырастает');
+  ok(/sec === "system" && \(/.test(set) && /sec === "screen" && \(/.test(set),
+    'каждая группа настроек режется активной вкладкой');
   ok(/pc-foot-ver/.test(set) && /pc-foot-brand/.test(set),
     'внизу настроек: знак по центру, версия в углу');
   ok(!/<div className="pc-col">/.test(set), 'старых колонок pc-col в настройках больше нет');
@@ -1613,6 +1615,40 @@ console.log('\n[40] 1.27: кейс-батл понятен, у фермы ест
   /* имена классов не должны пересекаться: иначе стиль одной секации лез в другую */
   ok(!/\.pc-battle-side\.me \.pc-battle-sum \{/.test(css) && /\.pc-battle-total \{/.test(css),
     'табло батла использует свои классы и не наследует стиль строки «стоит/на кону»');
+}
+
+console.log('\n[41] 1.27: вкладки настроек и полный перевод названий игр');
+{
+  const css = fs.readFileSync('src/index.css', 'utf8');
+  const set = fs.readFileSync('src/pages/Settings.tsx', 'utf8');
+  const content = fs.readFileSync('src/core/content.ts', 'utf8');
+  const en = fs.readFileSync('src/core/i18n-en.ts', 'utf8');
+
+  ok(/html\.is-desktop \.pc-cols\.pc-set-cols \{[^}]*grid-auto-rows: min-content/.test(css),
+    'сетка настроек: auto-строки и align-items: start — плашки не наезжают друг на друга');
+  ok(/\.pc-set-item \{[^}]*min-width: 0/.test(css),
+    'блоки настроек умеют сжиматься (min-width: 0) — длинные подписки не распирают колонку');
+  ok(/html\.is-desktop \.pc-cols > \.pc-set-span \{[^}]*grid-column: 1 \/ -1/.test(css),
+    'плашка «Об игре» на всю ширину и по центру');
+  ok(/chubgames\.settingsTab/.test(set), 'выбранная вкладка настроек запоминается');
+  for (const [id, label] of [['screen', 'Экран'], ['game', 'Игра'], ['profile', 'Профиль'], ['system', 'Система']]) {
+    ok(set.includes(`{ id: "${id}", label: "${label}"`), `вкладка настроек «${label}» есть`);
+  }
+
+  /* Язык менял «почти всё, кроме названий режимов от Лёхи бургера до Башни
+     Лёхи» — проверим это машиной: у КАЖДОЙ строки GAME_META должен быть
+     английский вариант в словаре. */
+  const i = content.indexOf('export const GAME_META');
+  const body = content.slice(i, content.indexOf('\n];', i));
+  const missing = [];
+  for (const m of body.matchAll(/(?:name|tag|desc): "([^"]+)"/g)) {
+    if (!en.includes('"' + m[1] + '":')) missing.push(m[1]);
+  }
+  ok(missing.length === 0,
+    missing.length ? `нет перевода у ${missing.length} строк списка игр: ${missing.slice(0, 3).join(' / ')}`
+      : 'названия, теги и описания ВСЕХ мини-игр переведены на английский');
+  ok(/Имена друзей и прозвища НЕ переводятся/.test(en),
+    'правило перевода задокументировано в шапке словаря (имена собственные — нет, режимы — да)');
 }
 
 console.log(fails===0?'\n✅ ВСЕ ПРОВЕРКИ ВЁРСТКИ ПРОЙДЕНЫ\n':`\n❌ ПРОВАЛЕНО: ${fails}\n`);
