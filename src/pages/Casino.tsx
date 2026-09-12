@@ -210,7 +210,7 @@ export default function Casino({ onBack }: { onBack: () => void }) {
           exit={{ opacity: 0, y: -6 }}
           transition={{ duration: 0.18 }}
         >
-          {tab === "farm"    && <ChipFarm save={save} />}
+          {tab === "farm"    && <ChipFarm save={save} onTab={setTab} />}
           {tab === "slots"   && <Slots g={g} save={save} />}
           {tab === "cases"   && <Cases g={g} save={save} />}
           {tab === "battle"  && <Battle g={g} save={save} />}
@@ -887,85 +887,128 @@ function Battle({ g, save }: { g: GambleStore; save: GambleSave }) {
   return (
     <>
       {!live ? (
-        <Panel r="lg" style={{ padding: 15 }}>
-          <div className="t-title-sm" style={{ marginBottom: 4 }}>{tr("Кейс-батл")}</div>
-          <div className="t-caption" style={{ marginBottom: 14, lineHeight: 1.5 }}>
-            Открываете кейсы одновременно с соперником. У кого сумма ценности
-            больше — забирает все предметы, включая чужие.
+        <div className="pc-battle">
+          <div className="pc-battle-rule">
+            <span className="pc-battle-rule-ico"><Icon name="skull" size={15} /></span>
+            <span className="min-w-0">
+              <span className="t-title-sm">{tr("Что это")}</span>
+              <span className="t-caption">
+                {tr("Вы и соперник по очереди открываете ОДИН И ТОТ ЖЕ кейс. Раунд берёт тот, у кого выпавшая вещь дороже. Кто выиграл больше раундов — забирает ВСЕ предметы, и свои, и чужие.")}
+              </span>
+            </span>
           </div>
 
-          <div className="t-label" style={{ marginBottom: 8 }}>{tr("Кейс")}</div>
-          <div className="flex" style={{ gap: 6, marginBottom: 14 }}>
-            {GAMBLE_CASES.map((x) => (
-              <button
-                key={x.id}
-                type="button"
-                onClick={() => { sfx.click(); setCaseId(x.id); }}
-                className="t-caption flex-1"
-                style={{
-                  padding: "9px 4px", borderRadius: "var(--r-sm)", fontSize: 10,
-                  background: caseId === x.id ? "var(--acc)" : "var(--btn-bg)",
-                  color: caseId === x.id ? "var(--acc-ink)" : "var(--text-mute)",
-                  border: `1px solid ${caseId === x.id ? "var(--acc)" : "var(--btn-brd)"}`,
-                }}
-              >
-                {x.price}
-              </button>
-            ))}
+          <div className="pc-battle-picks">
+            <div className="t-label pc-battle-cap">{tr("1 · КЕЙС — что вскрываем")}</div>
+            <div className="pc-battle-cases">
+              {GAMBLE_CASES.map((x) => (
+                <button
+                  key={x.id}
+                  type="button"
+                  onClick={() => { sfx.click(); haptic("light"); setCaseId(x.id); }}
+                  className={`pc-battle-case ${caseId === x.id ? "on" : ""}`}
+                  title={x.name}
+                >
+                  <span className="t-body clip1">{x.name}</span>
+                  <span className="pc-battle-case-price t-num">
+                    <Icon name="ticket" size={10} />{fmt(x.price)}
+                  </span>
+                  <span className="pc-battle-case-legend">
+                    {tr("легенда")} {(x.odds.legend * 100).toFixed(1)}%
+                  </span>
+                </button>
+              ))}
+            </div>
+
+            <div className="t-label pc-battle-cap">{tr("2 · РАУНДОВ — сколько дуэлей")}</div>
+            <div className="pc-battle-rounds">
+              {[1, 3, 5].map((r) => (
+                <button
+                  key={r}
+                  type="button"
+                  onClick={() => { sfx.click(); setRounds(r); }}
+                  className={`pc-battle-round ${rounds === r ? "on" : ""}`}
+                >
+                  <b className="t-num">{r}</b>
+                  <span className="t-caption">
+                    {r === 1 ? tr("одна дуэль — всё или ничего") : r === 3 ? tr("обычная — спокойнее") : tr("длинная — дешевле в среднем")}
+                  </span>
+                </button>
+              ))}
+            </div>
           </div>
 
-          <div className="t-label" style={{ marginBottom: 8 }}>{tr("Раундов")}</div>
-          <div className="flex" style={{ gap: 6, marginBottom: 16 }}>
-            {[1, 3, 5].map((r) => (
-              <button
-                key={r}
-                type="button"
-                onClick={() => { sfx.click(); setRounds(r); }}
-                className="t-num flex-1"
-                style={{
-                  padding: "9px 0", borderRadius: "var(--r-sm)", fontSize: 12,
-                  background: rounds === r ? "var(--acc)" : "var(--btn-bg)",
-                  color: rounds === r ? "var(--acc-ink)" : "var(--text-mute)",
-                  border: `1px solid ${rounds === r ? "var(--acc)" : "var(--btn-brd)"}`,
-                }}
-              >
-                {r}
-              </button>
-            ))}
+          <div className="pc-battle-sum">
+            <span>
+              <span className="t-label">{tr("стоит")}</span>
+              <b className={`t-num ${g.chips < cost ? "poor" : ""}`}>{fmt(cost)}</b>
+            </span>
+            <Icon name="chevron" size={12} />
+            <span>
+              <span className="t-label">{tr("на кону")}</span>
+              <b className="t-num gold">{rounds * 2} ×</b>
+              <span className="t-caption">{tr("предметов")}</span>
+            </span>
+            <span>
+              <span className="t-label">{tr("средняя ценность")}</span>
+              <b className="t-num">≈{fmt(Math.round(c.price * 1.05))}</b>
+            </span>
           </div>
 
-          <Tap
+          <button
+            type="button"
+            className="pc-battle-go"
             onClick={start}
-            accent r="md" center
-            className="w-full py-3.5 t-title"
-            style={{ fontSize: 14, opacity: g.chips < cost ? 0.5 : 1 }}
-            sound="power"
+            disabled={g.chips < cost}
           >
-            {g.chips < cost ? "НЕ ХВАТАЕТ ЖЕТОНОВ" : `В БОЙ ЗА ${cost}`}
-          </Tap>
+            <Icon name="fist" size={14} />
+            {g.chips < cost ? tr("НЕ ХВАТАЕТ ЖЕТОНОВ") : `${tr("В БОЙ ЗА")} ${fmt(cost)}`}
+          </button>
 
           {g.battles > 0 && (
-            <div className="t-caption" style={{ marginTop: 12, textAlign: "center" }}>
-              побед {g.battleWins} из {g.battles}
+            <div className="pc-battle-record">
+              <Icon name="medal" size={12} />
+              {tr("побед")} <b className="t-num">{g.battleWins}</b> {tr("из")} <b className="t-num">{g.battles}</b>
+              <span className="t-caption">
+                ({Math.round((g.battleWins / Math.max(1, g.battles)) * 100)}%)
+              </span>
             </div>
           )}
-        </Panel>
+        </div>
       ) : (
         <Panel r="lg" style={{ padding: 15 }}>
-          <div className="flex" style={{ gap: 10, marginBottom: 12 }}>
-            <div className="flex-1 text-center">
-              <div className="t-label">{tr("ТЫ")}</div>
-              <div className="t-num acc-text" style={{ fontSize: 20 }}>
-                {fmt(live.list.slice(0, step).reduce((a, b) => a + b.mine.value, 0))}
+          {(() => {
+            const mineSum = live.list.slice(0, step).reduce((a, b) => a + b.mine.value, 0);
+            const foeSum = live.list.slice(0, step).reduce((a, b) => a + b.foe.value, 0);
+            const tot = mineSum + foeSum || 1;
+            const lead = mineSum === foeSum ? 0 : mineSum > foeSum ? 1 : -1;
+            return (
+              <div className="pc-battle-board">
+                <div className="pc-battle-side me">
+                  <span className="t-label">{tr("ТЫ")}</span>
+                  <span className="t-num pc-battle-total">{fmt(mineSum)}</span>
+                </div>
+                {/* полоса перевеса — сразу видно, кто впереди, без счёта в уме */}
+                <div className="pc-battle-tug" aria-hidden>
+                  <i className="me" style={{ width: `${(mineSum / tot) * 100}%` }} />
+                  <i className="foe" style={{ width: `${(foeSum / tot) * 100}%` }} />
+                  <span className="pc-battle-tug-mark" />
+                </div>
+                <div className="pc-battle-side foe">
+                  <span className="t-label">{foe.toUpperCase()}</span>
+                  <span className="t-num pc-battle-total">{fmt(foeSum)}</span>
+                </div>
+                <div className="pc-battle-status">
+                  <span className="t-label">
+                    {tr("раунд")} {Math.min(step, live.list.length)}/{live.list.length}
+                  </span>
+                  <span className={`pc-battle-lead ${lead > 0 ? "up" : lead < 0 ? "down" : ""}`}>
+                    {lead > 0 ? tr("ведёшь ты") : lead < 0 ? tr("ведёт соперник") : tr("равно")}
+                  </span>
+                </div>
               </div>
-            </div>
-            <div className="flex-1 text-center">
-              <div className="t-label">{foe.toUpperCase()}</div>
-              <div className="t-num" style={{ fontSize: 20 }}>
-                {fmt(live.list.slice(0, step).reduce((a, b) => a + b.foe.value, 0))}
-              </div>
-            </div>
-          </div>
+            );
+          })()}
 
           {live.list.slice(0, step).map((r, i) => (
             <motion.div
@@ -985,6 +1028,7 @@ function Battle({ g, save }: { g: GambleStore; save: GambleSave }) {
                 }}
               >
                 <ItemIcon id={r.mine.id} size={17} />
+                <span className="t-caption clip1 flex-1">{r.mine.name}</span>
                 <span className="t-num" style={{ fontSize: 11 }}>{r.mine.value}</span>
               </span>
               <span
@@ -997,6 +1041,7 @@ function Battle({ g, save }: { g: GambleStore; save: GambleSave }) {
                 }}
               >
                 <span className="t-num" style={{ fontSize: 11 }}>{r.foe.value}</span>
+                <span className="t-caption clip1 flex-1" style={{ textAlign: "right" }}>{r.foe.name}</span>
                 <ItemIcon id={r.foe.id} size={17} />
               </span>
             </motion.div>
@@ -1365,12 +1410,14 @@ interface FarmChip {
  * при 70 % точности ≈ 280 жетонов = 11 спинов по 25. Ферма остаётся
  * основным бесплатным источником, поэтому награда не режется.
  */
-function ChipFarm({ save }: { save: GambleSave }) {
+function ChipFarm({ save, onTab }: { save: GambleSave; onTab?: (t: Tab) => void }) {
   const [phase, setPhase] = useState<"idle" | "play" | "over">("idle");
   const [chips, setChips] = useState<FarmChip[]>([]);
   const [earned, setEarned] = useState(0);
   const [left, setLeft] = useState(FARM_MS);
   const [combo, setCombo] = useState(0);
+  /** лучший комбо-множитель за забег — нужен для итога, а не для игры */
+  const [maxCombo, setMaxCombo] = useState(0);
   const [missed, setMissed] = useState(0);
   const areaRef = useRef<HTMLDivElement>(null);
   const nextId = useRef(1);
@@ -1382,7 +1429,7 @@ function ChipFarm({ save }: { save: GambleSave }) {
   useEffect(() => { chipsRef.current = chips; }, [chips]);
 
   const start = () => {
-    setChips([]); setEarned(0); setCombo(0); comboRef.current = 0;
+    setChips([]); setEarned(0); setCombo(0); setMaxCombo(0); comboRef.current = 0;
     setMissed(0);
     setLeft(FARM_MS);
     endAt.current = performance.now() + FARM_MS;
@@ -1463,6 +1510,7 @@ function ChipFarm({ save }: { save: GambleSave }) {
     if (c.taken) return;
     comboRef.current += 1;
     setCombo(comboRef.current);
+    setMaxCombo((v) => Math.max(v, comboRef.current));
     const bonus = 1 + Math.min(comboRef.current, 10) * 0.05;
     setEarned((e) => e + Math.round(c.val * bonus));
     // помечаем собранной — анимация вылета, затем удаление
@@ -1500,11 +1548,30 @@ function ChipFarm({ save }: { save: GambleSave }) {
 
   return (
     <>
+      {/* Правила, СРОК и НАГРАДА — три вещи, о которых спрашивали: «нет
+          таймера, нет срока, не объяснено, за что это и что даёт». */}
       <Panel r="lg" style={{ padding: 13, marginBottom: 12 }}>
-        <div className="t-label" style={{ marginBottom: 7, fontSize: 9.5 }}>{tr("КАК ЭТО РАБОТАЕТ")}</div>
-        <div className="t-caption" style={{ lineHeight: 1.6, fontSize: 11 }}>
-          {tr("Двадцать секунд на то, чтобы собирать фишки. Веди пальцем по экрану — фишки собираются касанием, тапать по каждой не нужно. Золотая дороже, но живёт меньше. Ловишь без промаха — растёт комбо и надбавка.")}
+        <div className="pc-farm-rule">
+          <span>
+            <Icon name="clock" size={13} />
+            <b className="t-num">{(FARM_MS / 1000).toFixed(0)} c</b>
+            <span className="t-caption">{tr("на один забег, между забегами перерыва нет")}</span>
+          </span>
+          <span>
+            <Icon name="ticket" size={13} />
+            <span className="t-caption">{tr("награда — жетоны: они тратятся на кейсы, апгрейд и слоты")}</span>
+          </span>
+          <span>
+            <Icon name="fire" size={13} />
+            <span className="t-caption">{tr("ловишь без промаха — растёт комбо: до +50% к фишкам")}</span>
+          </span>
         </div>
+        {onTab && (
+          <button type="button" className="pc-farm-go" onClick={() => { sfx.click(); onTab("slots"); }}>
+            <Icon name="dice" size={12} />
+            {tr("КУДА ПОТРАТИТЬ ЖЕТОНЫ")}
+          </button>
+        )}
       </Panel>
 
       <Panel r="lg" style={{ padding: 14 }}>
@@ -1604,9 +1671,21 @@ function ChipFarm({ save }: { save: GambleSave }) {
                     +{fmt(earned)}
                   </div>
                   <div className="t-caption" style={{ marginTop: 4 }}>{tr("жетонов на счёт")}</div>
+                  {/* «что мне это даёт» — награда обязана быть переводима в
+                      понятные вещи, а не оставаться просто числом */}
+                  <div className="pc-farm-worth">
+                    <span>
+                      <Icon name="case" size={12} />
+                      ≈ {Math.max(0, Math.floor(earned / GAMBLE_CASES[0].price))} × {GAMBLE_CASES[0].name}
+                    </span>
+                    <span>
+                      <Icon name="dice" size={12} />
+                      ≈ {Math.max(0, Math.floor(earned / 25))} {tr("спинов по 25")}
+                    </span>
+                  </div>
                   {missed > 0 && (
                     <div className="t-caption" style={{ marginTop: 6, color: "var(--text-mute)" }}>
-                      {tr("Упустил")}: {missed}
+                      {tr("Упустил")} <b className="t-num">{missed}</b> · {tr("макс. комбо")} ×{(1 + Math.min(maxCombo, 10) * 0.05).toFixed(2)}
                     </div>
                   )}
                 </>

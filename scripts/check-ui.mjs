@@ -1581,5 +1581,39 @@ console.log('\n[39] 1.27: кейсы как кейсы, вещи можно ос
     'из осмотра можно надеть и продать, не возвращаясь в список');
 }
 
+console.log('\n[40] 1.27: кейс-батл понятен, у фермы есть срок и награда');
+{
+  const css = fs.readFileSync('src/index.css', 'utf8');
+  const cas = fs.readFileSync('src/pages/Casino.tsx', 'utf8');
+  ok(/className="pc-battle-rule"/.test(cas) && /Вы и соперник по очереди открываете/.test(cas),
+    'правила батла объяснены одной строкой прямо на экране настройки');
+  ok(/className=\{`pc-battle-case /.test(cas) && /\{x\.name\}/.test(cas),
+    'выбор кейса в батле — с названием и ценой, а не голыми числами');
+  ok(/className=\{`pc-battle-round \$\{rounds === r \? "on"/.test(cas) && /одна дуэль — всё или ничего/.test(cas),
+    'выбор числа раундов подписан: чем отличается 1, 3 и 5');
+  ok(/className="pc-battle-sum"/.test(cas) && /на кону/.test(cas) && /средняя ценность/.test(cas),
+    'перед боем видно: сколько стоит, что на кону и средняя ценность');
+  ok(/className="pc-battle-tug"/.test(cas) && /\.pc-battle-tug \{/.test(css),
+    'на табло есть полоса перевеса — кто ведёт, видно без счёта в уме');
+  ok(/pc-battle-lead/.test(cas) && /ведёшь ты/.test(cas), 'под табло подписано, кто ведёт');
+  ok(/r\.mine\.name/.test(cas) && /r\.foe\.name/.test(cas),
+    'в раундах показаны имена предметов, а не только иконки с цифрами');
+  ok(/className="pc-battle-record"/.test(cas), 'статистика побед осталась и подписана');
+
+  ok(/pc-farm-rule/.test(cas) && /на один забег, между забегами перерыва нет/.test(cas),
+    'у фермы указан срок забега и то, что перерыва между забегами нет');
+  ok(/награда — жетоны: они тратятся на кейсы/.test(cas),
+    'ферма объясняет, ЧТО за награда и куда она тратится');
+  ok(/className="pc-farm-worth"/.test(cas) && /GAMBLE_CASES\[0\]\.price/.test(cas),
+    'итог фермы переведён в понятные вещи: сколько кейсов и спинов это');
+  ok(/setMaxCombo\(\(v\) => Math\.max\(v, comboRef\.current\)\)/.test(cas) && /макс\. комбо/.test(cas),
+    'в итоге фермы виден лучший комбо-множитель забега');
+  ok(/onTab\?: \(t: Tab\) => void/.test(cas) && /onTab\("slots"\)/.test(cas),
+    'с фермы можно уйти тратить жетоны — ссылка на слоты');
+  /* имена классов не должны пересекаться: иначе стиль одной секации лез в другую */
+  ok(!/\.pc-battle-side\.me \.pc-battle-sum \{/.test(css) && /\.pc-battle-total \{/.test(css),
+    'табло батла использует свои классы и не наследует стиль строки «стоит/на кону»');
+}
+
 console.log(fails===0?'\n✅ ВСЕ ПРОВЕРКИ ВЁРСТКИ ПРОЙДЕНЫ\n':`\n❌ ПРОВАЛЕНО: ${fails}\n`);
 process.exit(fails?1:0);

@@ -2258,6 +2258,237 @@ html.is-desktop .pc-chips-bar > div:first-child {
 }
 
 /* ============================================================
+   ФЕРМА: срок, награда, переводимость результата
+   ============================================================ */
+.pc-farm-rule { display: flex; flex-direction: column; gap: 0.3rem; }
+.pc-farm-rule > span { display: flex; align-items: center; gap: 0.4rem; font-size: 0.66rem; color: var(--text-dim); }
+.pc-farm-rule b { color: var(--text); font-size: 0.78rem; }
+.pc-farm-rule .t-caption { font-size: 0.62rem; line-height: 1.35; color: var(--text-mute); }
+.pc-farm-go {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-top: 0.55rem;
+  padding: 0.4rem 0.65rem;
+  border-radius: 999px;
+  background: var(--surface-3);
+  border: 1px solid var(--surface-brd);
+  color: var(--text-mute);
+  font-size: 0.56rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+.pc-farm-go:hover { color: var(--acc-text); border-color: var(--acc-line); }
+.pc-farm-worth {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.3rem 0.7rem;
+  margin-top: 0.5rem;
+  padding-top: 0.5rem;
+  border-top: 1px dashed var(--surface-brd);
+}
+.pc-farm-worth span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.62rem;
+  font-weight: 700;
+  color: var(--gold);
+}
+
+/* ============================================================
+   КЕЙС-БАТЛ: правила, выбор, табло
+   ============================================================ */
+.pc-battle {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 0.9rem 1rem 1rem;
+  border-radius: var(--r-lg);
+  background: linear-gradient(180deg, var(--surface-2), var(--surface) 72%);
+  border: 1px solid var(--surface-brd);
+}
+.pc-battle-rule {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  padding: 0.6rem 0.7rem;
+  border-radius: var(--r-md);
+  background: var(--surface-3);
+  border: 1px solid var(--surface-brd);
+}
+.pc-battle-rule-ico {
+  flex: 0 0 auto;
+  width: 1.9rem;
+  height: 1.9rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--r-sm);
+  background: color-mix(in srgb, var(--danger) 16%, transparent);
+  color: var(--danger);
+}
+.pc-battle-rule .t-title-sm { display: block; font-size: 0.78rem; }
+.pc-battle-rule .t-caption { display: block; margin-top: 2px; font-size: 0.66rem; line-height: 1.5; color: var(--text-dim); }
+.pc-battle-cap { margin: 0 0 0.35rem; font-size: 0.55rem; letter-spacing: 0.12em; color: var(--text-mute); }
+.pc-battle-picks { display: flex; flex-direction: column; gap: 0.5rem; }
+.pc-battle-cases { display: grid; grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr)); gap: 0.45rem; }
+.pc-battle-case {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 0.55rem 0.6rem;
+  border-radius: var(--r-sm);
+  background: var(--btn-bg);
+  border: 1px solid var(--btn-brd);
+  color: var(--text-dim);
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+.pc-battle-case .t-body { font-size: 0.7rem; font-weight: 700; color: var(--text); }
+.pc-battle-case-price { display: inline-flex; align-items: center; gap: 0.25rem; font-size: 0.72rem; color: var(--gold); }
+.pc-battle-case-legend { font-size: 0.55rem; color: var(--text-mute); }
+.pc-battle-case:hover { background: var(--btn-bg-hi); }
+.pc-battle-case.on {
+  background: var(--acc-soft);
+  border-color: var(--acc);
+  box-shadow: 0 0 0 1px var(--acc-soft);
+}
+.pc-battle-rounds { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.45rem; }
+.pc-battle-round {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 0.5rem 0.4rem;
+  border-radius: var(--r-sm);
+  background: var(--btn-bg);
+  border: 1px solid var(--btn-brd);
+  color: var(--text-mute);
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+.pc-battle-round b { font-size: 1rem; color: var(--text); }
+.pc-battle-round .t-caption { font-size: 0.54rem; line-height: 1.25; text-align: center; }
+.pc-battle-round:hover { background: var(--btn-bg-hi); }
+.pc-battle-round.on {
+  background: var(--acc-soft);
+  border-color: var(--acc);
+  color: var(--acc-text);
+}
+.pc-battle-round.on b { color: var(--acc-text); }
+.pc-battle-sum {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding: 0.5rem 0.65rem;
+  border-radius: var(--r-sm);
+  background: var(--surface-3);
+  border: 1px solid var(--surface-brd);
+  color: var(--text-mute);
+}
+.pc-battle-sum > span { display: inline-flex; align-items: baseline; gap: 0.3rem; }
+.pc-battle-sum .t-label { font-size: 0.53rem; letter-spacing: 0.1em; }
+.pc-battle-sum b { font-size: 0.86rem; color: var(--text); }
+.pc-battle-sum b.gold { color: var(--gold); }
+.pc-battle-sum b.poor { color: var(--danger); }
+.pc-battle-go {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  width: 100%;
+  padding: 0.8rem 1rem;
+  border-radius: var(--r-md);
+  background: linear-gradient(170deg, var(--acc-hi), var(--acc) 52%, var(--acc-lo));
+  border: 1px solid color-mix(in srgb, var(--acc) 62%, #ffffff);
+  color: var(--acc-ink);
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+  box-shadow: 0 12px 28px -14px var(--acc-glow);
+  transition: filter 0.15s ease, transform 0.12s ease;
+}
+.pc-battle-go:hover:not(:disabled) { filter: brightness(1.06); }
+.pc-battle-go:active:not(:disabled) { transform: scale(0.985); }
+.pc-battle-go:disabled {
+  background: var(--btn-bg);
+  border-color: var(--btn-brd);
+  color: var(--text-mute);
+  box-shadow: none;
+  cursor: not-allowed;
+}
+.pc-battle-record {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  font-size: 0.64rem;
+  color: var(--text-mute);
+}
+.pc-battle-record b { color: var(--text); }
+/* табло: я — перетягивание каната — соперник */
+.pc-battle-board {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr) minmax(0, 1fr);
+  gap: 0.6rem;
+  align-items: center;
+  padding: 0.65rem 0.75rem;
+  border-radius: var(--r-md);
+  background: var(--surface-3);
+  border: 1px solid var(--surface-brd);
+}
+.pc-battle-side { display: flex; flex-direction: column; gap: 2px; }
+.pc-battle-side.foe { align-items: flex-end; text-align: right; }
+.pc-battle-side .t-label { font-size: 0.53rem; letter-spacing: 0.12em; color: var(--text-mute); }
+.pc-battle-sum2 { font-size: 1.1rem; }
+.pc-battle-total { font-size: 1.1rem; font-variant-numeric: tabular-nums; }
+.pc-battle-side.me .pc-battle-total { color: var(--acc-text); }
+.pc-battle-side.foe .pc-battle-total { color: var(--danger); }
+.pc-battle-tug {
+  position: relative;
+  display: flex;
+  height: 0.5rem;
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--surface-2);
+}
+.pc-battle-tug i { display: block; height: 100%; transition: width 0.4s cubic-bezier(0.2, 0.8, 0.2, 1); }
+.pc-battle-tug i.me { background: linear-gradient(90deg, color-mix(in srgb, var(--acc) 70%, #fff), var(--acc)); }
+.pc-battle-tug i.foe { background: linear-gradient(90deg, var(--danger), color-mix(in srgb, var(--danger) 60%, #fff)); }
+.pc-battle-tug-mark {
+  position: absolute;
+  left: 50%;
+  top: -2px;
+  bottom: -2px;
+  width: 2px;
+  transform: translateX(-50%);
+  background: rgba(255, 255, 255, 0.5);
+}
+.pc-battle-status {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding-top: 0.4rem;
+  border-top: 1px solid var(--surface-brd);
+  color: var(--text-mute);
+  font-size: 0.58rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+.pc-battle-lead { padding: 0.14rem 0.45rem; border-radius: 999px; background: var(--surface-2); color: var(--text-dim); }
+.pc-battle-lead.up { background: var(--acc-soft); color: var(--acc-text); }
+.pc-battle-lead.down { background: var(--danger-soft); color: var(--danger); }
+
+/* ============================================================
    АПГРЕЙД: два явных режима · ВЕЩИ: осмотр
    ============================================================ */
 /* Режимы апгрейда — две отдельные кнопки с объяснением, а не одна
