@@ -668,7 +668,10 @@ const css19 = fs.readFileSync('src/index.css', 'utf8');
 ok(css19.includes('html.low-fx'), 'в стилях есть блок облегчённого режима');
 ok(/html\.low-fx[\s\S]{0,900}backdrop-filter:\s*none/.test(css19), 'размытие отключается на слабых');
 const shell19 = fs.readFileSync('src/games/shell.tsx', 'utf8');
-ok(shell19.includes('canvasScaleCap'), 'канвас игр учитывает слабый телефон');
+// кап dpr заменён бюджетом пикселей (см. [28]): он учитывает и слабый
+// телефон, и огромное окно на слабом компьютере
+ok(/renderScale\(/.test(shell19) && !/min\(canvasScaleCap\(\), *dpr\)/.test(shell19),
+  'канвас игр учитывает слабое устройство');
 const app19b = fs.readFileSync('src/App.tsx', 'utf8');
 ok(app19b.includes('applyPerfMode'), 'режим производительности применяется при запуске');
 const set19 = fs.readFileSync('src/pages/Settings.tsx', 'utf8');
@@ -887,6 +890,64 @@ ok(!/borderRadius: "50%"/.test(cd27) && !/border: "2px solid var\(--acc\)"/.test
   'вокруг цифр отсчёта нет колец');
 ok(/var\(--surface\)/.test(sh27), 'плашка итогов непрозрачная');
 ok(/var\(--surface-2\)/.test(sh27), 'шапка игры непрозрачная');
+
+console.log('\n[28] Производительность на слабом ПК');
+const pf28 = fs.readFileSync('src/core/perf.ts', 'utf8');
+ok(/export function renderScale/.test(pf28) && /pixelBudget/.test(pf28),
+  'разрешение рисования считается из бюджета пикселей, а не из devicePixelRatio');
+ok(/renderScale\(r\.width, r\.height\)/.test(sh27) && /setTransform\(scale, 0, 0, scale/.test(sh27),
+  'useCanvas берёт буфер из бюджета и рисует в CSS-пикселях');
+ok(!/min\(canvasScaleCap\(\), *dpr\)/.test(sh27),
+  'канвас больше не разгоняется до dpr на всё окно (главная причина 2–7 FPS)');
+ok(/fpsFeed\(now\)/.test(sh27), 'кадры считает цикл игры, отдельного rAF на индикатор нет');
+ok(/export function fpsWatch/.test(pf28), 'для игр без канваса есть резервный счётчик кадров');
+const app28 = fs.readFileSync('src/App.tsx', 'utf8');
+const st28 = fs.readFileSync('src/core/store.tsx', 'utf8');
+ok(/pc && game \? null/.test(app28), 'главный экран размонтирован, пока открыта игра');
+ok(/!lowFx && !game && <Aurora/.test(app28), 'фоновая аура не рисуется под игрой');
+ok(/isPlaying\(\)/.test(st28) && /n >= 5/.test(st28),
+  'автодоход во время игры капает, но дёргает React раз в 5 секунд');
+ok(/\.page-dormant/.test(css), 'экран под игрой выключен из отрисовки (телефон)');
+ok(/html\.is-playing .*animation: none/s.test(css), 'анимации под оверлеем игры остановлены');
+ok(/softShadows/.test(sh27) && /defineProperty\(ctx, "shadowBlur"/.test(sh27),
+  'в лёгком режиме канвас не платит кадрами за размытые тени');
+ok(/export function adaptStep|adaptStep\(fCur/.test(pf28) && /adaptValue/.test(pf28),
+  'разрешение подстраивается по кадрам самой игры, а не по догадке при старте');
+ok(sh27.indexOf('fpsFeed(now)') < sh27.indexOf('const ctx = c.getContext'),
+  'счёт кадров идёт до рисования: смена разрешения не даёт чёрной вспышки');
+const hud28 = fs.readFileSync('src/ui/PcHud.tsx', 'utf8');
+ok(/<div className={`fps-hud \$\{tone\}`}/.test(hud28) && /fps-hud-worst/.test(hud28),
+  'счётчик FPS показывает кадры, миллисекунды и просадки');
+ok(/\.fps-hud \{[^}]*pointer-events: none/s.test(css), 'счётчик не перехватывает клики игры');
+ok(/fpsHud !== false && <FpsHud/.test(app28) && /fpsHud/.test(set25),
+  'FPS включён по умолчанию и выключается в настройках');
+ok(/writeQuality/.test(pf28) && /part="perf"/.test(set25),
+  'качество картинки — одна ручка в настройках, с замером железа');
+
+console.log('\n[29] Клавиатура и мышь в играх');
+const km29 = fs.readFileSync('src/core/keymouse.ts', 'utf8');
+for (const [k, n] of [['KeyW','W'],['KeyA','A'],['KeyS','S'],['KeyD','D'],
+                      ['ArrowUp','↑'],['ArrowDown','↓'],['ArrowLeft','←'],['ArrowRight','→'],
+                      ['Space','пробел'],['Enter','Enter'],['ShiftLeft','SHIFT']])
+  ok(km29.includes(k), `клавиша ${n} работает в играх`);
+ok(/pointerdown/.test(km29) && /pointerup/.test(km29) && /"click"/.test(km29),
+  'пробел шлёт pointerdown/pointerup и click — нажимаются и канвас, и DOM-кнопки');
+ok(/!== "CANVAS"/.test(km29), 'на канвасе лишнего клика нет: прицел-перетаскивание не ломается');
+ok(/inField\(e\.target\)/.test(km29), 'в полях ввода клавиши остаются вводу');
+ok(/window\.addEventListener\("blur"/.test(km29), 'при потере фокуса кнопки сбрасываются (герой не бежит вечно)');
+ok(/Math\.min\(64, t - last\)/.test(km29), 'шаг движения не зависит от лагов: дельта клампится');
+ok(/s\.settings\.keys === false/.test(app28) && /settings\.keys/.test(set25),
+  'управление с клавиатуры отключается тумблером');
+ok(/onKeysPtr/.test(pf28 + km29) && /el\.style\.transform/.test(hud28),
+  'кольцо курсора ходит без перерисовок React');
+ok(/NATIVE_KEY_GAMES/.test(km29) && /handlesKeysNatively\(game\)/.test(app28),
+  'игры, которые читают клавиши сами, не получают двойное нажатие');
+ok(/translate3d\(\$\{k\.x\}px/.test(hud28),
+  'кольцо появляется сразу в точке указателя, а не в углу поля');
+ok(/state\.usingKeys = false;/.test(km29),
+  'движение мыши снимает клавиатурное кольцо: можно целиться мышью');
+ok(/top: calc\(var\(--sat, 0px\) \+ 58px\)/.test(css),
+  'счётчик FPS стоит под шапкой игры, а не поверх «рекорда»');
 
 console.log(fails===0?'\n✅ ВСЕ ПРОВЕРКИ ВЁРСТКИ ПРОЙДЕНЫ\n':`\n❌ ПРОВАЛЕНО: ${fails}\n`);
 process.exit(fails?1:0);

@@ -78,6 +78,10 @@ export function freshSave(): SaveState {
       notifyNews: false,
       favGames: [],
       gameSort: "default",
+      // Счётчик кадров включён: на компьютере без него невозможно понять,
+      // тормозит игра или нет; выключается одной кнопкой ниже.
+      fpsHud: true,
+      keys: true,
     },
     unlockedGames: ALL_GAMES.slice(),
     stats: {

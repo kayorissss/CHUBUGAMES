@@ -6,6 +6,7 @@ import {
   loadSave, persist, persistNow, freshSave, xpForLevel, xpMult,
   autoRate, offlineRate, offlineCapHours, prestigeGain, spentSkillPoints,
 } from "./save";
+import { isPlaying, onPlaying } from "./play";
 import {
   ACHIEVEMENTS, ACCENTS, QUEST_POOL, DAILY_LADDER, GAME_META,
   SEASON_XP_PER_TIER, SEASON_TIERS,
@@ -140,18 +141,45 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  /* --- тик автодохода --- */
+  /* --- тик автодохода ---
+     *
+     * Во время игры он не дёргает весь интерфейс каждую секунду: доход
+     * капает, но React перерисовывается раз в пять секунд (суммой). На
+     * слабом компьютере это буквально лишние пять перерисовок в секунду
+     * под канвасом, а деньги всё равно приходят честно — за те же пять
+     * секунд.
+     */
   useEffect(() => {
+    let pend = 0;
+    let n = 0;
+    const flush = () => {
+      if (pend <= 0) return;
+      const amount = pend;
+      pend = 0;
+      set((d) => {
+        d.coins += amount;
+        d.totalCoinsEver += amount;
+        d.lastSeen = Date.now();
+      });
+    };
     const iv = setInterval(() => {
       const r = autoRate(ref.current);
       if (r <= 0) return;
-      set((d) => {
-        d.coins += r;
-        d.totalCoinsEver += r;
-        d.lastSeen = Date.now();
-      });
+      pend += r;
+      n += 1;
+      if (!isPlaying() || n >= 5) {
+        n = 0;
+        flush();
+      }
     }, 1000);
-    return () => clearInterval(iv);
+    const off = onPlaying((v) => { if (!v) flush(); });
+    document.addEventListener("visibilitychange", flush);
+    return () => {
+      clearInterval(iv);
+      off();
+      document.removeEventListener("visibilitychange", flush);
+      flush();
+    };
   }, [set]);
 
   /* --- сохранение при уходе в фон --- */

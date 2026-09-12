@@ -64,6 +64,9 @@ jobs:
       # check:ui читает dist/index.html, поэтому строго после сборки
       - name: UI contract checks
         run: npm run check:ui
+      # логика производительности и ввода: без браузера, по заглушкам DOM
+      - name: Performance & input logic checks
+        run: npm run check:perf
 
       # Ключ подписи не имеет права вернуться в репозиторий
       - name: No signing key in the repo

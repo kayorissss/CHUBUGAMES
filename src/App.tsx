@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion, MotionConfig } from "framer-motion";
 import { GameProvider, useGame } from "./core/store";
 import { Aurora } from "./ui/Glass";
@@ -18,10 +18,13 @@ import {
   syncInstalledVersion,
 } from "./core/notify";
 import { upcomingBosses } from "./core/bosses";
-import { applyPerfMode, isLowFx, measurePerfOnce } from "./core/perf";
-import { initDesktopKeys, initStage, isDesktop } from "./core/desktop";
+import { applyPerfMode, isLowFx, measurePerfOnce, resetFps } from "./core/perf";
+import { initDesktopKeys, initStage, isDesktop, hasKeyboard } from "./core/desktop";
 import BootScreen from "./ui/BootScreen";
 import PcTopBar from "./ui/pc/PcTopBar";
+import { FpsHud, KeyCursor } from "./ui/PcHud";
+import { initGameKeys, handlesKeysNatively } from "./core/keymouse";
+import { setPlaying } from "./core/play";
 import FanficPage from "./pages/Fanfic";
 import Home from "./pages/Home";
 import { ModesProvider } from "./core/modes";
@@ -90,6 +93,8 @@ function Shell() {
       : "home";
   });
   const [game, setGame] = useState<GameId | null>(null);
+  /** контейнер игры — нужен, чтобы посадить на него клавиатурный слой */
+  const playRef = useRef<HTMLDivElement>(null);
   // отдельные подстраницы поверх вкладок
   const [sub, setSub] = useState<SubPage | null>(null);
   // Влияет на анимации: в облегчённом режиме их выключаем целиком
@@ -160,6 +165,32 @@ function Shell() {
     return pushBack("game", () => setGame(null));
   }, [game]);
 
+  /*
+   * «Идёт игра». Один флаг на всё приложение: по нему прячется фоновая
+   * аура, засыпает тик автодохода в store и подсвечивается главный экран.
+   * Без этого под оверлеем игры continuosно перерисовываются пульсации
+   * босса, кубик казино и сундук — на слабом компьютере минус треть кадров.
+   */
+  useEffect(() => {
+    setPlaying(!!game);
+    if (game) resetFps();
+    return () => setPlaying(false);
+  }, [game]);
+
+  // Управление с клавиатуры: WASD и стрелки водят «палец» по полю игры,
+  // пробел нажимает. Ставится только пока игра открыта.
+  useEffect(() => {
+    // на компьютере с мышью и клавиатурой — всегда, даже если окно узкое
+    // и ПК-раскладка не включена: с клавиатуры играть никто не запрещал
+    if (!game || s.settings.keys === false) return;
+    if (!pc && !hasKeyboard()) return;
+    // четыре игры читают клавиши сами — слой удвоил бы каждое нажатие
+    if (handlesKeysNatively(game)) return;
+    const el = playRef.current;
+    if (!el) return;
+    return initGameKeys(el);
+  }, [game, pc, s.settings.keys]);
+
   // «назад» закрывает подстраницу
   useEffect(() => {
     if (!sub) return;
@@ -199,7 +230,10 @@ function Shell() {
     >
     <MotionConfig reducedMotion={lowFx ? "always" : "never"}>
     <div className={pc ? "h-full w-full pc-shell" : "h-full w-full relative overflow-hidden"} style={{ background: "var(--bg)" }}>
-      {s.settings.fx && !lowFx && <Aurora />}
+      {/* фон-аура: красиво, но это бесконечная анимация на весь экран.
+          Пока открыта игра, её всё равно не видно — значит и тратить на
+          неё кадры нечем. */}
+      {s.settings.fx && !lowFx && !game && <Aurora />}
 
       {/* ПК: разделы, профиль и кошелёк живут в верхней панели. На мониторе
           нижнее меню выглядит чужим, а боковая колонка с разделами съедала
@@ -217,8 +251,21 @@ function Shell() {
           раскладку, но на ПК этоflex-колонка, внутри которой лежат
           страницы, подстраницы и игры */}
       <div className={pc ? "pc-body" : "contents"}>
-      <div className="relative h-full" style={{ zIndex: 1 }}>
+      <div
+        className={`relative h-full ${game ? "page-dormant" : ""}`}
+        style={{ zIndex: 1 }}
+      >
         <AnimatePresence mode="wait">
+          {/*
+           * На компьютере, пока открыта игра, главный экран не просто
+           * закрыт оверлеем — он размонтирован. Иначе под игрой продолжают
+           * жить пульсации босса, свечение сундука и казино: framer-motion
+           * считает их в своём rAF, даже когда их не видно. На слабом ПК
+           * это минус треть кадров в самой игре.
+           * На телефоне оставляем как было: там оверлей и так перекрывает
+           * экран, а резкий перемонст заметнее.
+           */}
+          {pc && game ? null : (
           <motion.div
             key={tab}
             variants={pageVariants}
@@ -229,6 +276,7 @@ function Shell() {
           >
             {pages[tab]}
           </motion.div>
+          )}
         </AnimatePresence>
       </div>
 
@@ -274,7 +322,7 @@ function Shell() {
             exit="exit"
             className={`fixed inset-0 z-[60] ${pc ? "pc-play-wrap" : ""}`}
           >
-            <div className={pc ? "pc-play" : "h-full w-full"}>
+            <div className={pc ? "pc-play" : "h-full w-full"} ref={playRef}>
             {game === "burger" && <BurgerRain onExit={() => setGame(null)} />}
             {game === "clicker" && <Clicker onExit={() => setGame(null)} />}
             {game === "merge" && <MergeHeads onExit={() => setGame(null)} />}
@@ -304,6 +352,12 @@ function Shell() {
             {game === "nards" && <Backgammon onExit={() => setGame(null)} />}
             {game === "cheat" && <Cheat onExit={() => setGame(null)} />}
             {game === "lift" && <Elevator onExit={() => setGame(null)} />}
+
+            {/* Счётчик кадров — прямо в игре, выключается в настройках
+                («Игра» → «Показывать FPS»). Отдельного rAF не тратит:
+                кадры считает цикл useCanvas (core/perf.ts). */}
+            {s.settings.fpsHud !== false && <FpsHud />}
+            {s.settings.keys !== false && !handlesKeysNatively(game) && <KeyCursor />}
             </div>
           </motion.div>
         )}

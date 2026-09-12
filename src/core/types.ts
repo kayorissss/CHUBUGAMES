@@ -130,6 +130,10 @@ export interface Settings {
   favGames?: string[];
   /** Порядок игр в сетке */
   gameSort?: "default" | "best" | "recent" | "plays" | "name";
+  /** Показывать счётчик кадров прямо в игре (ПК и телефон) */
+  fpsHud?: boolean;
+  /** Управление с клавиатуры в играх: WASD и стрелки водят «палец», пробел жмёт */
+  keys?: boolean;
 }
 
 export interface SaveState {

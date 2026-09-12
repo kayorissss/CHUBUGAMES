@@ -3,7 +3,7 @@ import { motion } from "framer-motion";
 import { useGame } from "../core/store";
 import { Card, Button, SectionTitle, Screen, Divider } from "../ui/Glass";
 import DesktopSettings from "../ui/DesktopSettings";
-import { isDesktop } from "../core/desktop";
+import { isDesktop, hasKeyboard } from "../core/desktop";
 import UpdateCheckRow from "../ui/UpdateCheckRow";
 import {
   askNotifyPermission,
@@ -337,7 +337,33 @@ export default function Settings({
           on={s.settings.haptics}
           onToggle={() => set((d) => { d.settings.haptics = !d.settings.haptics; })}
         />
+        <Divider inset={14} />
+
+        {/* Счётчик кадров и клавиатура в играх. Оба нужны и на телефоне
+            (там только FPS), и на компьютере — там ещё и управление. */}
+        <Toggle
+          label={tr("Показывать FPS в играх")}
+          hint={tr("Сколько кадров рисует игра — в углу экрана")}
+          on={s.settings.fpsHud !== false}
+          onToggle={() => set((d) => { d.settings.fpsHud = !(d.settings.fpsHud !== false); })}
+        />
+        {(isDesktop() || hasKeyboard()) && (
+          <>
+            <Divider inset={14} />
+            <Toggle
+              label={tr("Управление с клавиатуры")}
+              hint={tr("WASD и стрелки водят палец, пробел нажимает")}
+              on={s.settings.keys !== false}
+              onToggle={() => set((d) => { d.settings.keys = !(d.settings.keys !== false); })}
+            />
+          </>
+        )}
       </Card>
+
+      {/* Качество картинки: одна ручка + честный замер железа. Внутри
+          DesktopSettings, потому что на телефоне разрешение и так полное,
+          а замер там только мучает устройство. */}
+      <DesktopSettings part="perf" />
       </div>
 
       <div className="pc-blk pc-span pc-r5">

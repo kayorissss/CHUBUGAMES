@@ -42,6 +42,8 @@ jobs:
         run: npm run build
       - name: UI contract checks
         run: npm run check:ui
+      - name: Performance & input logic checks
+        run: npm run check:perf
       - name: Key files parse
         run: node --check desktop/main.cjs && node --check desktop/preload.cjs
 

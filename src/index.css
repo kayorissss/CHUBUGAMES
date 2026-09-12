@@ -523,6 +523,184 @@ body {
    светлого игрового поля просто исчезала), где-то стекло, где-то
    заливка. Отсюда «сверху интерфейс ужасен» в каждом пункте списка.
    Плашка непрозрачная, высота фиксированная, рамка видимая. */
+/* ══════════════ игра: счётчик кадров и клавиши ══════════════ */
+
+/* Пока открыта игра на телефоне, главный экран под оверлеем выключается
+   из отрисовки (на компьютере он размонтирован — см. App.tsx). */
+.page-dormant {
+  visibility: hidden;
+}
+
+/* Пока игра открыта, всё живое под оверлеем должно замолчать: на
+   компьютере экран размонтирован, а на телефоне остаётся — гасим хотя бы
+   анимации, иначе framer и CSS-блики отъедают кадры у самой игры. */
+html.is-playing .aurora,
+html.is-playing .pc-shine::after {
+  display: none !important;
+}
+html.is-playing .page-dormant *,
+html.is-playing .page-dormant *::before,
+html.is-playing .page-dormant *::after {
+  animation: none !important;
+  transition: none !important;
+}
+
+/* Счётчик FPS: в углу игрового окна, клики не ловит и в игру не лезет. */
+/* Считаем по шапке игры: у всех канвас-игр сверху полоса HUD
+   (--sat + 8px, высота 44px). Если прилепить счётчик к самому верху, он
+   встанет ровно поверх «РЕКОРД» — поэтому отступ отсчитываем от неё. */
+.fps-hud {
+  position: absolute;
+  z-index: 14;
+  top: calc(var(--sat, 0px) + 58px);
+  right: 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 3px;
+  padding: 6px 9px;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  font-family: var(--font-num);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.1;
+  color: #7cf59b;
+  letter-spacing: 0.02em;
+  pointer-events: none;
+  text-shadow: none;
+}
+.fps-hud-warn { color: #ffd166; }
+.fps-hud-bad { color: #ff5a5a; }
+.fps-hud-row {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+}
+.fps-hud-row span {
+  font-size: 13px;
+  font-weight: 800;
+}
+.fps-hud-row small {
+  font-size: 8px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  opacity: 0.65;
+}
+.fps-hud-bar {
+  width: 62px;
+  height: 4px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.16);
+}
+.fps-hud-bar i {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: currentColor;
+  transition: width 0.18s linear;
+}
+.fps-hud-worst {
+  font-size: 9px;
+  font-weight: 600;
+  opacity: 0.8;
+}
+.fps-hud-scale {
+  font-size: 9px;
+  font-weight: 600;
+  color: #9fd0ff;
+}
+html.low-fx .fps-hud-scale { color: var(--text-dim); }
+
+/* Виртуальный «палец» для WASD и стрелок (core/keymouse.ts). */
+.key-cursor {
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 13;
+  will-change: transform;
+  animation: key-cursor-in 0.12s ease-out;
+  width: 34px;
+  height: 34px;
+  margin: -17px 0 0 -17px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 106, 0, 0.9);
+  background: radial-gradient(circle, rgba(255, 106, 0, 0.35), rgba(255, 106, 0, 0.06) 70%);
+  box-shadow: 0 0 16px rgba(255, 106, 0, 0.4);
+  pointer-events: none;
+}
+.key-cursor i {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 6px;
+  height: 6px;
+  margin: -3px 0 0 -3px;
+  border-radius: 50%;
+  background: #fff;
+}
+.key-cursor i.k-up { transform: translateY(-13px); }
+.key-cursor i.k-down { transform: translateY(13px); }
+.key-cursor i.k-left { transform: translateX(-13px); }
+.key-cursor i.k-right { transform: translateX(13px); }
+.key-cursor i.on {
+  background: #ffd166;
+  box-shadow: 0 0 8px rgba(255, 209, 102, 0.9);
+}
+.key-cursor-press {
+  width: 54px;
+  height: 54px;
+  margin: -27px 0 0 -27px;
+  border-color: #ffd166;
+  background: radial-gradient(circle, rgba(255, 209, 102, 0.5), rgba(255, 106, 0, 0.1) 70%);
+}
+
+.key-legend {
+  position: absolute;
+  z-index: 13;
+  left: 50%;
+  bottom: 10px;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 10px;
+  font-weight: 700;
+  white-space: nowrap;
+  pointer-events: none;
+}
+.key-legend span {
+  padding: 1px 5px;
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.12);
+  font-family: var(--font-num);
+}
+.key-legend em {
+  font-style: normal;
+  opacity: 0.7;
+  font-weight: 600;
+}
+
+@keyframes key-cursor-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.fps-hud {
+  will-change: auto;
+}
+
 .hud-chip {
   display: flex;
   align-items: center;
@@ -665,6 +843,39 @@ html.low-fx * {
 /* Нажатие кнопки должно остаться отзывчивым */
 html.low-fx .press {
   transition-duration: 0.1s !important;
+}
+
+/* То, что живёт ВДОЛЬ игры и ничего не даёт, а кадры съедает:
+   бегущий блик на кнопках, пульсация ауры, «плавающие» блоки,
+   цветные свечения и мягкие тени. Оставляем только ровный фон. */
+html.low-fx .pc-shine::after,
+html.low-fx .pc-pulse-ring,
+html.low-fx .animate-float,
+html.low-fx .float {
+  display: none !important;
+}
+html.low-fx .pc-pulse-ring {
+  animation: none !important;
+}
+/* тени — самый дорогой фильтр для слабого GPU: остаётся только мягкая
+   «глубина» карточек, цветные ореолы убираются */
+html.low-fx .pc-tile,
+html.low-fx .pc-blocks,
+html.low-fx .pc-boss,
+html.low-fx .pc-blk,
+html.low-fx .pc-hero {
+  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.5) !important;
+  text-shadow: none !important;
+}
+/* счётчик кадров в лёгком режиме — без полупрозрачности и свечения */
+html.low-fx .fps-hud,
+html.low-fx .key-legend {
+  background: #000 !important;
+  box-shadow: none !important;
+}
+html.low-fx .fps-hud-bar i,
+html.low-fx .key-cursor {
+  transition: none !important;
 }
 
 /* ---------- Прочее ---------- */
