@@ -10,7 +10,7 @@ import { useGame } from "../core/store";
 import { bossStats } from "../core/save";
 import { RARITY_COLOR, RARITY_LABEL } from "../core/content";
 import {
-  FREE_CHIPS, GAMBLE_CASES, SLOT_SYMBOLS, freeChipsIn, freeChipsReady,
+  FREE_CHIPS, GAMBLE_CASES, SLOT_SYMBOLS, freeChipsIn, freeChipsReady, symbolName,
   itemById, readGamble, rollItem, runBattle, shiftItem, slotPayout, spinReel,
   updateGamble,
   type GambleCase, type GambleSave, type GambleStore, type ItemDef, type SlotSymbol,
@@ -227,95 +227,121 @@ export default function Casino({ onBack }: { onBack: () => void }) {
 const BETS = [10, 25, 50, 100, 250];
 
 /**
- * Слоты.
+ * СЛОТЫ.
  *
- * Что было не так (жалоба «скудная анимация, непонятно выиграл или нет»):
- *   1. РЕАЛЬНЫЙ БАГ, а не оформление. Пара младших символов платит меньше
- *      ставки (бургер ×0.5, зуб ×0.7, болт ×0.9), но экран всё равно
- *      писал зелёное «+N жетонов». Расчётом: 42.3 % всех спинов
- *      показывали «выигрыш», после которого жетонов становилось МЕНЬШЕ.
- *      Игрок видел зелёный плюс и терял баланс — отсюда «непонятно».
- *      Теперь считаем ЧИСТЫЙ результат (выплата минус ставка) и красим
- *      по нему: плюс зелёным, возврат части ставки — жёлтым «вернулось»,
- *      ноль — серым. В плюс реально уходит 11.9 % спинов.
- *   2. Барабаны просто меняли иконку каждые 70 мс. Теперь лента символов
- *      едет вертикально и тормозит на своём барабане, а выигрышные
- *      подсвечиваются рамкой и вспышкой.
+ * Просьба: «Слоты должны выглядеть как реальное казино: шик, чтобы видно
+ * было, что лента листается, и чтобы символам были подписи».
+ *
+ * Что было: три плашки, в которых каждые 60 мс менялась одна иконка. Это не
+ * «листается» — это мигающие картинки; и подписи отсутствовали, поэтому
+ * таблица выплат читалась как набор цифр без языка.
+ *
+ * Что стало:
+ *   1. Настоящая лента: у каждого барабана свой столбец символов, он едет
+ *      сверху вниз и тормозит на своём символе (у барабанов разная длина —
+ *      30/34/38 позиций, поэтому они останавливаются по очереди, как в
+ *      живом автомате, а не все разом).
+ *   2. Видно три строки: целевая по центру в светлом «окне», соседние —
+ *      затемнённые. Линия выплат поперёк окна.
+ *   3. Под каждым символом — его имя; те же имена в таблице выплат, рядом с
+ *      множителями.
+ *   4. «Шик»: тёмное сукно, золотая рамка с внутренним бликом, подсветка
+ *      сверху, вспышка на выигрышных барабанах, счётчик последних исходов
+ *      (чтобы полоса результата не была единственной подсказкой).
+ *   5. Честный итог: считаем ЧИСТЫЙ результат (выплата минус ставка) —
+ *      игрок видел зелёный плюс и терял жетоны; теперь плюс зелёным, частичный
+ *      возврат — жёлтым «вернулось», мимо — серым «−ставка».
  */
 function Slots({ g, save }: { g: GambleStore; save: GambleSave }) {
   const [bet, setBet] = useState(25);
+  /** длина ленты каждого барабана: разная — поэтому остановка по очереди */
+  const LEN = [30, 34, 38];
+  const [pos, setPos] = useState<number[]>([0, 0, 0]);
+  const [strips, setStrips] = useState<SlotSymbol[][]>([[], [], []]);
   const [reels, setReels] = useState<SlotSymbol[]>(["burger", "tooth", "bolt"]);
   /** null — ещё не крутили; иначе итог последнего спина */
   const [res, setRes] = useState<{ pay: number; net: number; kind: "trip" | "pair" | "miss"; sym: SlotSymbol | null } | null>(null);
   const [spinning, setSpinning] = useState(false);
-  /** какие барабаны уже встали — для поочерёдной остановки */
-  const [stopped, setStopped] = useState([true, true, true]);
+  /** чем кончались последние спины — маленькая бегущая строка казино */
+  const [hist, setHist] = useState<{ net: number; sym: SlotSymbol | null }[]>([]);
   const timers = useRef<number[]>([]);
+  const posRef = useRef(pos);
+  posRef.current = pos;
+  const endedRef = useRef(0);
 
   useEffect(() => () => { timers.current.forEach((t) => { clearTimeout(t); clearInterval(t); }); }, []);
+
+  /** один барабан: едет, пока не дойдёт до своего символа */
+  const runReel = (i: number, onEnd: () => void) => {
+    const tick = () => {
+      const left = LEN[i] - 1 - posRef.current[i];
+      if (left <= 0) {
+        sfx.tap?.();
+        haptic("light");
+        onEnd();
+        return;
+      }
+      setPos((prev) => {
+        const n = [...prev];
+        // последние три позиции — торможение: лента «оседает» на символе
+        n[i] = Math.min(LEN[i] - 1, n[i] + 1);
+        return n;
+      });
+      const speed = left <= 3 ? 120 + (4 - left) * 90 : 40;
+      timers.current.push(window.setTimeout(tick, speed));
+    };
+    tick();
+  };
 
   const spin = () => {
     if (spinning || g.chips < bet) return;
     timers.current.forEach((t) => { clearTimeout(t); clearInterval(t); });
     timers.current = [];
 
+    const final: SlotSymbol[] = [spinReel(), spinReel(), spinReel()];
+    // лента: случайные символы, последний — итоговый
+    setStrips(final.map((f, i) => {
+      const arr = Array.from({ length: LEN[i] - 1 }, () => spinReel());
+      arr.push(f);
+      return arr;
+    }));
+    setPos([0, 0, 0]);
+    posRef.current = [0, 0, 0];
+    setReels(final);
     setSpinning(true);
     setRes(null);
-    setStopped([false, false, false]);
     sfx.click();
     haptic("light");
 
-    const final: SlotSymbol[] = [spinReel(), spinReel(), spinReel()];
+    endedRef.current = 0;
+    for (let i = 0; i < 3; i++) runReel(i, finish);
 
-    // Лента крутится, пока барабан не остановлен
-    const iv = window.setInterval(() => {
-      setReels((prev) => prev.map((cur, i) => (stoppedRef.current[i] ? cur : spinReel())));
-    }, 60);
-    timers.current.push(iv);
+    function finish() {
+      endedRef.current += 1;
+      if (endedRef.current < 3) return;
+      const pay = slotPayout(final, bet);
+      const net = pay - bet;
+      const trip = final[0] === final[1] && final[1] === final[2];
+      const pairSym = final[0] === final[1] ? final[0]
+        : final[1] === final[2] ? final[1]
+        : final[0] === final[2] ? final[0] : null;
+      const kind = trip ? "trip" : pairSym ? "pair" : "miss";
+      const sym = trip ? final[0] : pairSym;
 
-    [560, 900, 1260].forEach((ms, i) => {
-      const t = window.setTimeout(() => {
-        stoppedRef.current[i] = true;
-        setStopped((prev) => { const n = [...prev]; n[i] = true; return n; });
-        setReels((prev) => { const n = [...prev]; n[i] = final[i]; return n; });
-        sfx.tap?.();
-        haptic("light");
+      setRes({ pay, net, kind, sym });
+      setSpinning(false);
+      setHist((h) => [{ net, sym }, ...h].slice(0, 6));
+      save((x) => ({
+        chips: x.chips - bet + pay,
+        spins: x.spins + 1,
+        won: pay > 0 ? x.won + pay : x.won,
+        lost: x.lost + bet,
+      }));
 
-        if (i === 2) {
-          clearInterval(iv);
-          const pay = slotPayout(final, bet);
-          const net = pay - bet;
-          const trip = final[0] === final[1] && final[1] === final[2];
-          const pairSym = final[0] === final[1] ? final[0]
-            : final[1] === final[2] ? final[1]
-            : final[0] === final[2] ? final[0] : null;
-
-          setRes({
-            pay,
-            net,
-            kind: trip ? "trip" : pairSym ? "pair" : "miss",
-            sym: trip ? final[0] : pairSym,
-          });
-          setSpinning(false);
-
-          save((x) => ({
-            chips: x.chips - bet + pay,
-            spins: x.spins + 1,
-            won: pay > 0 ? x.won + pay : x.won,
-            lost: x.lost + bet,
-          }));
-
-          if (net > 0) { sfx.crit?.(); haptic("success"); }
-          else { haptic("light"); }
-        }
-      }, ms);
-      timers.current.push(t);
-    });
+      if (net > 0) { sfx.crit?.(); haptic("success"); }
+      else { haptic("light"); }
+    }
   };
-
-  // ref, чтобы интервал видел актуальные остановки без пересоздания
-  const stoppedRef = useRef([true, true, true]);
-  useEffect(() => { stoppedRef.current = stopped; }, [stopped]);
 
   /** какие барабаны входят в комбинацию — их подсвечиваем */
   const litReel = (i: number) => {
@@ -328,77 +354,51 @@ function Slots({ g, save }: { g: GambleStore; save: GambleSave }) {
     : res.pay > 0 ? "part"
     : "miss";
 
-  const toneColor = tone === "win" ? "var(--ok)"
-    : tone === "part" ? "var(--warn)"
-    : "var(--text-mute)";
-
   return (
     <>
-      <Panel r="lg" style={{ padding: 16, marginBottom: 12 }}>
-        {/* Барабаны */}
-        <div className="flex" style={{ gap: 8, marginBottom: 14 }}>
-          {reels.map((r, i) => (
-            <div
-              key={i}
-              className="flex-1 relative overflow-hidden"
-              style={{
-                height: 92,
-                borderRadius: "var(--r-md)",
-                background: "var(--surface-2)",
-                border: `1.5px solid ${litReel(i) ? toneColor : "var(--btn-brd)"}`,
-                boxShadow: litReel(i) ? `0 0 0 2px color-mix(in srgb, ${toneColor} 26%, transparent)` : "none",
-                transition: "border-color .18s, box-shadow .18s",
-              }}
-            >
-              {/* вспышка на выигрышном барабане */}
-              <AnimatePresence>
-                {litReel(i) && (
-                  <motion.div
-                    className="absolute inset-0"
-                    initial={{ opacity: 0.5 }}
-                    animate={{ opacity: 0 }}
-                    exit={{ opacity: 0 }}
-                    transition={{ duration: 0.5 }}
-                    style={{ background: toneColor, pointerEvents: "none" }}
-                  />
-                )}
-              </AnimatePresence>
+      {/* ── автомат ── */}
+      <div className={`pc-slot ${tone === "win" ? "win" : ""}`}>
+        <div className="pc-slot-top">
+          <span className="t-label">{tr("СЛОТЫ «ЧУБКОЙ»")}</span>
+          <span className="pc-slot-chips">
+            <Icon name="ticket" size={12} />
+            <b className="t-num">{fmt(g.chips)}</b>
+          </span>
+        </div>
 
-              <div className="absolute inset-0 flex items-center justify-center">
-                <motion.div
-                  key={`${i}-${r}-${stopped[i]}`}
-                  initial={stopped[i] ? { y: -34, opacity: 0.25 } : { y: -30, opacity: 0.35 }}
-                  animate={{ y: 0, opacity: 1 }}
-                  transition={stopped[i]
-                    ? { type: "spring", stiffness: 420, damping: 24 }
-                    : { duration: 0.06, ease: "linear" }}
-                >
-                  <SlotGlyph id={r} />
-                </motion.div>
+        <div className="pc-slot-window">
+          <span className="pc-slot-payline" aria-hidden />
+          {[0, 1, 2].map((i) => (
+            <div key={i} className={`pc-slot-reel ${litReel(i) ? "lit" : ""}`}>
+              <div
+                className="pc-slot-strip"
+                style={{ transform: `translateY(calc(var(--cell) * ${-pos[i] + 1}))` }}
+              >
+                {strips[i].map((sym, k) => (
+                  <div key={k} className="pc-slot-cell">
+                    <SlotGlyph id={sym} size={34} />
+                    <span className="pc-slot-cap">{tr(symbolName(sym))}</span>
+                  </div>
+                ))}
               </div>
+              {litReel(i) && <span className="pc-slot-flash" aria-hidden />}
             </div>
           ))}
         </div>
 
-        {/* Результат: честный, по чистому итогу */}
-        <div style={{ minHeight: 46, marginBottom: 12 }}>
+        {/* исход спина — по чистому результату, а не по «красивому плюсу» */}
+        <div className="pc-slot-out">
           <AnimatePresence mode="wait">
-            {res && (
+            {res ? (
               <motion.div
                 key={`${res.pay}-${res.net}`}
                 initial={{ opacity: 0, y: 8, scale: 0.96 }}
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0 }}
                 transition={{ type: "spring", stiffness: 380, damping: 26 }}
-                className="flex items-center justify-center"
-                style={{
-                  gap: 9, padding: "9px 12px", borderRadius: "var(--r-sm)",
-                  background: tone === "miss" ? "var(--surface-2)"
-                    : `color-mix(in srgb, ${toneColor} 15%, var(--surface-2))`,
-                  border: `1px solid ${tone === "miss" ? "var(--btn-brd)" : toneColor}`,
-                }}
+                className={`pc-slot-res ${tone}`}
               >
-                <span className="t-title-sm clip1" style={{ color: toneColor, fontSize: 14 }}>
+                <span className="t-title-sm clip1">
                   {res.net > 0
                     ? `${tr("ВЫИГРЫШ")} +${fmt(res.net)}`
                     : res.pay > 0
@@ -406,73 +406,88 @@ function Slots({ g, save }: { g: GambleStore; save: GambleSave }) {
                       : `${tr("Мимо")} −${fmt(bet)}`}
                 </span>
                 {res.kind !== "miss" && (
-                  <span className="t-caption shrink-0" style={{ fontSize: 10 }}>
-                    {res.kind === "trip" ? tr("ТРОЙКА") : tr("ПАРА")}
+                  <span className="t-caption">
+                    {res.kind === "trip" ? tr("ТРОЙКА") : tr("ПАРА")} · {tr(symbolName(res.sym!))}
                   </span>
                 )}
               </motion.div>
+            ) : (
+              <span className="pc-slot-idle t-label">
+                {spinning ? tr("ЛЕНТА ИДЁТ…") : tr("СТАВКА ВЫБРАНА — КРУТИ")}
+              </span>
             )}
           </AnimatePresence>
+
+          {hist.length > 0 && (
+            <span className="pc-slot-hist" title={tr("последние спины")}>
+              {hist.map((h, i) => (
+                <b key={i} className={`t-num ${h.net > 0 ? "up" : h.net < 0 ? "down" : "flat"}`}>
+                  {h.net > 0 ? "+" : ""}{fmt(h.net)}
+                </b>
+              ))}
+            </span>
+          )}
         </div>
 
-        {/* Ставка */}
-        <div className="t-label" style={{ fontSize: 9, marginBottom: 6 }}>{tr("СТАВКА")}</div>
-        <div className="flex" style={{ gap: 6, marginBottom: 12 }}>
-          {BETS.map((b) => (
-            <button
-              key={b}
-              type="button"
-              disabled={spinning}
-              onClick={() => { sfx.click(); setBet(b); }}
-              className="t-num flex-1"
-              style={{
-                padding: "9px 0", borderRadius: "var(--r-sm)", fontSize: 12,
-                background: bet === b ? "var(--acc)" : "var(--btn-bg)",
-                color: bet === b ? "var(--acc-ink)" : "var(--text-mute)",
-                border: `1px solid ${bet === b ? "var(--acc)" : "var(--btn-brd)"}`,
-                opacity: g.chips < b ? 0.45 : 1,
-              }}
-            >
-              {b}
-            </button>
-          ))}
+        {/* ставка */}
+        <div className="pc-slot-bets">
+          <span className="t-label">{tr("СТАВКА")}</span>
+          <div className="pc-slot-betrow">
+            {BETS.map((b) => (
+              <button
+                key={b}
+                type="button"
+                disabled={spinning}
+                onClick={() => { sfx.click(); setBet(b); }}
+                className={`pc-slot-bet t-num ${bet === b ? "on" : ""}`}
+                style={{ opacity: g.chips < b ? 0.45 : 1 }}
+                title={`${tr("поставить")} ${b}`}
+              >
+                {b}
+              </button>
+            ))}
+          </div>
         </div>
 
-        <Tap
+        <button
+          type="button"
+          className="pc-slot-go"
           onClick={spin}
-          accent r="md" center
-          className="w-full py-3.5 t-title"
-          style={{ fontSize: 14, opacity: spinning || g.chips < bet ? 0.5 : 1 }}
-          sound="power"
+          disabled={spinning || g.chips < bet}
         >
+          <Icon name="dice" size={15} />
           {spinning ? tr("КРУТИТСЯ…") : g.chips < bet ? tr("НЕ ХВАТАЕТ ЖЕТОНОВ") : `${tr("КРУТИТЬ ЗА")} ${bet}`}
-        </Tap>
-      </Panel>
+        </button>
+      </div>
 
-      {/* Таблица выплат: с честной пометкой, что младшая пара — это возврат части ставки */}
+      {/* ── таблица выплат: символы с именами ── */}
       <Panel r="lg" style={{ padding: 14 }}>
         <div className="t-label" style={{ marginBottom: 10 }}>{tr("Выплаты")}</div>
         <div className="flex items-center" style={{ gap: 10, paddingBottom: 6 }}>
           <span style={{ width: 18 }} />
-          <span className="t-caption flex-1" style={{ fontSize: 9.5 }}>{tr("три подряд")}</span>
-          <span className="t-caption shrink-0" style={{ fontSize: 9.5, width: 62, textAlign: "right" }}>{tr("пара")}</span>
+          <span className="t-caption flex-1" style={{ fontSize: 9.5 }}>{tr("символ")}</span>
+          <span className="t-caption shrink-0" style={{ fontSize: 9.5, width: 54, textAlign: "right" }}>{tr("три подряд")}</span>
+          <span className="t-caption shrink-0" style={{ fontSize: 9.5, width: 46, textAlign: "right" }}>{tr("пара")}</span>
         </div>
-        {SLOT_SYMBOLS.map((s) => (
+        {SLOT_SYMBOLS.map((sy) => (
           <div
-            key={s.id}
+            key={sy.id}
             className="flex items-center"
             style={{ gap: 10, padding: "6px 0", borderTop: "1px solid var(--surface-brd)" }}
           >
-            <SlotGlyph id={s.id} size={18} />
-            <span className="t-num flex-1" style={{ fontSize: 12, color: "var(--ok)" }}>×{s.pay3}</span>
+            <SlotGlyph id={sy.id} size={18} />
+            <span className="t-body flex-1 clip1" style={{ fontSize: 11 }}>{tr(sy.name)}</span>
+            <span className="t-num shrink-0" style={{ fontSize: 12, width: 54, textAlign: "right", color: "var(--ok)" }}>
+              ×{sy.pay3}
+            </span>
             <span
               className="t-num shrink-0"
               style={{
-                fontSize: 12, width: 62, textAlign: "right",
-                color: s.pay2 >= 1 ? "var(--ok)" : "var(--warn)",
+                fontSize: 12, width: 46, textAlign: "right",
+                color: sy.pay2 >= 1 ? "var(--ok)" : "var(--warn)",
               }}
             >
-              ×{s.pay2}
+              ×{sy.pay2}
             </span>
           </div>
         ))}

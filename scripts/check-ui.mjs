@@ -1512,5 +1512,39 @@ console.log('\n[36] 1.27: кошелёк казино нельзя потеря�
     'ставка апгрейда снимается с актуального инвентаря');
 }
 
+console.log('\n[38] 1.27: слоты — автомат, а не мигающие плашки');
+{
+  const css = fs.readFileSync('src/index.css', 'utf8');
+  const gm = fs.readFileSync('src/core/gamble.ts', 'utf8');
+  const cas = fs.readFileSync('src/pages/Casino.tsx', 'utf8');
+  const slots = cas.slice(cas.indexOf('function Slots('), cas.indexOf('/* ═══════════════════════════ КЕЙСЫ'));
+
+  ok(/name: "БУРГЕР"/.test(gm) && /export function symbolName/.test(gm),
+    'у каждого символа барабана есть имя, и оно доступно отовсюду (подписи)');
+  ok(/const LEN = \[30, 34, 38\]/.test(slots),
+    'у барабанов разная длина ленты — они останавливаются по очереди, как в живом автомате');
+  ok(/className="pc-slot-strip"/.test(slots) && /translateY\(calc\(var\(--cell\)/.test(slots),
+    'лента реально едет (translate по cell), а не мигает сменой иконки');
+  ok(/\.pc-slot-reel \{[\s\S]{0,200}?height: calc\(var\(--cell\) \* 3\)/.test(css) &&
+     /\.pc-slot-window \{[\s\S]{0,300}?grid-template-columns: repeat\(3/.test(css),
+    'в окне видно три строки ленты — «прокрутка» читается глазом');
+  ok(/className="pc-slot-cap">\{tr\(symbolName\(sym\)\)\}/.test(slots),
+    'под символом в ленте подпись его имени');
+  ok(/tr\(sy\.name\)/.test(slots), 'в таблице выплат символы названы, а не только иконки');
+  ok(/\.pc-slot-payline \{/.test(css), 'есть линия выплат поперёк окна');
+  ok(/setHist\(\(h\) => \[\{ net, sym \}, \.\.\.h\]\.slice\(0, 6\)\)/.test(slots) &&
+     /className="pc-slot-hist"/.test(slots),
+    'ряд последних исходов виден — полоса результата не единственная подсказка');
+  ok(/const net = pay - bet;/.test(slots) && /tone === "win"/.test(slots),
+    'окрашивается ЧИСТЫЙ итог (выплата минус ставка), а не «красивый плюс»');
+  ok(/save\(\(x\) => \(\{\s*chips: x\.chips - bet \+ pay,/.test(slots),
+    'баланс слотов правится от актуального состояния');
+  ok(/\.pc-slot\.win \{[\s\S]{0,140}?animation: pcslotwin/.test(css) &&
+     /html\.low-fx \.pc-slot\.win \{ animation: none; \}/.test(css),
+    'золотая вспышка выигрыша есть, и она выключается в лёгком режиме');
+  ok(!/setInterval\(\(\) => \{[\s\S]{0,80}?spinReel\(\)\)\);/.test(slots),
+    'нет интервала, который просто подменял иконки каждые 60 мс');
+}
+
 console.log(fails===0?'\n✅ ВСЕ ПРОВЕРКИ ВЁРСТКИ ПРОЙДЕНЫ\n':`\n❌ ПРОВАЛЕНО: ${fails}\n`);
 process.exit(fails?1:0);

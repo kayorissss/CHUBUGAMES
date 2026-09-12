@@ -137,14 +137,26 @@ export function upgradeTargets(fromValue: number): ItemDef[] {
 /* ─────────────────────────── Слоты ─────────────────────────── */
 
 /** Барабаны: символ и его вес (чем больше, тем чаще) */
+/**
+ * Символы барабана.
+ *
+ * name — обязателен: «символам нужны подписи» было отдельной претензией.
+ * Голые иконки не читаются как язык игры — игрок не понимает, что дорого,
+ * а что дёшево, и таблица выплат превращается в набор цифр.
+ */
 export const SLOT_SYMBOLS = [
-  { id: "burger", weight: 30, pay3: 5,   pay2: 0.5 },
-  { id: "tooth",  weight: 25, pay3: 9,   pay2: 0.7 },
-  { id: "bolt",   weight: 18, pay3: 18,  pay2: 0.9 },
-  { id: "gem",    weight: 12, pay3: 36,  pay2: 1.2 },
-  { id: "crown",  weight: 8,  pay3: 90,  pay2: 1.8 },
-  { id: "skull",  weight: 5,  pay3: 260, pay2: 3 },
+  { id: "burger", name: "БУРГЕР",    weight: 30, pay3: 5,   pay2: 0.5 },
+  { id: "tooth",  name: "ЗУБ МУДРОСТИ", weight: 25, pay3: 9,  pay2: 0.7 },
+  { id: "bolt",   name: "ГАЙКА",     weight: 18, pay3: 18,  pay2: 0.9 },
+  { id: "gem",    name: "КРИСТАЛЛ",  weight: 12, pay3: 36,  pay2: 1.2 },
+  { id: "crown",  name: "КОРОНА",    weight: 8,  pay3: 90,  pay2: 1.8 },
+  { id: "skull",  name: "ЧЕРЕП",     weight: 5,  pay3: 260, pay2: 3 },
 ] as const;
+
+/** подпись символа для барабана и таблицы выплат */
+export function symbolName(id: SlotSymbol): string {
+  return SLOT_SYMBOLS.find((s) => s.id === id)?.name ?? id;
+}
 
 export type SlotSymbol = (typeof SLOT_SYMBOLS)[number]["id"];
 
