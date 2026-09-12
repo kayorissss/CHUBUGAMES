@@ -11,9 +11,9 @@ import { bossStats } from "../core/save";
 import { RARITY_COLOR, RARITY_LABEL } from "../core/content";
 import {
   FREE_CHIPS, GAMBLE_CASES, SLOT_SYMBOLS, freeChipsIn, freeChipsReady, symbolName,
-  itemById, readGamble, rollItem, runBattle, shiftItem, slotPayout, spinReel,
+  ITEMS, itemById, readGamble, rollItem, runBattle, shiftItem, slotPayout, spinReel,
   updateGamble,
-  type GambleCase, type GambleSave, type GambleStore, type ItemDef, type SlotSymbol,
+  type GambleCase, type GambleSave, type GambleStore, type ItemDef, type SkinKind, type SlotSymbol,
 } from "../core/gamble";
 import Wheel, { wheelStopFeedback } from "../ui/Wheel";
 import {
@@ -501,186 +501,327 @@ function Slots({ g, save }: { g: GambleStore; save: GambleSave }) {
 
 /* ═══════════════════════════ КЕЙСЫ ═══════════════════════════ */
 
+/** куда надевается украшение — общий справочник (нужен и в кейсах, и в «Вещах») */
+const ITEM_KIND_LABEL: Record<SkinKind, string> = {
+  hat: tr("на голову"),
+  glasses: tr("на лицо"),
+  chain: tr("на шею"),
+  aura: tr("вокруг героя"),
+  pet: tr("рядом с героем"),
+};
+
+
+
 function Cases({ g, save }: { g: GambleStore; save: GambleSave }) {
   /*
    * Удача главного друга реально влияет на дроп. В карточке друга давно
    * написано «+N% к редким дропам», но число никуда не передавалось —
    * теперь оно идёт в rollItem и двигает шансы rare/epic/legend.
+   *
+   * Что переделано и почему (претензии: «кейсы не выглядят как кейсы»,
+   * «модалка мелкая и неудобная, шансы нечитаемы», «вещи непонятны»):
+   *
+   *   1. Кейс теперь ВЫГЛЯД как кейс: алюминиевый корпус с бликом, ручка,
+   *      замок-защёлка, уголки и цветная подсветка «начинки» по редкости.
+   *      Раньше это была строка: серая иконка 44 px, название и цена.
+   *   2. Клик по кейсу больше НЕ СПИСЫВАЕТ жетоны. Он открывает просмотр
+   *      содержимого, и только кнопка «ОТКРЫТЬ ЗА N» покупает. Попадание
+   *      курсором мимо «ОТКРЫТЬ» стоило 200–800 жетонов, и это выглядело
+   *      как обман.
+   *   3. Модалка — широкая (до 60rem), в две колонки: слева лента/итог,
+   *      справа полный список содержимого с крупными процентами и именами
+   *      вещей. Мелкий квадрат max-w-sm с одной полоской-прокруткой был
+   *      ровно тем «неудобным и нечитаемым».
+   *   4. Проценты — числом, а не только полоской, и с пометкой, куда
+   *      влияет удача друга.
    */
   const { s: save0 } = useGame();
   const luck = bossStats(save0).luckBonus;
   const [opening, setOpening] = useState<GambleCase | null>(null);
   const [got, setGot] = useState<ItemDef | null>(null);
   const [roll, setRoll] = useState<ItemDef[]>([]);
+  /**
+   * Лента в покое — просто витрина: она генерируется ОДИН раз при открытии
+   * просмотра. Генерировать её прямо в render было бы дёрганьем (новое
+   * случайное содержимое на каждое наведение курсора).
+   */
+  const [armed, setArmed] = useState(false);
+  const [spinning, setSpinning] = useState(false);
+  const timers = useRef<number[]>([]);
 
-  const open = (c: GambleCase) => {
-    if (g.chips < c.price || opening) return;
-    const prize = rollItem(c, luck);
-    // лента прокрутки: случайные предметы, приз — предпоследний
-    const strip = Array.from({ length: 26 }, () => rollItem(c, luck));
-    strip[22] = prize;
-    setRoll(strip);
+  useEffect(() => () => { timers.current.forEach((t) => window.clearTimeout(t)); }, []);
+
+  /** просмотр кейса: никаких списаний, только содержимое и шанс */
+  const look = (c: GambleCase) => {
+    sfx.click();
+    haptic("light");
     setOpening(c);
     setGot(null);
+    setRoll(Array.from({ length: 26 }, () => rollItem(c, luck)));
+    setArmed(false);
+    setSpinning(false);
+  };
+
+  const close = () => {
+    timers.current.forEach((t) => window.clearTimeout(t));
+    timers.current = [];
+    setSpinning(false);
+    setOpening(null);
+    setGot(null);
+  };
+
+  /** покупка и прокрутка */
+  const buy = (c: GambleCase) => {
+    if (g.chips < c.price || spinning) return;
+    const prize = rollItem(c, luck);
+    // в уже показанной витрине меняем только призовую ячейку — лента
+    // продолжается туда, куда игрок уже смотрит
+    setRoll((prev) => {
+      const strip = prev.length === 26 ? [...prev] : Array.from({ length: 26 }, () => rollItem(c, luck));
+      strip[22] = prize;
+      return strip;
+    });
+    setGot(null);
+    setSpinning(true);
+    setArmed(true);
     save((x) => ({ chips: Math.max(0, x.chips - c.price) }));
     sfx.click();
     haptic("light");
 
-    window.setTimeout(() => {
+    timers.current.push(window.setTimeout(() => {
+      setSpinning(false);
       setGot(prize);
-      save((x) => ({
-        // chips не пересчитываем: ставку сняли сразу, приз только кладём
-        items: shiftItem(x, prize.id, 1),
-      }));
+      // приз кладём в АКТУАЛЬНЫЙ инвентарь (см. core/gamble.ts)
+      save((x) => ({ items: shiftItem(x, prize.id, 1) }));
       sfx.legend?.();
       haptic("success");
-    }, 2600);
+    }, 2600));
   };
+
+  // Esc закрывает просмотр — как и везде в приложении
+  useEffect(() => {
+    if (!opening) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      e.stopPropagation();
+      timers.current.forEach((t) => window.clearTimeout(t));
+      timers.current = [];
+      setSpinning(false);
+      setOpening(null);
+      setGot(null);
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [opening]);
 
   return (
     <>
-      {GAMBLE_CASES.map((c) => (
-        <Panel key={c.id} r="lg" style={{ padding: 14, marginBottom: 10 }}>
-          <div className="flex items-center" style={{ gap: 12, marginBottom: 12 }}>
-            <span
-              className="shrink-0 flex items-center justify-center"
-              style={{
-                width: 44, height: 44, borderRadius: "var(--r-sm)",
-                background: "var(--surface-2)", border: "1px solid var(--btn-brd)",
-              }}
-            >
-              <Icon name="case" size={21} />
+      <div className="pc-cases">
+        {GAMBLE_CASES.map((c) => (
+          <button key={c.id} type="button" className="pc-case" onClick={() => look(c)}>
+            {/* сам чемодан: корпус, блик, ручка, замок, уголки, подсветка
+                начинки — всё на CSS, без растровой картинки */}
+            <span className="pc-case-art" aria-hidden>
+              <span className="pc-case-glow" />
+              <span className="pc-case-handle" />
+              <span className="pc-case-body">
+                <span className="pc-case-seam" />
+                <span className="pc-case-lock" />
+                <span className="pc-case-plate t-display">{GAMBLE_CASES.indexOf(c) + 1}</span>
+              </span>
+              <span className="pc-case-corner c1" />
+              <span className="pc-case-corner c2" />
+              <span className="pc-case-corner c3" />
+              <span className="pc-case-corner c4" />
             </span>
-            <span className="flex-1 min-w-0">
-              <span className="t-title-sm block">{c.name}</span>
-              <span className="t-caption block" style={{ marginTop: 2 }}>
-                легенда {(c.odds.legend * 100).toFixed(1)}%
+
+            <span className="pc-case-info">
+              <span className="t-label pc-case-kicker">{tr("КЕЙС")}</span>
+              <span className="t-title-sm pc-case-name clip1">{c.name}</span>
+              <span className="pc-case-odds">
+                {(["legend", "epic", "rare"] as const).map((r) => (
+                  <span key={r} className="pc-case-odd" style={{ color: RARITY_COLOR[r] }}>
+                    <i style={{ background: RARITY_COLOR[r] }} />
+                    {RARITY_LABEL[r]}
+                    <b className="t-num">{(c.odds[r] * 100).toFixed(c.odds[r] < 0.1 ? 2 : 1)}%</b>
+                  </span>
+                ))}
+              </span>
+              <span className="pc-case-bar">
+                {(["common", "rare", "epic", "legend"] as const).map((r) => (
+                  <i key={r} style={{ width: `${c.odds[r] * 100}%`, background: RARITY_COLOR[r] }} />
+                ))}
               </span>
             </span>
-            <Tap
-              onClick={() => open(c)}
-              accent r="sm" center
-              className="shrink-0 t-title"
-              style={{
-                fontSize: 12, padding: "10px 16px",
-                opacity: g.chips < c.price ? 0.45 : 1,
-              }}
-              sound="power"
-            >
-              {c.price}
-            </Tap>
-          </div>
 
-          {/* Шансы полоской */}
-          <div className="flex" style={{ height: 5, borderRadius: 99, overflow: "hidden" }}>
-            {(["common", "rare", "epic", "legend"] as const).map((r) => (
-              <span
-                key={r}
-                style={{ width: `${c.odds[r] * 100}%`, background: RARITY_COLOR[r] }}
-              />
-            ))}
-          </div>
-        </Panel>
-      ))}
+            <span className="pc-case-foot">
+              <span className={`pc-case-price t-num ${g.chips < c.price ? "poor" : ""}`}>
+                <Icon name="ticket" size={12} />
+                {fmt(c.price)}
+              </span>
+              <span className="pc-case-cta">
+                {g.chips < c.price ? tr("МАЛО ЖЕТОНОВ") : tr("СМОТРЕТЬ")}
+                <Icon name="chevron" size={11} />
+              </span>
+            </span>
+          </button>
+        ))}
+      </div>
 
-      {/* Открытие кейса */}
+      <div className="t-caption pc-case-note">
+        <Icon name="info" size={11} />
+        {tr("Клик по кейсу — только просмотр: жетоны тратятся кнопкой «ОТКРЫТЬ ЗА».")}
+        {luck > 0 && ` · ${tr("удача друга")} +${Math.round(luck * 100)}% ${tr("к редким")}`}
+      </div>
+
+      {/* ── просмотр и вскрытие ── */}
       <AnimatePresence>
         {opening && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[80] flex items-center justify-center px-5"
-            style={{ background: "var(--scrim-strong)", backdropFilter: "blur(16px)" }}
+            className="pc-case-scrim"
+            onClick={close}
           >
-            <div className="w-full max-w-sm">
-              {!got ? (
-                <>
-                  <div className="t-label text-center" style={{ marginBottom: 14 }}>
-                    {opening.name}
-                  </div>
-                  {/* Лента */}
-                  <div
-                    style={{
-                      position: "relative", height: 96, overflow: "hidden",
-                      borderRadius: "var(--r-lg)", border: "1.5px solid var(--btn-brd)",
-                      background: "var(--surface-2)",
-                    }}
-                  >
+            <motion.div
+              initial={{ opacity: 0, y: 16, scale: 0.97 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 10, scale: 0.98 }}
+              transition={{ type: "spring", stiffness: 340, damping: 28 }}
+              className="pc-case-modal"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="pc-case-mhead">
+                <span className="t-label pc-case-mkicker">{tr("КЕЙС")}</span>
+                <span className="t-display pc-case-mname">{opening.name}</span>
+                <button type="button" className="pc-case-mx" onClick={close} aria-label={tr("Закрыть")}>
+                  <Icon name="cross" size={14} />
+                </button>
+              </div>
+
+              <div className="pc-case-mbody">
+                {/* левая колонка: лента или итог */}
+                <div className="pc-case-mleft">
+                  {got ? (
                     <motion.div
-                      className="flex items-center h-full"
-                      initial={{ x: 0 }}
-                      animate={{ x: -(22 * 84) + 140 }}
-                      transition={{ duration: 2.4, ease: [0.15, 0.6, 0.15, 1] }}
-                      style={{ gap: 8, paddingLeft: 8 }}
+                      initial={{ scale: 0.84, opacity: 0 }}
+                      animate={{ scale: 1, opacity: 1 }}
+                      transition={{ type: "spring", stiffness: 320, damping: 22 }}
+                      className="pc-case-prize"
+                      style={{ ["--rc" as never]: RARITY_COLOR[got.rarity] }}
                     >
-                      {roll.map((it, i) => (
-                        <span
-                          key={i}
-                          className="shrink-0 flex flex-col items-center justify-center"
-                          style={{
-                            width: 76, height: 76, borderRadius: "var(--r-md)",
-                            background: "var(--surface)",
-                            border: `1.5px solid ${RARITY_COLOR[it.rarity]}`,
-                            color: RARITY_COLOR[it.rarity],
-                          }}
-                        >
-                          <ItemIcon id={it.id} size={30} />
-                        </span>
-                      ))}
+                      <span className="t-label" style={{ color: RARITY_COLOR[got.rarity] }}>
+                        {RARITY_LABEL[got.rarity]}
+                      </span>
+                      <span className="pc-case-prize-art">
+                        <ItemIcon id={got.id} size={58} />
+                      </span>
+                      <span className="t-display pc-case-prize-name">{got.name}</span>
+                      <span className="t-caption">
+                        {tr("ценность")} <b className="t-num">{fmt(got.value)}</b> {tr("жетонов")} ·{" "}
+                        {ITEM_KIND_LABEL[got.kind]}
+                      </span>
                     </motion.div>
-                    {/* указатель */}
-                    <span
-                      style={{
-                        position: "absolute", left: "50%", top: 0, bottom: 0,
-                        width: 2, background: "var(--acc)", transform: "translateX(-50%)",
-                      }}
-                    />
+                  ) : (
+                    <div className="pc-case-strip">
+                      {/* лента: приз на 23-й позиции, окно центрировано на нём */}
+                      <div
+                        className="pc-case-strip-tape"
+                        style={{ transform: armed ? "translateX(calc(var(--step) * -22))" : "translateX(0)" }}
+                      >
+                        {roll.map((it, i) => (
+                          <span
+                            key={i}
+                            className={`pc-case-cell ${armed && i === 22 ? "prize" : ""}`}
+                            style={{ borderColor: RARITY_COLOR[it.rarity] }}
+                            title={it.name}
+                          >
+                            <ItemIcon id={it.id} size={28} />
+                            <span className="pc-case-cell-name clip1">{it.name}</span>
+                          </span>
+                        ))}
+                      </div>
+                      <span className="pc-case-needle" aria-hidden />
+                      {spinning && <span className="pc-case-hood" aria-hidden />}
+                    </div>
+                  )}
+
+                  <div className="t-caption pc-case-hint">
+                    {got
+                      ? tr("Предмет уже в разделе «Вещи»: там его можно надеть, осмотреть или продать.")
+                      : spinning
+                        ? tr("ЛЕНТА ИДЁТ…")
+                        : tr("Жми «ОТКРЫТЬ» — лента прокрутится и покажет, что выпало.")}
                   </div>
-                </>
-              ) : (
-                <motion.div
-                  initial={{ scale: 0.8, opacity: 0 }}
-                  animate={{ scale: 1, opacity: 1 }}
-                  transition={{ type: "spring", stiffness: 320, damping: 22 }}
-                >
-                  <Panel r="xl" strong className="p-6 text-center">
-                    <div
-                      className="t-label"
-                      style={{ color: RARITY_COLOR[got.rarity], marginBottom: 12 }}
-                    >
-                      {RARITY_LABEL[got.rarity]}
-                    </div>
-                    <span
-                      className="inline-flex items-center justify-center"
-                      style={{
-                        width: 92, height: 92, borderRadius: "var(--r-lg)",
-                        background: "var(--surface-2)",
-                        border: `2px solid ${RARITY_COLOR[got.rarity]}`,
-                        color: RARITY_COLOR[got.rarity],
-                        boxShadow: `0 0 40px -10px ${RARITY_COLOR[got.rarity]}`,
-                        marginBottom: 14,
-                      }}
-                    >
-                      <ItemIcon id={got.id} size={44} />
+                </div>
+
+                {/* правая колонка: читаемые шансы и что внутри */}
+                <div className="pc-case-mright">
+                  <div className="t-label pc-case-rcap">{tr("ЧТО МОЖЕТ ВЫПАСТЬ")}</div>
+                  {(["legend", "epic", "rare", "common"] as const).map((r) => {
+                    const items = ITEMS.filter((i) => i.rarity === r);
+                    return (
+                      <div key={r} className="pc-case-row" style={{ ["--rc" as never]: RARITY_COLOR[r] }}>
+                        <span className="pc-case-row-pct t-num">{(opening.odds[r] * 100).toFixed(opening.odds[r] < 0.1 ? 2 : 1)}%</span>
+                        <span className="min-w-0">
+                          <span className="t-label pc-case-row-r">{RARITY_LABEL[r]} · {items.length}</span>
+                          <span className="pc-case-row-names">
+                            {items.slice(0, 4).map((i) => i.name).join(" · ")}
+                            {items.length > 4 ? ` · +${items.length - 4}` : ""}
+                          </span>
+                        </span>
+                      </div>
+                    );
+                  })}
+
+                  <div className="pc-case-mid">
+                    <span className="t-caption">
+                      {tr("шанс редких растёт с удачей друга")}
+                      {luck > 0 ? ` (+${Math.round(luck * 100)}%)` : ` (${tr("нет активного друга")})`}
                     </span>
-                    <div className="t-title" style={{ fontSize: 17, marginBottom: 4 }}>
-                      {got.name}
-                    </div>
-                    <div className="t-caption" style={{ marginBottom: 18 }}>
-                      ценность {got.value} жетонов
-                    </div>
-                    <Tap
-                      onClick={() => { setOpening(null); setGot(null); sfx.click(); }}
-                      accent r="md" center
-                      className="w-full py-3.5 t-title"
-                      style={{ fontSize: 14 }}
-                      sound="coin"
-                    >{tr("ЗАБРАТЬ")}</Tap>
-                  </Panel>
-                </motion.div>
-              )}
-            </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="pc-case-mfoot">
+                {got ? (
+                  <>
+                    <button type="button" className="pc-case-ghost" onClick={close}>
+                      {tr("ЗАКРЫТЬ")}
+                    </button>
+                    <button
+                      type="button"
+                      className="pc-case-open"
+                      disabled={g.chips < opening.price}
+                      onClick={() => buy(opening)}
+                    >
+                      <Icon name="refresh" size={14} />
+                      {tr("ЕЩЁ РАЗ")} · {fmt(opening.price)}
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button type="button" className="pc-case-ghost" onClick={close} disabled={spinning}>
+                      {tr("ОТМЕНА")}
+                    </button>
+                    <button
+                      type="button"
+                      className="pc-case-open"
+                      disabled={spinning || g.chips < opening.price}
+                      onClick={() => buy(opening)}
+                    >
+                      <Icon name="case" size={14} />
+                      {spinning
+                        ? tr("КРУТИТСЯ…")
+                        : g.chips < opening.price
+                          ? tr("НЕ ХВАТАЕТ ЖЕТОНОВ")
+                          : `${tr("ОТКРЫТЬ ЗА")} ${fmt(opening.price)}`}
+                    </button>
+                  </>
+                )}
+              </div>
+            </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
@@ -1045,6 +1186,7 @@ function Upgrade({ g, save }: { g: GambleStore; save: GambleSave }) {
                 }}
               >
                 <ItemIcon id={id} size={18} />
+                <span className="t-body clip1" style={{ fontSize: 10.5 }}>{it.name}</span>
                 <span className="t-num" style={{ fontSize: 11.5 }}>×{n}</span>
               </button>
             );
@@ -1131,24 +1273,33 @@ function Upgrade({ g, save }: { g: GambleStore; save: GambleSave }) {
             )}
           </AnimatePresence>
 
-          {/* Быстрый режим — отдельным переключателем, как просили */}
-          <button
-            type="button"
-            onClick={() => { setFast((v) => !v); sfx.click(); }}
-            className="flex items-center justify-center w-full"
-            style={{
-              gap: 8, padding: "9px 0", marginBottom: 9,
-              borderRadius: "var(--r-sm)",
-              background: fast ? "var(--acc-soft)" : "var(--btn-bg)",
-              border: `1px solid ${fast ? "var(--acc)" : "var(--btn-brd)"}`,
-              color: fast ? "var(--acc)" : "var(--text-mute)",
-            }}
-          >
-            <Icon name="speed" size={14} />
-            <span className="t-label" style={{ fontSize: 10 }}>
-              {fast ? tr("БЫСТРЫЙ АПГРЕЙД") : tr("ОБЫЧНЫЙ АПГРЕЙД")}
-            </span>
-          </button>
+          {/* Режимы — ДВА явных переключателя, как просили («нужен обычный
+              апгрейд и отдельно ускоренный»). Раньше это была одна кнопка,
+              которая молча меняла надпись: невозможно было догадаться, что
+              она вообще делает. Шансы в обоих режимах ОДИНАКОВЫЕ — режим
+              меняет только прокрутку, а не математику. */}
+          <div className="pc-up-modes">
+            <button
+              type="button"
+              className={`pc-up-mode ${!fast ? "on" : ""}`}
+              aria-pressed={!fast}
+              onClick={() => { setFast(false); sfx.click(); }}
+            >
+              <Icon name="refresh" size={13} />
+              <span className="t-label">{tr("ОБЫЧНЫЙ")}</span>
+              <span className="t-caption">{tr("колесо крутится 4.2 с — видно, как падает")}</span>
+            </button>
+            <button
+              type="button"
+              className={`pc-up-mode ${fast ? "on" : ""}`}
+              aria-pressed={fast}
+              onClick={() => { setFast(true); sfx.click(); }}
+            >
+              <Icon name="speed" size={13} />
+              <span className="t-label">{tr("УСКОРЕННЫЙ")}</span>
+              <span className="t-caption">{tr("1.2 с — тот же шанс, быстрее серия")}</span>
+            </button>
+          </div>
 
           {/* Главная кнопка: раньше она была такой же серой, как всё
               вокруг, и было «непонятно куда жать». */}
@@ -1490,6 +1641,12 @@ function ChipFarm({ save }: { save: GambleSave }) {
 
 function Stuff({ g, save }: { g: GambleStore; save: GambleSave }) {
   const owned = Object.entries(g.items).filter(([, n]) => n > 0);
+  /**
+   * Осмотр вещи. Просьба: «вещи непонятны, их же никак не осмотреть» —
+   * в списке были иконка, имя и две кнопки, и всё: чем предмет, куда
+   * надевается, что даёт и сколько стоит — узнать было негде.
+   */
+  const [look, setLook] = useState<string | null>(null);
 
   const sell = (id: string) => {
     const it = itemById(id);
@@ -1560,15 +1717,22 @@ function Stuff({ g, save }: { g: GambleStore; save: GambleSave }) {
               >
                 <ItemIcon id={id} size={21} />
               </span>
-              <span className="flex-1 min-w-0">
+              {/* имя — кнопка «осмотреть»: карточка вещи без подробностей
+                  была просто списком иконок */}
+              <button
+                type="button"
+                className="pc-stuff-hit flex-1 min-w-0"
+                onClick={() => { sfx.click(); setLook(id); }}
+                title={tr("Осмотреть")}
+              >
                 <span className="t-title-sm clip1 block">{it.name}</span>
                 <span
                   className="t-label block"
-                  style={{ marginTop: 2, fontSize: 9, color: RARITY_COLOR[it.rarity] }}
+                  style={{ marginTop: 2, color: RARITY_COLOR[it.rarity] }}
                 >
-                  {RARITY_LABEL[it.rarity]} · {n} шт
+                  {RARITY_LABEL[it.rarity]} · {n} {tr("шт")} · {ITEM_KIND_LABEL[it.kind]}
                 </span>
-              </span>
+              </button>
               <button
                 type="button"
                 onClick={() => equip(it)}
@@ -1580,12 +1744,13 @@ function Stuff({ g, save }: { g: GambleStore; save: GambleSave }) {
                   border: `1px solid ${on ? "var(--acc)" : "var(--btn-brd)"}`,
                 }}
               >
-                {on ? "СНЯТЬ" : tr("НАДЕТЬ")}
+                {on ? tr("СНЯТЬ") : tr("НАДЕТЬ")}
               </button>
               <button
                 type="button"
                 onClick={() => sell(id)}
                 className="t-label shrink-0"
+                title={tr("Продать за 60% ценности")}
                 style={{
                   padding: "8px 10px", borderRadius: "var(--r-sm)", fontSize: 9,
                   background: "var(--btn-bg)", border: "1px solid var(--btn-brd)",
@@ -1599,6 +1764,66 @@ function Stuff({ g, save }: { g: GambleStore; save: GambleSave }) {
         );
       })}
       <div className="t-caption" style={{ marginTop: 10, lineHeight: 1.5, textAlign: "center" }}>{tr("Продажа даёт 60% ценности.")}</div>
+
+      {/* ── ОСМОТР ВЕЩИ ── */}
+      <AnimatePresence>
+        {look && (() => {
+          const it = itemById(look);
+          if (!it) return null;
+          const n = g.items[look] || 0;
+          const on = g.equipped[it.kind] === look;
+          return (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="pc-case-scrim"
+              onClick={() => setLook(null)}
+            >
+              <motion.div
+                initial={{ opacity: 0, y: 14, scale: 0.97 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 8, scale: 0.98 }}
+                transition={{ type: "spring", stiffness: 340, damping: 28 }}
+                className="pc-stuff-modal"
+                style={{ ["--rc" as never]: RARITY_COLOR[it.rarity] }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <button type="button" className="pc-case-mx" onClick={() => setLook(null)} aria-label={tr("Закрыть")}>
+                  <Icon name="cross" size={14} />
+                </button>
+                <div className="pc-stuff-art"><ItemIcon id={it.id} size={72} /></div>
+                <div className="t-label" style={{ color: RARITY_COLOR[it.rarity] }}>
+                  {RARITY_LABEL[it.rarity]}
+                </div>
+                <div className="t-display pc-stuff-name">{it.name}</div>
+                <div className="pc-stuff-rows">
+                  <span><Icon name="ticket" size={12} />{tr("ценность")} <b className="t-num">{fmt(it.value)}</b> {tr("жетонов")}</span>
+                  <span><Icon name="user" size={12} />{ITEM_KIND_LABEL[it.kind]}</span>
+                  <span><Icon name="case" size={12} />{tr("в наличии")} <b className="t-num">{n}</b></span>
+                  <span>
+                    <Icon name={on ? "check" : "eye"} size={12} />
+                    {on ? tr("надето на главного героя") : tr("не надето")}
+                  </span>
+                </div>
+                <div className="t-caption pc-stuff-note">
+                  {tr("Украшение видно на герое во вкладке «Персонажи» и в играх, где герой участвует. Продажа возвращает 60% ценности, надеть и снять можно в любой момент.")}
+                </div>
+                <div className="pc-stuff-actions">
+                  <button type="button" className="pc-case-ghost" onClick={() => sell(it.id)}>
+                    <Icon name="coin" size={13} />
+                    {tr("ПРОДАТЬ")} · {Math.floor(it.value * 0.6)}
+                  </button>
+                  <button type="button" className="pc-case-open" onClick={() => { equip(it); }}>
+                    <Icon name={on ? "cross" : "check"} size={13} />
+                    {on ? tr("СНЯТЬ") : tr("НАДЕТЬ")}
+                  </button>
+                </div>
+              </motion.div>
+            </motion.div>
+          );
+        })()}
+      </AnimatePresence>
     </>
   );
 }

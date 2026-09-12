@@ -842,7 +842,8 @@ ok(wheel21.includes('WHEEL_RTP'), 'возврат колеса задан явн
 ok(/burn/.test(wheel21) && /win/.test(wheel21), 'у колеса есть выигрышные и сгорающие секторы');
 const cas21 = fs.readFileSync('src/pages/Casino.tsx', 'utf8');
 ok(cas21.includes('ChipFarm'), 'в казино есть заработок жетонов');
-ok(cas21.includes('БЫСТРЫЙ АПГРЕЙД'), 'есть быстрый режим прокрутки');
+ok(/pc-up-mode[\s\S]{0,400}?ОБЫЧНЫЙ/.test(cas21) && /УСКОРЕННЫЙ/.test(cas21),
+  'у апгрейда два явных режима с объяснением (обычный и ускоренный)');
 const fx21 = fs.readFileSync('src/core/fx.ts', 'utf8');
 ok(fx21.includes('wheelTick'), 'у колеса есть звук вращения');
 
@@ -1544,6 +1545,40 @@ console.log('\n[38] 1.27: слоты — автомат, а не мигающи�
     'золотая вспышка выигрыша есть, и она выключается в лёгком режиме');
   ok(!/setInterval\(\(\) => \{[\s\S]{0,80}?spinReel\(\)\)\);/.test(slots),
     'нет интервала, который просто подменял иконки каждые 60 мс');
+}
+
+console.log('\n[39] 1.27: кейсы как кейсы, вещи можно осмотреть');
+{
+  const css = fs.readFileSync('src/index.css', 'utf8');
+  const cas = fs.readFileSync('src/pages/Casino.tsx', 'utf8');
+  ok(/className="pc-case-art"/.test(cas) && /\.pc-case-body \{/.test(css) &&
+     /\.pc-case-handle \{/.test(css) && /\.pc-case-lock \{/.test(css),
+    'у кейса нарисован чемодан (корпус, ручка, замок, уголки), а не серая иконка');
+  ok(/className="pc-cases"/.test(cas) && /\.pc-cases \{[^}]*auto-fill/.test(css),
+    'кейсы — сетка карточек на всю ширину, а не три строки друг под другом');
+  ok(/\.pc-case-modal \{[^}]*min\(60rem/.test(css) && /\.pc-case-mbody \{[^}]*grid-template-columns/.test(css),
+    'модалка кейса широкая и в две колонки (лента + шансы), а не max-w-sm');
+  ok(/pc-case-row-pct/.test(cas) && /opening\.odds\[r\] \* 100/.test(cas),
+    'шансы показаны числом процентов на каждую редкость, а не только полоской');
+  ok(/pc-case-row-names/.test(cas), 'в модалке видно, какие именно вещи могут выпасть');
+  /* клик по карточке не должен тратить жетоны */
+  ok(/const look = \(c: GambleCase\)/.test(cas) && /const buy = \(c: GambleCase\)/.test(cas),
+    'просмотр кейса и покупка — два разных действия');
+  ok(!/onClick=\{\(\) => open\(c\)\}/.test(cas) && /onClick=\{\(\) => look\(c\)\}/.test(cas),
+    'клик по карточке кейса только смотрит: жетоны снимает кнопка «ОТКРЫТЬ ЗА»');
+  ok(/chips: Math\.max\(0, x\.chips - c\.price\)/.test(cas),
+    'цена кейса снимается от актуального баланса, ровно один раз');
+  ok(/if \(e\.key !== "Escape"\) return;/.test(cas), 'Esc закрывает просмотр кейса');
+  ok(/pc-case-cell-name clip1">\{it\.name\}/.test(cas), 'у ячеек ленты есть подписи предметов');
+  ok(/className="pc-stuff-hit/.test(cas) && /pc-stuff-modal/.test(cas),
+    'вещь можно осмотреть: карточка ведёт в модалку с подробностями');
+  ok(/ITEM_KIND_LABEL/.test(cas) && /на голову/.test(cas) && /рядом с героем/.test(cas),
+    'у каждого украшения подписано, куда оно надевается');
+  ok(/tr\("в наличии"\)/.test(cas), 'в осмотре видно, сколько таких предметов');
+  ok(/тот же шанс, быстрее серия/.test(cas) && /\.pc-up-mode\.on/.test(css),
+    'обычный и ускоренный режимы подписаны одинаковостью шансов: режим не меняет математику');
+  ok(/className="pc-stuff-actions"/.test(cas) && /ПРОДАТЬ/.test(cas) && /НАДЕТЬ/.test(cas),
+    'из осмотра можно надеть и продать, не возвращаясь в список');
 }
 
 console.log(fails===0?'\n✅ ВСЕ ПРОВЕРКИ ВЁРСТКИ ПРОЙДЕНЫ\n':`\n❌ ПРОВАЛЕНО: ${fails}\n`);
