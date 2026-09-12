@@ -6,6 +6,7 @@ import { drawHead } from "../core/head";
 import { useCanvas, GameHUD, GameOver, Countdown, HudGauge } from "./shell";
 import AdModal from "../ui/AdModal";
 import { hasAds, noteRevive } from "../core/ads";
+import { actionFor } from "../core/keymap";
 import { sfx, haptic } from "../core/fx";
 
 /**
@@ -214,11 +215,14 @@ export default function ShitovRun({ onExit }: { onExit: () => void }) {
     window.addEventListener("pointercancel", up);
 
     const kd = (e: KeyboardEvent) => {
-      if (e.code === "Space" || e.key === "ArrowUp") { e.preventDefault(); jump(); }
-      if (e.key === "ArrowDown") G.current.ducking = true;
+      /* ПРОБЕЛ/ENTER и «вверх» из карты клавиш: прыжок — это и W, и ↑, и
+         пробел; присесть — S или ↓. */
+      const a = actionFor(e.code);
+      if (a === "act" || a === "up") { e.preventDefault(); jump(); }
+      if (a === "down") G.current.ducking = true;
     };
     const ku = (e: KeyboardEvent) => {
-      if (e.key === "ArrowDown") G.current.ducking = false;
+      if (actionFor(e.code) === "down") G.current.ducking = false;
     };
     window.addEventListener("keydown", kd);
     window.addEventListener("keyup", ku);

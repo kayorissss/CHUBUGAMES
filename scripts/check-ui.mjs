@@ -1360,5 +1360,40 @@ console.log('\n[34] 1.27: цвета, уведомления, пауза, защ
   ok(!('"win"' in pkg), 'в package.json нет мёртвого блока win (electron-builder читает desktop/builder.yml)');
 }
 
+console.log('\n[35] 1.27: клавиши, светлая тема, лёгкость');
+{
+  const css = fs.readFileSync('src/index.css', 'utf8');
+  /* Мышь + стрелки + WASD одновременно. Игры со «своим» клавиатурным кодом
+     обязаны брать клавиши из карты (core/keymap): там стрелки всегда, а
+     сравнение по e.key ломается на русской раскладке (KeyA — это «ф»). */
+  for (const f of ['src/games/BurgerRain.tsx', 'src/games/MergeHeads.tsx', 'src/games/ShitovRun.tsx']) {
+    const t = fs.readFileSync(f, 'utf8');
+    ok(/actionFor\(e\.code\)/.test(t) && /core\/keymap/.test(t),
+      `${f.split('/').pop()}: клавиши читаются из keymap (стрелки + WASD + свои)`);
+    ok(!/e\.key === "Arrow/.test(t),
+      `${f.split('/').pop()}: больше нет сверки по e.key (ломалось на не-латинице)`);
+  }
+  ok(/up: \["KeyW"\], down: \["KeyS"\], left: \["KeyA"\], right: \["KeyD"\]/.test(
+    fs.readFileSync('src/core/keymap.ts', 'utf8')),
+    'WASD — назначение по умолчанию, а не «если игрок сам проставит»');
+
+  /* Светлая тема: не белое по чёрному */
+  ok(/html\.light \{\n[\s\S]{0,600}?--n-100: #fbfbfd/.test(css),
+    'светлая тема: фон карточек приглушён, а не чистый #ffffff');
+  ok(/--n-900: #23232c;/.test(css),
+    'светлая тема: текст #23232c — гало от чистого чёрного убрано');
+  ok(/html\.light \.aurora \{[\s\S]{0,60}?opacity: 0\.42/.test(css),
+    'светлая тема: декоративный ореол приглушён');
+
+  /* Шрифтовые роли существовали как var(), но не были определены */
+  ok(/--font-display: "Unbounded"/.test(css) && /--font-num: "Inter Variable"/.test(css),
+    '--font-display и --font-num определены (раньше var() в пустоту)');
+
+  /* Библиотека не должна рисовать то, чего не видно */
+  ok(/html\.is-desktop \.pc-tile \{[\s\S]{0,140}?content-visibility: auto/.test(css) &&
+     /contain-intrinsic-size/.test(css),
+    'плитка библиотеки: content-visibility + contain-intrinsic-size (скролл без лишних отрисовок)');
+}
+
 console.log(fails===0?'\n✅ ВСЕ ПРОВЕРКИ ВЁРСТКИ ПРОЙДЕНЫ\n':`\n❌ ПРОВАЛЕНО: ${fails}\n`);
 process.exit(fails?1:0);

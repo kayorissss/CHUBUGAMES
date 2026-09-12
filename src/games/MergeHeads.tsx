@@ -9,6 +9,7 @@ import Icon from "../ui/Icon";
 import { GameHUD, GameOver } from "./shell";
 import { Panel, Tap } from "../ui/Glass";
 import type { Friend } from "../core/types";
+import { actionFor } from "../core/keymap";
 
 const N = 4;
 /** Цена отката хода в монетах */
@@ -175,9 +176,14 @@ export default function MergeHeads({ onExit }: { onExit: () => void }) {
     };
     el.addEventListener("pointerdown", down);
     window.addEventListener("pointerup", up);
+    /* Стрелки И WASD (и любые свои клавиши из настроек) — через keymap.
+         Ходили только стрелки: на клавиатуре, где рука на WASD, 2048
+         «не слушался». */
+    const DIR: Record<string, "l" | "r" | "u" | "d"> = { left: "l", right: "r", up: "u", down: "d" };
     const key = (e: KeyboardEvent) => {
-      const m: any = { ArrowLeft: "l", ArrowRight: "r", ArrowUp: "u", ArrowDown: "d" };
-      if (m[e.key]) { e.preventDefault(); move(m[e.key]); }
+      const act = actionFor(e.code);
+      const dir = act ? DIR[act] : undefined;
+      if (dir) { e.preventDefault(); move(dir); }
     };
     window.addEventListener("keydown", key);
     return () => {

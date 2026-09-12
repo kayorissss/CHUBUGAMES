@@ -6,6 +6,7 @@ import { drawHead } from "../core/head";
 import { sfx, haptic } from "../core/fx";
 import Icon, { type IconName } from "../ui/Icon";
 import { useCanvas, GameHUD, GameOver, Countdown } from "./shell";
+import { actionFor } from "../core/keymap";
 import AdModal from "../ui/AdModal";
 import { hasAds, noteRevive } from "../core/ads";
 
@@ -194,12 +195,17 @@ export default function BurgerRain({ onExit }: { onExit: () => void }) {
   /* ---------- ввод ---------- */
   useEffect(() => {
     const kd = (e: KeyboardEvent) => {
-      if (e.key === "ArrowLeft" || e.key === "a") inputRef.current.left = true;
-      if (e.key === "ArrowRight" || e.key === "d") inputRef.current.right = true;
+      /* Клавиши — из карты управления (core/keymap): стрелки всегда, плюс
+         W/A/S/D и всё, что назначил игрок. Раньше сверялось e.key === "a", и
+         на русской раскладке это молча ломалось: физическая KeyA — это «ф». */
+      const a = actionFor(e.code);
+      if (a === "left") inputRef.current.left = true;
+      if (a === "right") inputRef.current.right = true;
     };
     const ku = (e: KeyboardEvent) => {
-      if (e.key === "ArrowLeft" || e.key === "a") inputRef.current.left = false;
-      if (e.key === "ArrowRight" || e.key === "d") inputRef.current.right = false;
+      const a = actionFor(e.code);
+      if (a === "left") inputRef.current.left = false;
+      if (a === "right") inputRef.current.right = false;
     };
     window.addEventListener("keydown", kd);
     window.addEventListener("keyup", ku);

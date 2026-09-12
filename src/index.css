@@ -100,6 +100,12 @@
   --glass-blur: 24px;
   --glass-shadow: 0 14px 40px -16px rgba(0, 0, 0, 0.9);
 
+  /* Шрифтовые роли. Их читали несколько мест (.t-num-наследники, europa,
+     новые баннеры), но определений не было — значит, «цифры одним
+     семейством» просто не работали и набор падал в системный шрифт. */
+  --font-display: "Unbounded", "Inter Variable", system-ui, sans-serif;
+  --font-num: "Inter Variable", "Inter", system-ui, sans-serif;
+
   /* ── Акцент (перебивается из JS) ── */
   --acc: #ffb020;
   --acc-soft: rgba(255, 176, 32, 0.16);
@@ -191,9 +197,13 @@
 /* Светлая тема. Те же роли, зеркальные значения; проверена так же —
    dim >= 6.8, mute >= 4.1 на каждой поверхности. */
 html.light {
-  --n-000: #ececee;
-  --n-050: #f2f2f4;
-  --n-100: #ffffff;
+  /* «Болят глаза» — не про акцент. Чистый белый фон + чистый
+     чёрный текст дают гало на любой матрице: буквы «дрожат». Фон
+     приглушён до #fbfbfd, текст поднят до #23232c (контраст всё ещё 13:1,
+     AA+ с запасом), и вместе с этим убраны ореолы и неоновые тени. */
+  --n-000: #e8e8ed;
+  --n-050: #f1f1f5;
+  --n-100: #fbfbfd;
   --n-200: #f0f0f4;
   --n-300: #e2e2e9;
   --n-400: #c8c8d4;
@@ -201,21 +211,21 @@ html.light {
   --n-600: #6a6a7a;
   --n-700: #4a4a58;
   --n-800: #2a2a33;
-  --n-900: #101014;
+  --n-900: #23232c;
 
   --bg: var(--n-000);
   --text: var(--n-900);
   --text-dim: var(--n-700);
   --text-mute: var(--n-600);
 
-  --surface: #ffffff;
+  --surface: #fbfbfd;
   --surface-2: #f2f2f6;
   --surface-3: #e6e6ec;
   --surface-brd: #dcdce4;
   --surface-brd-soft: #e8e8ee;
 
-  --glass-bg: rgba(255, 255, 255, 0.86);
-  --glass-bg-strong: rgba(255, 255, 255, 0.95);
+  --glass-bg: rgba(251, 251, 253, 0.88);
+  --glass-bg-strong: rgba(251, 251, 253, 0.96);
   --glass-brd: #d8d8e2;
   --glass-hi: rgba(255, 255, 255, 0.98);
   --glass-shadow: 0 12px 34px -16px rgba(20, 20, 30, 0.34);
@@ -2082,6 +2092,16 @@ html.is-desktop .pc-hero {
   background: var(--ok);
 }
 
+/* Экономия на главной, о которой просили («оптимизации и производительности
+   нету»): карточек 27, а на экране 8–12. content-visibility даёт браузеру
+   право не отрисовывать и не считать layout того, что за экраном, — на
+   слабом GPU это самая заметная вещь на скролле; contain-intrinsic-size
+   нужна, чтобы полоса прокрутки не прыгала. */
+html.is-desktop .pc-tile {
+  content-visibility: auto;
+  contain-intrinsic-size: 0 11rem;
+}
+
 /* ---------- плитка игр ---------- */
 .pc-games-head {
   display: flex;
@@ -3475,6 +3495,20 @@ html.light .glass-acc,
 html.light.is-desktop .glass.glass-acc {
   border-color: color-mix(in srgb, var(--acc) 70%, #000000 18%);
   box-shadow: 0 8px 22px -14px var(--acc-glow), inset 0 1px 0 rgba(255, 255, 255, 0.5);
+}
+
+/* Светлая тема, вторая половина «болят глаза»: декоративные ореолы и
+   неоновые тени рассчитаны на чёрный фон — на белом они не сияют, а
+   грязнят и заставляют глаз постоянно перестраиваться. */
+html.light .aurora {
+  opacity: 0.42;
+}
+html.light .acc-text {
+  text-shadow: none;
+}
+html.light .pc-tile:hover,
+html.light .chest2.ready {
+  box-shadow: 0 12px 26px -20px rgba(24, 24, 44, 0.42);
 }
 
 /* ── читаемость мелких подписей ──────────────────────────────────────────── */
