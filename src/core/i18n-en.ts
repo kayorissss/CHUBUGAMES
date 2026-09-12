@@ -1398,6 +1398,10 @@ export const EN_TEXT: Record<string, string> = {
   "Статы работают, пока друг стоит главным боссом. Меняешь босса — меняются бонусы.": "Stats work while the friend is set as the main boss. Switch the boss, and the bonuses switch too.",
   "к редким дропам": "to rare drops",
   "Ширина лица": "Face width",
+  "Ежедневный вход ждёт": "Daily check-in is waiting",
+  "награда за первый день — в Прогрессе, серия до 7 дней": "the first-day reward is in Progress — a streak up to 7 days",
+  "День": "Day",
+  "Серия продолжается, только если заходить каждый день; пропуск обнуляет счёт, награда 7-го дня — самая крупная.": "The streak only continues if you come every day; skipping resets it, and day 7 pays the most.",
   "убрать": "remove",
 
   /* ── названия, теги и описания игр из GAME_META ──────────────────────

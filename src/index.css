@@ -3156,6 +3156,111 @@ html.low-fx .pc-slot-flash { display: none; }
 html.low-fx .pc-slot-reel.lit { box-shadow: 0 0 0 1.5px var(--gold); }
 
 /* ============================================================
+   ПРОГРЕСС: ежедневный вход как страница
+   ============================================================ */
+.pc-daily-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 0.35rem;
+  margin-bottom: 0.7rem;
+}
+.pc-daily-day {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  min-height: 4.4rem;
+  padding: 0.4rem 0.2rem 0.35rem;
+  border-radius: var(--r-sm);
+  background: var(--btn-bg);
+  border: 1px solid var(--btn-brd);
+  text-align: center;
+  transition: background 0.18s ease, border-color 0.18s ease, transform 0.14s ease;
+}
+.pc-daily-n { font-size: 0.5rem; letter-spacing: 0.06em; color: var(--text-mute); }
+.pc-daily-rew {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 0.66rem;
+  font-weight: 800;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+.pc-daily-gem {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 0.56rem;
+  font-weight: 800;
+  color: var(--violet);
+}
+/* сегодня — акцентная плитка: её и надо нажимать */
+.pc-daily-day.on {
+  background: linear-gradient(170deg, var(--acc-hi), var(--acc) 54%, var(--acc-lo));
+  border-color: color-mix(in srgb, var(--acc) 62%, #ffffff);
+  box-shadow: 0 12px 26px -16px var(--acc-glow);
+  transform: translateY(-2px);
+}
+.pc-daily-day.on .pc-daily-n,
+.pc-daily-day.on .pc-daily-rew { color: var(--acc-ink); }
+.pc-daily-today {
+  position: absolute;
+  bottom: -1px;
+  left: 50%;
+  transform: translate(-50%, 50%);
+  padding: 1px 5px;
+  border-radius: 999px;
+  background: var(--n-000);
+  border: 1px solid var(--acc-line);
+  color: var(--acc-text);
+  font-size: 0.46rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+}
+/* забранное не «просто тусклое»: на нём галочка и никаких сомнений */
+.pc-daily-day.done { opacity: 0.62; }
+.pc-daily-day.done .pc-daily-rew { color: var(--text-mute); }
+.pc-daily-check {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 1rem;
+  height: 1rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: var(--ok);
+  color: #06120b;
+}
+.pc-daily-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.7rem;
+  flex-wrap: wrap;
+}
+.pc-daily-foot .t-caption {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: 0.3rem;
+  flex: 1 1 16rem;
+  min-width: 0;
+  font-size: 0.6rem;
+  line-height: 1.45;
+  color: var(--text-mute);
+}
+.pc-daily-claim { flex: 0 0 auto; min-width: 11rem; }
+@media (max-width: 560px) {
+  .pc-daily-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .pc-daily-claim { width: 100%; }
+}
+
+/* ============================================================
    РЕДАКТОР ПЕРСОНАЖА: окно на ПК, прилепленный подвал, подсказки
    ============================================================ */
 .fr-head {

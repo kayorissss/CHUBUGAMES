@@ -1817,5 +1817,33 @@ console.log('\n[45] 1.27: редактор персонажа — Esc, черн�
     'новые подписи редактора есть в английском словаре');
 }
 
+console.log('\n[46] 1.27: ежедневный вход — страница с наградами, а не семь квадратиков');
+{
+  const css = fs.readFileSync('src/index.css', 'utf8');
+  const prog = fs.readFileSync('src/pages/Progress.tsx', 'utf8');
+  const app = fs.readFileSync('src/App.tsx', 'utf8');
+  const daily = prog.slice(prog.indexOf('function Daily()'), prog.indexOf('/* ============', prog.indexOf('function Daily()') + 10));
+
+  ok(/className="pc-daily-grid"/.test(daily) && /\.pc-daily-grid \{[^}]*repeat\(7/.test(css),
+    'лесенка входа — сетка на семь дней, а не «grid grid-cols-7» inline-стилями');
+  ok(/pc-daily-rew t-num/.test(daily) && /\{fmt\(r\.coins\)\}/.test(daily),
+    'на каждом дне показана РЕАЛЬНАЯ награда, а не просто иконка монеты');
+  ok(/pc-daily-gem/.test(daily) && /r\.gems > 0 &&/.test(daily),
+    'дни с кристаллами помечены отдельным бейджем');
+  ok(/className=\{`pc-daily-day \$\{isNext \? "on"/.test(daily) && /\.pc-daily-day\.on \{/.test(css),
+    'день, который можно забрать сегодня, выделен акцентом');
+  ok(/pc-daily-check/.test(daily) && /\.pc-daily-day\.done \{[^}]*opacity/.test(css),
+    'забранное состояние читается галочкой, а не «просто тусклой плиткой»');
+  ok(/tr\("Серия продолжается/.test(daily),
+    'правило серии (пропуск обнуляет) подписано под плиткой');
+  ok(!/Забрать \$\{DAILY_LADDER/.test(daily) && /fmt\(DAILY_LADDER\[streakIdx\]\.coins\)/.test(daily),
+    'кнопка забора использует общий fmt() и tr(), а не toLocaleString с русской подписью');
+  ok(/nudgeRef/.test(app) && /Ежедневный вход ждёт/.test(app) && !/setTab\("progress"\)/.test(app.slice(app.indexOf('nudgeRef'), app.indexOf('nudgeRef') + 900)),
+    'при первом запуске появляется напоминание, но раздел сам не переключается');
+  ok(/if \(nudgeRef\.current \|\| s\.daily\.lastClaim \|\| splash\) return;/.test(app),
+    'напоминание не вылезет повторно: ни после забранного входа, ни на заставке');
+  ok(/КРАСНАЯ|pc-seg-dot/.test(prog), 'точка «есть награда» на вкладке ежедневных наград осталась');
+}
+
 console.log(fails===0?'\n✅ ВСЕ ПРОВЕРКИ ВЁРСТКИ ПРОЙДЕНЫ\n':`\n❌ ПРОВАЛЕНО: ${fails}\n`);
 process.exit(fails?1:0);

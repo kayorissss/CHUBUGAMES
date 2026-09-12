@@ -118,6 +118,29 @@ function Shell() {
   const playRef = useRef<HTMLDivElement>(null);
   // отдельные подстраницы поверх вкладок
   const [sub, setSub] = useState<SubPage | null>(null);
+
+  /*
+   * Первый запуск: про ежедневный вход нужно сказать сразу — иначе о награде
+   * узнают только из любопытства, а она тем временем лежит и сгорает (серия
+   * обнуляется при пропуске). Одно напоминание за сессию, и только если вход
+   * ещё ни разу не забирали; раздел сами не переключаем — это решит сам
+   * игрок, красная точка на вкладке «Прогресс» для этого и есть.
+   */
+  const nudgeRef = useRef(false);
+  useEffect(() => {
+    if (nudgeRef.current || s.daily.lastClaim || splash) return;
+    nudgeRef.current = true;
+    const t = window.setTimeout(() => {
+      toast({
+        title: tr("Ежедневный вход ждёт"),
+        sub: tr("награда за первый день — в Прогрессе, серия до 7 дней"),
+        icon: "gift",
+        tone: "gold",
+        ms: 6000,
+      });
+    }, 2400);
+    return () => window.clearTimeout(t);
+  }, [s.daily.lastClaim, splash, toast]);
   // Влияет на анимации: в облегчённом режиме их выключаем целиком
   const [lowFx, setLowFx] = useState(() => isLowFx());
 

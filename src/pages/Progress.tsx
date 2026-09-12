@@ -135,8 +135,8 @@ function Daily() {
       d.gems += rw.gems;
     });
     toast({
-      title: `День ${newStreak}`,
-      sub: `+${rw.coins.toLocaleString("ru-RU")} монет${rw.gems ? ` · +${rw.gems} кристаллов` : ""}`,
+      title: tr("День") + ` ${newStreak}`,
+      sub: `+${fmt(rw.coins)} ${tr("монет")}${rw.gems ? ` · +${rw.gems} ${tr("кристаллов")}` : ""}`,
       icon: "gift", tone: "gold",
     });
   };
@@ -166,44 +166,55 @@ function Daily() {
       <SectionTitle right={<span className="t-label acc-text flex items-center" style={{ gap: 5 }}>
             <Icon name="fire" size={13} /> {s.daily.streak} дней
           </span>}>{tr("Ежедневный вход")}</SectionTitle>
+      {/*
+        Ежедневный вход — страница, а не полоска: плитка дней, на каждом дне
+        РЕАЛЬНАЯ награда (были «Д1…Д7» и одна иконка — непонятно, за что ты
+        вообще заходишь), состояние дня и подпись, что делает пропуск.
+      */}
       <Card r="lg" style={{ padding: 14, marginBottom: 22 }}>
-        <div className="grid grid-cols-7" style={{ gap: 6, marginBottom: 14 }}>
+        <div className="pc-daily-grid">
           {DAILY_LADDER.map((r, i) => {
             const claimed = i < streakIdx || (!canClaim && i <= streakIdx);
             const isNext = canClaim && i === streakIdx;
             return (
-              <div
-                key={i}
-                className="flex flex-col items-center justify-center relative"
-                style={{
-                  padding: "8px 2px",
-                  borderRadius: "var(--r-sm)",
-                  background: isNext ? "var(--acc)" : "var(--btn-bg)",
-                  border: `1px solid ${isNext ? "transparent" : "var(--btn-brd)"}`,
-                  opacity: claimed ? 0.5 : 1,
-                }}
-              >
-                <div
-                  className="t-label"
-                  style={{ fontSize: 8, color: isNext ? "var(--acc-ink)" : "var(--text-mute)" }}
-                >
-                  Д{i + 1}
-                </div>
-                <div className="flex justify-center" style={{ marginTop: 4 }}>
-                    <Icon name={claimed ? "check" : r.gems ? "gem" : "coin"} size={13} />
-                  </div>
+              <div key={i} className={`pc-daily-day ${isNext ? "on" : ""} ${claimed ? "done" : ""}`}>
+                <span className="t-label pc-daily-n">{tr("День")} {i + 1}</span>
+                <span className="pc-daily-rew t-num">
+                  <Icon name="coin" size={11} />
+                  {fmt(r.coins)}
+                </span>
+                {r.gems > 0 && (
+                  <span className="pc-daily-gem t-num">
+                    <Icon name="gem" size={10} />
+                    {r.gems}
+                  </span>
+                )}
+                {claimed && (
+                  <span className="pc-daily-check" aria-hidden>
+                    <Icon name="check" size={12} />
+                  </span>
+                )}
+                {isNext && <span className="pc-daily-today">{tr("сегодня")}</span>}
               </div>
             );
           })}
         </div>
-        <Button
-          variant="primary" size="lg" full sound="none"
-          onClick={claim} disabled={!canClaim}
-        >
-          {canClaim
-            ? `Забрать ${DAILY_LADDER[streakIdx].coins.toLocaleString("ru-RU")} монет`
-            : tr("Уже забрал · заходи завтра")}
-        </Button>
+
+        <div className="pc-daily-foot">
+          <span className="t-caption">
+            <Icon name="info" size={11} />
+            {tr("Серия продолжается, только если заходить каждый день; пропуск обнуляет счёт, награда 7-го дня — самая крупная.")}
+          </span>
+          <Button
+            variant="primary" size="lg" sound="none"
+            onClick={claim} disabled={!canClaim}
+            className="pc-daily-claim"
+          >
+            {canClaim
+              ? `${tr("Забрать")} ${fmt(DAILY_LADDER[streakIdx].coins)}${DAILY_LADDER[streakIdx].gems ? ` + ${DAILY_LADDER[streakIdx].gems} ◆` : ""}`
+              : tr("Уже забрал · заходи завтра")}
+          </Button>
+        </div>
       </Card>
       </div>
 
