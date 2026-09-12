@@ -1248,7 +1248,19 @@ console.log('\n[33] Android без ключа подписи: preview вмест
   ok(/Remove the misspelled legacy asset\n\s+if: .*signed == 'true'/.test(wf),
     'чистка старых файлов тоже только на подписанном релизе');
   ok(/node scripts\/patch-android-glass\.mjs/.test(wf),
-    'правка системных полосок стоит в сборке');
+    'правка системных полосок стоит в сборке');  {
+    // Дубликаты ищем только внутри job `build`: у verify свои шаги, и одинаковые
+    // имена в разных джобах — норма. А два upload-artifact с одним именем в
+    // одной джобе дают 409 «artifact already exists» и роняют сборку.
+    const bi = wf.search(/^ {2}build:$/m);
+    const rest = bi >= 0 ? wf.slice(bi) : '';
+    const nx = rest.slice(1).match(/^ {2}[A-Za-z][\w-]*:$/m);
+    const body = nx ? rest.slice(0, rest.indexOf(nx[0])) : rest;
+    const names = (body.match(/^      - name: (.+)$/gm) || []).map((x) => x.replace(/^      - name: /, '').trim());
+    const dup = names.filter((n, i) => names.indexOf(n) !== i);
+    ok(names.length > 20 && dup.length === 0,
+      `шаги джобы build не повторяются (шагов ${names.length}${dup.length ? ', дубли: ' + [...new Set(dup)].join(', ') : ''})`);
+  }
   const rm = fs.readFileSync('README.md', 'utf8');
   ok(/preview/i.test(rm) && /PASTE-INTO-SECRETS/.test(rm),
     'README объясняет, что делать без ключа и где взять значения');

@@ -215,7 +215,7 @@ Windows покажет **«Система Windows защитила ваш ком
 npm install
 npm run dev        # http://localhost:5173  (ПК-раскладка — добавить ?pc=1)
 npm run build      # → dist/index.html: один файл, 1.32 МБ (468 КБ gzip), офлайн
-npm run check:ui   # ~663 проверок вёрстки, локализации, манифеста, сборки и экранов стратегии
+npm run check:ui   # ~664 проверок вёрстки, локализации, манифеста, сборки и экранов стратегии
 npm run check:perf # логика: бюджет пикселей, автоподстройка FPS, WASD, карта и баланс стратегии
 npm run icons      # пересобрать все иконки из branding/*.svg
 npx tsc --noEmit   # типы
