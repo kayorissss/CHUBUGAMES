@@ -138,6 +138,7 @@
   --danger-brd: rgba(255, 107, 90, 0.45);
   --info: #6bb8ff;
   --info-soft: rgba(107, 184, 255, 0.14);
+  --info-brd: rgba(107, 184, 255, 0.4);
 
   /* ── Дополнительные семантические цвета ──────────────────────────────
      Раньше эти оттенки писались хексами прямо в компонентах: жёлтый
@@ -249,6 +250,7 @@ html.light {
   --danger-brd: rgba(200, 54, 42, 0.38);
   --info: #1f6fc4;
   --info-soft: rgba(31, 111, 196, 0.12);
+  --info-brd: rgba(31, 111, 196, 0.34);
 
   --gold: #a86a00;
   --gold-soft: rgba(168, 106, 0, 0.13);
@@ -3152,6 +3154,79 @@ html.low-fx .pc-case:hover { transform: none; }
 html.low-fx .pc-slot.win { animation: none; }
 html.low-fx .pc-slot-flash { display: none; }
 html.low-fx .pc-slot-reel.lit { box-shadow: 0 0 0 1.5px var(--gold); }
+
+/* ============================================================
+   РЕДАКТОР ПЕРСОНАЖА: окно на ПК, прилепленный подвал, подсказки
+   ============================================================ */
+.fr-head {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.35rem 1rem 0.6rem;
+  margin: 0 0.25rem;
+  border-bottom: 1px solid var(--glass-brd);
+}
+.fr-head-title { display: block; font-size: 1.05rem; line-height: 1.15; }
+.fr-head-sub { display: block; margin-top: 2px; font-size: 0.62rem; color: var(--text-mute); }
+.fr-x {
+  margin-left: auto;
+  flex: 0 0 auto;
+  width: 1.9rem;
+  height: 1.9rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--r-sm);
+  background: var(--btn-bg);
+  border: 1px solid var(--btn-brd);
+  color: var(--text-mute);
+  cursor: pointer;
+}
+.fr-x:hover { color: var(--text); background: var(--btn-bg-hi); }
+.fr-warn { display: block; margin-top: 3px; font-size: 0.6rem; color: var(--warn); }
+/* ловушка «загрузил фото — и все настройки пропали»: объясняем на месте */
+.fr-phototip {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.4rem;
+  padding: 0.5rem 0.6rem;
+  margin: 2px 0 12px;
+  border-radius: var(--r-sm);
+  background: var(--info-soft);
+  border: 1px solid var(--info-brd);
+  color: var(--info);
+  font-size: 0.64rem;
+  line-height: 1.4;
+}
+/* подвал действий прилеплен к нижнему краю: раньше «СОХРАНИТЬ» уезжал за
+   скролл, и непонятно было, сохранятся ли правки вообще */
+.fr-foot {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  margin: 1rem -1rem -1rem;
+  padding: 0.7rem 1rem calc(0.7rem + var(--sab));
+  background: var(--glass-bg-strong);
+  border-top: 1px solid var(--glass-brd);
+}
+.fr-body { padding-bottom: 1rem !important; }
+/* на мониторе — центральное окно, а не мобильная шторка на 92% высоты */
+html.is-desktop .fr-scrim {
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+html.is-desktop .fr-wrap {
+  width: min(44rem, 94vw);
+  max-height: none;
+}
+html.is-desktop .fr-sheet {
+  max-height: 88vh;
+  border-radius: var(--r-lg);
+}
+html.is-desktop .fr-sheet .m-handle { display: none; }
+html.is-desktop .fr-head { padding-top: 0.75rem; }
+html.is-desktop .fr-foot { background: var(--surface-2); }
 
 /* ============================================================
    ПОДДЕРЖКА: спокойно, на токенах, две колонки на ПК

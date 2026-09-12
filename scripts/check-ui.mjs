@@ -1769,5 +1769,53 @@ console.log('\n[44] 1.27: поддержка — спокойно, на токе
   ok(/aria-label=\{tr\("Закрыть"\)\}/.test(don), 'кнопка закрытия поддержки доступна с клавиатуры/скринридера');
 }
 
+console.log('\n[45] 1.27: редактор персонажа — Esc, черновик, подвал, подсказки');
+{
+  const css = fs.readFileSync('src/index.css', 'utf8');
+  const fr = fs.readFileSync('src/pages/Friends.tsx', 'utf8');
+  const ed = fr.slice(fr.indexOf('function Editor({'));
+  const en = fs.readFileSync('src/core/i18n-en.ts', 'utf8');
+
+  ok(/if \(e\.key !== "Escape"\) return;/.test(ed) && /window\.addEventListener\("keydown", onKey, true\)/.test(ed),
+    'Esc слушается на capture: закрывается редактор, а не весь раздел «Персонажи»');
+  ok(/e\.stopPropagation\(\)/.test(ed), 'Esc не уходит дальше — глобальная «назад» его не получит');
+  ok(/const dirty = JSON\.stringify\(f\) !== JSON\.stringify\(friend\)/.test(ed),
+    'наличие правок определяется сравнением с исходником, а не на глаз');
+  ok(/if \(dirty && !allowDiscard\) \{/.test(ed) && /ещё раз, чтобы закрыть без сохранения/.test(ed),
+    'закрытие с несохранённым черновиком требует второго нажатия');
+  ok(/onClick=\{close\}/.test(ed) && !/className="w-full"\n         style=\{\{ maxHeight: "92%" \}\}/.test(ed),
+    'клик по затемнению и крестик идут через close, а не через сырой onClose');
+  ok(/className="fr-foot flex gap-2"/.test(ed) && /\.fr-foot \{[^}]*position: sticky/.test(css),
+    'подвал с «СОХРАНИТЬ» прилеплен к нижнему краю — его не надо искать под скроллом');
+  ok(/dirty \? tr\("Не сохран/.test(ed),
+    'кнопка отмены честно называется «Не сохранять», когда есть правки');
+  ok(/className="fr-head"/.test(ed) && /aria-label=\{tr\("Закрыть"\)\}/.test(ed),
+    'у редактора есть заголовок и доступная кнопка закрытия');
+  ok(/html\.is-desktop \.fr-scrim \{[^}]*align-items: center/.test(css) &&
+     /html\.is-desktop \.fr-wrap \{[^}]*min\(44rem/.test(css),
+    'на мониторе редактор — центральное окно, а не мобильная шторка');
+  ok(/html\.is-desktop \.fr-sheet \.m-handle \{ display: none; \}/.test(css),
+    'ручка «потяни меня» на компьютере скрыта');
+  ok(/className="fr-phototip"/.test(ed) && /--info-brd:/.test(css),
+    'исчезновение настроек внешности при фото объяснено на месте, а не молчит');
+  ok(/className="fr-warn"/.test(ed) && /Нужно имя/.test(ed),
+    'пустое имя подписано под полем, а не отвечает только писком');
+  /* страницы «Персонажи»: весь видимый текст обязан проходить через tr() */
+  /* строковый поиск построчно: русский текст в разметке обязан быть обёрнут
+     в tr(); комментарии и строки с tr() пропускаем */
+  const bare = fr.split('\n')
+    .map((l, i) => [i + 1, l.trim()])
+    .filter(([n, l]) => /[А-ЯЁ][а-яё]{2,}/.test(l)
+      && !l.startsWith('*') && !l.startsWith('//') && !l.startsWith('/*') && !l.startsWith('{/*')
+      && !l.startsWith('*/}') && !l.includes('/*')
+      && !/tr\(/.test(l) && !/console\./.test(l) && !/^\/\*\*/.test(l)
+      && !/(?:const|let|var|case|title:|text:|name:|desc:|sub:|label:|\")/.test(l));
+  ok(bare.length === 0,
+    bare.length ? `в «Персонажах» текст мимо tr(): ${bare[0][0]}: ${bare[0][1].slice(0, 48)}`
+      : 'весь текст страницы проходит через tr()');
+  ok(en.includes('"Создать персонажа"') && en.includes('"Не сохранять"'),
+    'новые подписи редактора есть в английском словаре');
+}
+
 console.log(fails===0?'\n✅ ВСЕ ПРОВЕРКИ ВЁРСТКИ ПРОЙДЕНЫ\n':`\n❌ ПРОВАЛЕНО: ${fails}\n`);
 process.exit(fails?1:0);
