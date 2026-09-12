@@ -1037,7 +1037,11 @@ html.is-desktop .pc-body {
   height: var(--pc-bar-h);
   display: flex;
   align-items: center;
-  gap: 0.85rem;
+  /* nowrap + min-width:0 у детей: без этого на 1280 px группы начинали
+     наползать друг на друга, потому что flex пытался уместить всё и
+     переполнял панель */
+  flex-wrap: nowrap;
+  gap: 0.7rem;
   padding: 0 var(--pc-pad);
   background:
     linear-gradient(180deg, color-mix(in srgb, var(--surface-2) 92%, #fff 3%), var(--surface) 70%);
@@ -1054,22 +1058,31 @@ html.is-desktop .pc-body {
   height: 1px;
   background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--acc) 55%, transparent) 22%, color-mix(in srgb, var(--acc) 26%, transparent) 62%, transparent);
 }
+/* ---------- знак = кнопка «на главную» ---------- */
 .pc-bar-brand {
   display: flex;
   align-items: center;
-  gap: 0.6rem;
-  padding: 0.35rem 0.6rem 0.35rem 0.35rem;
+  gap: 0.55rem;
+  flex: 0 0 auto;
+  height: 2.35rem;
+  padding: 0 0.6rem 0 0.35rem;
   margin-left: -0.35rem;
   border-radius: var(--r-sm);
   border: 1px solid transparent;
   background: transparent;
   color: var(--text);
-  position: relative;
   cursor: pointer;
+  transition: border-color 0.16s, background 0.16s;
 }
 html.is-desktop .pc-bar-brand:hover {
   border-color: var(--surface-brd);
   background: color-mix(in srgb, var(--surface-3) 60%, transparent);
+}
+/* мы на главной — знак подсвечен рамкой: это и есть «ты здесь»,
+   отдельной вкладки «Игры» в панели больше нет */
+.pc-bar-brand.on {
+  border-color: color-mix(in srgb, var(--acc) 45%, var(--surface-brd));
+  background: color-mix(in srgb, var(--acc) 9%, transparent);
 }
 .pc-bar-word {
   font-size: 0.95rem;
@@ -1081,21 +1094,47 @@ html.is-desktop .pc-bar-brand:hover {
   color: transparent;
   white-space: nowrap;
 }
+.pc-bar-sep {
+  width: 1px;
+  height: 1.4rem;
+  background: var(--surface-brd);
+  flex: 0 0 auto;
+}
+
+/* ---------- уровень и опыт одной плашкой ----------
+   Раньше полоса опыта висела абсолютно поверх кнопки знака и влезала в
+   надпись — это и было «всё наслаивается». Теперь всё в потоке flex. */
+.pc-bar-level {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex: 0 0 auto;
+  height: 2.1rem;
+  padding: 0 0.55rem;
+  border-radius: 99px;
+  border: 1px solid var(--surface-brd);
+  background: var(--n-050);
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: border-color 0.16s, color 0.16s;
+}
+html.is-desktop .pc-bar-level:hover {
+  border-color: color-mix(in srgb, var(--acc) 45%, var(--surface-brd));
+  color: var(--text);
+}
 .pc-bar-lvl {
-  font-size: 0.62rem;
-  padding: 0.16rem 0.42rem;
+  font-size: 0.66rem;
+  font-weight: 700;
+  padding: 0.14rem 0.42rem;
   border-radius: 99px;
   background: var(--acc);
   color: var(--acc-ink);
   white-space: nowrap;
 }
-/* полоса опыта прямо под кнопкой профиля — тянется по её ширине */
 .pc-bar-xp {
-  position: absolute;
-  left: 0.35rem;
-  right: 0.6rem;
-  bottom: 0.16rem;
-  height: 2px;
+  display: block;
+  width: 4rem;
+  height: 3px;
   border-radius: 99px;
   background: var(--n-300);
   overflow: hidden;
@@ -1107,19 +1146,44 @@ html.is-desktop .pc-bar-brand:hover {
   background: var(--acc);
   transition: width 0.4s var(--ease, ease);
 }
-.pc-bar-sep {
-  width: 1px;
-  height: 1.5rem;
-  background: var(--surface-brd);
-  flex: 0 0 auto;
+.pc-bar-xp-num {
+  font-size: 0.56rem;
+  color: var(--text-mute);
+  line-height: 1;
 }
 
-/* ---------- вкладки разделов ---------- */
+/* ---------- кошелёк ---------- */
+.pc-bar-wallet {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex: 0 0 auto;
+}
+.pc-wallet-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.36rem 0.6rem;
+  border-radius: 99px;
+  border: 1px solid var(--surface-brd);
+  background: var(--n-050);
+  color: var(--text);
+  font-size: 0.78rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+html.is-desktop .pc-wallet-item:hover {
+  border-color: var(--btn-brd);
+}
+
+/* ---------- разделы ---------- */
 .pc-bar-tabs {
   display: flex;
   align-items: center;
   gap: 0.2rem;
+  flex: 0 1 auto;
   min-width: 0;
+  margin-left: 0.3rem;
 }
 .pc-tab {
   position: relative;
@@ -1151,8 +1215,7 @@ html.is-desktop .pc-tab:hover {
   box-shadow: 0 10px 24px -14px var(--acc-glow);
 }
 .pc-tab-ico,
-.pc-tab-label,
-.pc-tab-key {
+.pc-tab-label {
   position: relative;
   z-index: 1;
   line-height: 1.1;
@@ -1161,30 +1224,37 @@ html.is-desktop .pc-tab:hover {
   font-size: 0.82rem;
   font-weight: 600;
 }
-/* подсказка «1–5» — на телефоне её не существует */
-.pc-tab-key {
-  font-size: 0.56rem;
-  padding: 0.05rem 0.26rem;
-  border-radius: 4px;
-  background: color-mix(in srgb, var(--text) 10%, transparent);
-  color: inherit;
-  opacity: 0.62;
+/* «Настройки» в углу выделяются так же, но без лишней рамки вокруг */
+.pc-tab-gear.on {
+  color: var(--acc-ink);
+}
+.pc-tab-gear.on::after {
+  content: "";
+  position: absolute;
+  left: 0.7rem;
+  right: 0.7rem;
+  bottom: 0.2rem;
+  height: 2px;
+  border-radius: 99px;
+  background: color-mix(in srgb, var(--acc-ink) 55%, transparent);
+  z-index: 1;
 }
 
-/* ---------- второстепенные страницы ---------- */
-.pc-bar-extra {
+/* ---------- правый угол: поддержать + настройки ---------- */
+.pc-bar-tail {
   display: flex;
   align-items: center;
-  gap: 0.2rem;
-  margin-left: 0.35rem;
-  min-width: 0;
+  gap: 0.4rem;
+  flex: 0 0 auto;
+  margin-left: auto;
 }
 .pc-xtra {
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
-  padding: 0.36rem 0.58rem;
-  border-radius: var(--r-sm);
+  height: 2.1rem;
+  padding: 0 0.6rem;
+  border-radius: 99px;
   border: 1px solid var(--surface-brd);
   background: color-mix(in srgb, var(--surface-2) 70%, transparent);
   color: var(--text-dim);
@@ -1200,64 +1270,37 @@ html.is-desktop .pc-xtra:hover {
 .pc-xtra.on {
   background: var(--acc);
   border-color: var(--acc);
+  color: var(--acc-ink);
 }
 .pc-xtra.on span {
   color: inherit;
 }
 
-/* ---------- кошелёк и хинты ---------- */
-.pc-bar-wallet {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  margin-left: auto;
-}
-.pc-wallet-item {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  padding: 0.4rem 0.6rem;
-  border-radius: 99px;
-  border: 1px solid var(--surface-brd);
-  background: var(--n-050);
-  color: var(--text);
-  font-size: 0.78rem;
-  cursor: pointer;
-}
-html.is-desktop .pc-wallet-item:hover {
-  border-color: var(--btn-brd);
-}
-.pc-bar-hint {
-  font-size: 0.58rem;
-  color: var(--text-mute);
-  white-space: nowrap;
-}
-.pc-bar-hint b {
-  color: var(--text-dim);
-}
-.pc-bar-ver {
-  font-size: 0.58rem;
-  color: var(--text-mute);
-  opacity: 0.8;
-  white-space: nowrap;
-}
-
-/* на узком окне подписи и хинты уходят первыми — пусть лучше останутся
-   иконки и кошелёк, чем панель начнёт наезжать сама на себя */
-@media (max-width: 1180px) {
-  .pc-bar-hint,
-  .pc-tab-key,
-  .pc-bar-ver {
+/* Узкое окно: прячем второстепенное, а не позволим блокам наползать.
+   Порядок жертв — от самого необязательного к самому нужному. */
+@media (max-width: 1320px) {
+  .pc-bar-xp-num,
+  .pc-wallet-chips {
     display: none;
   }
+}
+@media (max-width: 1180px) {
+  .pc-tab-label,
   .pc-xtra span:last-child {
     display: none;
   }
+  .pc-tab,
+  .pc-xtra {
+    padding-left: 0.5rem;
+    padding-right: 0.5rem;
+  }
 }
-@media (max-width: 940px) {
-  .pc-bar-word,
-  .pc-bar-extra {
+@media (max-width: 980px) {
+  .pc-bar-word {
     display: none;
+  }
+  .pc-bar-xp {
+    width: 2.6rem;
   }
 }
 

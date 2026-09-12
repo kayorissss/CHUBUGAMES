@@ -5,123 +5,87 @@ import { fmt } from "../../core/format";
 import { sfx, haptic } from "../../core/fx";
 import { BrandMark } from "../Brand";
 import Icon, { type IconName } from "../Icon";
-import { APP_VERSION } from "../../core/version";
 import type { Tab } from "../../components/Nav";
 import type { SubPage } from "../../App";
+import { readGamble } from "../../core/gamble";
 
 /**
  * ВЕРХНЯЯ ПАНЕЛЬ ПК-ВЕРСИИ.
  *
- * На телефоне разделы живут внизу — до них дотягиваться пальцем удобно.
- * На мониторе нижнее меню выглядело чужеродно, а боковая панель, которую
- * мы делали вместо него, съела треть ширины и оставила игры в узкой
- * колонке справа.
+ * Что в ней было до этого: знак, пять разделов, пять «вторых страниц»
+ * (босс, казино, фанфики, сеть, поддержать), кошелёк, подсказка про F11 и
+ * номер версии. Восемь групп в полосе высотой 3.5rem — они не влезали даже
+ * на 1920 px: на узких окнах начиналось наслаивание, а половина кнопок
+ * дублировала то, что уже есть на самой странице (босс, казино, фанфики).
  *
- * Теперь как в нормальных игровых клиентах: сверху одна панель — знак,
- * разделы, дополнительные страницы, кошелёк и подсказка по клавишам.
- * Вся ширина окна отдана контенту, а сама панель не уезжает при скролле.
+ * Теперь правило одно: в панели только то, что нужно ВСЕГДА и ВСЮДУ.
+ *
+ *   CHUBUGAMES | Ур. 3 | 💰 26к 💎 310 🎟 40 | Прогресс Магазин Персонажи | … | Поддержать Настройки
+ *
+ * • CHUBUGAMES — кнопка «на главную»: отдельной вкладки «Игры» больше нет.
+ * • Уровень, опыт и валюты — одна строка сверху: дублировать их в шапке
+ *   главной страницы смысла нет (именно это и выглядело как «ужас справа»).
+ * • Разделов три. Босс, казино и фанфики живут карточками на главной,
+ *   сеть уехала в настройки — кнопки-дубли сверху лишние.
+ * • Настройки — в правом углу, «Поддержать» сразу левее них.
+ * • F11/Esc и номер версии убраны: подсказка по клавишам есть в настройках,
+ *   а версия — внизу настроек же, где про неё и спрашивают.
+ *
+ * Ничего не накладывается: у панели `flex-wrap: nowrap`, каждая группа
+ * `flex: 0 0 auto`, а сужается только то, что умеет (метки вкладок и лишние
+ * валюты скрываются медиазапросами, а не наползанием друг на друга).
  */
 
+/** Разделы. Порядок = порядок вкладок на телефоне, цифры 1–5 те же. */
 const TABS: { id: Tab; label: string; icon: IconName }[] = [
-  { id: "home", label: "Игры", icon: "play" },
   { id: "progress", label: "Прогресс", icon: "chart" },
   { id: "shop", label: "Магазин", icon: "shop" },
-  { id: "friends", label: "Друзья", icon: "users" },
-  { id: "settings", label: "Настройки", icon: "settings" },
-];
-
-const EXTRA: { id: SubPage; label: string; icon: IconName; tone: string }[] = [
-  { id: "boss", label: "Босс", icon: "skull", tone: "var(--danger)" },
-  { id: "casino", label: "Казино", icon: "dice", tone: "var(--violet)" },
-  { id: "fanfic", label: "Фанфики", icon: "note", tone: "var(--violet)" },
-  { id: "network", label: "Сеть", icon: "wifi", tone: "var(--info)" },
-  { id: "donate", label: "Поддержать", icon: "heart", tone: "var(--gold)" },
+  { id: "friends", label: "Персонажи", icon: "users" },
 ];
 
 export default function PcTopBar({
-  tab, sub, onTab, onOpen, onOpenProfile,
+  tab, sub, onTab, onOpen,
 }: {
   tab: Tab;
   sub: SubPage | null;
   onTab: (t: Tab) => void;
-  onOpen: (p: SubPage) => void;
-  onOpenProfile?: () => void;
+  onOpen?: (p: SubPage) => void;
 }) {
   const { s, levelPct, toast } = useGame();
+  const chips = readGamble().chips;
+  const go = (next: Tab) => { sfx.click(); haptic("light"); onTab(next); };
 
   return (
     <header className="pc-bar">
-      {/* Знак + вход в профиль */}
+      {/* Знак = дом. */}
       <button
         type="button"
-        className="pc-bar-brand"
-        onClick={() => { sfx.click(); haptic("light"); onOpenProfile?.(); }}
-        title={tr("Открыть профиль")}
+        className={`pc-bar-brand ${tab === "home" && !sub ? "on" : ""}`}
+        onClick={() => go("home")}
+        title={tr("На главную")}
+        aria-label={tr("CHUBUGAMES — на главную")}
       >
-        <BrandMark size={30} />
+        <BrandMark size={28} />
         <span className="t-display pc-bar-word">CHUBUGAMES</span>
-        <span className="t-num pc-bar-lvl">
-          {tr("УР")} {s.level}
-        </span>
-        <span className="pc-bar-xp" aria-hidden>
-          <span style={{ width: `${levelPct}%` }} />
-        </span>
       </button>
 
       <span className="pc-bar-sep" aria-hidden />
 
-      {/* Разделы */}
-      <nav className="pc-bar-tabs" aria-label={tr("Разделы")}>
-        {TABS.map((it, i) => {
-          const on = tab === it.id && !sub;
-          return (
-            <button
-              key={it.id}
-              type="button"
-              className={`pc-tab ${on ? "on" : ""}`}
-              aria-current={on ? "page" : undefined}
-              onClick={() => { sfx.click(); haptic("light"); onTab(it.id); }}
-            >
-              {on && (
-                <motion.span
-                  layoutId="pc-tab-active"
-                  className="pc-tab-pill"
-                  transition={{ type: "spring", stiffness: 520, damping: 38 }}
-                  aria-hidden
-                />
-              )}
-              <span className="pc-tab-ico">
-                <Icon name={it.icon} size={15} />
-              </span>
-              <span className="t-body pc-tab-label">{tr(it.label)}</span>
-              <span className="t-num pc-tab-key">{i + 1}</span>
-            </button>
-          );
-        })}
-      </nav>
+      {/* Уровень и опыт. Тап — в прогресс: больше nowhere уровень не нужен. */}
+      <button
+        type="button"
+        className="pc-bar-level"
+        onClick={() => go("progress")}
+        title={tr("Уровень и опыт")}
+      >
+        <span className="t-num pc-bar-lvl">{tr("Ур.")} {s.level}</span>
+        <span className="pc-bar-xp" aria-hidden>
+          <span style={{ width: `${levelPct}%` }} />
+        </span>
+        <span className="t-caption pc-bar-xp-num">{Math.round(levelPct)}%</span>
+      </button>
 
-      {/* Вторые страницы */}
-      <nav className="pc-bar-extra" aria-label={tr("Дополнительно")}>
-        {EXTRA.map((it) => {
-          const on = sub === it.id;
-          return (
-            <button
-              key={it.id}
-              type="button"
-              className={`pc-xtra ${on ? "on" : ""}`}
-              style={on ? { color: "var(--acc-ink)" } : undefined}
-              onClick={() => { sfx.click(); haptic("light"); onOpen(it.id); }}
-            >
-              <span style={{ color: on ? undefined : it.tone, lineHeight: 0 }}>
-                <Icon name={it.icon} size={14} />
-              </span>
-              <span className="t-body">{tr(it.label)}</span>
-            </button>
-          );
-        })}
-      </nav>
-
-      {/* Кошелёк */}
+      {/* Валюты. Тап по каждой — что это за валюта (просьба пользователя). */}
       <div className="pc-bar-wallet">
         <button
           type="button"
@@ -141,7 +105,7 @@ export default function PcTopBar({
         </button>
         <button
           type="button"
-          className="pc-wallet-item"
+          className="pc-wallet-item pc-wallet-gem"
           onClick={() => {
             haptic("light");
             toast({
@@ -155,12 +119,71 @@ export default function PcTopBar({
           <span style={{ color: "var(--violet)", lineHeight: 0 }}><Icon name="gem" size={14} /></span>
           <span className="t-num">{fmt(s.gems)}</span>
         </button>
+        {chips > 0 && (
+          <button
+            type="button"
+            className="pc-wallet-item pc-wallet-chips"
+            onClick={() => { haptic("light"); onOpen?.("casino"); }}
+            title={tr("Жетоны казино")}
+          >
+            <span style={{ color: "var(--violet)", lineHeight: 0 }}><Icon name="ticket" size={14} /></span>
+            <span className="t-num">{fmt(chips)}</span>
+          </button>
+        )}
       </div>
 
-      <span className="t-caption pc-bar-hint">
-        <b>F11</b> {tr("полный экран")} · <b>Esc</b> {tr("назад")}
-      </span>
-      <span className="t-num pc-bar-ver">v{APP_VERSION}</span>
+      {/* Разделы */}
+      <nav className="pc-bar-tabs" aria-label={tr("Разделы")}>
+        {TABS.map((it) => {
+          const on = tab === it.id && !sub;
+          return (
+            <button
+              key={it.id}
+              type="button"
+              className={`pc-tab ${on ? "on" : ""}`}
+              aria-current={on ? "page" : undefined}
+              onClick={() => go(it.id)}
+            >
+              {on && (
+                <motion.span
+                  layoutId="pc-tab-active"
+                  className="pc-tab-pill"
+                  transition={{ type: "spring", stiffness: 520, damping: 38 }}
+                  aria-hidden
+                />
+              )}
+              <span className="pc-tab-ico">
+                <Icon name={it.icon} size={15} />
+              </span>
+              <span className="t-body pc-tab-label">{tr(it.label)}</span>
+            </button>
+          );
+        })}
+      </nav>
+
+      {/* Правый угол: поддержка и настройки. Настройки — последними, в углу,
+          как и просили; «Поддержать» — сразу левее них. */}
+      <div className="pc-bar-tail">
+        <button
+          type="button"
+          className={`pc-xtra ${sub === "donate" ? "on" : ""}`}
+          onClick={() => { sfx.click(); haptic("light"); onOpen?.("donate"); }}
+        >
+          <span style={{ lineHeight: 0 }}><Icon name="heart" size={14} /></span>
+          <span className="t-body">{tr("Поддержать")}</span>
+        </button>
+        <button
+          type="button"
+          className={`pc-tab pc-tab-gear ${tab === "settings" || sub === "network" ? "on" : ""}`}
+          aria-current={tab === "settings" && !sub ? "page" : undefined}
+          onClick={() => go("settings")}
+        >
+          <span className="pc-tab-ico">
+            <Icon name="settings" size={15} />
+          </span>
+          <span className="t-body pc-tab-label">{tr("Настройки")}</span>
+        </button>
+      </div>
     </header>
   );
 }

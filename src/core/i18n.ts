@@ -11,7 +11,7 @@ const RU: Dict = {
   "nav.games": "Игры",
   "nav.progress": "Прогресс",
   "nav.shop": "Магазин",
-  "nav.friends": "Друзья",
+  "nav.friends": "Персонажи",
   "nav.more": "Ещё",
 
   "home.continue": "Продолжить",
@@ -68,7 +68,7 @@ const EN: Dict = {
   "nav.games": "Games",
   "nav.progress": "Progress",
   "nav.shop": "Shop",
-  "nav.friends": "Friends",
+  "nav.friends": "Characters",
   "nav.more": "More",
 
   "home.continue": "Continue",

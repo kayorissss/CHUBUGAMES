@@ -10,6 +10,11 @@
  */
 
 export const EN_TEXT: Record<string, string> = {
+  "На главную": "Home",
+  "Уровень и опыт": "Level and experience",
+  "Жетоны казино": "Casino chips",
+  "Персонажи": "Characters",
+
   /* --- короткие слова времени и статусов --- */
   "Почти…": "Almost...",
   "сек": "sec",

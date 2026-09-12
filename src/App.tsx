@@ -210,7 +210,6 @@ function Shell() {
           sub={sub}
           onTab={(next) => { setSub(null); setTab(next); }}
           onOpen={setSub}
-          onOpenProfile={() => { setSub(null); setTab("progress"); }}
         />
       )}
 
