@@ -88,7 +88,11 @@ function Daily() {
   };
 
   return (
-    <>
+    <div className="pc-cols">
+      {/* ЗОНА 1 — «забрать награду». По смыслу это первое действие на
+          странице, поэтому оно стоит первым и слева, а не в хвосте
+          списка после режимов. */}
+      <div className="pc-blk pc-a pc-r1">
       <SectionTitle right={<span className="t-label acc-text flex items-center" style={{ gap: 5 }}>
             <Icon name="fire" size={13} /> {s.daily.streak} дней
           </span>}>{tr("Ежедневный вход")}</SectionTitle>
@@ -131,42 +135,80 @@ function Daily() {
             : tr("Уже забрал · заходи завтра")}
         </Button>
       </Card>
+      </div>
 
-      {/* Режимы и испытание дня — их место здесь, а не на главной */}
-      <ModesPanel />
+      {/* ЗОНА 2 — испытание дня справа сверху, над заданиями. */}
+      <div className="pc-blk pc-b pc-r1">
+        <ModesPanel />
+      </div>
 
+      {/* ЗОНА 3 — сам прогресс: уровень, полоса опыта и сколько XP осталось
+          до следующего уровня. До этого «Ур. N» был только в шапке главной,
+          а на странице прогресса смотреть было нечего. */}
+      <div className="pc-blk pc-a pc-r2">
+        <SectionTitle>{tr("Прогресс")}</SectionTitle>
+        <Card r="lg" style={{ padding: 14, marginBottom: 0 }}>
+          <div className="pc-prog-row">
+            <div className="min-w-0">
+              <div className="t-label" style={{ fontSize: 8.5, letterSpacing: "0.08em" }}>{tr("УРОВЕНЬ")}</div>
+              <div className="t-display" style={{ fontSize: 34, lineHeight: 1 }}>{s.level}</div>
+            </div>
+            <div style={{ flex: "1 1 auto", minWidth: "6rem" }}>
+              <Bar pct={Math.min(1, s.xp / xpForLevel(s.level))} h={8} />
+              <div className="t-caption" style={{ marginTop: 7 }}>
+                {fmt(xpForLevel(s.level) - s.xp)} XP {tr("до")} {s.level + 1}
+              </div>
+            </div>
+            <div className="pc-prog-side">
+              <div>
+                <div className="t-label" style={{ fontSize: 8.5 }}>{tr("СЕЗОННЫЙ XP")}</div>
+                <div className="t-num" style={{ fontSize: 15 }}>{fmt(s.season.xp)}</div>
+              </div>
+              <div>
+                <div className="t-label" style={{ fontSize: 8.5 }}>{tr("ЗАДАНИЙ ГОТОВО")}</div>
+                <div className="t-num" style={{ fontSize: 15 }}>
+                  {s.daily.quests.filter((q) => q.done).length}/{s.daily.quests.length}
+                </div>
+              </div>
+            </div>
+          </div>
+        </Card>
+      </div>
+
+      {/* ЗОНА 4 — задания дня. Полосами, как плашка босса на главной:
+          слева название и прогресс, справа награда и кнопка. */}
+      <div className="pc-blk pc-b pc-r2">
       <SectionTitle>{tr("Задания дня")}</SectionTitle>
       {s.daily.quests.map((q) => {
         const def = QUEST_POOL.find((x) => x.id === q.id);
         if (!def) return null;
         const pct = Math.min(1, q.progress / def.target);
         return (
-          <Card key={q.id} r="lg" style={{ padding: 14, marginBottom: 10 }}>
-            <div className="flex items-start justify-between" style={{ gap: 12, marginBottom: 11 }}>
-              <div className="t-title-sm clip2" style={{ flex: 1, minWidth: 0 }}>
-                {def.name.replace("{n}", def.target.toLocaleString("ru-RU"))}
-              </div>
-              <div className="t-num acc-text shrink-0" style={{ fontSize: 12.5 }}>+{fmt(def.reward)}</div>
-            </div>
-            <Bar pct={pct} h={6} />
-            <div
-              className="flex items-center justify-between"
-              style={{ gap: 10, marginTop: 11, minHeight: 30 }}
-            >
-              <span className="t-num clip1" style={{ fontSize: 11, color: "var(--text-mute)" }}>
+          <Card key={q.id} r="lg" className="pc-quest" style={{ padding: 12, marginBottom: 9 }}>
+            <div className="pc-quest-main">
+              <div className="t-title-sm clip2">{def.name.replace("{n}", def.target.toLocaleString("ru-RU"))}</div>
+              <Bar pct={pct} h={6} />
+              <span className="t-num" style={{ fontSize: 11, color: "var(--text-mute)" }}>
                 {Math.floor(q.progress).toLocaleString("ru-RU")} / {def.target.toLocaleString("ru-RU")}
               </span>
+            </div>
+            <div className="pc-quest-side">
+              <span className="t-num acc-text" style={{ fontSize: 13 }}>+{fmt(def.reward)}</span>
               {q.done && !q.claimed && (
                 <Button variant="primary" size="sm" sound="none" onClick={() => claimQuest(q.id)}>{tr("Забрать")}</Button>
               )}
-              {q.claimed && <span className="t-label flex items-center" style={{ fontSize: 9, gap: 4 }}>
-                    <Icon name="check" size={10} />{tr("получено")}</span>}
+              {q.claimed && (
+                <span className="t-label flex items-center" style={{ fontSize: 9, gap: 4 }}>
+                  <Icon name="check" size={10} />{tr("получено")}
+                </span>
+              )}
             </div>
           </Card>
         );
       })}
-      <div className="t-caption text-center" style={{ marginTop: 18 }}>{tr("Задания обновляются каждый день")}</div>
-    </>
+      <div className="t-caption" style={{ marginTop: 12 }}>{tr("Задания обновляются каждый день")}</div>
+      </div>
+    </div>
   );
 }
 

@@ -1748,6 +1748,55 @@ html.is-desktop .pc-cols > .pc-span {
   padding-top: 0.5rem;
 }
 
+/* ---------- страница «Прогресс»: ряд уровня и задания-полосы ---------- */
+.pc-prog-row {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 0.9rem;
+}
+.pc-prog-side {
+  display: flex;
+  gap: 1rem;
+  flex: 0 0 auto;
+}
+html.is-desktop .pc-prog-side {
+  flex-direction: column;
+  gap: 0.55rem;
+  text-align: right;
+}
+/* Задание дня — полоса, как плашка босса: слева что и сколько, справа
+   награда и кнопка. Стопка «название / полоса / цифры / кнопка» на
+   широком экране растягивалась в нелепую анкету. */
+.pc-quest {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+}
+.pc-quest-main {
+  display: grid;
+  gap: 5px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.pc-quest-side {
+  display: grid;
+  gap: 6px;
+  justify-items: end;
+  flex: 0 0 auto;
+  min-width: 5.5rem;
+}
+@media (max-width: 430px) {
+  .pc-quest {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .pc-quest-side {
+    justify-items: stretch;
+    text-align: right;
+  }
+}
+
 /* Низ страницы настроек: по центру — знак и «для своих», в углу — версия.
    Версия раньше жила в правом углу верхней панели, где её никто не искал. */
 .pc-foot {
