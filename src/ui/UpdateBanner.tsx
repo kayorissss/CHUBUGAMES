@@ -13,6 +13,7 @@ import {
   type UpdateInfo,
 } from "../core/updater";
 import { APP_VERSION } from "../core/version";
+import { isDesktop } from "../core/desktop";
 import { CHANGELOG } from "../core/changelog";
 import { cmpVer } from "./ChangelogView";
 
@@ -109,6 +110,8 @@ export default function UpdateBanner({
   onClose?: () => void;
 } = {}) {
   const { toast } = useGame();
+  /** На компьютере обновление — окно лаунчера, а не полноэкранная полоса. */
+  const pc = isDesktop();
   const [found, setFound] = useState<UpdateInfo | null>(null);
   const info = external ?? found;
   const setInfo = (v: UpdateInfo | null) => {
@@ -182,6 +185,21 @@ export default function UpdateBanner({
     setInfo(null);
   };
 
+  /* На компьютере это окно, и Esc должен его закрывать, как любое модальное
+     окно. На телефоне ничего не добавляем: там жест «назад» уже делает это. */
+  useEffect(() => {
+    if (!pc || !info) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      e.preventDefault();
+      e.stopPropagation();
+      later();
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pc, info, later]);
+
   const pct = total > 0 ? Math.min(1, loaded / total) : 0;
   /**
    * Что нового.
@@ -215,21 +233,39 @@ export default function UpdateBanner({
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.24 }}
-          className="fixed inset-0 z-[110] flex flex-col"
-          style={{ background: "var(--bg)" }}
+          className={`fixed inset-0 z-[110] flex ${pc ? "items-center justify-center p-6" : "flex-col"}`}
+          style={
+            pc
+              ? {
+                  background: "color-mix(in srgb, var(--n-000) 76%, transparent)",
+                  backdropFilter: "blur(10px)",
+                }
+              : { background: "var(--bg)" }
+          }
         >
+          {/* Шапка, тело и подвал на компьютере живут внутри карточки, а не
+              растянуты на весь монитор. На телефоне этот же div — просто
+              колонка на всю высоту, как было. */}
+          <div
+            className={pc ? "pc-modal-card" : "flex flex-col min-h-0"}
+            style={pc ? undefined : { flex: 1, minHeight: 0 }}
+          >
           {/* ─── Шапка ───
               Пересобрана: было три разнородных блока подряд (иконка+версия,
               потом плашка «СЕЙЧАС → СТАНЕТ», потом размер) — рябило и
               «болели глаза». Стало одно смысловое пятно: крупный номер
               версии, под ним переход со старой и вес файла строкой. */}
           <div
-            className="shrink-0"
-            style={{
-              padding: "calc(var(--sat) + 26px) 20px 22px",
-              background: "var(--surface)",
-              borderBottom: "1px solid var(--surface-brd)",
-            }}
+            className={pc ? "pc-modal-head" : "shrink-0"}
+            style={
+              pc
+                ? undefined
+                : {
+                    padding: "calc(var(--sat) + 26px) 20px 22px",
+                    background: "var(--surface)",
+                    borderBottom: "1px solid var(--surface-brd)",
+                  }
+            }
           >
             <div className="flex items-center" style={{ gap: 8, marginBottom: 16 }}>
               <span
@@ -277,8 +313,8 @@ export default function UpdateBanner({
               `minHeight: 0` разрешает середине сжиматься и скроллиться,
               кнопки остаются на месте. */}
           <div
-            className="flex-1 scroll"
-            style={{ padding: "16px 18px 8px", minHeight: 0, overflowY: "auto" }}
+            className={pc ? "pc-modal-body scroll" : "flex-1 scroll"}
+            style={pc ? undefined : { padding: "16px 18px 8px", minHeight: 0, overflowY: "auto" }}
           >
             {busy ? (
               <div style={{ paddingTop: 8 }}>
@@ -392,19 +428,23 @@ export default function UpdateBanner({
 
           {/* ─── Кнопки: у нижнего края, но выше жестовой полосы ─── */}
           <div
-            className="shrink-0 flex flex-col"
-            style={{
-              gap: 9,
-              padding: "14px 18px calc(var(--sab) + 20px)",
-              background: "var(--surface)",
-              borderTop: "1px solid var(--surface-brd)",
-            }}
+            className={pc ? "pc-modal-foot" : "shrink-0 flex flex-col"}
+            style={
+              pc
+                ? undefined
+                : {
+                    gap: 9,
+                    padding: "14px 18px calc(var(--sab) + 20px)",
+                    background: "var(--surface)",
+                    borderTop: "1px solid var(--surface-brd)",
+                  }
+            }
           >
             {!busy && (
               <button
                 type="button"
                 className="btn-acc"
-                style={{ width: "100%", minHeight: 50, fontSize: 14 }}
+                style={pc ? { minHeight: 44, fontSize: 13 } : { width: "100%", minHeight: 50, fontSize: 14 }}
                 disabled={!isNative()}
                 onClick={() => { sfx.power?.(); haptic("light"); void install(); }}
               >
@@ -414,11 +454,12 @@ export default function UpdateBanner({
             <button
               type="button"
               className="btn-flat"
-              style={{ width: "100%", minHeight: 46, fontSize: 13 }}
+              style={pc ? { minHeight: 42, fontSize: 12 } : { width: "100%", minHeight: 46, fontSize: 13 }}
               onClick={later}
             >
               {busy ? tr("Отменить загрузку") : external ? tr("Закрыть") : tr("Позже")}
             </button>
+          </div>
           </div>
         </motion.div>
       )}

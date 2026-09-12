@@ -544,7 +544,12 @@ ok(fs.readFileSync('src/pages/Friends.tsx', 'utf8').includes('pc-pal-grid'),
   ok(!/className="pc-head"/.test(home) || /html\.is-desktop \.pc-head \{/s.test(css),
     'шапка уровня и монет на ПК скрыта (уровень и кошелёк — в панели)');
 
-  ok(!/^\s*width: min\(34rem/m.test(css) && /html\.is-desktop \.pc-play \{[^}]*width: 100%/s.test(css),
+  /* Раньше проверка запрещала любому правилу в файле ширину 34rem. Идея
+     была в том, что игра на компьютере не должна жить в мобильной колонке,
+     а доставалось всем: модалка офлайна тоже имеет право на 34rem. Теперь
+     запрещено именно play-блокам, а не всему stylesheet-у. */
+  ok(/html\.is-desktop \.pc-play \{[^}]*width: 100%/s.test(css) &&
+     !/\.pc-play[a-z-]*\s*\{[^}]*width: min\(34rem/s.test(css),
     'игра на ПК занимает всё окно, а не колонку 34rem');
   ok(/html\.is-desktop \.pc-play \{[^}]*transform: translateZ\(0\)/s.test(css),
     'у игрового блока остаётся containing block — оверлеи не разлипаются по окну');
@@ -1871,6 +1876,74 @@ console.log('\n[47] 1.27: в ЧУБУПА УНИВЕРСАЛИС видно по
     'в лёгком режиме замес собирается за один кадр и без свечения');
   ok(!/animate=\{\{[^}]*repeat: Infinity/.test(bm),
     'в бою нет бесконечных петель — анимация конечна и не ест кадры во время хода');
+}
+
+console.log('\n[48] В JSX нет классов без правил в CSS');
+{
+  /* Класс без определения — это «иконки кривые», «что-то наезжает» и
+     «стиль поехал» ровно на одном из двух устройств. Такие дыры не видно
+     ни в tsc, ни глазами: элемент просто живёт на inline-стилях. Поэтому
+     сверяем каждый проектный className со stylesheet-ом. */
+  const RE = /^(pc|eu|chub|toast|game|bug)-[a-z0-9-]+$/;
+  const files = [];
+  (function walk(d) {
+    for (const e of fs.readdirSync(d, { withFileTypes: true })) {
+      const p = path.join(d, e.name);
+      if (e.isDirectory()) walk(p);
+      else if (/\.tsx$/.test(e.name)) files.push(p);
+    }
+  })("src");
+
+  const used = new Map();
+  for (const f of files) {
+    const s = fs.readFileSync(f, "utf8");
+    for (const m of s.matchAll(/className=(?:"([^"]*)"|'([^']*)'|\{`([^`]*)`\})/g)) {
+      const raw = (m[1] || m[2] || m[3] || "").replace(/\$\{[^}]*\}/g, " ");
+      for (const c of raw.split(/\s+/)) {
+        if (!RE.test(c)) continue;
+        if (!used.has(c)) used.set(c, new Set());
+        used.get(c).add(f);
+      }
+    }
+  }
+  const missing = [...used].filter(([c]) => {
+    const esc = c.replace(/-/g, "\\-");
+    return !new RegExp("\\." + esc + "(?=[\\s,{:>])").test(css);
+  });
+  ok(missing.length === 0,
+    `каждый из ${used.size} проектных классов описан в index.css` +
+    (missing.length ? ` · нет правил у: ${missing.map(([c]) => c).join(", ")}` : ""));
+  ok(used.size > 250, "аудит правда видит разметку, а не пустой список");
+}
+
+console.log('\n[49] 1.27.1: офлайн и обновление на ПК — окна, а не полосы');
+{
+  const up = fs.readFileSync("src/ui/UpdateBanner.tsx", "utf8");
+  const ovl = fs.readFileSync("src/components/Overlays.tsx", "utf8");
+
+  ok(/html\.is-desktop \.pc-modal-card \{[\s\S]{0,420}max-height:/.test(css),
+    "карточка ограничена по высоте: на мониторе это окно, а не растянутая полоса");
+  ok(/html\.is-desktop \.pc-modal-card \{[\s\S]{0,420}overflow: hidden/.test(css),
+    "шапка и подвал скруглены вместе с карточкой — углы не расползаются");
+  ok(/html\.is-desktop \.pc-modal-body \{[\s\S]{0,220}overflow-y: auto/.test(css),
+    "список изменений скроллится внутри окна, кнопки всегда на месте");
+  ok(/\.pc-modal-foot \.btn-acc,[\s\S]{0,120}\{[\s\S]{0,120}width: auto/.test(css),
+    "кнопка «Обновить сейчас» на ПК не тянется через весь экран");
+  ok(/const pc = isDesktop\(\)/.test(up) && /pc-modal-card/.test(up),
+    "баннер обновления различает компьютер и собирается в карточку");
+  ok(/className=\{pc \? "pc-modal-card" : "flex flex-col min-h-0"\}/.test(up),
+    "на телефоне экран обновления остался полноэкранным — ветка не тронута");
+  ok(/if \(!pc \|\| !info\) return;[\s\S]{0,220}"Escape"/.test(up),
+    "на ПК окно обновления закрывается Esc, как любое модальное");
+  ok(/pc \? "pc-offline pc-modal-card" : "w-full max-w-xs"/.test(ovl),
+    "офлайн-плашка на ПК — карточка фиксированной ширины, на телефоне как была");
+  ok(/onClick=\{\(e\) => e\.stopPropagation\(\)\}/.test(ovl),
+    "клик по самой плашке её не закрывает — закрывает только затемнение");
+  ok(/html\.is-desktop \.pc-foot \{[\s\S]{0,220}justify-content: space-between/.test(css),
+    "подвал Настроек в одну строку: версия больше не наезжает на подпись");
+  ok(/\.pc-shop-tab\.on \.pc-shop-tab-ico \{/.test(css) &&
+     /\.pc-wallet-gem \{/.test(css) && /\.pc-tab-gear \{/.test(css),
+    "иконки разделов магазина, алмазы и шестерёнка получили свои правила");
 }
 
 console.log(fails===0?'\n✅ ВСЕ ПРОВЕРКИ ВЁРСТКИ ПРОЙДЕНЫ\n':`\n❌ ПРОВАЛЕНО: ${fails}\n`);

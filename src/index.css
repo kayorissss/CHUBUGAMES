@@ -5686,3 +5686,123 @@ html.is-paused .game-stage *::after {
   border-color: color-mix(in srgb, var(--acc) 62%, #ffffff);
   color: var(--acc-ink);
 }
+
+/* ══════════════════════════════════════════════════════════════════
+   1.27.1 · добор стилей, найденный аудитом «класс в JSX есть — правила нет.»
+   На телефоне это пряталось в inline-стилях, на компьютере — в кривых
+   рядах и наезжающих друг на друга подписях.
+   ══════════════════════════════════════════════════════════════════ */
+
+/* Настройки: подвал в одну строку — марка слева, версия справа.
+   Было: версия position:absolute в правом нижнем углу, и на окне уже
+   1200 px она залезала на подпись. */
+html.is-desktop .pc-foot {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  text-align: left;
+}
+html.is-desktop .pc-foot-brand { min-width: 0; }
+html.is-desktop .pc-foot-ver {
+  position: static;
+  margin: 0;
+  white-space: nowrap;
+}
+
+/* Магазин: иконка раздела — такая же плитка, как в других вкладках,
+   а не голая пиктограмма, гуляющая по высоте строки. */
+.pc-shop-tab-ico {
+  display: grid;
+  place-items: center;
+  width: 1.65rem;
+  height: 1.65rem;
+  flex: 0 0 auto;
+  border-radius: 9px;
+  background: var(--surface-2);
+  color: var(--text-dim);
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.pc-shop-tab.on .pc-shop-tab-ico {
+  background: var(--acc);
+  color: var(--acc-ink);
+}
+
+/* Верхняя панель: алмазы визуально не путаются с монетами,
+   шестерёнка — квадрат без подписи, ряд от неё не разъезжается. */
+.pc-wallet-gem {
+  border-color: var(--violet-brd);
+  background: var(--violet-soft);
+  color: var(--n-900);
+}
+.pc-tab-gear {
+  flex: 0 0 auto;
+  width: 2.3rem;
+  padding: 0.44rem 0;
+  justify-content: center;
+}
+
+/* ЧУБУПА УНИВЕРСАЛИС: пояснение под строкой отчёта. */
+.eu-row-hint {
+  display: block;
+  margin-top: 0.14rem;
+  font-size: 0.62rem;
+  line-height: 1.35;
+  color: var(--text-mute);
+}
+
+/* ══ МОДАЛКИ ОБНОВЛЕНИЯ И ОФЛАЙНА НА ПК ══
+   Обе пришли из телефона полноэкранными полосами: на мониторе текст в трёх
+   метрах от края, кнопка через весь экран, никакого ощущения окна. Здесь
+   они становятся обычным окном лаунчера: карточка по центру, своя шапка и
+   подвал, скролл только внутри, кнопки справа внизу. На телефоне ничего не
+   меняется — там полноэкранный режим и был правильным. */
+html.is-desktop .pc-modal-card {
+  width: min(46rem, 92vw);
+  max-height: min(46rem, 88vh);
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: 1.4rem;
+  border: 1px solid var(--surface-brd);
+  background: linear-gradient(180deg, var(--n-200), var(--n-100));
+  box-shadow: 0 2.4rem 6rem -2rem rgba(0, 0, 0, 0.85);
+}
+html.is-desktop .pc-modal-head {
+  flex: 0 0 auto;
+  padding: 1.25rem 1.5rem 1.1rem;
+  background: var(--surface);
+  border-bottom: 1px solid var(--surface-brd);
+}
+html.is-desktop .pc-modal-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 1.2rem 1.5rem;
+  overflow-y: auto;
+}
+html.is-desktop .pc-modal-foot {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.55rem;
+  padding: 1rem 1.5rem 1.15rem;
+  background: var(--surface);
+  border-top: 1px solid var(--surface-brd);
+}
+/* Кнопки в подвале: свои размеры, а не «на всю ширину экрана». */
+html.is-desktop .pc-modal-foot .btn-acc,
+html.is-desktop .pc-modal-foot .btn-flat {
+  width: auto;
+  min-width: 12rem;
+  padding: 0 1.4rem;
+}
+html.is-desktop .pc-modal-card .t-display {
+  letter-spacing: 0.02em;
+}
+/* Офлайн-карточка уже по центру — ей нужна только ширина. */
+html.is-desktop .pc-offline {
+  width: min(34rem, 92vw);
+}

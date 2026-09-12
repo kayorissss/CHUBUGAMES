@@ -9,7 +9,7 @@ import Icon from "../ui/Icon";
 /**
  * УВЕДОМЛЕНИЯ.
  *
- * Как было: плашки сыпались СВОИМ СТОПКОЙ ПО ЦЕНТР СВЕРХУ, по три-семь
+ * Как было: плашки сыпались стопкой по центру сверху, по три-семь
  * штук одновременно, не закрывались руками и залепляли шапку с очками.
  * Просьба: «уведомления стереть, и они по центру сверху, а не в углу».
  *
@@ -82,6 +82,7 @@ function holdToast(id: number, on: boolean): void {
 
 export function OfflineModal() {
   const { offlineReport, clearOffline, mainFriend } = useGame();
+  const pc = isDesktop();
   return (
     <AnimatePresence>
       {offlineReport && (
@@ -95,8 +96,56 @@ export function OfflineModal() {
             initial={{ scale: 0.8, y: 40, opacity: 0 }}
             animate={{ scale: 1, y: 0, opacity: 1 }}
             transition={{ type: "spring", stiffness: 300, damping: 24 }}
-            className="w-full max-w-xs"
+            className={pc ? "pc-offline pc-modal-card" : "w-full max-w-xs"}
+            onClick={(e) => e.stopPropagation()}
           >
+            {pc ? (
+              <>
+                {/* На мониторе это окно лаунчера: шапка с пояснением, цифры
+                    и кнопка — в одну строку, подсказка про «Холодильник»
+                    внизу. Полноэкранная мобильная полоса на 27" выглядела
+                    как несжатая страница сайта. */}
+                <div className="pc-modal-head">
+                  <div className="flex items-center" style={{ gap: 10 }}>
+                    <span style={{ color: "var(--acc)", lineHeight: 0 }}><Icon name="snow" size={22} /></span>
+                    <span className="t-display" style={{ fontSize: 19 }}>{tr("ПОКА ТЕБЯ НЕ БЫЛО")}</span>
+                    <span className="flex-1" />
+                    <span className="t-caption" style={{ color: "var(--text-mute)" }}>
+                      {fmtTime(offlineReport.hours * 3600000)}
+                    </span>
+                  </div>
+                </div>
+                <div className="pc-modal-body flex items-center" style={{ gap: 20 }}>
+                  <div style={{ minWidth: 0 }}>
+                    <div className="t-body" style={{ color: "var(--text-dim)" }}>
+                      {mainFriend.name} жрал и накопил
+                    </div>
+                    <div
+                      className="t-num acc-text"
+                      style={{ fontSize: 40, marginTop: 6, textShadow: "0 0 30px var(--acc-glow)" }}
+                    >
+                      +{fmt(offlineReport.coins)}
+                    </div>
+                    <div className="t-label" style={{ fontSize: 9, color: "var(--text-mute)" }}>CHUBCOINS</div>
+                  </div>
+                  <Tap
+                    onClick={clearOffline}
+                    accent
+                    r="md"
+                    sound="coin"
+                    className="t-title"
+                    style={{ padding: "0 22px", minHeight: 46, fontSize: 13, flex: "0 0 auto", marginLeft: "auto" }}
+                  >
+                    {tr("ЗАБРАТЬ")}
+                  </Tap>
+                </div>
+                <div className="pc-modal-foot" style={{ justifyContent: "flex-start" }}>
+                  <span className="t-caption" style={{ color: "var(--text-mute)" }}>
+                    {tr("Качай «Холодильник» в CHUBCLICKER, чтобы копить дольше")}
+                  </span>
+                </div>
+              </>
+            ) : (
             <Panel r="xl" strong className="p-6 text-center">
               <div style={{ color: "var(--acc)" }}><Icon name="snow" size={42} /></div>
               <div className="t-display mt-2" style={{ fontSize: 22 }}>{tr("ПОКА ТЕБЯ НЕ БЫЛО")}</div>
@@ -110,6 +159,7 @@ export function OfflineModal() {
               <Tap onClick={clearOffline} accent r="md" className="w-full py-3.5 t-title" style={{ fontSize: 14 }} sound="coin">{tr("ЗАБРАТЬ")}</Tap>
               <div className="t-label mt-3" style={{ fontSize: 8, lineHeight: 1.5 }}>{tr("Качай «Холодильник» в CHUBCLICKER, чтобы копить дольше")}</div>
             </Panel>
+            )}
           </motion.div>
         </motion.div>
       )}
