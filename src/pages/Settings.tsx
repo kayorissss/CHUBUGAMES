@@ -136,31 +136,58 @@ export default function Settings({
 
   return (
     <Screen title={t("settings.title")}>
-      {/* На ПК страницы-списки раскладываются в две колонки: один столб
-          карточек на мониторе выглядел «накиданным», а половина экрана
-          пустовала. На телефоне контейнеры display:contents — вёрстка не
-          меняется. */}
+      {/* НАСТРОЙКИ НА ПК — сетка по зонам, а не два независимых списка.
+          Порядок в разметке остаётся телефонным; классы pc-a / pc-b
+          (колонка) и pc-rN (строка) решают, куда блок встанет на мониторе,
+          поэтому «Экран» и «Обновление» идут на одной высоте и ничего не
+          сползает, когда один из блоков вырастает. */}
       <div className="pc-cols">
-      <div className="pc-col">
-      {/* На ПК — свой блок: масштаб, разрешение сцены и обновление через exe */}
-      {isDesktop() ? (
-        <>
-          <SectionTitle>{tr("Компьютер")}</SectionTitle>
-          <DesktopSettings />
-        </>
-      ) : (
-        <>
-          <SectionTitle>{t("settings.update")}</SectionTitle>
-          <Card r="lg" style={{ marginBottom: 12, padding: 0, overflow: "hidden" }}>
-            <UpdateCheckRow />
-          </Card>
-        </>
+
+      {isDesktop() && (
+      <div className="pc-blk pc-a pc-r1">
+      <SectionTitle>{tr("Экран")}</SectionTitle>
+      <DesktopSettings part="screen" />
+      </div>
       )}
+
+      <div className="pc-blk pc-b pc-r1">
+      <SectionTitle>{t("settings.update")}</SectionTitle>
+      {isDesktop() ? (
+        <DesktopSettings part="update" />
+      ) : (
+        <Card r="lg" style={{ padding: 0, overflow: "hidden" }}>
+          <UpdateCheckRow />
+        </Card>
+      )}
+      </div>
+
+      <div className="pc-blk pc-a pc-r2">
+      <SectionTitle>{t("settings.save")}</SectionTitle>
+      <Card r="lg" style={{ padding: 14, marginBottom: 22 }}>
+        <div className="t-body" style={{ marginBottom: 14 }}>
+          Прогресс хранится только на этом телефоне и не требует интернета.
+          Перед сменой устройства выгрузи файл сохранения.
+        </div>
+        <div className="flex" style={{ gap: 8 }}>
+          <Button variant="secondary" full onClick={exportSave} sound="none">
+            <span className="inline-flex items-center" style={{ gap: 7 }}><Icon name="download" size={14} />{tr("Выгрузить")}</span>
+          </Button>
+          <Button variant="secondary" full onClick={() => fileRef.current?.click()} sound="none">
+            <span className="inline-flex items-center" style={{ gap: 7 }}><Icon name="upload" size={14} />{tr("Загрузить")}</span>
+          </Button>
+          <input ref={fileRef} type="file" accept="application/json" hidden onChange={importSave} />
+        </div>
+      </Card>
+      </div>
+
+      <div className="pc-blk pc-b pc-r2">
       <SectionTitle>{tr("Уведомления")}</SectionTitle>
       <Card r="lg" style={{ marginBottom: 22, overflow: "hidden" }}>
         <NotifyBlock />
       </Card>
+      </div>
 
+      <div className="pc-blk pc-a pc-r3">
       <SectionTitle>{t("settings.appearance")}</SectionTitle>
       <Card r="lg" style={{ marginBottom: 22, overflow: "hidden" }}>
         {/* Базовых темы три: чёрный, тёмно-серый и белый. Акцентный цвет
@@ -241,59 +268,9 @@ export default function Settings({
           </button>
         </div>
       </Card>
-
-      <SectionTitle>{t("settings.game")}</SectionTitle>
-      <Card r="lg" style={{ marginBottom: 22, overflow: "hidden" }}>
-        <DiffPicker
-          value={s.settings.difficulty}
-          onPick={(v) => set((d) => { d.settings.difficulty = v; })}
-        />
-        <Divider inset={14} />
-        <Toggle
-          label={t("settings.sound")}
-          on={s.settings.sound}
-          onToggle={() => {
-            unlockAudio();
-            set((d) => { d.settings.sound = !d.settings.sound; });
-          }}
-        />
-        <Divider inset={14} />
-        <Toggle
-          label={t("settings.haptics")}
-          on={s.settings.haptics}
-          onToggle={() => set((d) => { d.settings.haptics = !d.settings.haptics; })}
-        />
-      </Card>
-
       </div>
-      <div className="pc-col">
-      <SectionTitle>{tr("Инструменты")}</SectionTitle>
-      <Card r="lg" style={{ padding: 0, marginBottom: 22, overflow: "hidden" }}>
-        <NavRow
-          icon="wifi"
-          title="Проверка глушилок"
-          sub="Пинг российских и зарубежных сервисов, скорость"
-          onClick={() => onOpen?.("network")}
-        />
-      </Card>
 
-      <SectionTitle>{t("settings.save")}</SectionTitle>
-      <Card r="lg" style={{ padding: 14, marginBottom: 22 }}>
-        <div className="t-body" style={{ marginBottom: 14 }}>
-          Прогресс хранится только на этом телефоне и не требует интернета.
-          Перед сменой устройства выгрузи файл сохранения.
-        </div>
-        <div className="flex" style={{ gap: 8 }}>
-          <Button variant="secondary" full onClick={exportSave} sound="none">
-            <span className="inline-flex items-center" style={{ gap: 7 }}><Icon name="download" size={14} />{tr("Выгрузить")}</span>
-          </Button>
-          <Button variant="secondary" full onClick={() => fileRef.current?.click()} sound="none">
-            <span className="inline-flex items-center" style={{ gap: 7 }}><Icon name="upload" size={14} />{tr("Загрузить")}</span>
-          </Button>
-          <input ref={fileRef} type="file" accept="application/json" hidden onChange={importSave} />
-        </div>
-      </Card>
-
+      <div className="pc-blk pc-b pc-r3">
       <SectionTitle>{t("settings.danger")}</SectionTitle>
       <Card r="lg" style={{ padding: 14, marginBottom: 22 }}>
         {!confirmReset ? (
@@ -324,8 +301,46 @@ export default function Settings({
           </>
         )}
       </Card>
+      </div>
 
-      <SectionTitle>{t("settings.about")}</SectionTitle>
+      <div className="pc-blk pc-a pc-r4">
+      <SectionTitle>{tr("Инструменты")}</SectionTitle>
+      <Card r="lg" style={{ padding: 0, marginBottom: 22, overflow: "hidden" }}>
+        <NavRow
+          icon="wifi"
+          title="Проверка глушилок"
+          sub="Пинг российских и зарубежных сервисов, скорость"
+          onClick={() => onOpen?.("network")}
+        />
+      </Card>
+      </div>
+
+      <div className="pc-blk pc-b pc-r4">
+      <SectionTitle>{t("settings.game")}</SectionTitle>
+      <Card r="lg" style={{ marginBottom: 22, overflow: "hidden" }}>
+        <DiffPicker
+          value={s.settings.difficulty}
+          onPick={(v) => set((d) => { d.settings.difficulty = v; })}
+        />
+        <Divider inset={14} />
+        <Toggle
+          label={t("settings.sound")}
+          on={s.settings.sound}
+          onToggle={() => {
+            unlockAudio();
+            set((d) => { d.settings.sound = !d.settings.sound; });
+          }}
+        />
+        <Divider inset={14} />
+        <Toggle
+          label={t("settings.haptics")}
+          on={s.settings.haptics}
+          onToggle={() => set((d) => { d.settings.haptics = !d.settings.haptics; })}
+        />
+      </Card>
+      </div>
+
+      <div className="pc-blk pc-span pc-r5">
       <Card r="lg" style={{ padding: 14, marginBottom: 22 }}>
         <div className="flex items-center" style={{ gap: 13 }}>
           <div
@@ -363,17 +378,21 @@ export default function Settings({
         </div>
         <div className="t-caption" style={{ marginTop: 10, lineHeight: 1.5 }}>{tr("Все друзья, шутки и головы — реальные. Претензии тоже принимаются в телеграм.")}</div>
       </Card>
-
       </div>
       </div>
 
-      <div className="text-center" style={{ paddingBlock: 18 }}>
-        <div className="t-display-sm" style={{ color: "var(--n-400)" }}>CHUBUGAMES</div>
-        <div className="t-caption" style={{ marginTop: 5 }}>
-          {t("common.version")} {APP_VERSION} · {t("settings.offline")}
+      {/* Низ страницы: здесь же и «CHUBUGAMES», и номер версии. Раньше версия
+          висела в правом углу верхней панели — место, куда её никто не
+          смотрит; теперь она там, где о ней спрашивают. */}
+      <div className="pc-foot">
+        <div className="pc-foot-brand">
+          <div className="t-display-sm" style={{ color: "var(--n-400)" }}>CHUBUGAMES</div>
+          <div className="t-caption" style={{ marginTop: 5 }}>
+            {t("settings.forOurs")}
+          </div>
         </div>
-        <div className="t-caption" style={{ marginTop: 2 }}>
-          {t("settings.forOurs")}
+        <div className="t-caption pc-foot-ver">
+          {t("common.version")} {APP_VERSION} · {t("settings.offline")}
         </div>
       </div>
     </Screen>

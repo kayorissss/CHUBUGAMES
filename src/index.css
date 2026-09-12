@@ -1709,6 +1709,67 @@ html.is-desktop .pc-col {
 html.is-desktop .pc-col > :last-child {
   margin-bottom: 0 !important;
 }
+
+/* ---------- блоки по зонам ----------
+   Страницы, где порядок на мониторе НЕ совпадает с порядком в разметке
+   (настройки — точный пример: «Сохранение» должно стоять слева под
+   «Экраном», а «Опасная зона» — справа напротив него), размечаются одним
+   плоским списком блоков .pc-blk с классами колонки (pc-a / pc-b) и строки
+   (pc-r1…pc-r6). На телефоне классы ни на что не влияют: блоки идут как
+   написаны, поэтому второй разметки нет и разъезжаться нечему. */
+html.is-desktop .pc-cols > .pc-blk {
+  min-width: 0;
+}
+html.is-desktop .pc-cols > .pc-blk > :last-child {
+  margin-bottom: 0 !important;
+}
+html.is-desktop .pc-cols > .pc-a {
+  grid-column: 1;
+}
+html.is-desktop .pc-cols > .pc-b {
+  grid-column: 2;
+}
+html.is-desktop .pc-cols > .pc-span {
+  grid-column: 1 / -1;
+}
+html.is-desktop .pc-cols > .pc-r1 { grid-row: 1; }
+html.is-desktop .pc-cols > .pc-r2 { grid-row: 2; }
+html.is-desktop .pc-cols > .pc-r3 { grid-row: 3; }
+html.is-desktop .pc-cols > .pc-r4 { grid-row: 4; }
+html.is-desktop .pc-cols > .pc-r5 { grid-row: 5; }
+html.is-desktop .pc-cols > .pc-r6 { grid-row: 6; }
+/* «Об игре» — на всю ширину и по центру, как его просили */
+html.is-desktop .pc-cols > .pc-span > * {
+  max-width: 52rem;
+  margin-left: auto;
+  margin-right: auto;
+}
+html.is-desktop .pc-cols > .pc-span {
+  padding-top: 0.5rem;
+}
+
+/* Низ страницы настроек: по центру — знак и «для своих», в углу — версия.
+   Версия раньше жила в правом углу верхней панели, где её никто не искал. */
+.pc-foot {
+  text-align: center;
+  padding: 1.1rem 0 0.4rem;
+}
+.pc-foot-ver {
+  display: block;
+  margin-top: 0.5rem;
+  color: var(--text-mute);
+}
+html.is-desktop .pc-foot {
+  position: relative;
+  display: block;
+  padding: 1.3rem 0 0.6rem;
+}
+html.is-desktop .pc-foot-ver {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  margin: 0;
+}
 /* колонки скроллятся как страница, а не каждая сама по себе: на
    настройках это два экрана,отдельный скролл тут только мешает */
 html.is-desktop .pc-cols + *,

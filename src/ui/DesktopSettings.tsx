@@ -32,7 +32,13 @@ const MODES: { id: UiScaleMode; label: string; hint: string }[] = [
   { id: "manual", label: "Вручную", hint: "Свой масштаб, Ctrl и +/−" },
 ];
 
-export default function DesktopSettings() {
+/**
+ * part: "all" — как раньше, оба блока подряд (для телефона и для списков);
+ * "screen" / "update" — один из двух. Нужно для компьютерной раскладки:
+ * там «Экран» живёт в левой колонке настроек, а «Обновление» — в правой
+ * сверху, и держать их в одном <Panel> больше нельзя.
+ */
+export default function DesktopSettings({ part = "all" }: { part?: "all" | "screen" | "update" }) {
   const [st, setSt] = useState<StageSettings>(() => readStage());
   const [scale, setScale] = useState(1);
   const [full, setFull] = useState(false);
@@ -82,6 +88,7 @@ export default function DesktopSettings() {
   return (
     <>
       {/* ─── Экран ─── */}
+      {part !== "update" && (
       <Panel r="lg" style={{ padding: 14, marginBottom: 10 }}>
         <div className="flex items-center" style={{ gap: 9, marginBottom: 12 }}>
           <span style={{ color: "var(--acc)", lineHeight: 0 }}>
@@ -175,8 +182,10 @@ export default function DesktopSettings() {
           </div>
         )}
       </Panel>
+      )}
 
       {/* ─── Обновление ─── */}
+      {part !== "screen" && (
       <Panel r="lg" style={{ padding: 14, marginBottom: 10 }}>
         <div className="flex items-center" style={{ gap: 9, marginBottom: 11 }}>
           <span style={{ color: "var(--ok)", lineHeight: 0 }}>
@@ -259,6 +268,7 @@ export default function DesktopSettings() {
           </motion.div>
         </AnimatePresence>
       </Panel>
+      )}
     </>
   );
 }
