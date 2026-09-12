@@ -436,7 +436,13 @@ jobs:
           cat PREVIEW_BODY.md
           # Ошибку gh выводим аннотацией: лог прогона с telefonu не всегда
           # достаён, а предупреждение в аннотациях видно и в UI, и через API.
-          if ! gh release create "v$APP_VER-preview" --target "$GITHUB_SHA" --prerelease \
+          # Повторный прогон того же тега — не ошибка: релиз уже создан,
+          # значит обновляем текст и заново заливаем файл.
+          if gh release view "v$APP_VER-preview" >/dev/null 2>&1; then
+            gh release edit "v$APP_VER-preview" --prerelease \
+              --title "Android $APP_VER — preview (debug-подпись)" \
+              --notes-file PREVIEW_BODY.md
+          elif ! gh release create "v$APP_VER-preview" --target "$GITHUB_SHA" --prerelease \
                --title "Android $APP_VER — preview (debug-подпись)" \
                --notes-file PREVIEW_BODY.md 2> gh.err; then
             echo "::error::gh release create: $(tr '\n' '|' < gh.err | cut -c1-400)"
@@ -448,59 +454,6 @@ jobs:
           fi
           echo "::warning::Секретов подписи нет — в Releases лёг только preview, latest не тронут"
 
-      - name: Upload APK (артефакт сборки)
-        uses: actions/upload-artifact@v4
-        with:
-          name: CHUBUGAMES-APK
-          path: |
-            CHUBUGAMES.apk
-            CHUBUGAMES.apk.sha256
-          retention-days: 90
-
-      # Секретов подписи нет, а людям файл нужен уже сейчас. Тогда debug-сборка
-      # уезжает в ОТДЕЛЬНЫЙ pre-release с крупным предупреждением, а канал
-      # обновлений (тег latest) не трогается вообще: у debug-ключа другая
-      # подпись, Android отказался бы ставить такой пакет поверх боевого, а
-      # попытка «через удаление» стёрла бы прогресс игрока.
-      - name: Publish preview APK (no signing key)
-        if: steps.kind.outputs.release == 'true' && steps.signs.outputs.signed != 'true'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          cp CHUBUGAMES.apk "CHUBUGAMES-$APP_VER-preview.apk"
-          sha256sum "CHUBUGAMES-$APP_VER-preview.apk" > "CHUBUGAMES-$APP_VER-preview.apk.sha256"
-          {
-            printf '## Это НЕ обновление. Это preview\n\n'
-            printf 'Тот же код, что в теге `v%s`, но подписанный **отладочным** ключом:\n' "$APP_VER"
-            printf 'постоянного релизного ключа в Secrets нет, поэтому нормальный APK\n'
-            printf 'собрать нечем.\n\n'
-            printf '| Файл | Размер |\n|---|---|\n'
-            printf '| `CHUBUGAMES-%s-preview.apk` | %s |\n\n' "$APP_VER" "$(du -h "CHUBUGAMES-$APP_VER-preview.apk" | cut -f1)"
-            printf '**Что будет, если поставить:**\n'
-            printf('- поверх боевой версии Android откажет: подписи разные;\n')
-            printf('- если удалить текущую версию и поставить эту — прогресс сотрётся\n')
-            x. Сначала «Настройки» → «Сохранение» →\n')
-            printf('  экспорт файла, потом обратно после установки;\n')
-            printf('- встроенная проверка обновлений эту ветку не видит: она смотрит на\n')
-            printf('  тег `latest`, поэтому встроенные обновления приходить не будут.\n\n')
-            printf '**Как выпустить нормальную сборку (5 минут, один раз):**\n')
-            printf('1. Значения четырёх секретов лежат в `android-signing/PASTE-INTO-SECRETS.txt` (файл в репо, ключа в репо нет).\n')
-            printf('2. GitHub → Settings → Secrets and variables → Actions → New repository secret, четыре имени:\n')
-            printf('   `CHUB_KEYSTORE_B64`, `CHUB_KEYSTORE_PASSWORD`, `CHUB_KEY_ALIAS`, `CHUB_KEY_PASSWORD`.\n')
-            printf('3. Перезапустить этот прогон (Re-run failed jobs) — тот же коммит соберётся `assembleRelease`,\n')
-            printf('   подпишется и попадёт в `latest`.\n\n')
-            printf '```\n'; cat "CHUBUGAMES-$APP_VER-preview.apk.sha256"; printf '\n```\n'
-          } > PREVIEW_BODY.md
-          gh release create "v$APP_VER-preview" --target "$GITHUB_SHA" --prerelease \
-            --title "Android $APP_VER — preview (debug-подпись)" --notes-file PREVIEW_BODY.md \
-            "CHUBUGAMES-$APP_VER-preview.apk" "CHUBUGAMES-$APP_VER-preview.apk.sha256"
-          echo "::warning::Секретов подписи нет — в Releases лёг только preview (pre-release), latest не тронут"
-
-      # Кладём APK в Releases — прямая ссылка на скачивание с телефона,
-      # без ZIP-архива и без входа в аккаунт GitHub
-      # Описание релиза держим коротким и техническим: подробный список
-      # изменений человек читает ВНУТРИ приложения (экран «Что нового»),
-      # дублировать его целиком на странице релиза незачем.
       - name: Prepare release notes
         if: steps.kind.outputs.release == 'true' && steps.signs.outputs.signed == 'true'
         run: |
