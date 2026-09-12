@@ -408,6 +408,29 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      # Плавающий тег — это не про историю, а про «что выложено прямо сейчас».
+      # Теги desktop/latest когда-то были созданы на коммите мая и с тех пор
+      # не двигались, поэтому страница релиза выглядела как старая сборка:
+      # в шапке «released this …» дата прошлого выпуска, рядом показан коммит
+      # семимесячной давности, а «Source code (zip/tar.gz)» качал исходники не
+      # того, из чего собран этот exe. Двигаем тег на коммит прогона и
+      # возвращаем релизу актуальную дату публикации: GitHub считает
+      # «published» по переходу из draft, сама она не обновится.
+      - name: Point the floating tag at the built commit
+        if: steps.kind.outputs.release == 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if ! gh api -X PATCH "repos/$GITHUB_REPOSITORY/git/refs/tags/latest" \
+               -f sha="$GITHUB_SHA" -F force=true >/dev/null 2>&1; then
+            gh api -X POST "repos/$GITHUB_REPOSITORY/git/refs" \
+              -f ref="refs/tags/latest" -f sha="$GITHUB_SHA"
+          fi
+          echo "тег latest -> $GITHUB_SHA"
+          gh release edit latest --draft=true --title "Android-сборка $APP_VER"
+          gh release edit latest --draft=false --title "Android-сборка $APP_VER" --latest
+
       # Тег latest остаётся точкой публикации: на него ведут ссылка внутри
       # самого приложения (updater спрашивает releases/tags/latest), ссылки в
       # README и закладки тех, кто качал игру раньше. Меняется только то, что

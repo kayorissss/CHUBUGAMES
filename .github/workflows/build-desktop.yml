@@ -237,6 +237,29 @@ jobs:
           echo "--- что теперь лежит в релизе desktop ---"
           gh release view desktop --json assets -q '.assets[].name'
 
+      # Плавающий тег — это не про историю, а про «что выложено прямо сейчас».
+      # Теги desktop/latest когда-то были созданы на коммите мая и с тех пор
+      # не двигались, поэтому страница релиза выглядела как старая сборка:
+      # в шапке «released this …» дата прошлого выпуска, рядом показан коммит
+      # семимесячной давности, а «Source code (zip/tar.gz)» качал исходники не
+      # того, из чего собран этот exe. Двигаем тег на коммит прогона и
+      # возвращаем релизу актуальную дату публикации: GitHub считает
+      # «published» по переходу из draft, сама она не обновится.
+      - name: Point the floating tag at the built commit
+        if: steps.kind.outputs.release == 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if ! gh api -X PATCH "repos/$GITHUB_REPOSITORY/git/refs/tags/desktop" \
+               -f sha="$GITHUB_SHA" -F force=true >/dev/null 2>&1; then
+            gh api -X POST "repos/$GITHUB_REPOSITORY/git/refs" \
+              -f ref="refs/tags/desktop" -f sha="$GITHUB_SHA"
+          fi
+          echo "тег desktop -> $GITHUB_SHA"
+          gh release edit desktop --draft=true --title "PC-сборка $APP_VER"
+          gh release edit desktop --draft=false --title "PC-сборка $APP_VER"
+
 
       # Устаревшие exe удаляем ПОСЛЕ загрузки новых: если почистить заранее,
       # а публикация упадёт, в релизе не останется вообще ничего и ссылка
