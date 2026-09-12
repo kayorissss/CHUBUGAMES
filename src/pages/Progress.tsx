@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { dailyState } from "../core/rewards";
+import type { GameId } from "../core/types";
 import { tr } from "../core/i18n";
 import MasteryView from "../ui/MasteryView";
 import { motion } from "framer-motion";
@@ -7,7 +9,7 @@ import {
   ACHIEVEMENTS, QUEST_POOL, DAILY_LADDER, SKILLS, RARITY_COLOR, RARITY_LABEL,
   SEASON_TIERS, SEASON_XP_PER_TIER, seasonReward, GAME_META,
 } from "../core/content";
-import { fmt, fmtTime, today, daysBetween } from "../core/format";
+import { fmt, fmtTime, today } from "../core/format";
 import { spentSkillPoints, xpForLevel } from "../core/save";
 import { Card, Button, Bar, Chip, SectionTitle, Screen, Divider } from "../ui/Glass";
 import ModesPanel from "../ui/ModesPanel";
@@ -18,38 +20,106 @@ import { freshSave } from "../core/save";
 
 type Tab = "daily" | "season" | "mastery" | "skills" | "ach" | "stats";
 
-export default function ProgressPage() {
+export default function ProgressPage({ onPlay }: { onPlay?: (g: GameId) => void }) {
+  const { s } = useGame();
   const [tab, setTab] = useState<Tab>("daily");
+  const loot = dailyState(s).canClaim;
   return (
     <Screen title={tr("ПРОГРЕСС")}>
-      <div
-        className="flex overflow-x-auto scroll pc-tabs-row"
-        style={{ gap: 8, marginBottom: 18, paddingBottom: 2 }}
-      >
-        <Chip active={tab === "daily"} onClick={() => setTab("daily")}>{tr("Ежедневки")}</Chip>
-        <Chip active={tab === "season"} onClick={() => setTab("season")}>{tr("Сезон")}</Chip>
-        <Chip active={tab === "mastery"} onClick={() => setTab("mastery")}>{tr("Мастерство")}</Chip>
-        <Chip active={tab === "skills"} onClick={() => setTab("skills")}>{tr("Навыки")}</Chip>
-        <Chip active={tab === "ach"} onClick={() => setTab("ach")}>{tr("Ачивки")}</Chip>
-        <Chip active={tab === "stats"} onClick={() => setTab("stats")}>{tr("Статистика")}</Chip>
+      {/* Уровень — первым и крупным. Просьба была буквальная: «уровень
+          спрятан где-то внизу и кривой — должен быть выше всех и красивый».
+          Раньше это был «Ур. N» внутри карточки третьей секции. */}
+      <LevelHero />
+
+      {/* Вкладки — те же, что в Магазине: сегменты на всю ширину, с иконкой
+          и подписью, а не горстка Chip-ов, которые хотелось тыкать. */}
+      <div className="pc-seg" role="tablist">
+        {([
+          { id: "daily", label: "Ежедневки", icon: "calendar", dot: loot },
+          { id: "season", label: "Сезон", icon: "trophy" },
+          { id: "mastery", label: "Мастерство", icon: "medal" },
+          { id: "skills", label: "Навыки", icon: "brain" },
+          { id: "ach", label: "Достижения", icon: "star" },
+          { id: "stats", label: "Статистика", icon: "chart" },
+        ] as const).map((it) => (
+          <button
+            key={it.id}
+            type="button"
+            role="tab"
+            aria-selected={tab === it.id}
+            className={`pc-seg-item ${tab === it.id ? "on" : ""}`}
+            onClick={() => { sfx.click(); haptic("light"); setTab(it.id as Tab); }}
+          >
+            <Icon name={it.icon} size={14} />
+            <span className="t-label clip1">{tr(it.label)}</span>
+            {"dot" in it && it.dot && <span className="pc-seg-dot" aria-label={tr("есть награда")} />}
+          </button>
+        ))}
       </div>
       {tab === "daily" && <Daily />}
       {tab === "season" && <Season />}
       {tab === "mastery" && <MasteryView />}
       {tab === "skills" && <Skills />}
-      {tab === "ach" && <Achievements />}
+      {tab === "ach" && <Achievements onPlay={onPlay} />}
       {tab === "stats" && <Stats />}
     </Screen>
+  );
+}
+
+/* ============ УРОВЕНЬ ============ */
+
+/**
+ * ПЛИТКА УРОВНЯ.
+ *
+ * Уровень и опыт раньше жили только в шапке главной («Ур. N» + тонкая
+ * полоска), а на странице прогресса — в карточке третьей секции. Просили
+ * «выше всех и красивый»: это первая вещь на странице, с рангом, полосой
+ * опыта, сколько осталось до следующего уровня и что за это будет.
+ */
+function LevelHero() {
+  const { s, levelPct } = useGame();
+  const need = xpForLevel(s.level);
+  const left = Math.max(0, need - s.xp);
+  const tiers = SEASON_TIERS;
+  const tier = Math.min(tiers, Math.max(1, Math.floor(s.season.xp / SEASON_XP_PER_TIER) + 1));
+  return (
+    <div className="pc-lvlhero">
+      <span className="pc-lvlhero-n">
+        <span className="t-label pc-lvlhero-cap">{tr("УРОВЕНЬ")}</span>
+        <span className="t-display pc-lvlhero-num">{s.level}</span>
+      </span>
+      <span className="pc-lvlhero-mid">
+        <span className="pc-lvlhero-row">
+          <span className="t-title-sm">{tr("Опыт до уровня")} {s.level + 1}</span>
+          <span className="t-num pc-lvlhero-xp">{fmt(s.xp)} / {fmt(need)}</span>
+        </span>
+        <span className="pc-lvlhero-bar"><i style={{ width: `${Math.min(100, levelPct)}%` }} /></span>
+        <span className="pc-lvlhero-foot">
+          <span>
+            <Icon name="bolt" size={11} />
+            {tr("осталось")} <b className="t-num">{fmt(left)}</b> XP
+          </span>
+          <span>
+            <Icon name="trophy" size={11} />
+            {tr("сезон")}: <b>{tier}/{tiers}</b>
+          </span>
+          {s.prestige > 0 && (
+            <span>
+              <Icon name="star" size={11} />
+              {tr("перерождений")}: <b>{s.prestige}</b> · +{Math.round(s.prestige * 12)}% {tr("монет")}
+            </span>
+          )}
+        </span>
+      </span>
+    </div>
   );
 }
 
 /* ============ ЕЖЕДНЕВКИ ============ */
 function Daily() {
   const { s, set, toast } = useGame();
+  const { canClaim, gap, idx: streakIdx } = dailyState(s);
   const t = today();
-  const gap = s.daily.lastClaim ? daysBetween(s.daily.lastClaim, t) : 999;
-  const canClaim = gap >= 1;
-  const streakIdx = Math.min(6, canClaim ? (gap === 1 ? s.daily.streak : 0) : Math.max(0, s.daily.streak - 1));
 
   const claim = () => {
     if (!canClaim) return;
@@ -444,7 +514,18 @@ function Skills() {
 }
 
 /* ============ АЧИВКИ ============ */
-function Achievements() {
+/** куда вести игрока за закрытием достижения: по префиксу id, без новой
+    руки данных в контенте — иначе ACHIEVEMENTS пришлось бы знать про игры */
+function achTarget(id: string): { game: GameId; label: string } | null {
+  if (id.startsWith("burger") || id.startsWith("dodge")) return { game: "burger", label: "Burger Rain" };
+  if (id.startsWith("merge") || id.startsWith("tile")) return { game: "merge", label: "2048" };
+  if (id.startsWith("chess")) return { game: "chess", label: "Шахматы" };
+  if (id.startsWith("checkers")) return { game: "checkers", label: "Шашки" };
+  if (id.startsWith("europa")) return { game: "europa", label: "ЧУБУПА УНИВЕРСАЛИС" };
+  return null;
+}
+
+function Achievements({ onPlay }: { onPlay?: (g: GameId) => void }) {
   const { s } = useGame();
   const [filter, setFilter] = useState<"all" | "done" | "todo">("all");
   const list = ACHIEVEMENTS.filter((a) => {
@@ -469,11 +550,13 @@ function Achievements() {
       </div>
       {list.map((a, i) => {
         const done = !!s.achievements[a.id];
+        const to = onPlay ? achTarget(a.id) : null;
         return (
           <motion.div key={a.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: Math.min(0.3, i * 0.02) }}>
             <Card
               r="md" tone={2} className="flex items-center"
               style={{ padding: 12, gap: 12, marginBottom: 8, opacity: done ? 1 : 0.58 }}
+              onClick={to && !done ? () => { sfx.click(); onPlay?.(to.game); } : undefined}
             >
               <div
                 className="shrink-0 flex items-center justify-center"
@@ -497,11 +580,19 @@ function Achievements() {
                 </div>
                 <div className="t-caption clip2" style={{ marginTop: 3 }}>{a.desc}</div>
               </div>
-              <div
-                className="t-num shrink-0"
-                style={{ fontSize: 11.5, color: done ? "var(--acc)" : "var(--text-mute)" }}
-              >
-                {fmt(a.reward)}
+              <div className="shrink-0 flex flex-col items-end" style={{ gap: 3 }}>
+                <span className="t-num" style={{ fontSize: 11.5, color: done ? "var(--acc)" : "var(--text-mute)" }}>
+                  +{fmt(a.reward)}
+                </span>
+                {/* «незакрытые кликабельны и ведут в нужный режим» — просьба
+                    дословная; куда вести — подписано, чтобы это не был
+                    тычок вслепую */}
+                {to && !done && (
+                  <span className="pc-ach-go">
+                    {to.label}
+                    <Icon name="chevron" size={10} />
+                  </span>
+                )}
               </div>
             </Card>
           </motion.div>

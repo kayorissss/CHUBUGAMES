@@ -266,7 +266,7 @@ function Shell() {
 
   const pages: Record<Tab, React.ReactNode> = {
     home: <Home onPlay={(g) => setGame(g)} onOpenProfile={() => setTab("progress")} onOpen={setSub} />,
-    progress: <ProgressPage />,
+    progress: <ProgressPage onPlay={(g) => setGame(g)} />,
     shop: <Shop />,
     friends: <Friends />,
     settings: <Settings onOpen={setSub} onTab={setTab} />,

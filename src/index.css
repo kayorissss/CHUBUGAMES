@@ -2102,6 +2102,161 @@ html.is-desktop .pc-tile {
   contain-intrinsic-size: 0 11rem;
 }
 
+/* ---------- ОБЩИЕ ВКЛАДКИ СЕКЦИЙ (как в Магазине) ----------
+   Прогресс, Настройки, Казино: сегменты на всю ширину с иконкой и подписью.
+   Раньше у каждого раздела были свои Chip-ы: косые, без иконки, и «что
+   выбрано» читалось только по фону. */
+.pc-seg {
+  display: flex;
+  gap: 0.4rem;
+  margin-bottom: 1.1rem;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding-bottom: 2px;
+}
+.pc-seg::-webkit-scrollbar { display: none; }
+.pc-seg-item {
+  position: relative;
+  flex: 1 1 0;
+  min-width: 6.4rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  padding: 0.7rem 0.55rem;
+  border-radius: var(--r-md);
+  background: var(--btn-bg);
+  border: 1px solid var(--btn-brd);
+  color: var(--text-dim);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.18s, color 0.18s, border-color 0.18s;
+}
+.pc-seg-item:hover { background: var(--btn-bg-hi); color: var(--text); }
+.pc-seg-item.on {
+  background: linear-gradient(170deg, var(--acc-hi), var(--acc) 52%, var(--acc-lo));
+  border-color: color-mix(in srgb, var(--acc) 62%, #ffffff);
+  color: var(--acc-ink);
+  box-shadow: 0 10px 26px -16px var(--acc-glow);
+}
+.pc-seg-item .t-label { font-size: 0.62rem; font-weight: 800; letter-spacing: 0.04em; }
+/* красная точка: «тут есть что забрать» — без объяснений и без счётчика.
+   Одна и та же микросхема — на вкладках разделов и на сегментах внутри. */
+.pc-tab-dot {
+  width: 0.42rem;
+  height: 0.42rem;
+  border-radius: 999px;
+  background: var(--danger);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--danger) 26%, transparent);
+}
+.pc-seg-dot {
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 999px;
+  background: var(--danger);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--danger) 26%, transparent);
+  animation: pcsegdot 1.8s ease-in-out infinite;
+}
+@keyframes pcsegdot {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.22); }
+}
+
+/* Шапка «жетоны казино» на ПК — компактная полоса в один ряд с вкладками,
+   а не жирная золотая плита: она «не вписывалась» ровно потому, что была
+   выше и тяжелее самого казино. */
+html.is-desktop .pc-chips-bar {
+  display: flex;
+  align-items: center;
+  gap: 1.1rem;
+  padding: 0.6rem 0.85rem !important;
+  margin-bottom: 0.75rem !important;
+  border-width: 1px !important;
+  background:
+    linear-gradient(100deg, var(--gold-soft), transparent 58%),
+    var(--surface-2) !important;
+}
+html.is-desktop .pc-chips-bar > div {
+  margin-top: 0 !important;
+  padding-top: 0 !important;
+  border-top: none !important;
+  flex: 0 0 auto;
+  gap: 1.1rem !important;
+}
+html.is-desktop .pc-chips-bar > div:first-child {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* ---------- ПЛИТКА УРОВНЯ на странице прогресса ---------- */
+.pc-lvlhero {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.9rem;
+  align-items: center;
+  padding: 0.85rem 1rem 0.95rem;
+  margin-bottom: 0.9rem;
+  border-radius: var(--r-lg);
+  background:
+    radial-gradient(120% 150% at 4% 50%, var(--acc-soft), transparent 56%),
+    linear-gradient(100deg, var(--surface-2), var(--surface) 62%);
+  border: 1px solid var(--surface-brd);
+  box-shadow: 0 18px 40px -30px rgba(0, 0, 0, 0.9);
+}
+.pc-lvlhero-n {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-width: 5.4rem;
+  padding: 0.5rem 0.7rem 0.55rem;
+  border-radius: var(--r-md);
+  background: linear-gradient(170deg, var(--acc-hi), var(--acc) 54%, var(--acc-lo));
+  color: var(--acc-ink);
+  box-shadow: 0 12px 26px -16px var(--acc-glow);
+}
+.pc-lvlhero-cap { font-size: 0.55rem; letter-spacing: 0.14em; opacity: 0.82; }
+.pc-lvlhero-num { font-size: 1.9rem; line-height: 1; }
+.pc-lvlhero-mid { display: flex; flex-direction: column; gap: 0.4rem; min-width: 0; }
+.pc-lvlhero-row { display: flex; align-items: baseline; justify-content: space-between; gap: 0.6rem; }
+.pc-lvlhero-xp { font-size: 0.75rem; color: var(--text-mute); white-space: nowrap; }
+.pc-lvlhero-bar {
+  display: block;
+  height: 0.55rem;
+  border-radius: 999px;
+  background: var(--track);
+  overflow: hidden;
+}
+.pc-lvlhero-bar i {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--acc) 70%, #fff), var(--acc));
+  transition: width 0.6s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.pc-lvlhero-foot { display: flex; flex-wrap: wrap; gap: 0.35rem 0.9rem; color: var(--text-mute); font-size: 0.6rem; font-weight: 600; }
+.pc-lvlhero-foot span { display: inline-flex; align-items: center; gap: 0.28rem; }
+.pc-lvlhero-foot b { color: var(--text-dim); font-weight: 800; }
+
+/* карточка, по которой можно кликнуть, обязана этим выглядеть */
+.solid-hit { cursor: pointer; transition: border-color 0.16s, background 0.16s, transform 0.12s; }
+.solid-hit:hover { border-color: var(--acc-line); }
+.solid-hit:active { transform: scale(0.995); }
+.pc-ach-go {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.22rem;
+  padding: 0.14rem 0.4rem;
+  border-radius: 999px;
+  background: var(--acc-soft);
+  border: 1px solid var(--acc-line);
+  color: var(--acc-text);
+  font-size: 0.55rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
 /* ---------- ИТОГ ЗАБЕГА: на ПК плашка альбомная, а не квадрат ----------
    Претензия с первого же скриншота: «плашка поражения — больше и альбомная,
    не квадратная». На широком окне квадрат 384 px выглядел как наклейка

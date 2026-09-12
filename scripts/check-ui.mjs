@@ -564,9 +564,45 @@ ok(fs.readFileSync('src/pages/Friends.tsx', 'utf8').includes('pc-pal-grid'),
     || /html\.is-desktop \.pc-pal-grid \{[^}]*repeat\(3/s.test(css),
     'плитка персонажей на ПК — по три в ряд');
 }
-ok(['Progress', 'Casino', 'Network'].every((pg) =>
-    fs.readFileSync(`src/pages/${pg}.tsx`, 'utf8').includes('pc-tabs-row')),
+ok(['Progress', 'Casino', 'Network'].every((pg) => {
+    const t = fs.readFileSync(`src/pages/${pg}.tsx`, 'utf8');
+    return t.includes('pc-tabs-row') || t.includes('pc-seg');
+  }),
   'ряды вкладок на ПК — панель, а не тянущаяся на всю ширину полоска');
+
+console.log('\n[37] 1.27: общие вкладки, уровень первым, точка награды, казино');
+{
+  const css37 = fs.readFileSync('src/index.css', 'utf8');
+  const prog = fs.readFileSync('src/pages/Progress.tsx', 'utf8');
+  const cas37 = fs.readFileSync('src/pages/Casino.tsx', 'utf8');
+  const rew = fs.readFileSync('src/core/rewards.ts', 'utf8');
+  const bar37 = fs.readFileSync('src/ui/pc/PcTopBar.tsx', 'utf8');
+
+  ok(/\.pc-seg-item\.on \{[\s\S]{0,240}?--acc-hi/.test(css37),
+    'сегменты вкладок залиты акцентом так же, как вкладки Магазина');
+  ok(prog.includes('className="pc-seg"') && /Достижения/.test(prog) && !/tr\("Ачивки"\)/.test(prog),
+    'в Прогрессе вкладки — pc-seg, раздел называется «Достижения», а не «Ачивки»');
+  ok(/<LevelHero \/>/.test(prog) && prog.indexOf('<LevelHero />') < prog.indexOf('className="pc-seg"'),
+    'уровень — ПЕРВЫЙ блок страницы прогресса, над вкладками');
+  ok(/pc-lvlhero-num/.test(css37) && /pc-lvlhero-bar i \{/.test(css37),
+    'плитка уровня свёрстана классами: число, полоса опыта, остаток XP');
+  ok(/hasLoot/.test(bar37) && /pc-tab-dot/.test(bar37),
+    'на вкладке «Прогресс» в верхней панели есть красная точка «есть награда»');
+  ok(/export function hasLoot/.test(rew) && /export function dailyState/.test(rew),
+    '«есть что забрать» считается в одном месте (core/rewards.ts)');
+  ok(/onClick=\{to && !done \?/.test(prog) && /pc-ach-go/.test(prog),
+    'незакрытое достижение кликабельно и подписано, в какой режим оно ведёт');
+  ok(/function achTarget/.test(prog) && /solid-hit/.test(css37),
+    'клик по карточке — с классом-курсором и поддержкой клавиатуры (Card onClick)');
+
+  const tabList = cas37.slice(cas37.indexOf('const TABS'), cas37.indexOf('];', cas37.indexOf('const TABS')));
+  ok(/\{ id: "slots",   name: "СЛОТЫ"/.test(tabList) && tabList.indexOf('"slots"') < tabList.indexOf('"farm"'),
+    'СЛОТЫ — первая вкладка казино, ферма в конце');
+  ok(/className="pc-seg" role="tablist"/.test(cas37),
+    'вкладки казино — те же сегменты, что у магазина и прогресса');
+  ok(/html\.is-desktop \.pc-chips-bar \{[\s\S]{0,120}?display: flex/.test(css37),
+    'шапка «жетоны казино» на ПК — компактная полоса, а не жирная плита');
+}
 // Магазин: вкладки уехали в левый вертикальный список — ряд чипов сверху
 // там выглядел тремя баннерами, а не навигацией.
 ok(fs.readFileSync('src/pages/Shop.tsx', 'utf8').includes('pc-shop-nav'),

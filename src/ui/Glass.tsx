@@ -27,14 +27,33 @@ export function Panel({
 
 /** Сплошная карточка — для списков и плотного контента (читается лучше стекла) */
 export function Card({
-  children, className = "", style, r = "lg", tone = 1, active,
+  children, className = "", style, r = "lg", tone = 1, active, onClick, title,
 }: {
   children?: ReactNode; className?: string; style?: CSSProperties;
   r?: R; tone?: 1 | 2; active?: boolean;
+  /**
+   * Карточка как объект действия (например, незакрытое достижение, которое
+   * ведёт в нужный режим). Без this карточки приходилось оборачивать в
+   * <div onClick> — мышь работала, клавиатура нет.
+   */
+  onClick?: () => void;
+  title?: string;
 }) {
+  const go = onClick
+    ? {
+        role: "button",
+        tabIndex: 0,
+        onClick,
+        onKeyDown: (e: React.KeyboardEvent) => {
+          if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick(); }
+        },
+      }
+    : {};
   return (
     <div
-      className={`solid ${tone === 2 ? "solid-2" : ""} ${className}`}
+      {...go}
+      title={title}
+      className={`solid ${tone === 2 ? "solid-2" : ""} ${onClick ? "solid-hit " : ""}${className}`}
       style={{
         borderRadius: rad(r),
         ...(active

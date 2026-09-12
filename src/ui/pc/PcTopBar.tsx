@@ -8,6 +8,7 @@ import Icon, { type IconName } from "../Icon";
 import type { Tab } from "../../components/Nav";
 import type { SubPage } from "../../App";
 import { readGamble } from "../../core/gamble";
+import { hasLoot } from "../../core/rewards";
 
 /**
  * ВЕРХНЯЯ ПАНЕЛЬ ПК-ВЕРСИИ.
@@ -141,6 +142,9 @@ export default function PcTopBar({
       <nav className="pc-bar-tabs" aria-label={tr("Разделы")}>
         {TABS.map((it) => {
           const on = it.sub ? sub === it.id : tab === it.id && !sub;
+          /* точка-сигнал: есть что забрать (ежедневный вход) — иначе о
+             награде узнаёшь, только зайдя внутрь раздела */
+          const loot = it.id === "progress" && hasLoot(s);
           return (
             <button
               key={it.id}
@@ -161,6 +165,7 @@ export default function PcTopBar({
                 <Icon name={it.icon} size={15} />
               </span>
               <span className="t-body pc-tab-label">{tr(it.label)}</span>
+              {loot && <span className="pc-tab-dot" aria-label={tr("есть награда")} />}
             </button>
           );
         })}

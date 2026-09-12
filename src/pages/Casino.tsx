@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { tr } from "../core/i18n";
 import { AnimatePresence, motion } from "framer-motion";
 import { Panel, Screen, Tap } from "../ui/Glass";
-import Icon from "../ui/Icon";
+import Icon, { type IconName } from "../ui/Icon";
 import ItemIcon from "../ui/ItemIcon";
 import { sfx, haptic } from "../core/fx";
 import { fmt } from "../core/format";
@@ -32,13 +32,15 @@ type Tab = "farm" | "slots" | "cases" | "battle" | "upgrade" | "stuff";
  * на уровне модуля перевод всегда возвращал русский, потому что язык в
  * этот момент ещё не выбран стором.
  */
-const TABS: { id: Tab; name: string }[] = [
-  { id: "farm",    name: "ФЕРМА" },
-  { id: "slots",   name: "СЛОТЫ" },
-  { id: "cases",   name: "КЕЙСЫ" },
-  { id: "battle",  name: "БАТЛ" },
-  { id: "upgrade", name: "АПГРЕЙД" },
-  { id: "stuff",   name: "ВЕЩИ" },
+/* Порядок вкладок — по значимости, а не по алфавиту кода: СЛОТЫ первыми
+   (просьба буквальная), ферма — в конец, как второстепенный фарм. */
+const TABS: { id: Tab; name: string; icon: IconName }[] = [
+  { id: "slots",   name: "СЛОТЫ",   icon: "dice" },
+  { id: "cases",   name: "КЕЙСЫ",   icon: "case" },
+  { id: "upgrade", name: "АПГРЕЙД", icon: "bolt" },
+  { id: "battle",  name: "БАТЛ",    icon: "skull" },
+  { id: "stuff",   name: "ВЕЩИ",    icon: "gift" },
+  { id: "farm",    name: "ФЕРМА",   icon: "leaf" },
 ];
 
 /** Значок символа слота */
@@ -122,6 +124,7 @@ export default function Casino({ onBack }: { onBack: () => void }) {
           и текст «через 3:12». */}
       <Panel
         r="lg"
+        className="pc-chips-bar"
         style={{
           padding: 15, marginBottom: 12,
           border: "1.5px solid var(--gold-brd)",
@@ -179,24 +182,22 @@ export default function Casino({ onBack }: { onBack: () => void }) {
         </div>
       </Panel>
 
-      {/* Вкладки */}
-      <div className="flex pc-tabs-row" style={{ gap: 6, marginBottom: 14, overflowX: "auto" }}>
+      {/* Вкладки — общие сегменты (.pc-seg), тот же стиль, что в Магазине и
+          Прогрессе: иконка + подпись, активная залита акцентом. Раньше это
+          была вереница кнопок-таблеток, из-за чего казино выглядело
+          «не вписанным» в остальное приложение. */}
+      <div className="pc-seg" role="tablist">
         {TABS.map((t) => (
           <button
             key={t.id}
             type="button"
+            role="tab"
+            aria-selected={tab === t.id}
+            className={`pc-seg-item ${tab === t.id ? "on" : ""}`}
             onClick={() => { sfx.click(); setTab(t.id); }}
-            className="t-label shrink-0"
-            style={{
-              padding: "9px 13px",
-              borderRadius: "var(--r-sm)",
-              fontSize: 10,
-              background: tab === t.id ? "var(--acc)" : "var(--btn-bg)",
-              color: tab === t.id ? "var(--acc-ink)" : "var(--text-mute)",
-              border: `1px solid ${tab === t.id ? "var(--acc)" : "var(--btn-brd)"}`,
-            }}
           >
-            {tr(t.name)}
+            <Icon name={t.icon} size={14} />
+            <span className="t-label clip1">{tr(t.name)}</span>
           </button>
         ))}
       </div>
