@@ -204,22 +204,92 @@ const EMPTY: GambleStore = {
   battleWins: 0,
 };
 
+/** Зеркало. Нужнo, чтобы одна неудачная запись не съела инвентарь. */
+const KEY_BAK = `${KEY}.bak`;
+
+/** то, чем хранилище обязано быть, чтобы его нельзя было потерять */
+function sane(v: unknown): v is GambleStore {
+  if (!v || typeof v !== "object") return false;
+  const o = v as Partial<GambleStore>;
+  return typeof o.chips === "number" && !!o.items && typeof o.items === "object";
+}
+
+function parse(raw: string | null): GambleStore | null {
+  if (!raw) return null;
+  try {
+    const v = JSON.parse(raw) as Partial<GambleStore>;
+    return sane(v) ? { ...EMPTY, ...v, items: { ...v.items } } : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Инвентарь казино может быть НЕЦЕЛЫМ: страница закрылась в момент записи,
+ * браузер срезал квоту, расширение почистило localStorage. Молча заменить
+ * такое на пустое — значит съесть собранные вещи (на это и жаловались:
+ * «было 14 вещей, я нажал — они пропали»). Поэтому читаем основное ключевое
+ * значение, а при любом подозрении — зеркальную копию; пустота это последний
+ * вариант, и она никогда не записывается сама собой.
+ */
 export function readGamble(): GambleStore {
   try {
-    const raw = localStorage.getItem(KEY);
-    if (!raw) return { ...EMPTY };
-    return { ...EMPTY, ...(JSON.parse(raw) as Partial<GambleStore>) };
+    const main = parse(localStorage.getItem(KEY));
+    if (main) return main;
+    const bak = parse(localStorage.getItem(KEY_BAK));
+    if (bak) {
+      // зеркало живое, а основной ключ битый или пустой — чиним его сразу,
+      // пока пользователь не успел ничего потерять
+      try { localStorage.setItem(KEY, JSON.stringify(bak)); } catch { /* приватный режим */ }
+      return bak;
+    }
   } catch {
-    return { ...EMPTY };
+    /* приватный режим — играем с нуля, но ничего не затираем */
   }
+  return { ...EMPTY, items: {} };
 }
 
 export function writeGamble(s: GambleStore) {
   try {
-    localStorage.setItem(KEY, JSON.stringify(s));
+    const json = JSON.stringify(s);
+    localStorage.setItem(KEY, json);
+    localStorage.setItem(KEY_BAK, json);
   } catch {
     /* приватный режим */
   }
+}
+
+/**
+ * Патч хранилища: либо готовый кусок, либо функция от АКТУАЛЬНОГО состояния.
+ * Вторая форма — правильный способ: она исключает «пишу поверх снимка,
+ * снятого до таймаута», из-за которого пропадают чужие записи.
+ */
+export type GamblePatch = Partial<GambleStore> | ((s: GambleStore) => Partial<GambleStore>);
+export type GambleSave = (p: GamblePatch) => void;
+
+/** read-modify-write одним шагом: читаем хранилище в момент записи */
+export function updateGamble(patch: GamblePatch): GambleStore {
+  const cur = readGamble();
+  const p = typeof patch === "function" ? patch(cur) : patch;
+  const next: GambleStore = { ...cur, ...p };
+  // мусор из старых версий: отрицательные жетоны и пустые позиции
+  next.chips = Math.max(0, Math.floor(next.chips || 0));
+  const items: Record<string, number> = {};
+  for (const [k, n] of Object.entries(next.items || {})) {
+    if (typeof n === "number" && n > 0) items[k] = Math.floor(n);
+  }
+  next.items = items;
+  writeGamble(next);
+  return next;
+}
+
+/** Изменение одной позиции инвентаря (d > 0 — нашли, d < 0 — потратили) */
+export function shiftItem(s: GambleStore, id: string, d: number): Record<string, number> {
+  const items = { ...s.items };
+  const n = (items[id] || 0) + d;
+  if (n > 0) items[id] = n;
+  else delete items[id];
+  return items;
 }
 
 /** Бесплатные жетоны раз в 20 минут, чтобы не застревать на нуле */

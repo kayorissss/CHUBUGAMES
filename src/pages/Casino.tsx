@@ -11,9 +11,9 @@ import { bossStats } from "../core/save";
 import { RARITY_COLOR, RARITY_LABEL } from "../core/content";
 import {
   FREE_CHIPS, GAMBLE_CASES, SLOT_SYMBOLS, freeChipsIn, freeChipsReady,
-  itemById, readGamble, rollItem, runBattle, slotPayout, spinReel,
-  writeGamble,
-  type GambleCase, type GambleStore, type ItemDef, type SlotSymbol,
+  itemById, readGamble, rollItem, runBattle, shiftItem, slotPayout, spinReel,
+  updateGamble,
+  type GambleCase, type GambleSave, type GambleStore, type ItemDef, type SlotSymbol,
 } from "../core/gamble";
 import Wheel, { wheelStopFeedback } from "../ui/Wheel";
 import {
@@ -63,12 +63,19 @@ export default function Casino({ onBack }: { onBack: () => void }) {
   const [tab, setTab] = useState<Tab>("slots");
   const [g, setG] = useState<GambleStore>(() => readGamble());
 
-  const save = useCallback((patch: Partial<GambleStore>) => {
-    setG((prev) => {
-      const next = { ...prev, ...patch };
-      writeGamble(next);
-      return next;
-    });
+  /*
+   * Единственная точка записи казино.
+   *
+   * Раньше сюда прилетал объект, собранный из `g` — состояния, снятого на
+   * ПОСЛЕДНЕМ РЕНДЕРЕ. Между нажатием и записью у нас таймауты: прокрутка
+   * слотов, 2.6 секунды открытия кейса, раунды батла. За это время
+   * хранилище успевает измениться (вторая кнопка, босс, сундук, автосейв),
+   * и запись «поверх своего снимка» затирает чужое — именно так и пропадают
+   * собранные вещи. Теперь патч — функция от актуального состояния:
+   * read-modify-write происходит в момент записи, а не в момент клика.
+   */
+  const save = useCallback<GambleSave>((patch) => {
+    setG(updateGamble(patch));
   }, []);
 
   /* ── бесплатные жетоны ── */
@@ -80,7 +87,7 @@ export default function Casino({ onBack }: { onBack: () => void }) {
 
   const takeFree = () => {
     if (!freeChipsReady(g)) return;
-    save({ chips: g.chips + FREE_CHIPS, lastFree: Date.now() });
+    save((x) => ({ chips: x.chips + FREE_CHIPS, lastFree: Date.now() }));
     sfx.coin?.();
     haptic("success");
     toast({ title: tr("Жетоны получены"), sub: `+${FREE_CHIPS}`, icon: "coin", tone: "gold" });
@@ -202,7 +209,7 @@ export default function Casino({ onBack }: { onBack: () => void }) {
           exit={{ opacity: 0, y: -6 }}
           transition={{ duration: 0.18 }}
         >
-          {tab === "farm"    && <ChipFarm g={g} save={save} />}
+          {tab === "farm"    && <ChipFarm save={save} />}
           {tab === "slots"   && <Slots g={g} save={save} />}
           {tab === "cases"   && <Cases g={g} save={save} />}
           {tab === "battle"  && <Battle g={g} save={save} />}
@@ -234,7 +241,7 @@ const BETS = [10, 25, 50, 100, 250];
  *      едет вертикально и тормозит на своём барабане, а выигрышные
  *      подсвечиваются рамкой и вспышкой.
  */
-function Slots({ g, save }: { g: GambleStore; save: (p: Partial<GambleStore>) => void }) {
+function Slots({ g, save }: { g: GambleStore; save: GambleSave }) {
   const [bet, setBet] = useState(25);
   const [reels, setReels] = useState<SlotSymbol[]>(["burger", "tooth", "bolt"]);
   /** null — ещё не крутили; иначе итог последнего спина */
@@ -290,12 +297,12 @@ function Slots({ g, save }: { g: GambleStore; save: (p: Partial<GambleStore>) =>
           });
           setSpinning(false);
 
-          save({
-            chips: g.chips - bet + pay,
-            spins: g.spins + 1,
-            won: pay > 0 ? g.won + pay : g.won,
-            lost: g.lost + bet,
-          });
+          save((x) => ({
+            chips: x.chips - bet + pay,
+            spins: x.spins + 1,
+            won: pay > 0 ? x.won + pay : x.won,
+            lost: x.lost + bet,
+          }));
 
           if (net > 0) { sfx.crit?.(); haptic("success"); }
           else { haptic("light"); }
@@ -478,7 +485,7 @@ function Slots({ g, save }: { g: GambleStore; save: (p: Partial<GambleStore>) =>
 
 /* ═══════════════════════════ КЕЙСЫ ═══════════════════════════ */
 
-function Cases({ g, save }: { g: GambleStore; save: (p: Partial<GambleStore>) => void }) {
+function Cases({ g, save }: { g: GambleStore; save: GambleSave }) {
   /*
    * Удача главного друга реально влияет на дроп. В карточке друга давно
    * написано «+N% к редким дропам», но число никуда не передавалось —
@@ -499,16 +506,16 @@ function Cases({ g, save }: { g: GambleStore; save: (p: Partial<GambleStore>) =>
     setRoll(strip);
     setOpening(c);
     setGot(null);
-    save({ chips: g.chips - c.price });
+    save((x) => ({ chips: Math.max(0, x.chips - c.price) }));
     sfx.click();
     haptic("light");
 
     window.setTimeout(() => {
       setGot(prize);
-      save({
-        chips: g.chips - c.price,
-        items: { ...g.items, [prize.id]: (g.items[prize.id] || 0) + 1 },
-      });
+      save((x) => ({
+        // chips не пересчитываем: ставку сняли сразу, приз только кладём
+        items: shiftItem(x, prize.id, 1),
+      }));
       sfx.legend?.();
       haptic("success");
     }, 2600);
@@ -669,7 +676,7 @@ function Cases({ g, save }: { g: GambleStore; save: (p: Partial<GambleStore>) =>
 
 const FOES = ["Лёха", "Макс", "Серёга", "Артём", "Кудря", "Шитов"];
 
-function Battle({ g, save }: { g: GambleStore; save: (p: Partial<GambleStore>) => void }) {
+function Battle({ g, save }: { g: GambleStore; save: GambleSave }) {
   const [rounds, setRounds] = useState(3);
   const [caseId, setCaseId] = useState(GAMBLE_CASES[0].id);
   const [live, setLive] = useState<ReturnType<typeof runBattle> | null>(null);
@@ -687,7 +694,7 @@ function Battle({ g, save }: { g: GambleStore; save: (p: Partial<GambleStore>) =
     const res = runBattle(c, rounds);
     setLive(res);
     setStep(0);
-    save({ chips: g.chips - cost });
+    save((x) => ({ chips: Math.max(0, x.chips - cost) }));
     sfx.click();
 
     // раунды открываются по одному
@@ -697,19 +704,20 @@ function Battle({ g, save }: { g: GambleStore; save: (p: Partial<GambleStore>) =
         sfx.click();
         haptic("light");
         if (i === rounds) {
-          const gained: Record<string, number> = { ...g.items };
-          if (res.win) {
-            // победитель забирает всё
-            for (const r of res.list) {
-              gained[r.mine.id] = (gained[r.mine.id] || 0) + 1;
-              gained[r.foe.id] = (gained[r.foe.id] || 0) + 1;
+          save((x) => {
+            // победитель забирает всё; проигравший остаётся при своём
+            let items = x.items;
+            if (res.win) {
+              for (const r of res.list) {
+                items = shiftItem({ ...x, items }, r.mine.id, 1);
+                items = shiftItem({ ...x, items }, r.foe.id, 1);
+              }
             }
-          }
-          save({
-            chips: g.chips - cost,
-            items: gained,
-            battles: g.battles + 1,
-            battleWins: g.battleWins + (res.win ? 1 : 0),
+            return {
+              items,
+              battles: x.battles + 1,
+              battleWins: x.battleWins + (res.win ? 1 : 0),
+            };
           });
           if (res.win) { sfx.legend?.(); haptic("success"); }
           else { sfx.gameOver?.(); haptic("error"); }
@@ -871,7 +879,7 @@ function Battle({ g, save }: { g: GambleStore; save: (p: Partial<GambleStore>) =
 
 /* ═══════════════════════════ АПГРЕЙД ═══════════════════════════ */
 
-function Upgrade({ g, save }: { g: GambleStore; save: (p: Partial<GambleStore>) => void }) {
+function Upgrade({ g, save }: { g: GambleStore; save: GambleSave }) {
   const owned = Object.entries(g.items).filter(([, n]) => n > 0);
   const [fromId, setFromId] = useState<string | null>(owned[0]?.[0] ?? null);
   const [multId, setMultId] = useState(WHEEL_MULTS[1].id);
@@ -918,16 +926,13 @@ function Upgrade({ g, save }: { g: GambleStore; save: (p: Partial<GambleStore>) 
     window.clearTimeout(guardRef.current);
 
     const gained = zonePayout(p.zone, p.staked, p.mult);
-    const items = { ...g.items };
-    items[p.itemId] = (items[p.itemId] || 1) - 1;
-    if (items[p.itemId] <= 0) delete items[p.itemId];
     // Выигрыш и утешительные выплаты приходят жетонами: подбирать
     // предмет ровно нужной цены не всегда возможно.
-    save({ items, chips: g.chips + gained });
+    save((x) => ({ items: shiftItem(x, p.itemId, -1), chips: x.chips + gained }));
     setRes({ zone: p.zone, gained });
     setSpinning(false);
     wheelStopFeedback(p.zone === "win");
-  }, [g.items, g.chips, save]);
+  }, [save]);
 
   const start = () => {
     if (!from || spinning || pendingRef.current) return;
@@ -1193,7 +1198,7 @@ interface FarmChip {
  * при 70 % точности ≈ 280 жетонов = 11 спинов по 25. Ферма остаётся
  * основным бесплатным источником, поэтому награда не режется.
  */
-function ChipFarm({ g, save }: { g: GambleStore; save: (p: Partial<GambleStore>) => void }) {
+function ChipFarm({ save }: { save: GambleSave }) {
   const [phase, setPhase] = useState<"idle" | "play" | "over">("idle");
   const [chips, setChips] = useState<FarmChip[]>([]);
   const [earned, setEarned] = useState(0);
@@ -1279,11 +1284,11 @@ function ChipFarm({ g, save }: { g: GambleStore; save: (p: Partial<GambleStore>)
     if (phase !== "over" || paid.current) return;
     paid.current = true;
     if (earned > 0) {
-      save({ chips: g.chips + earned });
+      save((x) => ({ chips: x.chips + earned }));
       sfx.coin?.();
       haptic("success");
     }
-  }, [phase, earned, g.chips, save]);
+  }, [phase, earned, save]);
 
   useEffect(() => { if (phase === "play") paid.current = false; }, [phase]);
 
@@ -1467,18 +1472,18 @@ function ChipFarm({ g, save }: { g: GambleStore; save: (p: Partial<GambleStore>)
 
 /* ═══════════════════════════ ВЕЩИ ═══════════════════════════ */
 
-function Stuff({ g, save }: { g: GambleStore; save: (p: Partial<GambleStore>) => void }) {
+function Stuff({ g, save }: { g: GambleStore; save: GambleSave }) {
   const owned = Object.entries(g.items).filter(([, n]) => n > 0);
 
   const sell = (id: string) => {
     const it = itemById(id);
     if (!it) return;
-    const items = { ...g.items };
-    items[id] = (items[id] || 1) - 1;
-    if (items[id] <= 0) delete items[id];
-    const eq = { ...g.equipped };
-    if (eq[it.kind] === id && !items[id]) delete eq[it.kind];
-    save({ items, equipped: eq, chips: g.chips + Math.floor(it.value * 0.6) });
+    save((x) => {
+      const items = shiftItem(x, id, -1);
+      const eq = { ...x.equipped };
+      if (eq[it.kind] === id && !items[id]) delete eq[it.kind];
+      return { items, equipped: eq, chips: x.chips + Math.floor(it.value * 0.6) };
+    });
     sfx.coin?.();
     haptic("light");
   };
@@ -1487,7 +1492,7 @@ function Stuff({ g, save }: { g: GambleStore; save: (p: Partial<GambleStore>) =>
     const eq = { ...g.equipped };
     if (eq[it.kind] === it.id) delete eq[it.kind];
     else eq[it.kind] = it.id;
-    save({ equipped: eq });
+    save(() => ({ equipped: eq }));
     sfx.click();
     haptic("light");
   };

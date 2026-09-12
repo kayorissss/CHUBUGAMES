@@ -1395,5 +1395,38 @@ console.log('\n[35] 1.27: клавиши, светлая тема, лёгкос�
     'плитка библиотеки: content-visibility + contain-intrinsic-size (скролл без лишних отрисовок)');
 }
 
+console.log('\n[36] 1.27: кошелёк казино нельзя потерять');
+{
+  const gm = fs.readFileSync('src/core/gamble.ts', 'utf8');
+  const casino = fs.readFileSync('src/pages/Casino.tsx', 'utf8');
+  ok(/const KEY_BAK = `\$\{KEY\}\.bak`;/.test(gm),
+    'хранилище казино пишется в два ключа: основной + зеркало');
+  ok(/function sane\(/.test(gm) && /function parse\(/.test(gm),
+    'прочитанное состояние проверяется на пригодность, а не принимается на веру');
+  ok(/if \(bak\) \{[\s\S]{0,200}?localStorage\.setItem\(KEY, JSON\.stringify\(bak\)\)/.test(gm),
+    'битый основной ключ восстанавливается из зеркала сразу, а не обнуляется');
+  ok(/export function updateGamble/.test(gm) && /export type GamblePatch =[\s\S]{0,80}=> Partial<GambleStore>/.test(gm),
+    'запись — одна функция read-modify-write по актуальному состоянию');
+  ok(/next\.chips = Math\.max\(0, Math\.floor\(next\.chips \|\| 0\)\);/.test(gm) &&
+     /if \(typeof n === "number" && n > 0\)/.test(gm),
+    'перед записью вычищаются отрицательные жетоны и обнулённые позиции');
+  ok(/export function shiftItem/.test(gm),
+    'изменение позиции инвентаря — общая функция, а не ручной перебор ключей');
+  ok(/const save = useCallback<GambleSave>/.test(casino) && /updateGamble\(patch\)/.test(casino),
+    'казино пишет через save() → updateGamble, минуя свой снимок состояния');
+  ok(!/writeGamble\(/.test(casino) && !/writeGamble\(/.test(fs.readFileSync('src/ui/ChestCard.tsx', 'utf8')) &&
+     !/writeGamble\(/.test(fs.readFileSync('src/pages/BossFight.tsx', 'utf8')),
+    'ни один экран не дёргает writeGamble напрямую — иначе записи затирают друг друга');
+  /* сам баг: патч, собранный из g внутри таймаута, — это и есть потерянные вещи */
+  const stale = casino.match(/save\(\{[^}]*\bg\.(chips|items|battles|won|lost)\b[^}]*\}\)/g) || [];
+  ok(stale.length === 0,
+    'в save() не передаётся объект, собранный из снимка рендера (stale closure = потерянные вещи)');
+  ok(/save\(\(x\) => \(\{[\s\S]{0,220}?items: shiftItem\(x,/.test(casino),
+    'приз кейса кладётся в актуальный инвентарь, а не в «g.items двухсекундной давности»');
+  ok(/save\(x => \(\{ items: shiftItem\(x, p\.itemId, -1\)/.test(casino) ||
+     /items: shiftItem\(x, p\.itemId, -1\)/.test(casino),
+    'ставка апгрейда снимается с актуального инвентаря');
+}
+
 console.log(fails===0?'\n✅ ВСЕ ПРОВЕРКИ ВЁРСТКИ ПРОЙДЕНЫ\n':`\n❌ ПРОВАЛЕНО: ${fails}\n`);
 process.exit(fails?1:0);

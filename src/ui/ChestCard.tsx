@@ -5,7 +5,7 @@ import { useGame } from "../core/store";
 import { tr } from "../core/i18n";
 import { fmt } from "../core/format";
 import { sfx, haptic } from "../core/fx";
-import { readGamble, writeGamble } from "../core/gamble";
+import { updateGamble } from "../core/gamble";
 import {
   readFriendship, writeFriendship, chestLeft, chestReady, chestReward, CHEST_MS,
 } from "../core/friendship";
@@ -61,8 +61,9 @@ export default function ChestCard() {
     setSt(next);
 
     addCoins(rw.coins);
-    const g = readGamble();
-    writeGamble({ ...g, chips: g.chips + rw.chips });
+    // прирастание к АКТУАЛЬНОМУ балансу: если жетоны успели измениться
+    // (казино открыто в другом окне), «снимок» затрёт чужую запись
+    updateGamble((x) => ({ chips: x.chips + rw.chips }));
 
     setBurst(true);
     setTimeout(() => setBurst(false), 900);
