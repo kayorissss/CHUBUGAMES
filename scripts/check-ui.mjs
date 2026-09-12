@@ -1225,5 +1225,34 @@ console.log('\n[32] Жидкое стекло на телефоне (тольк�
   ok(/жидкое\s+стекл/i.test(fs.readFileSync('README.md', 'utf8')), 'README описывает мобильное стекло');
 }
 
+console.log('\n[33] Android без ключа подписи: preview вместо сломанного релиза');
+{
+  const wf = fs.readFileSync('.github/workflows/build-apk.yml', 'utf8');
+  ok(/id: signs/.test(wf) && /signed=(true|false)/.test(wf),
+    'прогон отдельно определяет, заданы ли секреты подписи');
+  ok(/CHUB_ALLOW_UNSIGNED: \$\{\{ steps\.signs\.outputs\.signed == 'true' && '0' \|\| '1' \}\}/.test(wf),
+    '«можно ли без ключа» выводится из наличия секретов, а не из «это релиз»');
+  ok(/TASK=assembleRelease\n.*signed.*'true'|if \[ "\$\{\{ steps\.kind\.outputs\.release \}\}" = "true" \] && \[ "\$\{\{ steps\.signs\.outputs\.signed \}\}" = "true" \]/.test(wf),
+    'assembleRelease только когда ключ есть: без него release-APK всё равно не установить');
+  const latestIf = (wf.match(/name: Publish APK to Releases\n\s+if: (.+)/) || [])[1] || '';
+  ok(/release == 'true'/.test(latestIf) && /signed == 'true'/.test(latestIf),
+    'в канал обновлений latest файл попадает ТОЛЬКО подписанный — иначе у людей ломаются обновления');
+  const pv = wf.match(/name: Publish preview APK[\s\S]*?\n      # /);
+  ok(pv, 'есть отдельная публикация preview, когда ключа нет');
+  ok(pv && /--prerelease/.test(pv[0]) && /-preview\.apk/.test(pv[0]),
+    'preview помечен pre-release и называется иначе, чем боевой файл');
+  ok(pv && /signed != 'true'/.test(pv[0]),
+    'preview публикуется только когда секреты правда не заданы');
+  ok(pv && /прогресс сотрётся/.test(pv[0]) && /latest/.test(pv[0]),
+    'в тексте preview сказано про потерю прогресса и про то, что latest не тронут');
+  ok(/Remove the misspelled legacy asset\n\s+if: .*signed == 'true'/.test(wf),
+    'чистка старых файлов тоже только на подписанном релизе');
+  ok(/node scripts\/patch-android-glass\.mjs/.test(wf),
+    'правка системных полосок стоит в сборке');
+  const rm = fs.readFileSync('README.md', 'utf8');
+  ok(/preview/i.test(rm) && /PASTE-INTO-SECRETS/.test(rm),
+    'README объясняет, что делать без ключа и где взять значения');
+}
+
 console.log(fails===0?'\n✅ ВСЕ ПРОВЕРКИ ВЁРСТКИ ПРОЙДЕНЫ\n':`\n❌ ПРОВАЛЕНО: ${fails}\n`);
 process.exit(fails?1:0);
