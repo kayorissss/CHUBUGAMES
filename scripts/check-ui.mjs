@@ -213,7 +213,23 @@ ok(dd.includes('bestCombo'),'оборона: серия ударов множи�
 
 console.log('\n[9] Пакет доработок');
 const nav=fs.readFileSync('src/components/Nav.tsx','utf8');
-ok(nav.includes('var(--nav-bg)')&&!nav.includes('glass-strong'),'нижнее меню непрозрачное');
+/*
+ * Раньше тут было «нижнее меню непрозрачное». Теперь на телефоне меню —
+ * стекло с преломлением (просьба игрока: жидкое стекло, как в iOS), и требование
+ * переформулировано так, чтобы защита не пропала: плотная подложка обязана
+ * оставаться в лёгком режиме и на WebView без backdrop-filter, иначе надписи
+ * начнут тонуть в фоне — ровно та причина, по которой меню делали глухим.
+ */
+const css9pre=fs.readFileSync('src/index.css','utf8');
+ok(nav.includes('m-nav-bar') && /\.m-nav-bar \{[^}]*backdrop-filter/.test(css9pre),
+  'нижнее меню — стекло с преломлением');
+ok(/\.m-nav-bar \{[^}]*background: color-mix\(in srgb, var\(--nav-bg\) 6\d%/.test(css9pre),
+  'подложка меню полупрозрачная, но плотная: 60+ % цвета фона');
+ok(/html\.low-fx:not\(\.is-desktop\) \.m-nav-bar \{[\s\S]{0,160}background: var\(--surface-2\)/.test(css9pre),
+  'в лёгком режиме меню снова глухое');
+ok(/@supports not \(\(backdrop-filter/.test(css9pre) && /\.glass \{\s*background: var\(--surface\)/.test(css9pre),
+  'в WebView без backdrop-filter стекло становится плотным, а не прозрачным');
+ok(!nav.includes('glass-strong'),'меню не плодит второй слой стекла поверх своего');
 const css9=fs.readFileSync('src/index.css','utf8');
 ok((css9.match(/--nav-bg:/g)||[]).length>=2,'цвет меню задан для обеих тем');
 const mrg=fs.readFileSync('src/games/MergeHeads.tsx','utf8');
@@ -1147,6 +1163,66 @@ console.log('\n[31] Экраны режима собраны по-настоящ
     ok(/locked/.test(r31.pick), 'закрытые уровни помечены как закрытые');
   }
   fs.rmSync(outDir, { recursive: true, force: true });
+}
+
+console.log('\n[32] Жидкое стекло на телефоне (только мобильная оболочка)');
+{
+  const css32 = fs.readFileSync('src/index.css', 'utf8');
+  const mob = css32.slice(css32.indexOf('ЖИДКОЕ СТЕКЛО НА ТЕЛЕФОНЕ'));
+  ok(/html:not\(\.is-desktop\)/.test(mob), 'стеклянная ветка ограничена телефоном: ПК не затронут');
+  const blur32 = (mob.match(/--glass-blur:\s*(\d+)px/) || [])[1];
+  ok(+blur32 >= 16 && +blur32 <= 32, `радиус преломления в потолке: ${blur32}px (больше — уже минус кадры)`);
+  ok(/--glass-sat:\s*1[5-9]\d%/.test(mob), 'стекло насыщает фон (saturate), иначе оно молочное, а не цветное');
+  ok(/backdrop-filter: blur\(var\(--glass-blur\)\) saturate\(var\(--glass-sat\)\)/.test(mob),
+    'преломление собирается из переменных, а не захардкожено');
+  ok(/--r-lg:\s*2\dpx/.test(mob) && /--r-xl:\s*2\dpx/.test(mob),
+    'на телефоне скругления крупнее — край под пальцем');
+  ok(/::before \{[\s\S]{0,400}linear-gradient\(\s*168deg/.test(mob), 'верхний блик стекла усилен на мобильной ветке');
+  ok(/::after \{[\s\S]{0,300}rgba\(0, 0, 0, 0\.1\d\)/.test(mob), 'объём: нижняя тень внутри стекла');
+  ok(/--glass-shadow:[^;]*rgba\(0, 0, 0/.test(mob) && /--glass-inset:[^;]*inset 0 1px 0/.test(mob),
+    'тень в два слоя + внутренний свет — то, что делает панель объёмной');
+  ok(/html\.light:not\(\.is-desktop\)/.test(mob), 'для светлой темы есть свой набор стеклянных переменных');
+  ok(/\.pc-page-head h1/.test(mob) && /clamp\(\d+px, \d+\.\d+vw/.test(mob),
+    'заголовок страницы на телефоне крупный (big title)');
+  ok(/-webkit-overflow-scrolling: touch/.test(mob) && /overscroll-behavior: contain/.test(mob),
+    'скролл с инерцией и без «тянучки» за край экрана');
+  ok(/body::before \{[\s\S]{0,320}pointer-events: none/.test(mob),
+    'верхний свет не перехватывает касания');
+  ok(/html\.low-fx:not\(\.is-desktop\)[\s\S]{0,120}--glass-blur: 0px/.test(mob),
+    'в лёгком режиме преломление выключается, а радиусы и грани остаются');
+
+  const fr = fs.readFileSync('src/pages/Friends.tsx', 'utf8');
+  ok(fr.includes('m-sheet') && fr.includes('m-handle'), 'редактор друга — стеклянный лист снизу с ручкой');
+  ok(/spring|stiffness/.test(fr.slice(fr.indexOf('m-sheet') - 700, fr.indexOf('m-sheet'))),
+    'лист выезжает пружиной, а не телепортируется');
+  const gp = fs.readFileSync('src/ui/Glass.tsx', 'utf8');
+  ok(/isDesktop\(\) \? 0\.98 : 0\.955/.test(gp), 'нажатие на телефоне продавливает стекло сильнее');
+
+  const eu32 = fs.readFileSync('src/games/Europa.tsx', 'utf8');
+  ok(!/\bPanel\b|glass/.test(eu32), 'стратегия стекло не использует — ей и так тяжело на слабом телефоне');
+
+  const cap32 = JSON.parse(fs.readFileSync('capacitor.config.json', 'utf8'));
+  ok(cap32.android && /#0D0D10/i.test(cap32.android.backgroundColor),
+    'WebView стартует тёмным: вспышка белого при запуске убрана');
+  ok(cap32.android.zoomingEnabled === false, 'пинч-зум выключен: он ломает игры на канвасе');
+
+  const patch = fs.readFileSync('scripts/patch-android-glass.mjs', 'utf8');
+  ok(fs.existsSync('scripts/patch-android-glass.mjs'), 'правка системных полосок вынесена в скрипт, а не в sed внутри YAML');
+  ok(/navigationBarColor/.test(patch) && !/<item name="android:windowBackground"/.test(patch),
+    'скрипт красит полоски, но не лезет в тему сплэша (там живёт заставка Capacitor)');
+  ok(/идемпотентен|уже наши|уже прозрачные/.test(patch), 'скрипт можно запускать дважды — он не удваивает правки');
+  const wf32 = fs.readFileSync('.github/workflows/build-apk.yml', 'utf8');
+  ok(/node scripts\/patch-android-glass\.mjs android\/app\/src\/main\/res/.test(wf32),
+    'сборка APK вызывает правку полосок');
+  ok(wf32.indexOf('patch-android-glass') < wf32.indexOf('gradlew'),
+    'полоски красятся до gradle-сборки, иначе правка бы не попала в APK');
+
+  const ver32 = fs.readFileSync('src/core/version.ts', 'utf8');
+  const v32 = ver32.match(/APP_VERSION\s*=\s*"([0-9.]+)"/)[1];
+  ok(fs.readFileSync('src/core/changelog.ts', 'utf8').includes(`"${v32}"`), `в changelog есть версия ${v32}`);
+  ok(fs.readFileSync('RELEASE_NOTES.md', 'utf8').includes('жидкое стекло') ||
+     fs.readFileSync('RELEASE_NOTES.md', 'utf8').includes('ЖИДКОЕ СТЕКЛО'), 'в описании релиза есть про жидкое стекло');
+  ok(/жидкое\s+стекл/i.test(fs.readFileSync('README.md', 'utf8')), 'README описывает мобильное стекло');
 }
 
 console.log(fails===0?'\n✅ ВСЕ ПРОВЕРКИ ВЁРСТКИ ПРОЙДЕНЫ\n':`\n❌ ПРОВАЛЕНО: ${fails}\n`);

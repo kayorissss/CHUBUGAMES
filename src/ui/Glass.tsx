@@ -1,6 +1,7 @@
 import { motion } from "framer-motion";
 import { useEffect, useRef, type ReactNode, type CSSProperties } from "react";
 import { sfx, haptic } from "../core/fx";
+import { isDesktop } from "../core/desktop";
 
 type R = "xs" | "sm" | "md" | "lg" | "xl" | "pill";
 const rad = (r: R) => `var(--r-${r})`;
@@ -187,8 +188,12 @@ export function Tap({
     <motion.button
       type="button"
       disabled={disabled}
-      whileTap={disabled ? undefined : { scale: 0.975 }}
-      transition={{ type: "spring", stiffness: 700, damping: 30 }}
+      /*
+       * На телефоне нажатие «продавливает» стекло сильнее (0.955 против 0.98):
+       * палец толще курсора, и отклик должен быть виден, а не угадываться.
+       */
+      whileTap={disabled ? undefined : { scale: isDesktop() ? 0.98 : 0.955 }}
+      transition={{ type: "spring", stiffness: 620, damping: 26 }}
       onPointerDown={startLp}
       onPointerUp={cancelLp}
       onPointerLeave={cancelLp}

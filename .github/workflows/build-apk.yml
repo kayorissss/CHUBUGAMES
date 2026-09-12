@@ -191,6 +191,12 @@ jobs:
           echo "release=$REL" >> "$GITHUB_OUTPUT"
           echo "Режим: $([ "$REL" = true ] && echo 'РЕЛИЗ (публикация в Releases)' || echo 'проверка (только артефакт)')"
 
+      # Стеклянная полоска внизу экрана живёт в WebView, а системные панели
+      # Android красит шаблон Capacitor. Правим его цвета и просим систему
+      # не рисовать свою подложку под статус-баром (см. скрипт).
+      - name: Match Android system bars to the glass
+        run: node scripts/patch-android-glass.mjs android/app/src/main/res
+
       - name: Install app icons
         run: |
           RES=android/app/src/main/res

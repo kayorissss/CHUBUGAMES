@@ -2917,3 +2917,206 @@ html.low-fx .eu-road.live { animation: none; stroke-dasharray: none; }
 html.low-fx .eu-node:hover { transform: translate(-50%, -50%); }
 html.low-fx .eu-map-inner { background-image: none; }
 html.low-fx .eu-lvl:hover { transform: none; }
+
+/* ══════════════════════════════════════════════════════════════════════
+   ЖИДКОЕ СТЕКЛО НА ТЕЛЕФОНЕ — объём, преломление, крупные скругления
+
+   Отдельная ветка намеренно только для мобильной оболочки. На компьютере
+   стекло убрано (оно стоит кадров на больших площадях), а на телефоне панелей
+   меньше, они меньше по размеру, и именно там «жидкое стекло» читается как
+   дизайн, а не как нагрузка. Поэтому всё, что ниже, живёт под
+   html:not(.is-desktop) и само выключается в лёгком режиме.
+
+   Три вещи, которые делают поверхность «стеклянной», а не «серой»:
+     1) преломление — backdrop-filter: blur + saturate, фон ИЗ-ПОД панели
+        должен быть насыщеннее, чем вокруг, иначе это молочно-белое стекло;
+     2) блик по верхней кромке и свет по нижней — стекло ловит свет гранями;
+     3) два слоя тени: узкая тёмная под панелью и широкая мягкая — объём.
+   ══════════════════════════════════════════════════════════════════════ */
+
+html:not(.is-desktop) {
+  /* Скругления крупнее: на телефоне палец попадает по краю, и острый угол
+     выглядит случайностью. ПК-радиусы остаются своими. */
+  --r-sm: 12px;
+  --r-md: 16px;
+  --r-lg: 22px;
+  --r-xl: 28px;
+
+  --glass-blur: 26px;
+  --glass-sat: 168%;
+  --glass-bg: rgba(24, 24, 32, 0.5);
+  --glass-bg-strong: rgba(30, 30, 40, 0.66);
+  --glass-brd: rgba(255, 255, 255, 0.13);
+  --glass-hi: rgba(255, 255, 255, 0.46);
+  --glass-shadow: 0 22px 48px -20px rgba(0, 0, 0, 0.82), 0 3px 10px -4px rgba(0, 0, 0, 0.5);
+  --glass-inset: inset 0 1px 0 rgba(255, 255, 255, 0.2), inset 0 -1px 0 rgba(0, 0, 0, 0.28);
+  --solid-inset: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  --solid-shadow: 0 14px 30px -18px rgba(0, 0, 0, 0.72);
+  /* пружина «жидкого» нажатия: есть перевлёт, поэтому кнопка ощущается упругой */
+  --m-pop: cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* Светлая тема: стекло белое и плотнее, иначе текст на нём тонет */
+html.light:not(.is-desktop) {
+  --glass-bg: rgba(255, 255, 255, 0.6);
+  --glass-bg-strong: rgba(255, 255, 255, 0.78);
+  --glass-brd: rgba(20, 20, 35, 0.08);
+  --glass-hi: rgba(255, 255, 255, 0.96);
+  --glass-shadow: 0 18px 40px -18px rgba(20, 20, 40, 0.26), 0 2px 8px -3px rgba(20, 20, 40, 0.16);
+  --glass-inset: inset 0 1px 0 rgba(255, 255, 255, 0.92), inset 0 -1px 0 rgba(20, 20, 40, 0.05);
+  --solid-inset: inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  --solid-shadow: 0 14px 28px -18px rgba(20, 20, 40, 0.2);
+}
+
+html:not(.is-desktop) .glass {
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat)) brightness(1.05);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat)) brightness(1.05);
+  border-color: var(--glass-brd);
+  box-shadow: var(--glass-shadow), var(--glass-inset);
+}
+/* верхний блик — ярче и с акцентной подсветкой снизу: грань стекла ловит
+   цвет интерфейса, и панель кажется литой, а не наклеенной */
+html:not(.is-desktop) .glass::before {
+  padding: 1.2px;
+  background: linear-gradient(
+    168deg,
+    var(--glass-hi) 0%,
+    rgba(255, 255, 255, 0.1) 26%,
+    rgba(255, 255, 255, 0) 52%,
+    color-mix(in srgb, var(--acc) 26%, rgba(255, 255, 255, 0.08)) 100%
+  );
+}
+/* объём: сверху свет, снизу лёгкая темнота — как у толстого стекла */
+html:not(.is-desktop) .glass::after {
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.1) 0%,
+    rgba(255, 255, 255, 0) 34%,
+    rgba(0, 0, 0, 0.14) 100%
+  );
+}
+/* плотные карточки без размытия тоже получают грань и тень, иначе рядом со
+   стеклом они выглядят плоскими кусками */
+html:not(.is-desktop) .solid {
+  box-shadow: var(--solid-shadow), var(--solid-inset);
+}
+
+/* Заголовок страницы — крупный, как big title в iOS: на телефоне это и есть
+   навигация, мелкий заголовок читается как подпись к списку */
+html:not(.is-desktop) .pc-page-head h1 {
+  font-size: clamp(21px, 6.4vw, 30px);
+  letter-spacing: -0.02em;
+  line-height: 1.06;
+}
+html:not(.is-desktop) .pc-page-head .t-caption {
+  opacity: 0.86;
+}
+
+/* ── нижнее меню: настоящая стеклянная полоска, а не наклеенный прямоугольник ── */
+.m-nav-bar {
+  /* база — тот же --nav-bg, что и у глухой панели: на телефоне он размыт до
+     62 % плотности, поэтому текст читается и при отсутствии blur */
+  background: color-mix(in srgb, var(--nav-bg) 62%, transparent);
+  backdrop-filter: blur(30px) saturate(180%);
+  -webkit-backdrop-filter: blur(30px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: var(--r-lg);
+  box-shadow:
+    0 26px 50px -22px rgba(0, 0, 0, 0.85),
+    inset 0 1px 0 rgba(255, 255, 255, 0.22),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.3);
+}
+html.light .m-nav-bar {
+  border-color: rgba(20, 20, 35, 0.08);
+  box-shadow:
+    0 20px 40px -20px rgba(20, 20, 40, 0.28),
+    inset 0 1px 0 rgba(255, 255, 255, 0.95),
+    inset 0 -1px 0 rgba(20, 20, 40, 0.06);
+}
+/* нажатие на вкладку: пружина с перевлётом, стекло «продавливается» */
+.m-nav-item {
+  transition: transform 0.18s var(--m-pop, cubic-bezier(0.34, 1.56, 0.64, 1));
+}
+.m-nav-item:active {
+  transform: scale(0.9);
+}
+/* пилюля активной вкладки: свет изнутри + мягкое цветное облако под панелью */
+.m-nav-pill {
+  box-shadow:
+    0 10px 26px -8px var(--acc-glow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.5),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.22);
+}
+
+/* ── лист снизу (редактор друзей, модалки): край стекла + ручка ── */
+.m-sheet {
+  border-radius: var(--r-xl) var(--r-xl) 0 0;
+  border-bottom: none;
+  padding-bottom: calc(var(--sab) + 12px);
+}
+.m-handle {
+  width: 38px;
+  height: 4px;
+  margin: 8px auto 2px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--text-mute) 42%, transparent);
+}
+
+/* ── скролл как в системе: инерция, без полос, без «тянучки» за край ── */
+html:not(.is-desktop) .scroll {
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+}
+html:not(.is-desktop) .scroll::-webkit-scrollbar {
+  display: none;
+}
+html:not(.is-desktop) html,
+html:not(.is-desktop) body {
+  overscroll-behavior-y: none;
+}
+
+/* ── верхний свет: панель интерфейса не «висит в вакууме», а освещена сверху ── */
+html:not(.is-desktop) body::before {
+  content: "";
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 38vh;
+  z-index: 0;
+  pointer-events: none;
+  background: radial-gradient(130% 100% at 50% -24%, rgba(255, 255, 255, 0.055), transparent 68%);
+}
+html.light:not(.is-desktop) body::before {
+  background: radial-gradient(130% 100% at 50% -24%, rgba(255, 255, 255, 0.9), transparent 70%);
+}
+
+/* нет backdrop-filter (старый WebView) — стекло становится плотным, а не
+   прозрачным: текст обязан читаться при любом раскладе */
+@supports not ((backdrop-filter: blur(2px)) or (-webkit-backdrop-filter: blur(2px))) {
+  html:not(.is-desktop) .glass {
+    background: var(--surface);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+}
+
+/* Лёгкий режим: преломление уходит первым, остальное остаётся. Радиусы,
+   грани и тени ничего не стоят, поэтому остаются — дизайн не должен
+   превращаться в «серую версию себя». */
+html.low-fx:not(.is-desktop) {
+  --glass-blur: 0px;
+  --glass-sat: 100%;
+}
+html.low-fx:not(.is-desktop) .m-nav-bar {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  background: var(--surface-2);
+}
+html.low-fx:not(.is-desktop) .m-nav-item {
+  transition: none;
+}
+html.low-fx:not(.is-desktop) .glass::after {
+  display: none;
+}

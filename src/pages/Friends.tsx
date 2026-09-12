@@ -354,17 +354,14 @@ function Editor({ friend, isNew, onClose }: { friend: Friend; isNew: boolean; on
         style={{ maxHeight: "92%" }}
         onClick={(e) => e.stopPropagation()}
       >
+        {/* m-sheet: стекло с преломлением, край скруглён сверху, низ —
+            до системной полоски; ручка (m-handle) говорит, что лист можно тянуть */}
         <div
-          className="flex flex-col"
-          style={{
-            background: "var(--surface)",
-            borderTop: "1px solid var(--surface-brd)",
-            borderRadius: "20px 20px 0 0",
-            maxHeight: "92vh",
-          }}
+          className="m-sheet glass glass-strong flex flex-col"
+          style={{ maxHeight: "92vh" }}
         >
           <div className="flex justify-center" style={{ paddingTop: 10, paddingBottom: 4 }}>
-            <div style={{ width: 40, height: 4, borderRadius: 999, background: "var(--btn-brd)" }} />
+            <div className="m-handle" />
           </div>
 
           <div className="scroll px-4 pb-4" style={{ paddingBottom: "calc(var(--sab) + 16px)" }}>

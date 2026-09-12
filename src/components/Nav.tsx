@@ -62,22 +62,21 @@ export default function Nav({ tab, onTab }: { tab: Tab; onTab: (t: Tab) => void 
       style={{
         bottom: 0,
         // запас под системную полоску жестов Xiaomi/iPhone
-        padding: "0 12px calc(var(--sab) + 10px)",
-        paddingTop: 10,
-        // растушёвка, чтобы контент не «упирался» в панель
+        padding: "0 10px calc(var(--sab) + 10px)",
+        paddingTop: 12,
+        // растушёвка, чтобы контент не «упирался» в панель: сама панель
+        // стеклянная (m-nav-bar), поэтому градиент нужен только под ней
         background:
-          "linear-gradient(to top, var(--bg) 62%, color-mix(in srgb, var(--bg) 55%, transparent) 88%, transparent)",
+          "linear-gradient(to top, var(--bg) 46%, color-mix(in srgb, var(--bg) 40%, transparent) 82%, transparent)",
       }}
     >
+      {/*
+       * Стиль полосы — в CSS (класс m-nav-bar): преломление, блик по верхней
+       * кромке и тень в два слоя. Здесь только геометрия.
+       */}
       <div
-        className="flex items-center justify-around relative"
-        style={{
-          borderRadius: 18,
-          padding: "7px 5px",
-          background: "var(--nav-bg)",
-          border: "1px solid var(--nav-brd)",
-          boxShadow: "0 -2px 24px -8px rgba(0,0,0,0.6), 0 8px 28px -14px rgba(0,0,0,0.9)",
-        }}
+        className="m-nav-bar flex items-center justify-around relative"
+        style={{ padding: "7px 5px" }}
       >
         {TABS.map((item) => {
           const active = tab === item.id;
@@ -90,17 +89,16 @@ export default function Nav({ tab, onTab }: { tab: Tab; onTab: (t: Tab) => void 
                 haptic("light");
                 onTab(item.id);
               }}
-              className="relative flex flex-col items-center justify-center flex-1 py-1.5"
+              className="m-nav-item relative flex flex-col items-center justify-center flex-1 py-1.5"
               style={{ color: active ? "var(--acc-ink)" : "var(--text-mute)", zIndex: 2 }}
             >
               {active && (
                 <motion.div
                   layoutId="navpill"
                   transition={springSoft}
-                  className="absolute"
+                  className="m-nav-pill absolute"
                   style={{
-                    inset: "-1px 4px", borderRadius: 13, background: "var(--acc)",
-                    boxShadow: "0 6px 20px -6px var(--acc-glow)", zIndex: -1,
+                    inset: "-1px 4px", borderRadius: "var(--r-md)", background: "var(--acc)", zIndex: -1,
                   }}
                 />
               )}
