@@ -2,6 +2,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { tr } from "../core/i18n";
 import { useGame, useToasts } from "../core/store";
 import { isDesktop } from "../core/desktop";
+import { useSystemBack } from "../core/android";
 import { Panel, Tap } from "../ui/Glass";
 import { fmt, fmtTime } from "../core/format";
 import Icon from "../ui/Icon";
@@ -83,6 +84,8 @@ function holdToast(id: number, on: boolean): void {
 export function OfflineModal() {
   const { offlineReport, clearOffline, mainFriend } = useGame();
   const pc = isDesktop();
+  // «Назад» на Android забирает награду так же, как кнопка «ЗАБРАТЬ».
+  useSystemBack(!!offlineReport, clearOffline);
   return (
     <AnimatePresence>
       {offlineReport && (

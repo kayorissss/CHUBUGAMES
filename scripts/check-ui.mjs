@@ -1946,5 +1946,42 @@ console.log('\n[49] 1.27.1: офлайн и обновление на ПК — �
     "иконки разделов магазина, алмазы и шестерёнка получили свои правила");
 }
 
+console.log('\n[50] 1.27.2 · телефон: уведомления, системный «назад», разрешения');
+{
+  const app = fs.readFileSync("src/App.tsx", "utf8");
+  const and = fs.readFileSync("src/core/android.ts", "utf8");
+  const bug = fs.readFileSync("src/ui/BugGuard.tsx", "utf8");
+  const nt = fs.readFileSync("src/core/notify.ts", "utf8");
+  const st = fs.readFileSync("src/pages/Settings.tsx", "utf8");
+  const wn = fs.readFileSync("src/ui/WhatsNew.tsx", "utf8");
+  const up = fs.readFileSync("src/ui/UpdateBanner.tsx", "utf8");
+
+  ok(/createPortal\(/.test(app) && /document\.body/.test(app),
+    "оверлеи монтируются в body — анимация страницы не тянет их за собой");
+  ok(/\.toast-stack \{[\s\S]{0,420}align-items: center/.test(css) &&
+     /\.toast-stack \{[\s\S]{0,420}right: 0/.test(css),
+    "на телефоне стопка уведомлений по центру сверху, а не «где-то слева»");
+  ok(/\.toast-item \{[\s\S]{0,340}width: min\(21rem, 100%\)/.test(css),
+    "плашка не шире экрана и не липнет к краям на узком телефоне");
+  ok(/useEffect\(\(\) => installSystemBack\(\), \[\]\)/.test(app),
+    "жест «назад» на Android подключён в оболочке");
+  ok(/App\.addListener\("backButton"/.test(and) && /App\.minimizeApp\(\)/.test(and),
+    "на корневом экране «назад» сворачивает приложение, а не молчит");
+  ok(/if \(backDepth\(\) > 0\)[\s\S]{0,90}history\.back\(\)/.test(and),
+    "сначала закрывается слой: сворачивается только пустой корень");
+  ok(/isPaused\(\)[\s\S]{0,140}resumeWithCountdown\(\)/.test(and),
+    "на паузе «назад» снимает паузу с отсчётом, а не выбрасывает из игры");
+  ok(/useSystemBack\(show, close\)/.test(wn) && /useSystemBack\(!!\s*info,\s*later\)/.test(up),
+    "окна «что нового» и обновления тоже слушают системный «назад»");
+  ok(/console\.warn\("\[chub\] фоново:"/.test(bug) && /CODE_ERROR/.test(bug),
+    "отказы плагинов и сети не выпрыгивают ошибкой при входе — только падение кода");
+  ok(/checkExactNotificationSetting/.test(nt) && /exact_alarm/.test(nt),
+    "точных будильников просят разрешение: иначе напоминание «в 19:00» не приедет никогда");
+  ok(/export async function sendTestNotification/.test(nt) && /sendTestNotification/.test(st),
+    "в настройках есть пробное уведомление — «работают или нет» видно сразу");
+  ok(/setTimeout\(\(\) => \{ void initNotificationsOnFirstRun\(\); \}, 1400\)/.test(app),
+    "разрешение спрашивается после Splash, а не в первую миллисекунду запуска");
+}
+
 console.log(fails===0?'\n✅ ВСЕ ПРОВЕРКИ ВЁРСТКИ ПРОЙДЕНЫ\n':`\n❌ ПРОВАЛЕНО: ${fails}\n`);
 process.exit(fails?1:0);

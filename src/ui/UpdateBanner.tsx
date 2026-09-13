@@ -14,6 +14,7 @@ import {
 } from "../core/updater";
 import { APP_VERSION } from "../core/version";
 import { isDesktop } from "../core/desktop";
+import { useSystemBack } from "../core/android";
 import { CHANGELOG } from "../core/changelog";
 import { cmpVer } from "./ChangelogView";
 
@@ -199,6 +200,10 @@ export default function UpdateBanner({
     return () => window.removeEventListener("keydown", onKey, true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pc, info, later]);
+
+  // Android-жест «назад» делает то же, что Esc: окно закрывается, а не
+  // «ничего не происходит».
+  useSystemBack(!!info, later);
 
   const pct = total > 0 ? Math.min(1, loaded / total) : 0;
   /**

@@ -115,6 +115,57 @@ export async function notifyGranted(): Promise<boolean> {
 }
 
 /**
+ * Точные будильники (Android 12+).
+ *
+ * Вторая настоящая причина «уведомления совсем не приходят». Без этого
+ * разрешения система не будит приложение ровно в 19:00: запланированное
+ * уведомление переносится на «удобное время» и вполне может приехать на
+ * следующий день — или не приехать вовсе. Спрашиваем один раз при выдаче
+ * разрешения на уведомления, дальше молчим.
+ */
+export async function ensureExactAlarms(): Promise<boolean> {
+  const n = await notifications();
+  if (!n) return false;
+  try {
+    /* Поле называется exact_alarm: 'granted' | 'denied' | 'prompt' */
+    const cur = await n.checkExactNotificationSetting?.();
+    if (cur?.exact_alarm === "granted") return true;
+    const r = await n.changeExactNotificationSetting?.();
+    return r?.exact_alarm === "granted";
+  } catch {
+    /* нет метода (старый Android) — там точные будильники не нужны */
+    return true;
+  }
+}
+
+/**
+ * Пробное уведомление прямо сейчас — по той же дороге, что и настоящие.
+ *
+ * Нужно, чтобы «уведомления не работают» проверялось одним нажатием, а не
+ * ожиданием семи вечера: если пришло — работает всё, если нет — причина в
+ * системном разрешении или канале, и это видно на том же экране.
+ */
+export async function sendTestNotification(): Promise<boolean> {
+  const n = await notifications();
+  if (!n) return false;
+  if (!(await notifyGranted())) return false;
+  try {
+    await n.schedule({
+      notifications: [{
+        id: 7400,
+        channelId: channelId("news"),
+        title: "CHUBUGAMES на связи",
+        body: "Если видишь это в шторке — уведомления работают.",
+        schedule: { at: new Date(Date.now() + 700), allowWhileIdle: true },
+      }],
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Просит разрешение на уведомления.
  * Возвращает true, если человек согласился.
  */
@@ -449,13 +500,17 @@ export async function initNotificationsOnFirstRun(): Promise<void> {
      * после фактического ответа.
      */
     if (await notifyGranted()) {
+      await ensureExactAlarms();
       await enableBackgroundCheck();
       return;
     }
 
     const ok = await askNotifyPermission();
     localStorage.setItem(ASKED_KEY, ok ? "granted" : "asked");
-    if (ok) await enableBackgroundCheck();
+    if (ok) {
+      await ensureExactAlarms();
+      await enableBackgroundCheck();
+    }
   } catch {
     /* плагин недоступен — молча пропускаем */
   }

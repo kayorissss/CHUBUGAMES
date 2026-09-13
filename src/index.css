@@ -5319,11 +5319,15 @@ html.light .rarity-legend { --rc: #8a5a00; }
   display: flex;
   flex-direction: column;
   gap: 8px;
-  width: min(21rem, calc(100vw - 24px));
   pointer-events: none;
-  left: 12px;
+  /* На телефоне — по центру сверху, как в остальных приложениях. Было:
+     стопка привязана к левому краю (left: 12px), и плашка висела криво:
+     «вылезла по середине, потом уехала вверх, но слева». */
+  left: 0;
+  right: 0;
   top: calc(var(--sat) + 10px);
-  align-items: flex-start;
+  padding: 0 12px;
+  align-items: center;
 }
 /* на компьютере правый верхний угол свободен (слева — «назад» и счёт),
    там уведомление ничего не перекрывает */
@@ -5331,6 +5335,8 @@ html.light .rarity-legend { --rc: #8a5a00; }
   left: auto;
   right: 14px;
   top: calc(var(--sat) + 56px);
+  width: min(21rem, calc(100vw - 28px));
+  padding: 0;
   align-items: flex-end;
 }
 .toast-item {
@@ -5338,7 +5344,8 @@ html.light .rarity-legend { --rc: #8a5a00; }
   display: flex;
   align-items: center;
   gap: 10px;
-  width: 100%;
+  /* 21rem и не шире экрана — на узком телефоне плашка не липнет к краям */
+  width: min(21rem, 100%);
   padding: 9px 8px 9px 11px;
   border-radius: var(--r-md);
   background: var(--toast-bg);

@@ -89,16 +89,44 @@ export default class BugGuard extends Component<Props, State> {
 /**
  * Глобальные ловушки: невыловленный reject и ошибка вне React.
  * Возвращает функцию снятия — App вызывает её в useEffect.
+ *
+ * ПОРОГ ШУМЛИВОСТИ. Человек жаловался, что при входе в приложение сверху
+ * вылезает «Ошибка в фоне». Это не игра падала: так отзывались плагины
+ * Capacitor и сеть. Отказ разрешения на уведомления, «незарегистрированный
+ * фоновый движок», отсутствующий в браузере метод, оборванный запрос к
+ * GitHub — штатные ситуации офлайн-игры, и уведомлять о каждой значит
+ * вызывать лишнее внимание рядом с настоящим падением. Поэтому в окно идут только
+ * падения кода (TypeError и прочее), остальное — в console.warn.
  */
+const BENIGN_REJECT = [
+  /AbortError|Load failed|interrupted|NetworkError|Failed to fetch|net::ERR|ERR_NETWORK|CORS/i,
+  /not implemented|not available|is not implemented|plugin .* does not exist|not registered/i,
+  /permission|denied|not granted|POST_NOTIFICATIONS|notifications? .*disabled/i,
+  /CapacitorKV|BackgroundRunner|localStorage.*(quota|denied)|SecurityError/i,
+];
+
+const CODE_ERROR = /TypeError|ReferenceError|RangeError|SyntaxError|is not a function|is not defined|Cannot read|of undefined|of null/i;
+
+const benign = (msg: string) => BENIGN_REJECT.some((re) => re.test(msg));
+
 export function installCrashWatch(toast: (msg: string, detail?: string) => void): () => void {
   const onError = (e: ErrorEvent) => {
     // ошибки ресурсов (картинка не влезла в кеш) — не повод дёргать человека
     if (e.target && e.target !== window) return;
-    toast("Ошибка в фоне", String(e.message || "").slice(0, 90));
+    const msg = String(e.message || "");
+    if (benign(msg) && !CODE_ERROR.test(msg)) {
+      console.warn("[chub] фоново:", msg);
+      return;
+    }
+    toast("Ошибка в фоне", msg.slice(0, 90));
   };
   const onRejection = (e: PromiseRejectionEvent) => {
     const msg = e.reason instanceof Error ? e.reason.message : String(e.reason);
-    if (/AbortError|Load failed|interrupted/i.test(msg)) return;
+    // Молчаливые отказы плагинов и сети — в консоль. Падение нашего кода — в окно.
+    if (!CODE_ERROR.test(msg)) {
+      if (!benign(msg)) console.warn("[chub] фоново:", msg);
+      return;
+    }
     toast("Ошибка в фоне", msg.slice(0, 90));
   };
   window.addEventListener("error", onError);

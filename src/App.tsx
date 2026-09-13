@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { AnimatePresence, motion, MotionConfig } from "framer-motion";
 import { GameProvider, useGame } from "./core/store";
 import { Aurora } from "./ui/Glass";
@@ -23,6 +24,7 @@ import {
   applyPerfMode, isLowFx, measurePerfOnce, resetFps, startUiWatch,
 } from "./core/perf";
 import { initDesktopKeys, initStage, isDesktop, hasKeyboard } from "./core/desktop";
+import { installSystemBack } from "./core/android";
 import BootScreen from "./ui/BootScreen";
 import PcTopBar from "./ui/pc/PcTopBar";
 import { FpsHud, KeyCursor } from "./ui/PcHud";
@@ -184,9 +186,21 @@ function Shell() {
     };
   }, []);
 
-  // При первом запуске система сама спросит про уведомления — тумблер в
-  // настройках после этого только включает и выключает напоминания.
-  useEffect(() => { void initNotificationsOnFirstRun(); }, []);
+  /* При первом запуске система сама спросит про уведомления — тумблер в
+     настройках после этого только включает и выключает напоминания.
+     Спрашиваем не в первую миллисекунду: диалог Android, приехавший до
+     конца запуска, иногда теряется — человек его не видит, а разрешение
+     уже «спрошенное» и больше не показывается. */
+  useEffect(() => {
+    const t = setTimeout(() => { void initNotificationsOnFirstRun(); }, 1400);
+    return () => clearTimeout(t);
+  }, []);
+
+  // Системный «назад» и жест свайпом на Android: закрыть оверлей → снять
+  // паузу → выйти из слоя → на корневом экране свернуть приложение. Без
+  // этого жеста игра отвечала ровно то, на что жаловались: «ничего не
+  // происходит». В браузере и на компьютере слушатель не ставится.
+  useEffect(() => installSystemBack(), []);
 
   // Напоминания о боссах. Расписание считается формулой, поэтому ставим
   // их сразу на 12 часов вперёд — приложение может долго не открываться.
@@ -438,14 +452,23 @@ function Shell() {
       </AnimatePresence>
       </div>
 
-      {/* Сторож фоновых ошибок: невыловленный reject в мини-игре раньше
-          просто останавливал анимацию, и выглядело это как «зависло». */}
-      <CrashWatch />
+      {/* Оверлеи — через портал в body. Пока они стояли внутри страницы,
+          любая анимация входа с transform делала их position:fixed
+          «fixed внутри блока»: плашки вылезали по середине экрана, а когда
+          анимация заканчивалась — прыгали наверх. В body им мешать некому. */}
+      {createPortal(
+        <>
+          {/* Сторож фоновых ошибок: невыловленный reject в мини-игре раньше
+              просто останавливал анимацию, и выглядело это как «зависло». */}
+          <CrashWatch />
 
-      <Toasts />
-      <OfflineModal />
-      {!game && <UpdateBanner />}
-      {!game && <WhatsNew />}
+          <Toasts />
+          <OfflineModal />
+          {!game && <UpdateBanner />}
+          {!game && <WhatsNew />}
+        </>,
+        document.body,
+      )}
 
       {/* Бонус за ролик — маленькая плашка в правом нижнем углу поверх всей
           библиотеки (просили именно так): она нужна там, где игрок устал, а

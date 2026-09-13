@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { useGame } from "../core/store";
 import { Card, Button, SectionTitle, Screen, Divider } from "../ui/Glass";
@@ -18,6 +18,8 @@ import {
   scheduleBossNotifications,
   scheduleNewsNotifications,
   cancelNewsNotifications,
+  sendTestNotification,
+  ensureExactAlarms,
 } from "../core/notify";
 import { upcomingBosses } from "../core/bosses";
 import { saveFileNative } from "../core/exportSave";
@@ -492,9 +494,61 @@ export default function Settings({
 function NotifyBlock() {
   const { s, set, toast } = useGame();
   const [busy, setBusy] = useState(false);
+  /** null — ещё не смотрели, false — разрешения нет, true — есть */
+  const [perm, setPerm] = useState<boolean | null>(null);
 
   /** Общая часть: убедиться, что разрешение есть */
   const ensurePerm = async () => (await notifyGranted()) || (await askNotifyPermission());
+
+  /*
+   * РЕАЛЬНАЯ ПРОВЕРКА РАЗРЕШЕНИЯ.
+   *
+   * Жалоба «уведомления совсем не работают» складывается из трёх вещей:
+   * разрешения нет (Android 13+ спрашивает их отдельно), нет точных
+   * будильников (Android 12+ переносит «19:00» на удобное время, то есть
+   * никогда), и канал выключен в настройках телефона. Первые две теперь
+   * чинятся кнопками отсюда, по третьей — переход в системные настройки.
+   * Статус читаем честно: не «включено», а «разрешение выдано».
+   */
+  const nativeNow = isNativeApp() || isDesktop();
+  useEffect(() => {
+    if (!nativeNow) return;
+    let alive = true;
+    void notifyGranted().then((g) => { if (alive) setPerm(g); });
+    return () => { alive = false; };
+  }, [nativeNow]);
+
+  const askNow = async () => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      const ok = await askNotifyPermission();
+      if (ok) await ensureExactAlarms();
+      setPerm(ok);
+      toast(
+        ok
+          ? { title: tr("Разрешение есть"), sub: tr("Теперь напоминания дойдут"), icon: "check", tone: "gold" }
+          : { title: tr("Разрешения нет"), sub: tr("Без него Android прячет все уведомления"), icon: "warn" },
+      );
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const testNow = async () => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      const ok = await sendTestNotification();
+      toast(
+        ok
+          ? { title: tr("Глянь шторку"), sub: tr("Пришло за секунду — уведомления работают"), icon: "check", tone: "gold" }
+          : { title: tr("Не ушло"), sub: tr("Нет разрешения или канал выключен в телефоне"), icon: "warn" },
+      );
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const toggleUpdates = async () => {
     if (busy) return;
@@ -609,6 +663,31 @@ function NotifyBlock() {
         onToggle={() => { void toggleNews(); }}
       />
       <Divider inset={14} />
+      {nativeNow && (
+        <div className="flex" style={{ gap: 8, padding: "12px 14px 0" }}>
+          {perm === false && (
+            <Button variant="primary" full sound="click" disabled={busy} onClick={() => { void askNow(); }}>
+              {tr("Разрешить уведомления")}
+            </Button>
+          )}
+          <Button
+            variant="secondary"
+            full
+            sound="click"
+            disabled={busy || perm === false}
+            onClick={() => { void testNow(); }}
+          >
+            {tr("Прислать пробное")}
+          </Button>
+        </div>
+      )}
+      {nativeNow && perm !== null && (
+        <div className="t-caption" style={{ padding: "9px 14px 0", lineHeight: 1.5 }}>
+          {perm
+            ? tr("Разрешение выдано: напоминания доходят до шторки.")
+            : tr("Разрешения нет — ни одно напоминание не придёт, пока не разрешишь.")}
+        </div>
+      )}
       <div style={{ padding: "13px 14px" }}>
         <div className="t-caption" style={{ marginBottom: 10, lineHeight: 1.55 }}>
           {desktop
