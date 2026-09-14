@@ -24,12 +24,60 @@ import GameIntro, { IntroGroup } from "../ui/GameIntro";
  * плотных серий ударов в одной полосе.
  */
 
-/** Встроенный трек — лежит в приложении, работает офлайн */
-const BUILTIN_TRACK = {
-  src: "femboichik.mp3",
-  title: "Фембойчик",
-  artist: "onokami",
-};
+/**
+ * Треки, которые лежат В ПРИЛОЖЕНИИ и работают офлайн. По просьбе добавлены
+ * вторым «Move Your Body» (Eiffel 65) — файлы кладутся в public/, откуда
+ * попадают и в APK, и в desktop-сборку.
+ *
+ * Если файла в конкретной сборке нет (например, веб-версия собирается одним
+ * HTML), трек просто не предлагается: игра откатывается на синтезированный
+ * бит вместо чёрного экрана — проверка на res.ok тут не косметика.
+ */
+export const BEAT_TRACKS: { id: string; src: string; title: string; artist: string }[] = [
+  { id: "femboichik", src: "femboichik.mp3", title: "Фембойчик", artist: "onokami" },
+  {
+    id: "eiffel",
+    src: "Eiffel_65_-_Move_Your_Body_Golden_Remixes_80920129.mp3",
+    title: "Move Your Body",
+    artist: "Eiffel 65 · Golden Remixes",
+  },
+];
+
+/**
+ * УРОВНИ РИТМА. Просьба: «добавить уровней».
+ *
+ * Уровень — это не «просто быстрее»: он решает, сколько нот успевает
+ * влезть в трек (минимальный шаг между онсетами), сколько длинных нот
+ * можно держать одновременно, сколько жизней дают и во сколько раз
+ * вырастает награда. Шаг 210 мс — это уже две руки впритык, поэтому
+ * «БЕЗ РИТМА» жизни жрёт быстро.
+ */
+export const BEAT_LEVELS: { name: string; gap: number; hold: number; lives: number; mult: number }[] = [
+  { name: "НОВИЧОК", gap: 460, hold: 1, lives: 6, mult: 1 },
+  { name: "В РИТМЕ", gap: 340, hold: 1, lives: 5, mult: 1.25 },
+  { name: "РАЗОГРЕВ", gap: 260, hold: 2, lives: 4, mult: 1.55 },
+  { name: "БЕЗ РИТМА", gap: 210, hold: 2, lives: 3, mult: 2 },
+];
+
+const LV_KEY = "chubgames.beat.level";
+const TRACK_KEY = "chubgames.beat.track";
+
+/** Уровень → старый селектор чарта: чтобы настройки игры оставались в силе. */
+function diffOf(lv: number): "chill" | "normal" | "insane" {
+  return BEAT_LEVELS[lv].gap >= 440 ? "chill" : BEAT_LEVELS[lv].gap >= 300 ? "normal" : "insane";
+}
+
+/** Запомнить выбор: играют-то с телефона, по нескольку раз за вечер. */
+function readNum(key: string, def: number, max: number): number {
+  try {
+    const v = Number(localStorage.getItem(key));
+    if (Number.isFinite(v) && v >= 0 && v < max) return Math.floor(v);
+  } catch { /* приватный режим */ }
+  return def;
+}
+function writeNum(key: string, v: number) {
+  try { localStorage.setItem(key, String(v)); } catch { /* приватный режим */ }
+}
 
 type Phase = "menu" | "count" | "play" | "over";
 
@@ -119,14 +167,19 @@ function builtinChart(diff: "chill" | "normal" | "insane", seed = 1): Note[] {
   return notes;
 }
 
-/** Чарт из онсетов реального трека */
-function chartFromOnsets(
-  ons: Onset[],
-  diff: "chill" | "normal" | "insane" = "normal",
-): Note[] {
+/**
+ * Чарт из онсетов реального трека.
+ *
+ * Плотность берётся ВПРЯМУЮ из уровня (шаг нот и лимит одновременных
+ * длинных), а не из трёхпозиционной «сложности игры»: иначе «РАЗОГРЕВ» и
+ * «БЕЗ РИТМА» давали бы один и тот же чарт, и четвёртая ступень была бы
+ * фиктивной.
+ */
+function chartFromOnsets(ons: Onset[], lv = 1): Note[] {
   const notes: Note[] = [];
+  const L = BEAT_LEVELS[Math.max(0, Math.min(BEAT_LEVELS.length - 1, lv - 1))];
   // Минимальный промежуток между нотами: пальцем быстрее просто не успеть
-  const minGap = diff === "chill" ? 420 : diff === "insane" ? 220 : 320;
+  const minGap = L.gap;
   /**
    * Сколько полос разрешено держать ОДНОВРЕМЕННО.
    *
@@ -140,7 +193,7 @@ function chartFromOnsets(
    * 2 на остальных. Нота, которая не влезает в лимит, становится
    * обычной, а не длинной.
    */
-  const maxHold = diff === "chill" ? 1 : 2;
+  const maxHold = L.hold;
   let lastT = -9999;
   for (let i = 0; i < ons.length; i++) {
     const o = ons[i];
@@ -170,6 +223,14 @@ export default function RadomirBeat({ onExit }: { onExit: () => void }) {
   const radomir = s.friends.find((f) => f.id === "radomir") || s.friends[0];
 
   const [phase, setPhase] = useState<Phase>("menu");
+  /* Выбранные уровень и трек живут в localStorage: ритм обычно играют
+     заходом на вечер, и каждый раз выставлять руками — издевательство. */
+  const [lv, setLv] = useState(() =>
+    readNum(LV_KEY, s.settings.difficulty === "chill" ? 0 : s.settings.difficulty === "insane" ? 3 : 1, BEAT_LEVELS.length),
+  );
+  const [trackId, setTrackId] = useState<string>(() => {
+    try { return localStorage.getItem(TRACK_KEY) || BEAT_TRACKS[0].id; } catch { return BEAT_TRACKS[0].id; }
+  });
   const [cd, setCd] = useState(3);
   const [uiScore, setUiScore] = useState(0);
   const [uiCombo, setUiCombo] = useState(0);
@@ -183,6 +244,13 @@ export default function RadomirBeat({ onExit }: { onExit: () => void }) {
   /** Играет встроенный «Фембойчик» (свой трек не загружен) */
   const [builtinReady, setBuiltinReady] = useState(false);
   const audioBuf = useRef<AudioBuffer | null>(null);
+  /*
+   * Онсеты выбранного трека держим отдельно: буфер дороги́й (скачать и
+   * декодировать 5-8 МБ на телефоне — это секунда), а чарт из тех же онсетов
+   * пересобирается на смену уровня за миллисекунды. Без этого каждый выбор
+   * уровня заново грузил трек.
+   */
+  const onsetsRef = useRef<ReturnType<typeof detectOnsets> | null>(null);
   const chartRef = useRef<Note[] | null>(null);
   const clockRef = useRef<(() => number) | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -213,23 +281,31 @@ export default function RadomirBeat({ onExit }: { onExit: () => void }) {
     void (async () => {
       const st = await loadTrack();
 
-      if (st) {
+      /* Свой файл используется, только когда его явно выбрали: иначе
+         загруженный однажды трек вечным «по умолчанию» перебивал бы встроенные. */
+      if (st && trackId === "own") {
         setTrackName(st.name);
         try {
           const buf = await decode(st.data);
           if (!alive) return;
           audioBuf.current = buf;
-          chartRef.current = chartFromOnsets(detectOnsets(buf), s.settings.difficulty);
+          onsetsRef.current = detectOnsets(buf);
+          chartRef.current = chartFromOnsets(onsetsRef.current, lv);
         } catch {
           setLoadErr("Файл не читается, загрузи заново");
         }
         return;
       }
 
-      // Встроенный трек
+      // Трек из приложения. Нет файла — остаётся синтезированный бит.
+      const track = BEAT_TRACKS.find((t) => t.id === trackId);
+      if (!track) {
+        if (alive) setAnalyzing(false);
+        return;
+      }
       setAnalyzing(true);
       try {
-        const res = await fetch(BUILTIN_TRACK.src);
+        const res = await fetch(track.src);
         if (!res.ok) throw new Error("нет файла");
         const data = await res.arrayBuffer();
         const buf = await decode(data);
@@ -237,16 +313,30 @@ export default function RadomirBeat({ onExit }: { onExit: () => void }) {
         const ons = detectOnsets(buf);
         if (ons.length >= 12) {
           audioBuf.current = buf;
-          chartRef.current = chartFromOnsets(ons, s.settings.difficulty);
+          onsetsRef.current = ons;
+          chartRef.current = chartFromOnsets(ons, lv);
           setBuiltinReady(true);
+        } else {
+          setLoadErr("В этом треке не нашлось ритма — играй на синтезированном бите");
         }
       } catch {
-        // трека нет — остаётся синтезированный бит, игра не ломается
+        /* файла нет в сборке: молча остаёмся на синтезированном бите */
       }
       if (alive) setAnalyzing(false);
     })();
     return () => { alive = false; };
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [trackId]);
+
+  /*
+   * СМЕНА УРОВНЯ ТРЕК НЕ ПЕРЕЗАПУСКАЕТ. Буфер и онсеты уже в памяти —
+   * заново строится только чарт (это дёшево), а audioBuf остаётся тот же.
+   */
+  useEffect(() => {
+    const ons = onsetsRef.current;
+    if (!ons || !audioBuf.current) return;
+    chartRef.current = chartFromOnsets(ons, lv);
+  }, [lv]);
 
   const pickFile = async (f: File) => {
     setAnalyzing(true);
@@ -261,7 +351,8 @@ export default function RadomirBeat({ onExit }: { onExit: () => void }) {
         return;
       }
       audioBuf.current = buf;
-      chartRef.current = chartFromOnsets(ons, s.settings.difficulty);
+      onsetsRef.current = ons;
+      chartRef.current = chartFromOnsets(ons, lv);
       await saveTrack(f.name, data);
       setTrackName(f.name);
       sfx.achieve?.();
@@ -287,16 +378,17 @@ export default function RadomirBeat({ onExit }: { onExit: () => void }) {
     const g = G.current;
     g.running = false;
     // seed от времени: каждый заход — новый рисунок нот
-    g.notes = (useOwn ? chartRef.current! : builtinChart(s.settings.difficulty, Date.now() & 0xffff))
+    const L = BEAT_LEVELS[lv];
+    g.notes = (useOwn ? chartRef.current! : builtinChart(diffOf(lv), Date.now() & 0xffff))
       .map((n) => ({ ...n }));
     g.time = 0; g.score = 0; g.combo = 0; g.bestCombo = 0;
-    g.lives = 5; g.hits = 0; g.perfect = 0;
+    g.lives = L.lives; g.hits = 0; g.perfect = 0;
     g.flash = [0, 0, 0]; g.held = [false, false, false];
     g.pops = []; g.bob = 0; g.shake = 0;
     const last = g.notes[g.notes.length - 1];
     g.endAt = last ? last.t + last.hold + 2400 : 30000;
-    setUiScore(0); setUiCombo(0); setUiLives(5);
-  }, [useOwn]);
+    setUiScore(0); setUiCombo(0); setUiLives(BEAT_LEVELS[lv].lives);
+  }, [useOwn, lv]);
 
   const start = useCallback(() => {
     reset();
@@ -332,7 +424,9 @@ export default function RadomirBeat({ onExit }: { onExit: () => void }) {
     stopTrack();
     clockRef.current = null;
     const score = Math.floor(g.score);
-    const coins = Math.floor(score * 1.8 * (1 + s.prestige * 0.12));
+    /* Награда уровня: «БЕЗ РИТМА» платит вдвое — риск должен быть чем-то
+       оправдан, иначе все играют на «НОВИЧКЕ». */
+    const coins = Math.floor(score * 1.8 * BEAT_LEVELS[lv].mult * (1 + s.prestige * 0.12));
     const xp = Math.floor(score * 0.5 + 25);
     setResult({ score, coins, xp });
     setPhase("over");
@@ -343,7 +437,7 @@ export default function RadomirBeat({ onExit }: { onExit: () => void }) {
     finishGame("radomir", score, g.time);
     bump("notesHit", g.hits);
     questProgress("score", score);
-  }, [addCoins, addXp, finishGame, bump, questProgress, s.prestige]);
+  }, [addCoins, addXp, finishGame, bump, questProgress, s.prestige, lv]);
 
   /* ---------- нажатие / отпускание дорожки ---------- */
   const pressLane = (lane: number) => {
@@ -660,8 +754,86 @@ export default function RadomirBeat({ onExit }: { onExit: () => void }) {
             onStart={start}
             onExit={onExit}
           >
-            {/* Что играет сейчас. Инструкцию «как поставить Фембойчик» со
-                ссылкой на hitmoz убрал: трек уже лежит в приложении. */}
+            {/* УРОВЕНЬ. Четыре ступени: от «одной большой палец справится»
+                до «две руки и ни одной свободной». Выбор запоминается. */}
+            <IntroGroup label={tr("УРОВЕНЬ")}>
+              <div className="flex" style={{ gap: 6 }}>
+                {BEAT_LEVELS.map((L, i) => (
+                  <button
+                    key={L.name}
+                    type="button"
+                    onClick={() => {
+                      if (i === lv) return;
+                      setLv(i);
+                      writeNum(LV_KEY, i);
+                      sfx.click();
+                      haptic("light");
+                    }}
+                    className="flex-1 t-label"
+                    style={{
+                      padding: "9px 2px", borderRadius: "var(--r-sm)", fontSize: 8.5,
+                      background: lv === i ? "var(--acc)" : "var(--surface-2)",
+                      color: lv === i ? "var(--acc-ink)" : "var(--text-mute)",
+                      border: `1px solid ${lv === i ? "var(--acc)" : "var(--btn-brd)"}`,
+                      transition: "background .16s, color .16s",
+                    }}
+                  >
+                    {tr(L.name)}
+                  </button>
+                ))}
+              </div>
+              <div className="t-caption" style={{ marginTop: 7 }}>
+                {BEAT_LEVELS[lv].lives} {tr("жизней")} · {tr("награда")} ×{BEAT_LEVELS[lv].mult}
+              </div>
+            </IntroGroup>
+
+            {/* ТРЕК. Два лежат в приложении, третий — свой, с телефона. */}
+            <IntroGroup label={tr("ТРЕК")}>
+              <div className="flex" style={{ gap: 6, flexWrap: "wrap" }}>
+                {BEAT_TRACKS.map((T) => (
+                  <button
+                    key={T.id}
+                    type="button"
+                    onClick={() => {
+                      if (T.id === trackId) return;
+                      setTrackId(T.id);
+                      try { localStorage.setItem(TRACK_KEY, T.id); } catch { /*noop*/ }
+                      setTrackName(null);
+                      sfx.click();
+                      haptic("light");
+                    }}
+                    className="t-label"
+                    style={{
+                      padding: "8px 11px", borderRadius: "var(--r-sm)", fontSize: 9,
+                      background: trackId === T.id && !trackName ? "var(--acc)" : "var(--surface-2)",
+                      color: trackId === T.id && !trackName ? "var(--acc-ink)" : "var(--text-mute)",
+                      border: `1px solid ${trackId === T.id && !trackName ? "var(--acc)" : "var(--btn-brd)"}`,
+                    }}
+                  >
+                    {T.title}
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTrackId("own");
+                    try { localStorage.setItem(TRACK_KEY, "own"); } catch { /*noop*/ }
+                    sfx.click();
+                  }}
+                  className="t-label"
+                  style={{
+                    padding: "8px 11px", borderRadius: "var(--r-sm)", fontSize: 9,
+                    background: trackName ? "var(--acc)" : "var(--surface-2)",
+                    color: trackName ? "var(--acc-ink)" : "var(--text-mute)",
+                    border: `1px solid ${trackName ? "var(--acc)" : "var(--btn-brd)"}`,
+                  }}
+                >
+                  {tr("СВОЙ ФАЙЛ")}
+                </button>
+              </div>
+            </IntroGroup>
+
+            {/* Что играет сейчас. */}
             <IntroGroup label={tr("СЕЙЧАС ИГРАЕТ")}>
               <div
                 style={{
@@ -675,13 +847,13 @@ export default function RadomirBeat({ onExit }: { onExit: () => void }) {
                   </span>
                   <div className="min-w-0 flex-1">
                     <div className="t-title-sm clip1" style={{ fontSize: 13 }}>
-                      {trackName || (builtinReady ? BUILTIN_TRACK.title : tr("Встроенный бит"))}
+                      {trackName || (builtinReady ? BEAT_TRACKS.find((t) => t.id === trackId)?.title ?? tr("Встроенный бит") : tr("Синтезированный бит"))}
                     </div>
                     <div className="t-caption clip1" style={{ marginTop: 2 }}>
                       {trackName
                         ? tr("твой трек — ноты из музыки")
                         : builtinReady
-                          ? `${BUILTIN_TRACK.artist} — ${tr("ноты из музыки")}`
+                          ? `${BEAT_TRACKS.find((t) => t.id === trackId)?.artist ?? ""} — ${tr("ноты из музыки")}`
                           : analyzing ? tr("загружаю трек…") : tr("синтезируется в приложении")}
                     </div>
                   </div>

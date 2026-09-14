@@ -2,6 +2,7 @@ import { motion } from "framer-motion";
 import { springSoft } from "../core/motion";
 import { sfx, haptic } from "../core/fx";
 import { useGame } from "../core/store";
+import { claimableCount, claimables } from "../core/claimable";
 
 export type Tab = "home" | "progress" | "shop" | "friends" | "settings";
 
@@ -44,7 +45,7 @@ const TABS: { id: Tab; label: string; icon: (a: boolean) => React.ReactNode }[] 
     ),
   },
   {
-    id: "settings", label: "nav.more",
+    id: "settings", label: "nav.settings",
     icon: (a) => (
       <svg width="21" height="21" viewBox="0 0 24 24" fill={a ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2">
         <circle cx="12" cy="12" r="3.2" />
@@ -55,10 +56,14 @@ const TABS: { id: Tab; label: string; icon: (a: boolean) => React.ReactNode }[] 
 ];
 
 export default function Nav({ tab, onTab }: { tab: Tab; onTab: (t: Tab) => void }) {
-  const { t } = useGame();
+  const { t, s } = useGame();
+  /* Красный кружок с «!» на «Прогрессе»: ровно то, о чём просили — увидеть
+     ещё до входа, что внутри лежит награда. Считаем по всем четырём
+     источникам (ежедневка, задания, сундук, босс). */
+  const loot = claimableCount(claimables(s)) > 0;
   return (
     <div
-      className="fixed left-0 right-0 z-50"
+      className="m-nav fixed left-0 right-0 z-50"
       style={{
         bottom: 0,
         // запас под системную полоску жестов Xiaomi/iPhone
@@ -80,6 +85,8 @@ export default function Nav({ tab, onTab }: { tab: Tab; onTab: (t: Tab) => void 
       >
         {TABS.map((item) => {
           const active = tab === item.id;
+          /* min-width:0 обязателен: flex-1 без него не сжимается уже
+             содержимого, и «Персонажи» выползали за свою кнопку. */
           return (
             <button
               key={item.id}
@@ -90,7 +97,7 @@ export default function Nav({ tab, onTab }: { tab: Tab; onTab: (t: Tab) => void 
                 onTab(item.id);
               }}
               className="m-nav-item relative flex flex-col items-center justify-center flex-1 py-1.5"
-              style={{ color: active ? "var(--acc-ink)" : "var(--text-mute)", zIndex: 2 }}
+              style={{ minWidth: 0, color: active ? "var(--acc-ink)" : "var(--text-mute)", zIndex: 2 }}
             >
               {active && (
                 <motion.div
@@ -103,6 +110,7 @@ export default function Nav({ tab, onTab }: { tab: Tab; onTab: (t: Tab) => void 
                 />
               )}
               <motion.div
+                className="m-nav-ico"
                 animate={{ scale: active ? 1.08 : 1, y: active ? -1.5 : 0 }}
                 transition={springSoft}
               >
@@ -110,12 +118,17 @@ export default function Nav({ tab, onTab }: { tab: Tab; onTab: (t: Tab) => void 
               </motion.div>
               <span
                 style={{
-                  fontSize: 8.5, fontWeight: 800, letterSpacing: "0.06em",
+                  fontSize: 8.5, fontWeight: 800, letterSpacing: "0.04em",
                   marginTop: 2.5, textTransform: "uppercase",
+                  maxWidth: "100%", width: "100%", textAlign: "center",
+                  overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
                 }}
               >
                 {t(item.label)}
               </span>
+              {item.id === "progress" && loot && (
+                <span className="m-nav-flag" aria-label={t("nav.hasLoot")} />
+              )}
             </button>
           );
         })}

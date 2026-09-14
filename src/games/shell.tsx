@@ -60,6 +60,7 @@ export function useCanvas(
        отдельное событие. */
     const offAdapt = onAdapt(resize);
 
+    let brokenFrames = 0;
     const loop = (now: number) => {
       if (!alive) return;
       /*
@@ -86,7 +87,26 @@ export function useCanvas(
       const ctx = c.getContext("2d");
       if (ctx) {
         ctx.setTransform(scale, 0, 0, scale, 0, 0);
-        drawRef.current(ctx, c.width / scale, c.height / scale, dt, now);
+        /* Страховка кадра. Один exception внутри отрисовки раньше убивал
+           весь цикл: канвас замирал на чёрном, FPS падал в ноль, а человек
+           видел «игра сломалась» (так и было в ПОБЕГЕ ОТ ШИТОВА после
+           прыжка — тень уходила в отрицательный радиус). Одиночный сбой
+           теперь просто пропускает кадр; если же игра падает 30 кадров
+           подряд, цикл останавливается и ошибка уходит в оболочку, чтобы
+           не крутить пустой rAF до бесконечности. */
+        try {
+          drawRef.current(ctx, c.width / scale, c.height / scale, dt, now);
+          brokenFrames = 0;
+        } catch (err) {
+          brokenFrames += 1;
+          console.error("[chub] кадр игры упал:", err);
+          if (brokenFrames >= 30) {
+            alive = false;
+            // наружу, чтобы это увидел BugGuard, а не только консоль
+            setTimeout(() => { throw err; }, 0);
+            return;
+          }
+        }
       }
       raf = requestAnimationFrame(loop);
     };

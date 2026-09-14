@@ -310,11 +310,24 @@ export default function Elevator({ onExit }: { onExit: () => void }) {
       // пол
       ctx.fillStyle = "rgba(255,255,255,0.05)";
       ctx.fillRect(10, fy + fh - 3, w - 20, 3);
-      // номер этажа
-      ctx.textAlign = "left";
+      /* Номер этажа. Отсюда и шло «что-то белое мигает»: fillStyle
+         получал "var(--acc)", а канвас CSS-переменные не понимает — значение
+         просто игнорируется, и цифра красилась прошлым цветом (то белым, то
+         цветом предыдущей фигуры), меняясь кадр от кадра. Теперь цвет берётся
+         из палитры, а этаж, где стоит кабина, ещё и подсвечен плашкой. */
+      const here = Math.round(g.y) === i;
+      ctx.textAlign = "center";
       ctx.font = "800 12px Unbounded, Inter, system-ui, sans-serif";
-      ctx.fillStyle = Math.round(g.y) === i ? "var(--acc)" : "rgba(255,255,255,0.35)";
-      ctx.fillText(String(i + 1), 14, fy + fh - 12);
+      if (here) {
+        ctx.fillStyle = P.acc;
+        ctx.beginPath();
+        ctx.roundRect(10, fy + fh - 30, 22, 20, 6);
+        ctx.fill();
+        ctx.fillStyle = P.accInk;
+      } else {
+        ctx.fillStyle = "rgba(255,255,255,0.35)";
+      }
+      ctx.fillText(String(i + 1), 21, fy + fh - 15);
 
       // ждущие на этаже
       const wait = g.people.filter((p) => !p.inside && p.from === i);
@@ -326,11 +339,16 @@ export default function Elevator({ onExit }: { onExit: () => void }) {
         ctx.fillStyle = `rgba(255,${Math.round(200 - p.mad * 180)},60,${0.35 + p.mad * 0.5})`;
         ctx.fillRect(px - 13, py + 15, 26, 3);
         drawHead(ctx, p.look, px, py, 12, { body: true, angry: p.mad });
-        // куда едет
+        // Куда едет — цифра на тёмной пилюле: на светлой стене она терялась,
+        // а «зачем она вообще» без пояснения непонятно.
         ctx.textAlign = "center";
         ctx.font = "700 9px Inter, system-ui, sans-serif";
-        ctx.fillStyle = "#ffffff";
-        ctx.fillText(`${p.to + 1}`, px, py - 19);
+        ctx.fillStyle = "rgba(8, 10, 16, 0.72)";
+        ctx.beginPath();
+        ctx.roundRect(px - 8, py - 30, 16, 13, 4);
+        ctx.fill();
+        ctx.fillStyle = P.text;
+        ctx.fillText(`${p.to + 1}`, px, py - 20);
       });
     }
 
@@ -349,7 +367,17 @@ export default function Elevator({ onExit }: { onExit: () => void }) {
     ctx.lineWidth = 2;
     ctx.strokeRect(shaftX + 4, cy + 4, shaftW - 8, fh - 8);
 
-    // пассажиры в кабине
+    // двери
+    const dw = (shaftW - 8) / 2 * (1 - g.doors);
+    ctx.fillStyle = "#39415a";
+    ctx.fillRect(shaftX + 4, cy + 4, dw, fh - 8);
+    ctx.fillRect(shaftX + shaftW - 4 - dw, cy + 4, dw, fh - 8);
+
+    /* Пассажиры в кабине — ПОСЛЕ дверей. Раньше они рисовались раньше:
+       стоило людям зайти и дверям закрыться, как створки закрашивали и
+       самих пассажиров, и цифры «куда едут» — выглядело как «числа
+       пропадают, когда заходят в лифт». Кабина у нас в разрезе, так что
+       люди видимы всегда, а двери — только створки по краям. */
     const inside = g.people.filter((p) => p.inside);
     inside.forEach((p, idx) => {
       const px = shaftX + 20 + (idx % 3) * 30;
@@ -357,15 +385,13 @@ export default function Elevator({ onExit }: { onExit: () => void }) {
       drawHead(ctx, p.look, px, py, 10, { body: true });
       ctx.textAlign = "center";
       ctx.font = "700 8px Inter, system-ui, sans-serif";
-      ctx.fillStyle = "#ffd34a";
-      ctx.fillText(`${p.to + 1}`, px, py - 16);
+      ctx.fillStyle = "rgba(8, 10, 16, 0.78)";
+      ctx.beginPath();
+      ctx.roundRect(px - 8, py - 27, 16, 13, 4);
+      ctx.fill();
+      ctx.fillStyle = P.gold;
+      ctx.fillText(`${p.to + 1}`, px, py - 17);
     });
-
-    // двери
-    const dw = (shaftW - 8) / 2 * (1 - g.doors);
-    ctx.fillStyle = "#39415a";
-    ctx.fillRect(shaftX + 4, cy + 4, dw, fh - 8);
-    ctx.fillRect(shaftX + shaftW - 4 - dw, cy + 4, dw, fh - 8);
 
     // индикатор загрузки на кабине
     const lw = shaftW - 16;

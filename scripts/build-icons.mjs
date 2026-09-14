@@ -24,6 +24,23 @@ const SRC = {
   mono: path.join(ROOT, "branding/mark-mono.svg"),
 };
 
+/**
+ * ФОТО-РЕЖИМ.
+ *
+ * Если рядом с вектором лежит растровая плашка (branding/photo.jpg или
+ * branding/photo.png), ВСЕ иконки собираются из неё: человек попросил
+ * значок из своей картинки, и переключается это одним файлом — без правок
+ * скрипта. Векторный бургер остаётся запасным вариантом: удалил фото —
+ * и снова он.
+ *
+ * Правила те же, что для вектора: legacy-плашка — на весь квадрат,
+ * adaptive-foreground — только в безопасной зоне (66% холста 108dp),
+ * monochrome — обесцвеченный силуэт, потому что Android перекрашивает его сам.
+ */
+const PHOTO = ["branding/photo.jpg", "branding/photo.png"]
+  .map((p) => path.join(ROOT, p))
+  .find((p) => existsSync(p));
+
 /** Плотности Android: базовая иконка 48dp, adaptive-слой 108dp */
 const DENSITIES = { mdpi: 1, hdpi: 1.5, xhdpi: 2, xxhdpi: 3, xxxhdpi: 4 };
 
@@ -31,7 +48,32 @@ const out = (p) => path.join(ROOT, p);
 const ensure = (p) => mkdirSync(path.dirname(p), { recursive: true });
 
 /** SVG → PNG нужного размера (contain — чтобы не сплющить) */
+/**
+ * Фото-растры без палитры весят мегабайты, а иконка ездит ещё и внутри APK.
+ * Для фото-режима отдаём 256-цветный PNG высокого качества: на 48–1024 px
+ * глаз разницы не видит, а вес втрое меньше. Векторный режим не трогаем —
+ * там прозрачные края и градиенты, палитра им вредит.
+ */
+const PH_PNG = { palette: true, quality: 96, effort: 8 };
+
 async function png(from, size, withAlpha = true) {
+  if (PHOTO && from === SRC.badge) {
+    return sharp(PHOTO)
+      .resize(size, size, { fit: "cover", position: "centre" })
+      .png(PH_PNG).toBuffer();
+  }
+  if (PHOTO && (from === SRC.mark || from === SRC.mono)) {
+    const inner = Math.max(1, Math.round(size * 0.66));
+    let img = sharp(PHOTO).resize(inner, inner, { fit: "cover", position: "centre" });
+    if (from === SRC.mono) img = img.grayscale();
+    const body = await img.png(PH_PNG).toBuffer();
+    const back = from === SRC.mono
+      ? { r: 0, g: 0, b: 0, alpha: 0 }
+      : { r: 8, g: 8, b: 10, alpha: 1 };
+    return sharp({ create: { width: size, height: size, channels: 4, background: back } })
+      .composite([{ input: body, gravity: "centre" }])
+      .png(PH_PNG).toBuffer();
+  }
   let s = sharp(from, { density: 192 }).resize(size, size, {
     fit: "contain",
     background: withAlpha ? { r: 0, g: 0, b: 0, alpha: 0 } : { r: 8, g: 8, b: 10 },
@@ -136,7 +178,9 @@ async function main() {
   report.push(`desktop/res: icon.png + icon.ico (${sizes.join("/")})`);
 
   console.log(report.map((r) => "  ✓ " + r).join("\n"));
-  console.log("\nиконки пересобраны из branding/*.svg");
+  console.log(PHOTO
+    ? "\nиконки пересобраны из фото: " + path.relative(ROOT, PHOTO) + " (вектор — запасной вариант)"
+    : "\nиконки пересобраны из branding/*.svg");
 }
 
 main().catch((e) => {

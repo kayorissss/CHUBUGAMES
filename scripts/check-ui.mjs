@@ -696,7 +696,14 @@ ok(ar19.includes('drawFighter') && ar19.includes('groundY'),
 const st18 = fs.readFileSync('src/pages/Settings.tsx', 'utf8');
 ok(st18.indexOf('settings.update') < st18.indexOf('settings.appearance'),
   'раздел обновления в самом верху настроек');
-ok(st18.includes('KAYORISAN'), 'автор указан как KAYORISAN');
+/* Просьба 1.27.2: из Настроек убрали автора/разработчика и подпись
+   «все друзья, шутки…». Издатель при этом никуда не делся — он в свойствах
+   exe (package.json → author.name, см. проверку builder-метаданных). */
+ok(!/KAYORISAN/.test(st18) && /t\("common\.version"\)/.test(st18),
+  'в Настройках только название, версия и связь: автора и «для своих» убрали');
+ok(/Telegram/.test(st18), 'кнопка Telegram в Настройках осталась');
+ok(!/settings\.forOurs/.test(st18) && !/settings\.offline/.test(st18),
+  'подвал Настроек: «работает офлайн» и «сделано для своих» убраны');
 ok(st18.includes('saveFileNative'), 'выгрузка сохранения работает на телефоне');
 ok(fs.readFileSync('src/core/notify.ts', 'utf8').includes('initNotificationsOnFirstRun'),
   'разрешение на уведомления спрашивается при первом запуске');
@@ -1981,6 +1988,150 @@ console.log('\n[50] 1.27.2 · телефон: уведомления, систе
     "в настройках есть пробное уведомление — «работают или нет» видно сразу");
   ok(/setTimeout\(\(\) => \{ void initNotificationsOnFirstRun\(\); \}, 1400\)/.test(app),
     "разрешение спрашивается после Splash, а не в первую миллисекунду запуска");
+}
+
+console.log('\n[51] 1.27.2 · телефон: возврат из паузы и уровни в ЛЁХА БУРГЕР');
+{
+  const br = fs.readFileSync("src/games/BurgerRain.tsx", "utf8");
+  const po = fs.readFileSync("src/ui/PauseOverlay.tsx", "utf8");
+
+  ok((br.match(/name: "/g) || []).length >= 10, "у забега десять ступеней с именами — есть к чему идти");
+  ok(/const lv = brLevel\(g\.elapsed \/ 1000\)/.test(br) && /const LEV = BR_LEVELS\[g\.lv - 1\]/.test(br),
+    "уровень считается в игровом цикле и реально влияет на темп");
+  ok(/\/ LEV\.speed/.test(br) && /\(diff\.spawn \* LEV\.spawn\)/.test(br),
+    "время полёта и интервал спавна берут коэффициенты уровня");
+  ok(/const k = LEV\.kinds/.test(br) && /if \(k >= 5 && roll > 0\.94\)/.test(br),
+    "набор снарядов растёт по уровням, а не по «таймеру в минуты»");
+  ok(/say\(g, BONUS_LABEL\[b\.type\], BONUS_COLOR\[b\.type\], 1500\)/.test(br),
+    "поднятый бонус подписан плашкой по центру — видно, что именно поднял");
+  ok(/say\(g, "ЯРОСТЬ!", "--danger", 1800\)/.test(br) && /say\(g, "ЯРОСТЬ ПРОШЛА", "--info", 1200\)/.test(br),
+    "начало и конец ярости заявлены текстом, а не только миганием");
+  ok(/rgba\(214, 40, 40/.test(br) && /ctx\.fillRect\(0, 0, W, 3\)/.test(br),
+    "в ярости верх экрана наливается красным и пульсирует кромкой");
+  ok(/ctx\.fillStyle = cssVar\(g\.bannerC/.test(br) && /ctx\.fillStyle = cssVar\(p\.c/.test(br),
+    "плашки берут цвет через cssVar: var() канвас игнорирует молча");
+  ok(!/c: "var\(--/.test(br), "в игре не осталось var()-цветов, уходящих прямо в канвас");
+
+  /* То же правило — по всем играм: ctx.fillStyle = "var(--x)" не цвет,
+     а «оставь прошлый цвет»; такие дыры не видно ни в одной проверке. */
+  const gameFiles = fs.readdirSync("src/games").filter((f) => f.endsWith(".tsx"));
+  const bad = gameFiles.filter((f) =>
+    /ctx\.(fillStyle|strokeStyle|shadowColor)\s*=\s*"var\(/.test(fs.readFileSync(path.join("src/games", f), "utf8")));
+  ok(bad.length === 0, "ни одна игра не красит канвас через var()" + (bad.length ? " — " + bad.join(", ") : ""));
+
+  ok(/if \(countdown > 0\) \{[\s\S]{0,240}pause-resume/.test(po) && /<Countdown n=\{countdown\}/.test(po),
+    "возврат из паузы: меню уже закрыто, отсчёт идёт над полем игры");
+  ok(!/pause-count/.test(po) && !css.includes(".pause-count"),
+    "цифра поверх карточки убрана — именно она и выглядела как «меню не пропадает»");
+  ok(/\.pause-resume \{[\s\S]{0,260}pointer-events: none/.test(css),
+    "отсчёт не перехватывает касания: руки уже в игре");
+  ok(/hasKeyboard\(\) && \(/.test(po), "подсказка про Esc — только там, где клавиатура есть");
+}
+
+console.log('\n[52] 1.27.2 · ЧУБ КЛИКЕР: ползунок уровней, читаемая покупка, HUD не мешает');
+{
+  const cl = fs.readFileSync("src/games/Clicker.tsx", "utf8");
+  const hud = fs.readFileSync("src/ui/PcHud.tsx", "utf8");
+  const app = fs.readFileSync("src/App.tsx", "utf8");
+
+  ok(/Math\.min\(W, H\) \* 0\.33/.test(cl) && /H \* 0\.46/.test(cl),
+    "лицо поднято к центру и чуть уменьшено — не упирается в нижнюю панель");
+  ok(!/setBuyQty/.test(cl) && !/tr\("МАКС"\)/.test(cl) && !/"БРАТЬ"/.test(cl),
+    "переключателя «БРАТЬ ×1 ×10 МАКС» в разметке больше нет");
+  ok(/function LevelSlider/.test(cl) && /onPointerDown=\{/.test(cl) && /touch-action: none/.test(css),
+    "количество берут пальцем по ползунку, и список апгрейдов при этом не скроллится");
+  ok(/\.cl-slider-knob \{[\s\S]{0,420}color: var\(--acc-ink\)/.test(css),
+    "ручка ползунка залита акцентом и читается на любой теме");
+  ok(/const count = Math\.min\(Math\.max\(1, want\), aff\)/.test(cl),
+    "больше, чем по карману, не купится — сколько бы ручку ни тянули");
+  ok(/color: can \? "var\(--acc-ink\)" : "var\(--text\)"/.test(cl),
+    "подпись «КУПИТЬ» видна и на фиолетовом акценте, и когда денег не хватает");
+  ok(!/fps-hud-scale/.test(hud) && !css.includes(".fps-hud-scale"),
+    "строчка «разрешение» под счётчиком кадров убрана");
+  ok(/body\.cl-shop \.fps-hud \{\n  display: none/.test(css),
+    "на вкладке апгрейдов счётчик кадров не показывается");
+  ok(/game === "clicker" \? " is-clicker"/.test(app) && /\.is-clicker \.fps-hud \{/.test(css),
+    "в кликере счётчик опущен ниже кнопки «АПГРЕЙДЫ»");
+}
+
+console.log('\n[53] 1.27.2 · ПОБЕГ ОТ ШИТОВА: падение после прыжка и страховка кадра');
+{
+  const sr = fs.readFileSync("src/games/ShitovRun.tsx", "utf8");
+  const sh = fs.readFileSync("src/games/shell.tsx", "utf8");
+
+  ok(/const shrink = Math\.max\(0\.2, Math\.min\(1, 1 - g\.y \* 1\.55\)\)/.test(sr),
+    "радиус тени не может уйти в минус — на нём цикл и обрывался");
+  const badEllipse = sr.split("\n").filter((l) => /ctx\.ellipse\(/.test(l) && /1 - g\.y/.test(l));
+  ok(badEllipse.length === 0, "ни один ctx.ellipse не считает радиус как (1 - g.y) без клампа");
+  ok(/ctx\.ellipse\(heroX, groundY \+ 3, heroR \* 0\.8 \* shrink/.test(sr),
+    "тень сжимается и гаснет вместе с высотой прыжка");
+  ok(/try \{\n          drawRef\.current/.test(sh) && /brokenFrames >= 30/.test(sh),
+    "битый кадр больше не убивает игру: цикл переживает сбой и глушит спам");
+  ok(/console\.error\("\[chub\] кадр игры упал:"/.test(sh),
+    "причина сбоя кадра пишется в консоль, а не исчезает молча");
+  ok(/свисток на цепочке/.test(sr) && /кепи: тулья и козырёк/.test(sr),
+    "у Шитова куртка, кепи и свисток — силуэт читается с одного кадра");
+}
+
+console.log('\n[54] 1.27.2 · телефон: «!» о наградах, меню снизу, лишние плашки');
+{
+  const nav = fs.readFileSync("src/components/Nav.tsx", "utf8");
+  const clm = fs.readFileSync("src/core/claimable.ts", "utf8");
+  const pg = fs.readFileSync("src/pages/Progress.tsx", "utf8");
+  const st = fs.readFileSync("src/pages/Settings.tsx", "utf8");
+
+  ok(/"nav\.settings": "Настройки"/.test(i18n) && /label: "nav\.settings"/.test(nav),
+    "в нижнем меню справа — «Настройки», а не «Ещё»");
+  ok(/m-nav-flag/.test(nav) && /content: "!"/.test(css),
+    "на «Прогрессе» горит красный кружок с «!» — не безликая точка");
+  ok(/claimableCount\(claimables\(s\)\)/.test(nav) && /dailyState\(s\)\.canClaim/.test(clm),
+    "«!» считается по всем четырём источникам наград: ежедневка, задания, сундук, босс");
+  ok(/chestReady\(readFriendship\(\)\)/.test(clm) && /canFight\(readBosses\(\)\)/.test(clm),
+    "сундук и босс проверяются по-настоящему, а не «на глазок»");
+  ok(/minWidth: 0/.test(nav) && /textOverflow: "ellipsis"/.test(nav),
+    "подписи кнопок не вылезают за свои плитки («Персонажи» влезает)");
+  ok(/\.m-nav-ico \{/.test(css), "иконки нижнего меню сидят в одинаковой коробке");
+  ok(!/pc-prog-row[\s\S]{0,420}УРОВЕНЬ/.test(pg), "второй плашки уровня в Прогрессе больше нет");
+  ok(/\.pc-lvlhero-cap \{[\s\S]{0,240}opacity: 1/.test(css),
+    "подпись «УРОВЕНЬ» не тает на акцентной заливке");
+  ok(/\.pc-lvlhero-xp \{[\s\S]{0,260}--text-dim/.test(css),
+    "строка опыта читается и на светлой, и на цветной теме");
+  ok(!/settings\.author/.test(st) && !/Все друзья, шутки/.test(st),
+    "из Настроек убраны «автор и разработчик» и «все друзья, шутки…»");
+}
+
+console.log('\n[55] 1.27.2 · телефон: уровни и треки в РИТМЕ РАДОМИРА, иконка из фото');
+{
+  const beat = fs.readFileSync("src/games/RadomirBeat.tsx", "utf8");
+  const ico = fs.readFileSync("scripts/build-icons.mjs", "utf8");
+
+  ok(/BEAT_LEVELS: \{ name: string/.test(beat) && (beat.match(/name: "/g) || []).length >= 4,
+    "у ритма четыре ступени: НОВИЧОК, В РИТМЕ, РАЗОГРЕВ, БЕЗ РИТМА");
+  ok(/gap: 460[\s\S]{0,400}gap: 210/.test(beat),
+    "ступени правда разные: шаг нот от 460 мс до 210 мс");
+  ok(/lives: 6[\s\S]{0,400}lives: 3/.test(beat) && /g\.lives = L\.lives/.test(beat),
+    "жизни берутся из уровня, а не всегда пять");
+  ok(/BEAT_LEVELS\[lv\]\.mult/.test(beat),
+    "награда растёт вместе с риском: за «БЕЗ РИТМА» платят вдвое");
+  ok(/femboichik\.mp3/.test(beat) && /Eiffel_65_-_Move_Your_Body/.test(beat),
+    "в приложении два трека: «Фембойчик» и Eiffel 65");
+  ok(/if \(!res\.ok\) throw new Error\("нет файла"\)/.test(beat),
+    "нет файла в сборке — откат на синтезированный бит, а не чёрный экран");
+  ok(/trackId === "own"/.test(beat),
+    "свой файл играет только когда его явно выбрали, а не «потому что был»");
+  ok(/readNum\(LV_KEY/.test(beat) && /localStorage\.setItem\(TRACK_KEY/.test(beat),
+    "уровень и трек запоминаются: не надо выставлять руками каждый заход");
+  ok(/function chartFromOnsets\(ons: Onset\[\], lv = 1\)/.test(beat) && /const minGap = L\.gap;/.test(beat),
+    "плотность нот берётся из уровня: все четыре ступени дают разные чарты");
+  ok(/onsetsRef/.test(beat) && /\}, \[lv\]\);/.test(beat),
+    "смена уровня пересобирает чарт из онсетов в памяти, а не качает трек заново");
+
+  ok(/\.grayscale\(\)/.test(ico),
+    "monochrome-слой обесцвечен — Android перекрашивает его сам");
+  ok(/size \* 0\.66/.test(ico),
+    "фото в adaptive-иконке не вылезает за безопасную зону (66% холста)");
+  ok(/branding\/photo\.jpg/.test(ico),
+    "иконка переключается на фото одним файлом, вектор остаётся запасным");
 }
 
 console.log(fails===0?'\n✅ ВСЕ ПРОВЕРКИ ВЁРСТКИ ПРОЙДЕНЫ\n':`\n❌ ПРОВАЛЕНО: ${fails}\n`);

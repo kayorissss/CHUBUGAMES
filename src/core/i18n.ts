@@ -13,6 +13,8 @@ const RU: Dict = {
   "nav.shop": "Магазин",
   "nav.friends": "Персонажи",
   "nav.more": "Ещё",
+  "nav.settings": "Настройки",
+  "nav.hasLoot": "есть что забрать",
 
   "home.continue": "Продолжить",
   "home.play": "Играть",
@@ -70,6 +72,8 @@ const EN: Dict = {
   "nav.shop": "Shop",
   "nav.friends": "Characters",
   "nav.more": "More",
+  "nav.settings": "Settings",
+  "nav.hasLoot": "something to claim",
 
   "home.continue": "Continue",
   "home.play": "Play",

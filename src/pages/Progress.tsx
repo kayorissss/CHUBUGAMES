@@ -223,23 +223,14 @@ function Daily() {
         <ModesPanel />
       </div>
 
-      {/* ЗОНА 3 — сам прогресс: уровень, полоса опыта и сколько XP осталось
-          до следующего уровня. До этого «Ур. N» был только в шапке главной,
-          а на странице прогресса смотреть было нечего. */}
+      /* ЗОНА 3 — показатели сезона и заданий.
+         Уровень здесь был ВТОРЫМ: крупная плашка уровня уже живёт первым
+         блоком страницы, и дубль попросили убрать. Сезонный опыт и счётчик
+         готовых заданий оставили — уровень они не повторяют. */
       <div className="pc-blk pc-a pc-r2">
-        <SectionTitle>{tr("Прогресс")}</SectionTitle>
+        <SectionTitle>{tr("Сезон и задания")}</SectionTitle>
         <Card r="lg" style={{ padding: 14, marginBottom: 0 }}>
           <div className="pc-prog-row">
-            <div className="min-w-0">
-              <div className="t-label" style={{ fontSize: 8.5, letterSpacing: "0.08em" }}>{tr("УРОВЕНЬ")}</div>
-              <div className="t-display" style={{ fontSize: 34, lineHeight: 1 }}>{s.level}</div>
-            </div>
-            <div style={{ flex: "1 1 auto", minWidth: "6rem" }}>
-              <Bar pct={Math.min(1, s.xp / xpForLevel(s.level))} h={8} />
-              <div className="t-caption" style={{ marginTop: 7 }}>
-                {fmt(xpForLevel(s.level) - s.xp)} XP {tr("до")} {s.level + 1}
-              </div>
-            </div>
             <div className="pc-prog-side">
               <div>
                 <div className="t-label" style={{ fontSize: 8.5 }}>{tr("СЕЗОННЫЙ XP")}</div>

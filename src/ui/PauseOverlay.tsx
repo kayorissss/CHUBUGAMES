@@ -1,8 +1,10 @@
-import { AnimatePresence, motion } from "framer-motion";
+import { motion } from "framer-motion";
 import { tr } from "../core/i18n";
 import { usePause } from "../core/pause";
 import { isLowFx } from "../core/perf";
+import { hasKeyboard } from "../core/desktop";
 import Icon from "./Icon";
+import { Countdown } from "../games/shell";
 
 /**
  * ПАУЗА ИГРЫ.
@@ -14,15 +16,32 @@ import Icon from "./Icon";
  *   • scrim плотный (var(--scrim-strong)) — за паузой не должно угадываться
  *     поле игры, иначе глаз продолжает следить за партией;
  *   • card — одна карточка по центру: крупная надпись ПАУЗА, кнопки
- *     «Продолжить» и «Выйти», подсказка про Esc;
- *   • «Продолжить» запускает отсчёт 3-2-1 прямо поверх, цифра уходит
- *     уменьшаясь; игра в это время стоит (см. core/pause.ts);
+ *     «Продолжить» и «Выйти»;
+ *   • подсказка про Esc показывается только там, где клавиатура реально
+ *     есть: на телефоне строка про клавишу — мусор, занимающий место;
+ *   • «Продолжить» убирает МЕНЮ СРАЗУ, и над полем игры идёт тот же отсчёт
+ *     3-2-1, что встречает игрока в начале партии. Раньше цифра уходила
+ *     поверх карточки: человек всё ещё смотрел в меню, а не в игру
+ *     (просьба буквальная: «менюшка должна пропасть, и таймер уже в игре
+ *     появляется, как в начале самом»);
  *   • в лёгком режиме анимаций нет — цифра просто появляется.
+ *
+ * Игра стоит всё это время: цикл useCanvas проверяет isPaused() и не
+ * копит dt (core/pause.ts), поэтому после возвращения персонаж не улетает.
  */
 export default function PauseOverlay({ label }: { label?: string }) {
   const { paused, countdown, resume, exit } = usePause();
   if (!paused) return null;
   const fx = !isLowFx();
+
+  /* Возврат из паузы: только отсчёт, без карточки. */
+  if (countdown > 0) {
+    return (
+      <div className="pause-resume" aria-live="polite">
+        <Countdown n={countdown} />
+      </div>
+    );
+  }
 
   return (
     <motion.div
@@ -56,26 +75,13 @@ export default function PauseOverlay({ label }: { label?: string }) {
           {tr("Выйти в меню")}
         </button>
 
-        <div className="pause-hint">
-          <span className="kbd">Esc</span>
-          {tr("— пауза и продолжение")}
-        </div>
-      </motion.div>
-
-      <AnimatePresence>
-        {countdown > 0 && (
-          <motion.div
-            key={countdown}
-            className="pause-count"
-            initial={fx ? { scale: 1.6, opacity: 0 } : false}
-            animate={{ scale: 1, opacity: 1 }}
-            exit={{ scale: 0.7, opacity: 0 }}
-            transition={{ duration: 0.22, ease: [0.22, 0.9, 0.24, 1] }}
-          >
-            {countdown}
-          </motion.div>
+        {hasKeyboard() && (
+          <div className="pause-hint">
+            <span className="kbd">Esc</span>
+            {tr("— пауза и продолжение")}
+          </div>
         )}
-      </AnimatePresence>
+      </motion.div>
     </motion.div>
   );
 }

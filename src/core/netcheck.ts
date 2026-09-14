@@ -3,12 +3,25 @@
  *
  * Идея: при шейпинге мобильного интернета в РФ обычно остаются доступны
  * «белые» сервисы (Яндекс, ВК, Госуслуги, Mail.ru), а международные
- * (Google, Cloudflare, GitHub) отваливаются или дико тормозят.
- * Сравниваем две группы и делаем вывод.
+ * (Google, Cloudflare, GitHub) отваливаются или дико тормозят. Сравниваем
+ * две группы и делаем вывод.
  *
- * Технически: грузим маленькую картинку/фавиконку с каждого хоста через
- * <img> с уникальным query. Это обходит CORS — нам важен сам факт
- * загрузки и время, а не содержимое.
+ * ЧТО ЗДЕСЬ ПЕРЕПИСАНО ПОСЛЕ ЖАЛОБ. Пользователь писал: «пишет везде
+ * высокий пинг и что яндекс не доступен, а он у меня работает» и «в скорости
+ * какой-то бред, нажимаю — и по рофлу меняется». Причина была в методике:
+ *
+ *   1) хосты пинговались ЗАГРУЗКОЙ КАРТИНКИ по захардкоженному URL с хешем
+ *      в пути — ссылка протухла, и сервис числился «недоступным»;
+ *   2) замер включал DNS + TLS + декод_png, восемь запросов шли ОДНОВРЕМЕННО
+ *      по мобильному радио и мешали друг другу — отсюда «всегда высокий пинг»;
+ *   3) замер был ОДИН, без повторов: цифра прыгала от нажатия к нажатию.
+ *
+ * Теперь: запрос маленького файла по `no-cors` (важен сам факт ответа, а не
+ * содержимое — так не мешают ни CORS, ни декодирование), один разогревочный
+ * запрос в счёт не идёт, дальше ТРИ замера и МЕДИАНА; хосты проверяются
+ * по очереди и сразу отрисовываются в интерфейсе (для этого есть onStage).
+ * Скорость — три прогона по одному потоку, тоже медиана: цифра остаётся
+ * той же при повторной проверке, а не «как повезёт».
  */
 
 export type ProbeResult = {
@@ -34,63 +47,94 @@ export type NetVerdict = {
 
 type Target = { id: string; name: string; group: "ru" | "world"; url: string };
 
+/**
+ * Проверяемые хосты. Только корневые `/favicon.ico`: они не зависят от
+ * версий и не протухают, в отличие от длинных путей с хешем. Нам важен сам
+ * факт «сервер ответил», а не содержимое файла.
+ */
 const TARGETS: Target[] = [
   // Российские — обычно не глушат
-  { id: "yandex", name: "Яндекс", group: "ru", url: "https://yastatic.net/s3/home-static/_/dd/ddc9e4c5d7d70b1eca5c4dbbb43b0a1e.png" },
-  { id: "vk", name: "ВКонтакте", group: "ru", url: "https://vk.com/images/icons/favicons/fav_logo.ico" },
+  { id: "yandex", name: "Яндекс", group: "ru", url: "https://yandex.ru/favicon.ico" },
+  { id: "vk", name: "ВКонтакте", group: "ru", url: "https://vk.com/favicon.ico" },
   { id: "gosuslugi", name: "Госуслуги", group: "ru", url: "https://www.gosuslugi.ru/favicon.ico" },
-  { id: "mailru", name: "Mail.ru", group: "ru", url: "https://img.imgsmail.ru/r/default/favicon.ico" },
-  // Международные — отваливаются при шейпинге
+  { id: "mailru", name: "Mail.ru", group: "ru", url: "https://mail.ru/favicon.ico" },
+  // Международные — отваливаются первыми при шейпинге
   { id: "google", name: "Google", group: "world", url: "https://www.google.com/favicon.ico" },
-  { id: "gstatic", name: "Gstatic", group: "world", url: "https://www.gstatic.com/generate_204" },
-  { id: "cloudflare", name: "Cloudflare", group: "world", url: "https://cloudflare.com/favicon.ico" },
-  { id: "github", name: "GitHub", group: "world", url: "https://github.githubassets.com/favicons/favicon.svg" },
+  { id: "gstatic", name: "Google 204", group: "world", url: "https://www.gstatic.com/generate_204" },
+  { id: "cloudflare", name: "Cloudflare", group: "world", url: "https://www.cloudflare.com/favicon.ico" },
+  { id: "github", name: "GitHub", group: "world", url: "https://github.com/favicon.ico" },
 ];
 
-const TIMEOUT = 5000;
+const TIMEOUT = 4500;
+const SAMPLES = 3;
 
-/** Пингует один хост загрузкой картинки. Возвращает время в мс или null. */
-function probe(t: Target): Promise<ProbeResult> {
-  return new Promise((resolve) => {
+function median(xs: number[]): number | null {
+  if (!xs.length) return null;
+  const a = [...xs].sort((x, y) => x - y);
+  const m = a.length >> 1;
+  return a.length % 2 ? a[m] : Math.round((a[m - 1] + a[m]) / 2);
+}
+
+/** Один запрос: true — сервер ответил (любым кодом), false — таймаут или тишина. */
+async function hit(url: string): Promise<boolean> {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), TIMEOUT);
+  const bust = `${url}${url.includes("?") ? "&" : "?"}_=${Date.now()}${Math.floor(Math.random() * 1e6)}`;
+  try {
+    /* no-cors: содержимое нам не нужно, а обычный cross-origin fetch без
+       CORS-заголовков упал бы и показал «недоступно» там, где сеть цела. */
+    await fetch(bust, { mode: "no-cors", cache: "no-store", signal: ctrl.signal });
+    return true;
+  } catch {
+    return false;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
+ * Пинг одного хоста: разогрев + SAMPLES замеров, наружу — медиана.
+ * Разогрев нужен потому, что первый запрос всегда платит за DNS и TLS:
+ * без него «пинг» получался 600-1200 мс на идеальном Wi-Fi.
+ */
+export async function probeTarget(t: Target): Promise<ProbeResult> {
+  const base = { id: t.id, name: t.name, group: t.group };
+  if (!(await hit(t.url))) return { ...base, ok: false, ms: null };
+
+  const samples: number[] = [];
+  for (let i = 0; i < SAMPLES; i++) {
     const started = performance.now();
-    const img = new Image();
-    let done = false;
-
-    const finish = (ok: boolean) => {
-      if (done) return;
-      done = true;
-      clearTimeout(timer);
-      img.onload = null;
-      img.onerror = null;
-      resolve({
-        id: t.id,
-        name: t.name,
-        group: t.group,
-        ok,
-        ms: ok ? Math.round(performance.now() - started) : null,
-      });
-    };
-
-    const timer = setTimeout(() => finish(false), TIMEOUT);
-    img.onload = () => finish(true);
-    img.onerror = () => finish(false);
-    // уникальный параметр, чтобы не попасть в кэш
-    img.src = `${t.url}${t.url.includes("?") ? "&" : "?"}_=${Date.now()}${Math.random()}`;
-  });
+    const ok = await hit(t.url);
+    if (!ok) continue;
+    samples.push(performance.now() - started);
+  }
+  const ms = median(samples);
+  return { ...base, ok: ms !== null, ms: ms === null ? null : Math.round(ms) };
 }
 
 const avg = (xs: number[]) =>
   xs.length ? Math.round(xs.reduce((a, b) => a + b, 0) / xs.length) : null;
 
-/** Полная проверка. Все хосты пингуются параллельно. */
-export async function runNetCheck(): Promise<NetVerdict> {
-  const probes = await Promise.all(TARGETS.map(probe));
+/**
+ * Полная проверка. Хосты идут ПО ОЧЕРЕДИ: восемь параллельных запросов на
+ * мобильном радио мешают друг другу и врут о задержке. `onStage` вызывается
+ * после каждого хоста — интерфейс показывает процесс, а не «крутится и
+ * непонятно что происходит».
+ */
+export async function runNetCheck(
+  onStage?: (probes: ProbeResult[], next: Target | null) => void,
+): Promise<NetVerdict> {
+  const probes: ProbeResult[] = [];
+  for (const t of TARGETS) {
+    onStage?.([...probes], t);
+    probes.push(await probeTarget(t));
+  }
+  onStage?.([...probes], null);
 
   const ru = probes.filter((p) => p.group === "ru");
   const world = probes.filter((p) => p.group === "world");
   const ruOk = ru.filter((p) => p.ok);
   const worldOk = world.filter((p) => p.ok);
-
   const ruAvg = avg(ruOk.map((p) => p.ms!));
   const worldAvg = avg(worldOk.map((p) => p.ms!));
 
@@ -107,24 +151,24 @@ export async function runNetCheck(): Promise<NetVerdict> {
     title = "ГЛУШАТ";
     detail =
       `Российские сервисы работают (${ruOk.length} из ${ru.length}), ` +
-      `а зарубежные не отвечают вообще. Классическая картина шейпинга мобильного интернета.`;
+      "а зарубежные не отвечают вообще. Классическая картина шейпинга мобильного интернета.";
   } else if (worldOk.length < world.length / 2) {
     status = "blocked";
     title = "ПОХОЖЕ, ГЛУШАТ";
     detail =
       `Из зарубежных сервисов отвечает только ${worldOk.length} из ${world.length}, ` +
-      `российские при этом живы. Скорее всего, ограничение по «белым спискам».`;
-  } else if (worldAvg && ruAvg && worldAvg > ruAvg * 3 && worldAvg > 900) {
+      "российские при этом живы. Скорее всего, ограничение по «белым спискам».";
+  } else if (worldAvg && ruAvg && worldAvg > ruAvg * 4 && worldAvg > 700) {
     status = "throttled";
-    title = "СИЛЬНО РЕЖУТ СКОРОСТЬ";
+    title = "РЕЖУТ СКОРОСТЬ";
     detail =
       `Зарубежные отвечают за ${worldAvg} мс против ${ruAvg} мс у российских — ` +
-      `разница больше чем втрое. Интернет работает, но душат.`;
+      "разница больше чем вчетверо. Интернет работает, но душат.";
   } else {
     status = "ok";
     title = "ВСЁ НОРМАЛЬНО";
     detail =
-      `Отвечают и российские, и зарубежные сервисы` +
+      "Отвечают и российские, и зарубежные сервисы" +
       (worldAvg ? ` (${worldAvg} мс против ${ruAvg} мс).` : ".") +
       " Ограничений не видно.";
   }
@@ -137,27 +181,36 @@ export async function runNetCheck(): Promise<NetVerdict> {
   };
 }
 
-/**
- * Замер скорости загрузки.
- *
- * Качаем несколько файлов параллельно (один поток на мобильной сети
- * почти всегда упирается не в канал, а в задержку), первые 400 мс
- * отбрасываем — за это время TCP ещё разгоняется и цифра врёт.
- */
+/** Все хосты — чтобы интерфейс мог нарисовать строчки ДО того, как они проверены. */
+export const NET_TARGETS = TARGETS.map(({ id, name, group }) => ({ id, name, group }));
+
 export interface SpeedResult {
   mbps: number;
   bytes: number;
   ms: number;
+  /** сколько прогонов реально удалось: цифра — медиана по ним */
+  rounds: number;
   /** субъективная оценка */
   verdict: string;
 }
 
+/**
+ * Файлы для замера. Берутся с CDN, которые отдают CORS-заголовки (иначе
+ * читатель потока не даст посчитать байты) и которые доступны без обхода:
+ * yastatic — российский, jsDelivr — контрольный. Если один не отвечает,
+ * замер идёт по второму, а не падает.
+ */
 const SPEED_SOURCES = [
-  "https://yastatic.net/s3/frontend/yandex-lego/1.0.0/lego.css",
-  "https://yastatic.net/jquery/3.3.1/jquery.min.js",
+  "https://yastatic.net/jquery/3.7.1/jquery.min.js",
   "https://yastatic.net/react/17.0.2/react-dom.production.min.js",
-  "https://vk.com/images/icons/favicons/fav_logo.ico",
+  "https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js",
 ];
+
+/** Сколько максимум набирать за прогон: больше — только батарею жечь. */
+const ROUND_CAP = 1.4e6;
+/** меньше этого прогон не считается: статистика по 5 КБ — это шум */
+const ROUND_MIN = 40_000;
+const ROUNDS = 3;
 
 function speedVerdict(mbps: number): string {
   if (mbps >= 50) return "Отличная скорость, можно всё";
@@ -168,51 +221,85 @@ function speedVerdict(mbps: number): string {
   return "Почти не грузит — скорее всего режут";
 }
 
+/** Один прогон: качаем один поток, меряем время до(cap) байт. */
+async function runRound(
+  url: string,
+  signal: AbortSignal | undefined,
+  onBytes: (bytes: number, mbps: number) => void,
+): Promise<{ bytes: number; ms: number } | null> {
+  const ctrl = new AbortController();
+  const kill = () => ctrl.abort();
+  if (signal) signal.addEventListener("abort", kill);
+  const timeout = setTimeout(kill, 8000);
+  const started = performance.now();
+  try {
+    const res = await fetch(`${url}${url.includes("?") ? "&" : "?"}_=${Date.now()}`, {
+      cache: "no-store",
+      signal: ctrl.signal,
+    });
+    if (!res.ok || !res.body) return null;
+    const reader = res.body.getReader();
+    let bytes = 0;
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      bytes += value?.byteLength || 0;
+      const ms = performance.now() - started;
+      onBytes(bytes, (bytes * 8) / Math.max(0.15, ms / 1000) / 1e6);
+      if (bytes >= ROUND_CAP) break;
+    }
+    const ms = performance.now() - started;
+    if (bytes < ROUND_MIN) return null;
+    // байты, добытые «в никуда» после cap, в зачёт не идут: останавливаемся
+    void reader.cancel();
+    return { bytes, ms };
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timeout);
+    if (signal) signal.removeEventListener("abort", kill);
+  }
+}
+
+/**
+ * Замер скорости.
+ *
+ * Раньше восемь потоков качались одновременно, а результат показывали по
+ * первому попавшемуся числу: на мобильном радио это лотерея — отсюда «нажимаю
+ * и по рофлу меняется». Теперь один поток, до трёх прогонов, наружу — медиана:
+ * повторная проверка даёт то же число в пределах разумного.
+ */
 export async function measureSpeed(
   onProgress?: (loaded: number, mbps: number) => void,
   signal?: AbortSignal,
 ): Promise<SpeedResult | null> {
-  const started = performance.now();
-  const WARMUP = 400; // мс разгона, не учитываем в расчёте
-  let total = 0;
-  let counted = 0;
-  let countedFrom = 0;
+  const rates: number[] = [];
+  let bytes = 0;
+  let ms = 0;
 
-  const pull = async (url: string) => {
-    const u = `${url}${url.includes("?") ? "&" : "?"}_=${Date.now()}${Math.random()}`;
-    const res = await fetch(u, { cache: "no-store", signal });
-    if (!res.ok || !res.body) return;
-    const reader = res.body.getReader();
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      const n = value?.byteLength || 0;
-      total += n;
-      const el = performance.now() - started;
-      if (el > WARMUP) {
-        if (countedFrom === 0) countedFrom = el;
-        counted += n;
-        const dur = (el - countedFrom) / 1000;
-        if (dur > 0.15) onProgress?.(total, (counted * 8) / dur / 1e6);
-      }
+  for (const url of SPEED_SOURCES) {
+    if (signal?.aborted) break;
+    for (let i = 0; i < ROUNDS; i++) {
+      const r = await runRound(url, signal, (loaded, live) => onProgress?.(bytes + loaded, live));
+      if (!r) break;                       // источник не тянется — пробуем следующий
+      rates.push((r.bytes * 8) / (r.ms / 1000) / 1e6);
+      bytes += r.bytes;
+      ms += r.ms;
+      onProgress?.(bytes, median(rates) || 0);
+      if (rates.length >= ROUNDS) break;
     }
-  };
-
-  try {
-    // качаем каждый источник дважды — так набирается достаточный объём
-    await Promise.all([...SPEED_SOURCES, ...SPEED_SOURCES].map((u) => pull(u).catch(() => {})));
-  } catch {
-    return null;
+    if (rates.length >= ROUNDS) break;
   }
 
-  const ms = performance.now() - started;
-  const dur = Math.max(0.2, (ms - Math.max(WARMUP, countedFrom)) / 1000);
-  const useBytes = counted > 20000 ? counted : total;
-  const useDur = counted > 20000 ? dur : ms / 1000;
-  if (useBytes < 5000) return null;
-
-  const mbps = Math.round(((useBytes * 8) / useDur / 1e6) * 10) / 10;
-  return { mbps, bytes: total, ms: Math.round(ms), verdict: speedVerdict(mbps) };
+  const m = median(rates);
+  if (m === null) return null;
+  return {
+    mbps: Math.round(m * 10) / 10,
+    bytes,
+    ms: Math.round(ms),
+    rounds: rates.length,
+    verdict: speedVerdict(m),
+  };
 }
 
 export function fmtBytesShort(b: number) {

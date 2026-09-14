@@ -28,6 +28,18 @@ export default function Friends() {
   const { s, set, mainFriend, toast } = useGame();
   const bonus = bossStats(s);
   const [editing, setEditing] = useState<Friend | null>(null);
+
+  /*
+   * Пока открыт лист создания или редактирования персонажа, нижнее меню
+   * прячем. Оно оставалось под полупрозрачным затемнением, и подвал листа
+   * с «СОХРАНИТЬ» ложился поверх кнопок «Игры / Прогресс / Магазин /
+   * Персонажи» — выглядело так, будто кнопки «ушли за менюшку».
+   */
+  useEffect(() => {
+    const el = document.documentElement;
+    if (editing) el.classList.add("chub-sheet");
+    return () => el.classList.remove("chub-sheet");
+  }, [editing]);
   const [creating, setCreating] = useState(false);
 
   const newFriend = (): Friend => ({

@@ -4,6 +4,7 @@ import { useGame } from "../core/store";
 import { Card, Button, SectionTitle, Screen, Divider } from "../ui/Glass";
 import DesktopSettings from "../ui/DesktopSettings";
 import KeymapCard from "../ui/KeymapCard";
+import { NetPanel } from "./Network";
 import { isDesktop, hasKeyboard } from "../core/desktop";
 import UpdateCheckRow from "../ui/UpdateCheckRow";
 import {
@@ -52,7 +53,7 @@ export default function Settings({
    * Теперь группы режутся вкладками, а внутри группы — обычная сетка
    * `align-items: start`, где строки не фиксированы.
    */
-  const [sec, setSec] = useState<"screen" | "game" | "profile" | "system">(
+  const [sec, setSec] = useState<"screen" | "game" | "net" | "profile" | "system">(
     () => (localStorage.getItem("chubgames.settingsTab") as "screen") || "screen",
   );
   const fileRef = useRef<HTMLInputElement>(null);
@@ -162,6 +163,7 @@ export default function Settings({
           { id: "screen", label: "Экран", icon: "sun" },
           { id: "game", label: "Игра", icon: "speed" },
           { id: "profile", label: "Профиль", icon: "user" },
+          { id: "net", label: "Сеть", icon: "wifi" },
           { id: "system", label: "Система", icon: "gear" },
         ] as const).map((it) => (
           <button
@@ -355,14 +357,23 @@ export default function Settings({
       </div>
       )}
 
+{sec === "net" && (
+      /* «Глушилки» переехали сюда отдельной вкладкой: раньше это была
+         отдельная страница в «Инструментах», и найти её было невозможно. */
+      <div className="pc-blk pc-set-span">
+      <SectionTitle>{tr("Проверка сети")}</SectionTitle>
+      <NetPanel />
+      </div>
+      )}
+
 {sec === "system" && (
       <div className="pc-blk pc-set-item">
       <SectionTitle>{tr("Инструменты")}</SectionTitle>
       <Card r="lg" style={{ padding: 0, marginBottom: 22, overflow: "hidden" }}>
         <NavRow
           icon="wifi"
-          title="Проверка глушилок"
-          sub="Пинг российских и зарубежных сервисов, скорость"
+          title={tr("Проверка сети на всю страницу")}
+          sub={tr("та же проверка, но крупнее")}
           onClick={() => onOpen?.("network")}
         />
       </Card>
@@ -427,25 +438,10 @@ export default function Settings({
 
       <div className="pc-blk pc-set-span">
       <Card r="lg" style={{ padding: 14, marginBottom: 22 }}>
-        <div className="flex items-center" style={{ gap: 13 }}>
-          <div
-            className="shrink-0 flex items-center justify-center"
-            style={{
-              width: 44, height: 44, borderRadius: "var(--r-md)",
-              background: "var(--btn-bg)", border: "1px solid var(--btn-brd)",
-              color: "var(--acc)",
-            }}
-          >
-            <Icon name="burger" size={22} />
-          </div>
-          <div className="min-w-0 flex-1">
-            <div className="t-title-sm">KAYORISAN</div>
-            <div className="t-caption" style={{ marginTop: 2 }}>
-              {t("settings.author")}
-            </div>
-          </div>
-        </div>
-        <div style={{ marginTop: 14 }}>
+        {/* Просьба: «убери в настройках автора и разработчика, и надпись
+            „все друзья, шутки…“». Осталась одна кнопка связи — она и нужна,
+            когда человеку есть что сказать. */}
+        <div>
           <Button
             variant="primary"
             full
@@ -461,7 +457,6 @@ export default function Settings({
             Telegram: @kayorisan
           </Button>
         </div>
-        <div className="t-caption" style={{ marginTop: 10, lineHeight: 1.5 }}>{tr("Все друзья, шутки и головы — реальные. Претензии тоже принимаются в телеграм.")}</div>
       </Card>
       </div>
       </div>
@@ -470,14 +465,13 @@ export default function Settings({
           висела в правом углу верхней панели — место, куда её никто не
           смотрит; теперь она там, где о ней спрашивают. */}
       <div className="pc-foot">
+        {/* Просьба: «убери снизу „работает офлайн“ и „сделано для своих“,
+            оставь название и всё». Так и оставили: марка и номер версии. */}
         <div className="pc-foot-brand">
-          <div className="t-display-sm" style={{ color: "var(--text-mute)" }}>CHUBUGAMES</div>
-          <div className="t-caption" style={{ marginTop: 5 }}>
-            {t("settings.forOurs")}
-          </div>
+          <div className="t-display-sm" style={{ color: "var(--text-dim)" }}>CHUBUGAMES</div>
         </div>
         <div className="t-caption pc-foot-ver">
-          {t("common.version")} {APP_VERSION} · {t("settings.offline")}
+          {t("common.version")} {APP_VERSION}
         </div>
       </div>
     </Screen>

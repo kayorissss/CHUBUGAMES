@@ -5,8 +5,8 @@ import { Card, Screen, Divider } from "../ui/Glass";
 import Icon from "../ui/Icon";
 import { sfx, haptic } from "../core/fx";
 import {
-  measureSpeed, runNetCheck, fmtBytesShort,
-  type NetVerdict, type SpeedResult,
+  measureSpeed, runNetCheck, fmtBytesShort, NET_TARGETS,
+  type NetVerdict, type ProbeResult, type SpeedResult,
 } from "../core/netcheck";
 
 type Tab = "block" | "speed";
@@ -18,27 +18,19 @@ const COLOR: Record<NetVerdict["status"], string> = {
   offline: "#8f8f9c",
 };
 
-export default function Network({ onBack }: { onBack: () => void }) {
+/**
+ * Сама панель: вкладки «ГЛУШИЛКИ» / «СКОРОСТЬ» и содержимое.
+ *
+ * Вынесена из страницы специально — с 1.27.2 проверка живёт отдельной
+ * вкладкой в Настройках (просьба «перенеси на отдельную страницу, как
+ * вкладку»), а полноэкранный вариант остаётся для тех, кому в карточке
+ * тесно. Один компонент на оба входа, чтобы они не разъезжались.
+ */
+export function NetPanel() {
   const [tab, setTab] = useState<Tab>("block");
 
   return (
-    <Screen
-      title={tr("ИНТЕРНЕТ")}
-      sub={tr("Глушилки и скорость")}
-      right={
-        <button
-          type="button"
-          onClick={() => { sfx.click(); onBack(); }}
-          className="shrink-0 flex items-center justify-center"
-          style={{
-            width: 34, height: 34, borderRadius: "var(--r-sm)",
-            background: "var(--btn-bg)", border: "1px solid var(--btn-brd)",
-          }}
-        >
-          <Icon name="cross" size={15} />
-        </button>
-      }
-    >
+    <>
       {/* Вкладки */}
       <div
         className="flex pc-tabs-row"
@@ -95,6 +87,31 @@ export default function Network({ onBack }: { onBack: () => void }) {
           </motion.div>
         )}
       </AnimatePresence>
+    </>
+  );
+}
+
+/** Полноэкранный вариант той же панели. */
+export default function Network({ onBack }: { onBack: () => void }) {
+  return (
+    <Screen
+      title={tr("ИНТЕРНЕТ")}
+      sub={tr("Глушилки и скорость")}
+      right={
+        <button
+          type="button"
+          onClick={() => { sfx.click(); onBack(); }}
+          className="shrink-0 flex items-center justify-center"
+          style={{
+            width: 34, height: 34, borderRadius: "var(--r-sm)",
+            background: "var(--btn-bg)", border: "1px solid var(--btn-brd)",
+          }}
+        >
+          <Icon name="cross" size={15} />
+        </button>
+      }
+    >
+      <NetPanel />
     </Screen>
   );
 }
@@ -104,13 +121,25 @@ export default function Network({ onBack }: { onBack: () => void }) {
 function BlockCheck() {
   const [busy, setBusy] = useState(false);
   const [v, setV] = useState<NetVerdict | null>(null);
+  /*
+   * Что уже проверено и на каком хосте мы прямо сейчас. Это и есть та самая
+   * анимация проверки, о которой просили: список заполняется по одному
+   * хосту, а не «пульсирует неизвестно что» три секунды.
+   */
+  const [live, setLive] = useState<{ done: ProbeResult[]; now: string | null }>({
+    done: [], now: null,
+  });
 
   const check = async () => {
     setBusy(true);
     setV(null);
+    setLive({ done: [], now: NET_TARGETS[0]?.name ?? null });
     sfx.click();
-    const res = await runNetCheck();
+    const res = await runNetCheck((probes, next) => {
+      setLive({ done: [...probes], now: next ? next.name : null });
+    });
     setV(res);
+    setLive({ done: res.probes, now: null });
     setBusy(false);
     haptic(res.status === "ok" ? "success" : "error");
     if (res.status === "ok") sfx.achieve?.();
@@ -125,24 +154,46 @@ function BlockCheck() {
       <Card r="lg" style={{ padding: 14, marginBottom: 14 }}>
         <div className="t-body" style={{ lineHeight: 1.55 }}>
           Проверка сравнивает российские сервисы с зарубежными. Если работают
-          только «белые» — интернет режут.
+          только «белые» — интернет режут. Каждый хост пингуется трижды и на
+          экран выходит медиана: повторная проверка даёт то же число, а не
+          «как повезло».
         </div>
-        <button
-          type="button"
-          disabled={busy}
-          onClick={check}
-          className="w-full t-title-sm"
-          style={{
-            marginTop: 13, padding: "13px 0", borderRadius: "var(--r-md)",
-            background: "var(--acc)", color: "var(--acc-ink)",
-            fontWeight: 700, opacity: busy ? 0.6 : 1,
-          }}
-        >
-          {busy ? "ПРОВЕРЯЮ…" : v ? "ПРОВЕРИТЬ ЕЩЁ РАЗ" : tr("ПРОВЕРИТЬ")}
-        </button>
       </Card>
 
-      {busy && <Pinging />}
+      {/* Живой список хостов: «ждёт» → «проверяется» → медиана мс или
+          «не отвечает». */}
+      {(busy || live.done.length > 0) && (
+        <Card r="lg" style={{ padding: "4px 0", marginBottom: 10 }}>
+          {NET_TARGETS.map((t) => {
+            const r = live.done.find((p) => p.id === t.id);
+            const now = busy && live.now === t.name;
+            return (
+              <div key={t.id} className="net-row">
+                <span className={"net-row-tag " + (t.group === "ru" ? "ru" : "world")}>
+                  {t.group === "ru" ? "РФ" : "МИР"}
+                </span>
+                <span className="t-body clip1" style={{ flex: 1, minWidth: 0 }}>{t.name}</span>
+                {now && <span className="net-row-spin" aria-hidden />}
+                {r && !now && (
+                  <span className="t-num net-row-ms" style={{ color: r.ok ? "var(--ok)" : "var(--danger)" }}>
+                    {r.ok ? `${r.ms} мс` : tr("не отвечает")}
+                  </span>
+                )}
+                {!r && !now && (
+                  <span className="t-caption" style={{ fontSize: 9.5, opacity: 0.45 }}>{tr("ждёт")}</span>
+                )}
+              </div>
+            );
+          })}
+        </Card>
+      )}
+
+      {(busy || live.done.length > 0) && (
+        <div className="net-progress" role="progressbar" aria-valuemin={0} aria-valuemax={100}
+          aria-valuenow={Math.round((live.done.length / NET_TARGETS.length) * 100)}>
+          <i style={{ width: `${(live.done.length / NET_TARGETS.length) * 100}%` }} />
+        </div>
+      )}
 
       <AnimatePresence>
         {v && !busy && (
@@ -199,25 +250,24 @@ function BlockCheck() {
           </motion.div>
         )}
       </AnimatePresence>
-    </>
-  );
-}
 
-function Pinging() {
-  return (
-    <Card r="lg" style={{ padding: 22 }}>
-      <div className="flex flex-col items-center">
-        <motion.div
-          animate={{ scale: [1, 1.14, 1], opacity: [0.55, 1, 0.55] }}
-          transition={{ repeat: Infinity, duration: 1.3, ease: "easeInOut" }}
-          style={{ color: "var(--acc)" }}
-        >
-          <Icon name="wifi" size={38} />
-        </motion.div>
-        <div className="t-title-sm" style={{ marginTop: 12 }}>{tr("Пингую хосты")}</div>
-        <div className="t-caption" style={{ marginTop: 4 }}>{tr("это займёт пару секунд")}</div>
-      </div>
-    </Card>
+      {/* КНОПКА ВНИЗУ. Просьба буквальная: «кнопку проверки сделай снизу, а
+         не сверху» — сверху она уводила взгляд от результата, а результат
+         смотреть интереснее, чем жать. */}
+      <button
+        type="button"
+        disabled={busy}
+        onClick={check}
+        className="w-full t-title-sm"
+        style={{
+          marginTop: 14, padding: "14px 0", borderRadius: "var(--r-md)",
+          background: "var(--acc)", color: "var(--acc-ink)",
+          fontWeight: 800, letterSpacing: "0.06em", opacity: busy ? 0.6 : 1,
+        }}
+      >
+        {busy ? tr("ПРОВЕРЯЮ…") : v ? tr("ПРОВЕРИТЬ ЕЩЁ РАЗ") : tr("ПРОВЕРИТЬ")}
+      </button>
+    </>
   );
 }
 

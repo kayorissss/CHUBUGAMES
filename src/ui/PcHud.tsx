@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  adaptValue, fpsWatch, onAdapt, onFps, readFps, type FpsSample,
+  fpsWatch, onFps, readFps, type FpsSample,
 } from "../core/perf";
 import { onKeys, onKeysPtr, readKeys, type KeyState } from "../core/keymouse";
 import { tr } from "../core/i18n";
@@ -19,11 +19,7 @@ import { tr } from "../core/i18n";
 /** Кадры в секунду. Выключается в настройках: «Игра» → «Показывать FPS». */
 export function FpsHud() {
   const [m, setM] = useState<FpsSample>(() => readFps());
-  // разрешение рисования меняется адаптивом — показываем его рядом, чтобы
-  // было видно: «тормозит» или «картинка стала проще, зато летает»
-  const [ad, setAd] = useState(() => adaptValue());
   useEffect(() => onFps(setM), []);
-  useEffect(() => onAdapt(() => setAd(adaptValue())), []);
   // для игр без канваса (шахматы, кроссворд) включаем резервный счётчик
   useEffect(() => fpsWatch(), []);
 
@@ -42,11 +38,6 @@ export function FpsHud() {
       {m.worst >= 40 && (
         <div className="fps-hud-worst">
           {tr("просадка")} {m.worst} мс
-        </div>
-      )}
-      {ad < 0.99 && (
-        <div className="fps-hud-scale">
-          {tr("разрешение")} {Math.round(ad * 100)}%
         </div>
       )}
     </div>

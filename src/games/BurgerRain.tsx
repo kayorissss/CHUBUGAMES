@@ -7,6 +7,8 @@ import { sfx, haptic } from "../core/fx";
 import Icon, { type IconName } from "../ui/Icon";
 import { useCanvas, GameHUD, GameOver, Countdown } from "./shell";
 import { actionFor } from "../core/keymap";
+import { cssVar, canvasColor } from "../core/palette";
+import { tr } from "../core/i18n";
 import AdModal from "../ui/AdModal";
 import { hasAds, noteRevive } from "../core/ads";
 
@@ -109,6 +111,47 @@ function heroStep(px: number, pv: number, target: number, dtMs: number) {
   return { px, pv };
 }
 
+/**
+ * УРОВНИ ЗАБЕГА.
+ *
+ * Просьба: «добавить бы уровней в ЛЁХА БУРГЕР». Раньше темп набирался
+ * плавной дугой от времени — конца у «просто быстрее» нет, и игрок не
+ * понимал, где он вообще находится. Теперь забег разбит на десять ступеней:
+ * у каждой имя, баннер при входе, свой интервал спавна, своя скорость полёта
+ * и свой набор снарядов (на «РАЗМИНКЕ» летает только булка, к финалу — всё).
+ * Дойти до десятой — уже цель, а не случайность.
+ */
+export const BR_LEVELS: { at: number; name: string; spawn: number; speed: number; kinds: number }[] = [
+  { at: 0, name: "РАЗМИНКА", spawn: 1.0, speed: 1.0, kinds: 2 },
+  { at: 22, name: "ГОЛОД", spawn: 0.94, speed: 1.06, kinds: 2 },
+  { at: 46, name: "ОЧЕРЕДЬ", spawn: 0.88, speed: 1.12, kinds: 3 },
+  { at: 72, name: "СМЕНА", spawn: 0.83, speed: 1.18, kinds: 3 },
+  { at: 100, name: "РАЗДАЧА", spawn: 0.78, speed: 1.25, kinds: 4 },
+  { at: 130, name: "АЖИОТАЖ", spawn: 0.73, speed: 1.32, kinds: 4 },
+  { at: 162, name: "НАВАЛЕНИЕ", spawn: 0.68, speed: 1.4, kinds: 5 },
+  { at: 196, name: "ЖАРКА", spawn: 0.63, speed: 1.48, kinds: 5 },
+  { at: 232, name: "МЯСОРУБКА", spawn: 0.58, speed: 1.58, kinds: 5 },
+  { at: 270, name: "ЧУБУ-ФИНАЛ", spawn: 0.52, speed: 1.7, kinds: 5 },
+];
+
+/** Номер уровня по секундам забега (1..BR_LEVELS.length). */
+export function brLevel(sec: number): number {
+  let i = 0;
+  for (let k = 0; k < BR_LEVELS.length; k++) if (sec >= BR_LEVELS[k].at) i = k;
+  return i + 1;
+}
+
+/**
+ * Плашка по центру сверху: что поднял, какой уровень, что ярость пришла и
+ * ушла. Раньше подписи всплывали крошечными попапами прямо у земли, где их
+ * никто не читал, — отсюда «непонятно, что я вообще подобрал».
+ */
+function say(g: any, txt: string, c = "--gold", life = 1500): void {
+  g.banner = txt;
+  g.bannerC = c;
+  g.bannerT = life;
+}
+
 export default function BurgerRain({ onExit }: { onExit: () => void }) {
   const { s, mainFriend, addCoins, addXp, bump, finishGame, questProgress } = useGame();
   const [phase, setPhase] = useState<"count" | "play" | "over">("count");
@@ -123,6 +166,7 @@ export default function BurgerRain({ onExit }: { onExit: () => void }) {
   });
   const [result, setResult] = useState({ score: 0, coins: 0, xp: 0 });
   const [rage, setRage] = useState(false);
+  const [uiLv, setUiLv] = useState(1);
 
   const skin = HERO_SKINS.find((h) => h.id === s.heroSkin) || HERO_SKINS[0];
   // герой на земле — это ты сам
@@ -137,6 +181,8 @@ export default function BurgerRain({ onExit }: { onExit: () => void }) {
     mouth: 0, blink: 0, blinkT: 1400, cheeks: 0, headShake: 0, headX: 0,
     rage: 0, rageT: 26000, shake: 0, flash: 0, dodged: 0, running: false,
     invuln: 0, comboStreak: 0,
+    /** уровень забега и плашка по центру сверху (say) */
+    lv: 1, banner: "", bannerC: "--gold", bannerT: 0,
     /** наклон корпуса героя, -1..1 — считается из скорости пружины */
     lean: 0,
   });
@@ -152,7 +198,8 @@ export default function BurgerRain({ onExit }: { onExit: () => void }) {
     g.mouth = 0; g.cheeks = 0; g.headShake = 0; g.headX = 0;
     g.rage = 0; g.rageT = 26000; g.shake = 0; g.flash = 0; g.dodged = 0;
     g.invuln = 0; g.comboStreak = 0; g.running = false; g.lean = 0;
-    setUiScore(0); setUiLives(3); setRage(false);
+    g.lv = 1; g.banner = ""; g.bannerT = 0;
+    setUiScore(0); setUiLives(3); setRage(false); setUiLv(1);
     setUiBuffs({ shield: 0, slow: 0, magnet: 0, x2: 0 });
   }, []);
 
@@ -278,13 +325,29 @@ export default function BurgerRain({ onExit }: { onExit: () => void }) {
 
     if (g.running) {
       g.elapsed += dt;
+
+      /* ================= УРОВНИ =================
+         Ступень считается по времени забега; на первой баннер не мигает —
+         игрок только что видел «3-2-1». */
+      const lv = brLevel(g.elapsed / 1000);
+      if (lv !== g.lv) {
+        const up = lv > g.lv;
+        g.lv = lv;
+        setUiLv(lv);
+        if (up) {
+          say(g, `УРОВЕНЬ ${lv} · ${BR_LEVELS[lv - 1].name}`, "--acc-text", 1700);
+          sfx.levelUp?.();
+          haptic("medium");
+        }
+      }
+      const LEV = BR_LEVELS[g.lv - 1];
       const timeScale = g.slow > 0 ? 0.48 : 1;
       const sdt = dt * timeScale;
       // Сколько времени у игрока на уклонение прямо сейчас. Плавно
       // сокращается по ходу забега, но никогда не опускается ниже
       // порога человеческой реакции (см. комментарий к DIFF).
       // В ярости окно ужимается, но не больше чем на 15%.
-      const fall = fallTime(diff, g.elapsed) * (g.rage > 0 ? 0.85 : 1);
+      const fall = (fallTime(diff, g.elapsed) * (g.rage > 0 ? 0.85 : 1)) / LEV.speed;
       // Расстояние от рта до головы героя — по нему считаем скорость.
       const dropDist = Math.max(1, groundY - heroR - (headCy + headR * 0.5));
       const vy0 = speedForTime(dropDist, fall) * timeScale;
@@ -297,8 +360,14 @@ export default function BurgerRain({ onExit }: { onExit: () => void }) {
       /* ярость */
       g.rageT -= dt;
       if (g.rageT <= 0) {
-        if (g.rage > 0) { g.rage = 0; g.rageT = 24000; setRage(false); }
-        else { g.rage = 1; g.rageT = 7000; setRage(true); g.shake = 22; sfx.hit(); haptic("heavy"); }
+        if (g.rage > 0) {
+          g.rage = 0; g.rageT = 24000; setRage(false);
+          say(g, "ЯРОСТЬ ПРОШЛА", "--info", 1200);
+        } else {
+          g.rage = 1; g.rageT = 7000; setRage(true);
+          g.shake = 22; sfx.hit(); haptic("heavy");
+          say(g, "ЯРОСТЬ!", "--danger", 1800);
+        }
       }
 
       /* игрок */
@@ -317,21 +386,26 @@ export default function BurgerRain({ onExit }: { onExit: () => void }) {
       g.pv = st.pv;
       g.lean = Math.max(-1, Math.min(1, st.pv * 0.55));
 
+
       /* спавн снарядов */
       g.spawnT -= sdt;
-      const spawnInt = Math.max(230, diff.spawn / (1 + g.elapsed * 0.00007)) / (g.rage > 0 ? 1.8 : 1);
+      const spawnInt =
+        Math.max(205, (diff.spawn * LEV.spawn) / (1 + g.elapsed * 0.000045)) / (g.rage > 0 ? 1.8 : 1);
       if (g.spawnT <= 0) {
         g.spawnT = spawnInt * (0.75 + Math.random() * 0.5);
         g.cheeks = 1;
         g.mouth = 1;
         sfx.spit();
         const roll = Math.random();
-        const t = Math.min(1, g.elapsed / 60000);
+        /* Набор снарядов растёт по уровням, а не по «таймеру в минуты»:
+           на 1-2 уровнях летает только булка и сыр, на третьем появляются
+           картошка, на пятом — наггетсы, и лишь с «НАВАЛЕНИЯ» — коктейль. */
+        const k = LEV.kinds;
         let type: PType = "burger";
-        if (roll > 0.94 - t * 0.1) type = "shake";
-        else if (roll > 0.84 - t * 0.14) type = "nugget";
-        else if (roll > 0.7 - t * 0.16) type = "fries";
-        else if (roll > 0.48 - t * 0.1) type = "cheese";
+        if (k >= 5 && roll > 0.94) type = "shake";
+        else if (k >= 4 && roll > 0.82) type = "nugget";
+        else if (k >= 3 && roll > 0.68) type = "fries";
+        else if (k >= 2 && roll > 0.5) type = "cheese";
 
         const hx = W * 0.5 + g.headX;
         const my = headCy + headR * 0.5;
@@ -424,7 +498,7 @@ export default function BurgerRain({ onExit }: { onExit: () => void }) {
             g.shake = 26;
             g.flash = 1;
             burst(g, p.x, p.y, "var(--danger)", 30);
-            g.pops.push({ x: p.x, y: p.y, txt: "-1 ЖИЗНЬ", life: 900, c: "var(--danger)" });
+            g.pops.push({ x: p.x, y: p.y, txt: "-1 ЖИЗНЬ", life: 900, c: "--danger" });
             sfx.hit();
             haptic("heavy");
             if (g.lives <= 0) { end(); return; }
@@ -442,7 +516,7 @@ export default function BurgerRain({ onExit }: { onExit: () => void }) {
           g.score += pts;
           setUiScore(Math.floor(g.score));
           if (g.comboStreak > 0 && g.comboStreak % 25 === 0) {
-            g.pops.push({ x: g.px * W, y: hy - heroR * 2, txt: `${g.comboStreak} ПОДРЯД!`, life: 1100, c: "var(--gold)" });
+            g.pops.push({ x: g.px * W, y: hy - heroR * 2, txt: `${g.comboStreak} ПОДРЯД!`, life: 1100, c: "--gold" });
             sfx.crit();
           }
           sfx.dodge();
@@ -466,7 +540,10 @@ export default function BurgerRain({ onExit }: { onExit: () => void }) {
         if (dx * dx + dy * dy < (heroR * 2.1) ** 2) {
           applyBonus(g, b.type, setUiBuffs, setUiLives);
           burst(g, bx, by, "var(--gold)", 20);
-          g.pops.push({ x: bx, y: by, txt: BONUS_LABEL[b.type], life: 1000, c: "var(--gold)" });
+          g.pops.push({ x: bx, y: by, txt: BONUS_LABEL[b.type], life: 1000, c: BONUS_COLOR[b.type] });
+          // и то же самое — по центру сверху: подбор должен читаться
+          // без вглядывания в точку у земли
+          say(g, BONUS_LABEL[b.type], BONUS_COLOR[b.type], 1500);
           sfx.power();
           haptic("success");
           g.bonuses.splice(i, 1);
@@ -477,6 +554,7 @@ export default function BurgerRain({ onExit }: { onExit: () => void }) {
 
       /* таймеры */
       g.invuln = Math.max(0, g.invuln - dt);
+      g.bannerT = Math.max(0, g.bannerT - dt);
       const dec = (v: number) => Math.max(0, v - dt);
       const prev = { shield: g.shield, slow: g.slow, magnet: g.magnet, x2: g.x2 };
       g.shield = dec(g.shield); g.slow = dec(g.slow); g.magnet = dec(g.magnet); g.x2 = dec(g.x2);
@@ -528,6 +606,22 @@ export default function BurgerRain({ onExit }: { onExit: () => void }) {
     ctx.lineTo(W, groundY);
     ctx.stroke();
 
+    /* ЯРОСТЬ: краснеет ВЕРХ экрана. Лицо Артюма менялось и раньше, но
+       напряжение держится не на лице: когда сверху наливается красным и
+       пульсирует кромка, игрок реально напрягается — «сейчас проиграю».
+       Полоса полупрозрачная и под снарядами: видеть их она не мешает. */
+    if (g.rage > 0) {
+      const pulse = 0.7 + 0.3 * Math.sin(g.elapsed * 0.006);
+      const band = H * 0.36;
+      const rg = ctx.createLinearGradient(0, 0, 0, band);
+      rg.addColorStop(0, `rgba(214, 40, 40, ${(0.4 * pulse).toFixed(3)})`);
+      rg.addColorStop(1, "rgba(214, 40, 40, 0)");
+      ctx.fillStyle = rg;
+      ctx.fillRect(0, 0, W, band);
+      ctx.fillStyle = `rgba(255, 74, 60, ${(0.55 * pulse).toFixed(3)})`;
+      ctx.fillRect(0, 0, W, 3);
+    }
+
     // ГОЛОВА ДРУГА
     ctx.save();
     ctx.translate(g.headX, 0);
@@ -576,7 +670,7 @@ export default function BurgerRain({ onExit }: { onExit: () => void }) {
     // частицы
     for (const p of g.parts) {
       ctx.globalAlpha = Math.max(0, p.life / p.max);
-      ctx.fillStyle = p.c;
+      ctx.fillStyle = canvasColor(p.c);
       ctx.beginPath();
       ctx.arc(p.x, p.y, p.s, 0, Math.PI * 2);
       ctx.fill();
@@ -588,11 +682,31 @@ export default function BurgerRain({ onExit }: { onExit: () => void }) {
     ctx.font = "800 15px Inter, system-ui, sans-serif";
     for (const p of g.pops) {
       ctx.globalAlpha = Math.min(1, p.life / 400);
-      ctx.fillStyle = p.c;
+      ctx.fillStyle = cssVar(p.c, "#ffffff");
       ctx.fillText(p.txt, p.x, p.y);
     }
     ctx.globalAlpha = 1;
     ctx.restore();
+
+    /* Плашка: что поднял, какой уровень, ярость. По центру сверху, поверх
+       поля, живёт чуть меньше секунды и плавно гаснет. */
+    if (g.bannerT > 0 && g.banner) {
+      const a = Math.min(1, g.bannerT / 300);
+      const yy = H * 0.17;
+      const fsz = Math.round(Math.min(W * 0.072, 32));
+      ctx.save();
+      ctx.globalAlpha = a;
+      ctx.textAlign = "center";
+      ctx.font = `800 ${fsz}px Inter, system-ui, sans-serif`;
+      const wTxt = ctx.measureText(g.banner).width;
+      ctx.fillStyle = "rgba(8, 8, 11, 0.66)";
+      ctx.beginPath();
+      ctx.roundRect(W / 2 - wTxt / 2 - 14, yy - fsz - 8, wTxt + 28, fsz + 20, 13);
+      ctx.fill();
+      ctx.fillStyle = cssVar(g.bannerC, "#FFB020");
+      ctx.fillText(g.banner, W / 2, yy);
+      ctx.restore();
+    }
 
     // вспышка урона
     if (g.flash > 0.02) {
@@ -633,6 +747,20 @@ export default function BurgerRain({ onExit }: { onExit: () => void }) {
         best={s.games.burger.best}
         onExit={onExit}
         lives={{ value: uiLives, max: 3 }}
+        extra={(
+          <div
+            className="flex items-center"
+            style={{
+              gap: 6, padding: "3px 9px", borderRadius: 999,
+              background: "var(--surface-2)", border: "1px solid var(--acc-line)",
+            }}
+          >
+            <span className="t-label" style={{ fontSize: 9 }}>{tr("УР.")} {uiLv}</span>
+            <span className="t-caption clip1" style={{ fontSize: 8.5, maxWidth: 82, color: "var(--text-mute)" }}>
+              {BR_LEVELS[uiLv - 1]?.name}
+            </span>
+          </div>
+        )}
       />
 
       {/* активные бонусы */}
@@ -708,7 +836,7 @@ export default function BurgerRain({ onExit }: { onExit: () => void }) {
           onRetry={start}
           onExit={onExit}
           title="СЪЕЛ"
-          sub={`Уклонился от ${G.current.dodged} снарядов`}
+          sub={`Уклонился от ${G.current.dodged} снарядов · уровень ${G.current.lv} · ${BR_LEVELS[G.current.lv - 1]?.name ?? ""}`}
           onRevive={
             hasAds() && !revivedRef.current
               ? () => setShowAd(true)
@@ -744,6 +872,11 @@ const BONUS_ICON: Record<BType, IconName> = {
 };
 const BONUS_LABEL: Record<BType, string> = {
   shield: "ЩИТ", slow: "SLOW-MO", magnet: "МАГНИТ", x2: "×2 ОЧКИ", heal: "+1 ЖИЗНЬ",
+};
+/** Каждому бонусу — свой цвет плашки: «×2» и «+1 ЖИЗНЬ» путались глазом. */
+const BONUS_COLOR: Record<BType, string> = {
+  shield: "--info", slow: "--violet", magnet: "--gold",
+  x2: "--acc-text", heal: "--ok",
 };
 
 function applyBonus(g: any, t: BType, setBuffs: any, setLives: any) {

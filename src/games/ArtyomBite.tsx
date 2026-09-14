@@ -3,6 +3,7 @@ import { AnimatePresence } from "framer-motion";
 import { useGame } from "../core/store";
 import { tr } from "../core/i18n";
 import { drawHead } from "../core/head";
+import { canvasColor } from "../core/palette";
 import { useCanvas, GameHUD, GameOver, Countdown, HudStat } from "./shell";
 import { sfx, haptic } from "../core/fx";
 import GameIntro, { IntroRules } from "../ui/GameIntro";
@@ -33,6 +34,34 @@ const RAGE_LINES = [
   "ЧЁ ЗА ХРЕНЬ?!",
 ];
 
+/**
+ * УРОВНИ. Просьба: «добавить уровней, а то скучно просто приближать палец».
+ *
+ * Каждый уровень — три подхода, и меняются не только таймеры: наверху
+ * появляются ручка-фейк и двойной замах, а окно реакции сжимается так, что
+ * держать палец становится реально страшно. Двенадцать подходов — это
+ * «доехать до пятого уровня», и это уже цель, а не бесконечное терпение.
+ */
+type AbLevel = { name: string; wind: number; spread: number; pen: number; charge: number; feint: number };
+
+export const AB_LEVELS: AbLevel[] = [
+  { name: "ПАРТА",     wind: 2250, spread: 700, pen: 0.12, charge: 1.0, feint: 0 },
+  { name: "ПЕРЕМЕНА",  wind: 2060, spread: 760, pen: 0.16, charge: 1.06, feint: 0 },
+  { name: "ОКНО",      wind: 1880, spread: 820, pen: 0.2, charge: 1.13, feint: 0.06 },
+  { name: "ДЕЖУРНЫЙ",  wind: 1720, spread: 880, pen: 0.24, charge: 1.2, feint: 0.1 },
+  { name: "ЗВОНОК",    wind: 1560, spread: 940, pen: 0.28, charge: 1.28, feint: 0.14 },
+  { name: "ФИЗРА",     wind: 1420, spread: 1000, pen: 0.32, charge: 1.36, feint: 0.18 },
+  { name: "СТОЛОВАЯ",  wind: 1290, spread: 1060, pen: 0.36, charge: 1.45, feint: 0.22 },
+  { name: "ОБЩАГА",    wind: 1170, spread: 1120, pen: 0.4, charge: 1.55, feint: 0.26 },
+  { name: "КОМЕНДАНТ", wind: 1060, spread: 1180, pen: 0.44, charge: 1.66, feint: 0.3 },
+  { name: "ЧУБУ-ФИНАЛ", wind: 960, spread: 1250, pen: 0.48, charge: 1.8, feint: 0.34 },
+];
+
+/** Уровень по номеру подхода: три подхода — ступень. */
+export function abLevel(round: number): number {
+  return Math.min(AB_LEVELS.length, 1 + Math.floor(Math.max(0, round - 1) / 3));
+}
+
 export default function ArtyomBite({ onExit }: { onExit: () => void }) {
   const { s, addCoins, addXp, bump, finishGame, questProgress } = useGame();
   const artyom =
@@ -45,6 +74,7 @@ export default function ArtyomBite({ onExit }: { onExit: () => void }) {
   const [uiHold, setUiHold] = useState(false);
   const [uiCharge, setUiCharge] = useState(0);
   const [uiRound, setUiRound] = useState(1);
+  const [uiLv, setUiLv] = useState(1);
   const [result, setResult] = useState({ score: 0, coins: 0, xp: 0 });
 
   const G = useRef({
@@ -71,6 +101,9 @@ export default function ArtyomBite({ onExit }: { onExit: () => void }) {
     rage: 0, // 0..1 краснота от злости
     rageLine: "",
     rageT: 0,
+    /** текущий уровень (1..AB_LEVELS.length) и заряженный на этом подходе фейк */
+    lv: 1,
+    feintQueued: false,
     /* Маты, вылетающие изо рта. Пользователь просил, чтобы они
        разлетались влево и вправо, а не висели одной плашкой по центру:
        ось x — доля ширины, vx — скорость в долях ширины за мс. */
@@ -88,7 +121,8 @@ export default function ArtyomBite({ onExit }: { onExit: () => void }) {
     g.mouth = 0; g.shake = 0; g.flash = 0; g.round = 0; g.combo = 0;
     g.pops = []; g.bites = 0; g.safeReleases = 0;
     g.rage = 0; g.rageLine = ""; g.rageT = 0; g.curses = [];
-    setUiScore(0); setUiLives(3); setUiHold(false); setUiCharge(0); setUiRound(1);
+    g.lv = 1; g.feintQueued = false;
+    setUiScore(0); setUiLives(3); setUiHold(false); setUiCharge(0); setUiRound(1); setUiLv(1);
   }, []);
 
   const start = useCallback(() => {
@@ -132,10 +166,31 @@ export default function ArtyomBite({ onExit }: { onExit: () => void }) {
     setUiRound(g.round);
     g.approach = 0;
     g.biting = 0;
-    // с каждым раундом окно реакции сжимается, но не до невозможного
-    const diffK = Math.min(1, g.round / 22);
-    g.windup = 900 + Math.random() * 1500 - diffK * 450;
-    g.attack = Math.random() < 0.28 ? "pen" : "bite";
+
+    /* Считаем ступень и, если она изменилась, говорим об этом прямо в поле:
+       «уровень 4 — ДЕЖУРНЫЙ». Без этого рост скорости ощущался как случайность. */
+    const lv = abLevel(g.round);
+    if (lv !== g.lv) {
+      const up = lv > g.lv;
+      g.lv = lv;
+      setUiLv(lv);
+      if (up) {
+        g.pops.push({
+          x: 0.5, y: 0.34,
+          txt: `УРОВЕНЬ ${lv} · ${AB_LEVELS[lv - 1].name}`,
+          c: "#ffd166", life: 1500,
+        });
+        sfx.levelUp?.();
+        haptic("medium");
+      }
+    }
+    const L = AB_LEVELS[g.lv - 1];
+
+    g.windup = L.wind + Math.random() * L.spread;
+    g.attack = Math.random() < L.pen ? "pen" : "bite";
+    // двойной замах: на верхних уровнях Артём дразнится — подходит,
+    // оттягивает и возвращается. Зуб за это не отнимается, но нервы тратятся.
+    g.feintQueued = g.lv >= 3 && Math.random() < L.feint;
     g.attackIn = g.windup;
   };
 
@@ -224,33 +279,58 @@ export default function ArtyomBite({ onExit }: { onExit: () => void }) {
 
       if (g.holding) {
         // копим очки всё быстрее
-        g.charge += dt * 0.014 * (1 + g.round * 0.03);
+        g.charge += dt * 0.014 * AB_LEVELS[g.lv - 1].charge * (1 + g.round * 0.012);
         setUiCharge(Math.floor(g.charge));
 
         g.attackIn -= dt;
         g.approach = Math.max(0, Math.min(1, 1 - g.attackIn / g.windup));
 
         if (g.attackIn <= 0) {
-          // УКУС
-          g.holding = false;
-          setUiHold(false);
-          g.biting = 320;
-          g.lives -= 1;
-          g.combo = 0;
-          g.charge = 0;
-          g.bites += 1;
-          setUiCharge(0);
-          setUiLives(g.lives);
-          g.shake = 26;
-          g.flash = 1;
-          sfx.hit();
-          haptic("heavy");
-          g.pops.push({
-            x: 0.5, y: 0.55,
-            txt: g.attack === "pen" ? "РУЧКОЙ!" : "АМ!",
-            c: WARN_COLOR, life: 1000,
-          });
-          if (g.lives <= 0) { end(); return; }
+          /* ФЕЙК. Верхние уровни: Артём разворачивается и заходит заново.
+             Не больно, но подход обнулить может — на этом и держатся нервы. */
+          if (g.feintQueued) {
+            g.feintQueued = false;
+            const L = AB_LEVELS[g.lv - 1];
+            g.windup = L.wind * 0.66 + Math.random() * 420;
+            g.attackIn = g.windup;
+            g.approach = 0;
+            g.biting = 190;
+            sfx.click();
+            haptic("light");
+            g.pops.push({ x: 0.5, y: 0.5, txt: "ФЕЙК!", c: "#9fd0ff", life: 900 });
+          } else if (g.attack === "pen") {
+            /* РУЧКА. Правила всегда обещали «это не больно, но пугает», а
+               игра снимала зуб наравне с укусом. Теперь честно: зуб цел,
+               сгорает только накопленное — и за это всё равно обидно. */
+            g.holding = false;
+            setUiHold(false);
+            g.biting = 240;
+            g.combo = 0;
+            g.charge = 0;
+            setUiCharge(0);
+            g.shake = 12;
+            g.flash = 0.45;
+            sfx.error?.();
+            haptic("medium");
+            g.pops.push({ x: 0.5, y: 0.55, txt: "РУЧКОЙ! ПОДХОД СГОРЕЛ", c: WARN_COLOR, life: 1100 });
+          } else {
+            // УКУС
+            g.holding = false;
+            setUiHold(false);
+            g.biting = 320;
+            g.lives -= 1;
+            g.combo = 0;
+            g.charge = 0;
+            g.bites += 1;
+            setUiCharge(0);
+            setUiLives(g.lives);
+            g.shake = 26;
+            g.flash = 1;
+            sfx.hit();
+            haptic("heavy");
+            g.pops.push({ x: 0.5, y: 0.55, txt: "АМ!", c: WARN_COLOR, life: 1000 });
+            if (g.lives <= 0) { end(); return; }
+          }
         }
       } else {
         g.approach += (0 - g.approach) * 0.012 * dt;
@@ -367,7 +447,7 @@ export default function ArtyomBite({ onExit }: { onExit: () => void }) {
     ctx.font = "800 22px Inter, system-ui, sans-serif";
     for (const p of g.pops) {
       ctx.globalAlpha = Math.max(0, Math.min(1, p.life / 500));
-      ctx.fillStyle = p.c;
+      ctx.fillStyle = canvasColor(p.c);
       ctx.fillText(p.txt, p.x * W, p.y * H);
     }
     ctx.globalAlpha = 1;
@@ -422,7 +502,12 @@ export default function ArtyomBite({ onExit }: { onExit: () => void }) {
         best={s.games.bite.best}
         onExit={onExit}
         lives={{ value: uiLives, max: 3, icon: "tooth" }}
-        extra={<HudStat label={tr("ПОДХОД")} value={uiRound} min={48} />}
+        extra={(
+          <>
+            <HudStat label={tr("ПОДХОД")} value={uiRound} min={48} />
+            <HudStat label={tr("УР.")} value={uiLv} tone="acc" min={40} />
+          </>
+        )}
       />
 
       {/* Подсказка и накопитель */}
@@ -494,7 +579,7 @@ export default function ArtyomBite({ onExit }: { onExit: () => void }) {
             onRetry={start}
             onExit={onExit}
             title="СКУСАЛ"
-            sub="Артём доволен. Ты — нет."
+            sub={`Артём доволен. Ты — нет. Уровень ${G.current.lv} · ${AB_LEVELS[G.current.lv - 1]?.name ?? ""}`}
           />
         )}
       </AnimatePresence>

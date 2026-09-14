@@ -407,7 +407,7 @@ function Shell() {
             initial="initial"
             animate="animate"
             exit="exit"
-            className={`fixed inset-0 z-[60] ${pc ? "pc-play-wrap" : ""}${game === "europa" ? " is-europa" : ""}`}
+            className={`fixed inset-0 z-[60] ${pc ? "pc-play-wrap" : ""}${game === "europa" ? " is-europa" : ""}${game === "clicker" ? " is-clicker" : ""}`}
           >
             <div className={pc ? "pc-play game-stage" : "game-stage h-full w-full"} ref={playRef}>
             {game === "burger" && <BurgerRain onExit={() => setGame(null)} />}
@@ -444,7 +444,7 @@ function Shell() {
                 («Игра» → «Показывать FPS»). Отдельного rAF не тратит:
                 кадры считает цикл useCanvas (core/perf.ts). */}
             {s.settings.fpsHud !== false && <FpsHud />}
-            {s.settings.keys !== false && !handlesKeysNatively(game) && <KeyCursor />}
+            {s.settings.keys !== false && hasKeyboard() && !handlesKeysNatively(game) && <KeyCursor />}
             </div>
             <PauseOverlay label={(() => { const g = GAME_META.find((x) => x.id === game); return g ? tr(g.name) : undefined; })()} />
           </motion.div>
