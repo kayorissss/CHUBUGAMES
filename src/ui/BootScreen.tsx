@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from "react";
+import type { CSSProperties } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { APP_VERSION } from "../core/version";
 import { tr } from "../core/i18n";
 import { isLowFx } from "../core/perf";
 import { isDesktop } from "../core/desktop";
 import { BURGER_PATHS } from "./Brand";
+import { BRAND_LOGO_GLYPH_URL, BRAND_LOGO_IS_GLYPH, BRAND_LOGO_URL, HAS_BRAND_LOGO } from "../core/brandAsset";
 import { EASE } from "../core/motion";
 
 /**
@@ -54,10 +56,61 @@ function Layer({
 
 function SplashMark({ low }: { low: boolean }) {
   const p = BURGER_PATHS;
+  /* Векторная сборка остаётся — это движение заставки, — но заканчивается
+     она настоящим присланным знаком: шапка, иконка launcher-а и заставка
+     должны показывать одно и то же, а не «бургер наш, значок их». */
+  const glyph = HAS_BRAND_LOGO && BRAND_LOGO_IS_GLYPH;
+  const glyphSpan = (style: CSSProperties, animate: boolean) => {
+    const tr = animate ? { delay: 0.98, duration: 0.5, ease: EASE } : { duration: 0 };
+    const base: CSSProperties = { position: "absolute", inset: 0, pointerEvents: "none", ...style };
+    /* Силуэт красится акцентом темы (mask), цветная плашка показывается как
+       есть — выбор делает генератор, поэтому заставка и шапка не разъезжаются */
+    return BRAND_LOGO_IS_GLYPH ? (
+      <motion.span
+        aria-hidden
+        initial={animate ? { opacity: 0, scale: 0.92 } : false}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={tr}
+        style={{
+          background: "var(--acc)",
+          WebkitMask: `url(${BRAND_LOGO_GLYPH_URL}) center / contain no-repeat`,
+          mask: `url(${BRAND_LOGO_GLYPH_URL}) center / contain no-repeat`,
+          ...base,
+        }}
+      />
+    ) : (
+      <motion.img
+        src={BRAND_LOGO_URL}
+        alt=""
+        draggable={false}
+        initial={animate ? { opacity: 0, scale: 0.92 } : false}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={tr}
+        style={{ objectFit: "cover", borderRadius: "20%", ...base }}
+      />
+    );
+  };
+  if (glyph && low) {
+    return (
+      <span style={{ position: "relative", display: "block", width: "100%", height: "100%" }}>
+        {glyphSpan({ borderRadius: BRAND_LOGO_IS_GLYPH ? 0 : "20%" }, false)}
+      </span>
+    );
+  }
   // Размер задаёт CSS (.boot-mark), здесь только viewBox: так знак
   // остаётся чётким при любом окне и не «застывает» после разворачивания.
   return (
-    <svg width="100%" height="100%" viewBox="0 0 512 512" preserveAspectRatio="xMidYMid meet" aria-hidden style={{ display: "block", overflow: "visible" }}>
+    <span style={{ position: "relative", display: "block", width: "100%", height: "100%" }}>
+    <motion.svg
+      width="100%"
+      height="100%"
+      viewBox="0 0 512 512"
+      preserveAspectRatio="xMidYMid meet"
+      aria-hidden
+      animate={{ opacity: glyph && !low ? 0 : 1 }}
+      transition={{ delay: 0.98, duration: 0.5, ease: EASE }}
+      style={{ display: "block", overflow: "visible" }}
+    >
       <defs>
         <linearGradient id="sBun" x1="0" y1="0" x2="0.2" y2="1">
           <stop offset="0" stopColor="color-mix(in srgb, #ffffff 44%, var(--acc))" />
@@ -125,7 +178,9 @@ function SplashMark({ low }: { low: boolean }) {
           </>
         )}
       </g>
-    </svg>
+    </motion.svg>
+    {glyph && !low && glyphSpan({ borderRadius: BRAND_LOGO_IS_GLYPH ? 0 : "20%" }, true)}
+    </span>
   );
 }
 

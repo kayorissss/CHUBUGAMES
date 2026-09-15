@@ -516,8 +516,11 @@ ok(pkgJson.scripts && pkgJson.scripts.icons && fs.existsSync('scripts/build-icon
 const brand = fs.readFileSync('src/ui/Brand.tsx', 'utf8');
 ok(brand.includes('var(--acc)') && /HAS_BRAND_LOGO \?/.test(brand) && brand.includes('<Burger'),
   'знак в интерфейсе — вектор по умолчанию (красится акцентом темы), а растр включается только флагом генератора');
-ok(/LOGO && \(from === SRC\.badge \|\| from === SRC\.mark \|\| from === SRC\.mono\)/.test(fs.readFileSync('scripts/build-icons.mjs','utf8')),
-  'генератор умеет режим логотипа: растр вписывается целиком, не кромсается');
+{
+  const icoG = fs.readFileSync('scripts/build-icons.mjs', 'utf8');
+  ok(/fit: "cover"/.test(icoG) && /fit: "inside"/.test(icoG),
+    'генератор различает режимы: плашка заполняет квадрат, глиф вписывается целиком — ничего не кромсается');
+}
 const types23 = fs.readFileSync('src/core/types.ts', 'utf8');
 ok(types23.includes('"dark" | "graphite" | "light"'),
   'базовых темы три: чёрный, графит, белый');
@@ -2197,12 +2200,18 @@ console.log('\n[55] 1.27.2 · телефон: уровни и треки в РИ
   ok(/onsetsRef/.test(beat) && /\}, \[lv\]\);/.test(beat),
     "смена уровня пересобирает чарт из онсетов в памяти, а не качает трек заново");
 
-  ok(/\.grayscale\(\)/.test(ico),
-    "monochrome-слой обесцвечен — Android перекрашивает его сам");
+  ok(/\.greyscale\(\)/.test(ico),
+    "monochrome-слой сделан из яркости — Android перекрашивает его сам");
   ok(/size \* 0\.66/.test(ico),
-    "фото в adaptive-иконке не вылезает за безопасную зону (66% холста)");
-  ok(/branding\/photo\.jpg/.test(ico),
-    "иконка переключается на фото одним файлом, вектор остаётся запасным");
+    "картинка в adaptive-иконке не вылезает за безопасную зону (66% холста)");
+  ok(/chubugamesmaxlogo\.png/.test(ico) && /chubulogo\.png/.test(ico),
+    "генератор ищет присланный арт по имени: chubugamesmaxlogo.png (иконка) и chubulogo.png (знак)");
+  ok(/findSource/.test(ico) && /"branding", "public"/.test(ico),
+    "источники ищутся и в branding/, и в public/ — можно кинуть файл веб-загрузкой");
+  ok(/function writeIco\(/.test(ico),
+    "ICO собирается вручную: контейнер = заголовок + PNG-тела, иначе electron-builder берёт шаблон");
+  ok(/brandAsset\.ts/.test(ico) && /HAS_BRAND_LOGO/.test(ico),
+    "флаг наличия растрового логотипа генерируется — <img> не грузится, когда файла нет");
 }
 
 console.log('\n[56] 1.28 · ПК: настройки с рейкой, угол с круглыми кнопками, экран обновления, шансы слотов');
@@ -2436,6 +2445,64 @@ console.log('\n[62] 1.28: конфиг electron-builder жив — CI падае
     'диагностика SDK не гонит sdkmanager через head: под `set -o pipefail` SIGPIPE от head убивал шаг с кодом 141');
   ok(/commandlinetools-linux-\d+_latest\.zip/.test(wf) && !/commandlinetools-linux-[0-9]+\.[0-9]+_latest/.test(wf),
     'cmdline-tools качаются по точному имени архива (псевдо-версии вида 11.0 — это 404)');
+}
+
+console.log('\n[63] 1.28 · иконка и логотип из присланного арта (не «наш бургер»)');
+{
+  const ico63 = fs.readFileSync('scripts/build-icons.mjs', 'utf8');
+  const brand63 = fs.readFileSync('src/ui/Brand.tsx', 'utf8');
+  const boot63 = fs.readFileSync('src/ui/BootScreen.tsx', 'utf8');
+  const flag63 = fs.readFileSync('src/core/brandAsset.ts', 'utf8');
+
+  const px = (f) => {
+    const b = fs.readFileSync(f);
+    // IHDR PNG: 8 байт сигнатуры, длина, тип, затем width/height big-endian
+    return b.subarray(16, 24).readUInt32BE(0) + 'x' + b.subarray(20, 24).readUInt32BE(0);
+  };
+  const has = (f) => fs.existsSync(f);
+
+  ok(has('branding/chubugamesmaxlogo.png') && has('branding/chubulogo.png'),
+    'исходники арта лежат в branding/ — их не надо приносить заново в каждой сборке');
+  ok(ico63.includes('PH_PNG') && /quality: 96/.test(ico63),
+    'растры отдаются 256-цветным PNG: иконка ездит внутри APK и не должна весить мегабайты');
+
+  //launcher-иконка: 48dp по всем пяти плотностям + слои 108dp
+  for (const [d, k] of [['mdpi', 1], ['hdpi', 1.5], ['xhdpi', 2], ['xxhdpi', 3], ['xxxhdpi', 4]]) {
+    const base = Math.round(48 * k);
+    const fg = Math.round(108 * k);
+    ok(px(`android-icons/mipmap-${d}/ic_launcher.png`) === base + 'x' + base,
+      `mipmap-${d}/ic_launcher.png — ровно ${base}px: плотность выбрана правильно`);
+    ok(px(`android-icons/mipmap-${d}/ic_launcher_foreground.png`) === fg + 'x' + fg &&
+       px(`android-icons/mipmap-${d}/ic_launcher_monochrome.png`) === fg + 'x' + fg,
+      `mipmap-${d}: adaptive-слои на холсте ${fg}px (108dp) — force-max-аспект Android не обрежет`);
+    ok(has(`android-icons/mipmap-${d}/ic_launcher_round.png`),
+      `mipmap-${d}/ic_launcher_round.png — круглая версия на месте`);
+  }
+
+  const ico63b = fs.readFileSync('desktop/res/icon.ico');
+  ok(ico63b.readUInt16LE(2) === 1 && ico63b.readUInt16LE(4) === 7,
+    'icon.ico — контейнер типа «иконка» с семью размерами, а не переименованный PNG');
+  ok(ico63b[6] === 16 && ico63b[7] === 16,
+    'первая запись ICO — 16px: на мелочи Windows берёт её, а не растягивает 256');
+  const off0 = ico63b.readUInt32LE(6 + 12);
+  ok(ico63b.subarray(off0, off0 + 8).toString('hex') === '89504e470d0a1a0a',
+    'внутри ICO лежат PNG-тела (Vista+), иначе Windows показывает мыло на 256px');
+
+  ok(has('public/brand/logo.png') && has('public/brand/logo-glyph.png'),
+    'логотип интерфейса собран из присланного знака — оба файла лежат в public/brand/');
+  ok(/HAS_BRAND_LOGO = true/.test(flag63),
+    'brandAsset.ts говорит, что присланный растр есть: интерфейс показывает его, а не вектор');
+  ok(/BRAND_LOGO_IS_GLYPH = false/.test(flag63),
+    'цветная плашка важнее плоского знака: в шапке и на заставке — она же, что и на рабочем столе');
+  ok(/const ui = BRAND \|\| MARK;/.test(ico63),
+    'приоритет источника зашит в генератор: есть цвет — берём цвет, нет — силуэт под тему');
+  ok(/BRAND_LOGO_IS_GLYPH \?\s*\(/.test(brand63) && /url\(\$\{BRAND_LOGO_GLYPH_URL\}\)/.test(brand63) &&
+     /background: "var\(--acc\)"/.test(brand63),
+    'BrandMark: силуэт лежит под маской и берёт цвет акцента темы — читаем и на тёмной, и на белой');
+  ok(boot63.includes('BRAND_LOGO_GLYPH_URL') && /opacity: glyph && !low \? 0 : 1/.test(boot63),
+    'заставка: вектор собирается, а потом встает присланный знак — шапка, иконка и заставка показывают одно');
+  ok(/glyph && low/.test(boot63),
+    'на слабом железе заставка не анимирует перетекание, а сразу отдаёт готовый знак');
 }
 
 console.log(fails===0?'\n✅ ВСЕ ПРОВЕРКИ ВЁРСТКИ ПРОЙДЕНЫ\n':`\n❌ ПРОВАЛЕНО: ${fails}\n`);

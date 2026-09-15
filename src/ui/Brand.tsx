@@ -1,5 +1,5 @@
 import type { CSSProperties } from "react";
-import { BRAND_LOGO_URL, HAS_BRAND_LOGO } from "../core/brandAsset";
+import { BRAND_LOGO_GLYPH_URL, BRAND_LOGO_IS_GLYPH, BRAND_LOGO_URL, HAS_BRAND_LOGO } from "../core/brandAsset";
 
 /**
  * ЗНАК ПРИЛОЖЕНИЯ.
@@ -171,18 +171,41 @@ export function BrandMark({
           дёргается и 404 в консоли нет. Нет растра — рисуем векторный
           бургер, он же ездит в заставку. */}
       {HAS_BRAND_LOGO ? (
-        <img
-          src={BRAND_LOGO_URL}
-          alt="CHUBUGAMES"
-          draggable={false}
-          style={{
-            position: "relative",
-            width: "86%",
-            height: "86%",
-            objectFit: "contain",
-            pointerEvents: "none",
-          }}
-        />
+        BRAND_LOGO_IS_GLYPH ? (
+          /* Прислан плоский знак: не картинка в плашке, а сам силуэт,
+             выкрашенный акцентом темы через маску. Так логотип одинаково
+             читается и на «Угольке», и на белой теме, и не спорит с
+             подсветкой плашки (просьба 1.28 — «иконка везде из присланного
+             логотипа»). */
+          <span
+            aria-hidden
+            draggable={false}
+            style={{
+              position: "relative",
+              display: "block",
+              width: "84%",
+              height: "84%",
+              background: "var(--acc)",
+              WebkitMask: `url(${BRAND_LOGO_GLYPH_URL}) center / contain no-repeat`,
+              mask: `url(${BRAND_LOGO_GLYPH_URL}) center / contain no-repeat`,
+              pointerEvents: "none",
+            }}
+          />
+        ) : (
+          <img
+            src={BRAND_LOGO_URL}
+            alt="CHUBUGAMES"
+            draggable={false}
+            style={{
+              position: "absolute",
+              inset: 0,
+              width: "100%",
+              height: "100%",
+              objectFit: "cover",
+              pointerEvents: "none",
+            }}
+          />
+        )
       ) : (
         <Burger size={Math.round(size * 0.72)} glow={glow} style={{ position: "relative" }} />
       )}
