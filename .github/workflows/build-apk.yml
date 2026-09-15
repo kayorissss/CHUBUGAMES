@@ -125,24 +125,54 @@ jobs:
       # раннеров на Node 24 он начал падать в этом шаге (у нас и у всех, кто на
       # него полагается), а полезной работы в нём не было. Теперь: берём системный
       # SDK, а если его нет — ставим cmdline-tools руками с dl.google.com.
+      # Android SDK на ubuntu-latest предустановлен: /usr/local/lib/android/sdk,
+      # sdkmanager в PATH. Раньше поверх этого стоял сторонний экшен
+      # android-actions/setup-android@v3 — с переводом раннеров на Node 24 он
+      # падает в этом шаге, а полезной работы не делал вовсе.
+      #
+      # Правила шага:
+      #  • находим SDK по списку известных путей, а не верим одной переменной;
+      #  • set +e — диагностические пайпы (`sdkmanager --version | head`) под
+      #    `set -o pipefail` убивают шаг с кодом 141 на ровном месте (SIGPIPE);
+      #  • если системного SDK нет — ставим cmdline-tools сами, по точному
+      #    имени архива: ссылка с «версией через точку» вместо build-номера —
+      #    это 404.
       - name: Prepare Android SDK
         run: |
-          if command -v sdkmanager >/dev/null 2>&1; then
-            echo "SDK уже на раннере: $(sdkmanager --version 2>/dev/null | head -1)"
-          else
-            curl -fsSL -o /tmp/clt.zip https://dl.google.com/android/repository/commandlinetools-linux-11.0_latest.zip
+          set +e
+          home=""; bin=""
+          for d in "$ANDROID_HOME" "$ANDROID_SDK_ROOT" /usr/local/lib/android/sdk "$HOME/Android/Sdk"; do
+            [ -n "$d" ] || continue
+            if [ -x "$d/cmdline-tools/latest/bin/sdkmanager" ]; then
+              home="$d"; bin="$d/cmdline-tools/latest/bin"; break
+            fi
+          done
+          if [ -z "$bin" ] && command -v sdkmanager >/dev/null 2>&1; then
+            bin="$(dirname "$(command -v sdkmanager)")"
+            home="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          fi
+          if [ -z "$bin" ]; then
+            echo "системного SDK не найдено — ставим cmdline-tools"
+            tmp="$(mktemp -d)"
+            if ! curl -fsSL -o "$tmp/clt.zip" \
+              https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip; then
+              echo "::error::не удалось скачать cmdline-tools"
+              exit 1
+            fi
             mkdir -p "$HOME/android-sdk/cmdline-tools"
-            unzip -q /tmp/clt.zip -d "$HOME/android-sdk/cmdline-tools"
+            unzip -q "$tmp/clt.zip" -d "$tmp/unz" || { echo "::error::unzip не смог распаковать cmdline-tools"; exit 1; }
             rm -rf "$HOME/android-sdk/cmdline-tools/latest"
-            mv "$HOME/android-sdk/cmdline-tools/cmdline-tools" "$HOME/android-sdk/cmdline-tools/latest"
-            echo "$HOME/android-sdk/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
-            echo "ANDROID_HOME=$HOME/android-sdk" >> "$GITHUB_ENV"
+            mv "$tmp/unz/cmdline-tools" "$HOME/android-sdk/cmdline-tools/latest" || exit 1
+            rm -rf "$tmp"
+            home="$HOME/android-sdk"
+            bin="$HOME/android-sdk/cmdline-tools/latest/bin"
           fi
-          # Gradle и Capacitor читают ANDROID_HOME; на системном SDK он задан
-          # образом раннера, но не факт, что дожил до шагов сборки
-          if [ -z "${ANDROID_HOME:-}" ]; then
-            echo "ANDROID_HOME=/usr/local/lib/android/sdk" >> "$GITHUB_ENV"
-          fi
+          echo "$bin" >> "$GITHUB_PATH"
+          echo "ANDROID_HOME=$home" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$home" >> "$GITHUB_ENV"
+          echo "SDK: $home (sdkmanager: $bin)"
+          "$bin/sdkmanager" --version >/dev/null 2>&1 && echo "sdkmanager отвечает — ок" || echo "::warning::sdkmanager не вернул версию продолжим"
+          exit 0
 
       - name: Install Android SDK packages
         run: |

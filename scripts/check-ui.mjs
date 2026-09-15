@@ -2432,6 +2432,10 @@ console.log('\n[62] 1.28: конфиг electron-builder жив — CI падае
   ok(!/uses: android-actions\/setup-android@v3/.test(wf) && /Prepare Android SDK/.test(wf) &&
      /usr\/local\/lib\/android\/sdk/.test(wf),
     'SDK для APK берётся с раннера (с ручным cmdline-tools на крайний случай): упавший из-за Node 24 экшен убран');
+  ok(/set \+e/.test(wf) && !/sdkmanager --version 2>\/dev\/null \| head/.test(wf),
+    'диагностика SDK не гонит sdkmanager через head: под `set -o pipefail` SIGPIPE от head убивал шаг с кодом 141');
+  ok(/commandlinetools-linux-\d+_latest\.zip/.test(wf) && !/commandlinetools-linux-[0-9]+\.[0-9]+_latest/.test(wf),
+    'cmdline-tools качаются по точному имени архива (псевдо-версии вида 11.0 — это 404)');
 }
 
 console.log(fails===0?'\n✅ ВСЕ ПРОВЕРКИ ВЁРСТКИ ПРОЙДЕНЫ\n':`\n❌ ПРОВАЛЕНО: ${fails}\n`);
