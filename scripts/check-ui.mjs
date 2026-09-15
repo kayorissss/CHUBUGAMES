@@ -2407,5 +2407,32 @@ console.log('\n[61] 1.28: ферма — оптимизация цикла');
     'сама фишка — CSS-анимация вместо framer-motion на каждую: меньше перерисовок на слабом ПК, в лёгком режиме выключено');
 }
 
+
+console.log('\n[62] 1.28: конфиг electron-builder жив — CI падает на валидации схемы, а не на «магии»');
+{
+  const yml = fs.readFileSync('desktop/builder.yml', 'utf8');
+  /* блоки верхнего уровня, БЕЗ строк-комментариев: иначе собственные пояснения
+     в yml («у `nsis:` additionalProperties:false») ловятся как содержимое */
+  const block = (key) => {
+    const out = [];
+    let on = false;
+    for (const l of yml.split('\n')) {
+      if (l.trim() && !/^\s/.test(l)) { on = l.trim().startsWith(key + ':'); continue; }
+      if (on && !l.trim().startsWith('#')) out.push(l);
+    }
+    return out.join('\n');
+  };
+  const nsis = block('nsis');
+  const win = block('win');
+  ok(!/publisherName/.test(nsis) && /publisherName/.test(win),
+    'publisherName стоит под win: (в схеме electron-builder у nsis additionalProperties:false — прошлая правка роняла сборку EXE на валидации конфига)');
+  ok(/signAndEditExecutable: true/.test(win),
+    'свойства файла (CompanyName/ProductName) пишет electron-builder — без сертификата, но честно');
+  const wf = fs.readFileSync('.github/workflows/build-apk.yml', 'utf8');
+  ok(!/uses: android-actions\/setup-android@v3/.test(wf) && /Prepare Android SDK/.test(wf) &&
+     /usr\/local\/lib\/android\/sdk/.test(wf),
+    'SDK для APK берётся с раннера (с ручным cmdline-tools на крайний случай): упавший из-за Node 24 экшен убран');
+}
+
 console.log(fails===0?'\n✅ ВСЕ ПРОВЕРКИ ВЁРСТКИ ПРОЙДЕНЫ\n':`\n❌ ПРОВАЛЕНО: ${fails}\n`);
 process.exit(fails?1:0);

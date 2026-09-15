@@ -50,6 +50,13 @@ win:
   # нельзя, можно только купить сертификат (см. файл выше) или уйти в
   # Microsoft Store, где пакет подписывает Microsoft.
   signAndEditExecutable: true
+  # publisherName — опция ИМЕННО `win:` (в схеме electron-builder она в
+  # WindowsConfiguration; у `nsis:` additionalProperties:false, и прошлая
+  # правка «издателя в nsis» роняла CI на валидации конфига до сборки).
+  # Electron-builder кладёт её в свойства установщика и в реестр удаления;
+  # поле «Издатель» в диалоге SmartScreen по-прежнему берется из цифровой
+  # подписи — без сертификата там «Неизвестный издатель» при любом значении.
+  publisherName: "KAYORISAN"
   target:
     - target: portable
       arch: [x64]
@@ -69,9 +76,6 @@ nsis:
   shortcutName: CHUBUGAMES
   # в списке установленных программ подпись удалятора тоже должна быть нашей
   uninstallDisplayName: "CHUBUGAMES (KAYORISAN)"
-  # «Издатель» в «Приложения и функции» Windows берёт из этого поля — его
-  # можно заполнить и без сертификата, это не подпись, а метаданные установщика.
-  publisherName: "KAYORISAN"
   # Удаление должно уносить и сохранения, если пользователь этого хочет
   deleteAppDataOnUninstall: false
 

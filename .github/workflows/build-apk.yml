@@ -119,8 +119,30 @@ jobs:
           distribution: "temurin"
           java-version: "21"
 
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
+      # Android SDK на ubuntu-latest предустановлен: ANDROID_HOME указывает на
+      # /usr/local/lib/android/sdk, sdkmanager лежит в PATH. Раньше поверх этого
+      # стоял сторонний экшен android-actions/setup-android@v3 — с переводом
+      # раннеров на Node 24 он начал падать в этом шаге (у нас и у всех, кто на
+      # него полагается), а полезной работы в нём не было. Теперь: берём системный
+      # SDK, а если его нет — ставим cmdline-tools руками с dl.google.com.
+      - name: Prepare Android SDK
+        run: |
+          if command -v sdkmanager >/dev/null 2>&1; then
+            echo "SDK уже на раннере: $(sdkmanager --version 2>/dev/null | head -1)"
+          else
+            curl -fsSL -o /tmp/clt.zip https://dl.google.com/android/repository/commandlinetools-linux-11.0_latest.zip
+            mkdir -p "$HOME/android-sdk/cmdline-tools"
+            unzip -q /tmp/clt.zip -d "$HOME/android-sdk/cmdline-tools"
+            rm -rf "$HOME/android-sdk/cmdline-tools/latest"
+            mv "$HOME/android-sdk/cmdline-tools/cmdline-tools" "$HOME/android-sdk/cmdline-tools/latest"
+            echo "$HOME/android-sdk/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
+            echo "ANDROID_HOME=$HOME/android-sdk" >> "$GITHUB_ENV"
+          fi
+          # Gradle и Capacitor читают ANDROID_HOME; на системном SDK он задан
+          # образом раннера, но не факт, что дожил до шагов сборки
+          if [ -z "${ANDROID_HOME:-}" ]; then
+            echo "ANDROID_HOME=/usr/local/lib/android/sdk" >> "$GITHUB_ENV"
+          fi
 
       - name: Install Android SDK packages
         run: |
