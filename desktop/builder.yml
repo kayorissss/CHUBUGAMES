@@ -41,7 +41,14 @@ asarUnpack:
 win:
   icon: desktop/res/icon.ico
   # Без подписи Windows SmartScreen покажет предупреждение — это ожидаемо
-  # для бесплатной сборки, объяснение есть в README.
+  # для бесплатной сборки, объяснение есть в desktop/CERTIFICATE.md.
+  #
+  # signAndEditExecutable кладёт в свойства файла CompanyName/ProductName
+  # (из author.name и productName). Важно: поле «Издатель» в диалоге
+  # SmartScreen берётся НЕ отсюда, а из цифровой подписи. Без сертификата
+  # там будет «Неизвестный издатель» при любом author.name — обмануть это
+  # нельзя, можно только купить сертификат (см. файл выше) или уйти в
+  # Microsoft Store, где пакет подписывает Microsoft.
   signAndEditExecutable: true
   target:
     - target: portable
@@ -62,6 +69,9 @@ nsis:
   shortcutName: CHUBUGAMES
   # в списке установленных программ подпись удалятора тоже должна быть нашей
   uninstallDisplayName: "CHUBUGAMES (KAYORISAN)"
+  # «Издатель» в «Приложения и функции» Windows берёт из этого поля — его
+  # можно заполнить и без сертификата, это не подпись, а метаданные установщика.
+  publisherName: "KAYORISAN"
   # Удаление должно уносить и сохранения, если пользователь этого хочет
   deleteAppDataOnUninstall: false
 

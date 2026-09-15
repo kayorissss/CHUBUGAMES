@@ -515,3 +515,75 @@ export async function initNotificationsOnFirstRun(): Promise<void> {
     /* плагин недоступен — молча пропускаем */
   }
 }
+
+/* ═══════════════════════ ПК: веб-уведомления ═══════════════════════
+ *
+ * Просьба: «уведомления на ПК-версии адаптируй под ПК, чтобы от проги
+ * приходили уведомления, типа как из ТГ. А я тыкаю — и пишет про Android».
+ *
+ * На компьютере нет ни каналов Android, ни точных будильников, ни фонового
+ * раннера: там есть Notification API, который Electron (и любой браузер)
+ * отдаёт в центр уведомлений Windows. Поэтому на ПК отдельная, честная
+ * ветка: мы не обещаем «будит раз в час при закрытой игре» — Electron не
+ * держит фоновый процесс, и напоминания доходят, пока окно открыто или
+ * свёрнуто (но не закрыто). Формулировки в интерфейсе соответствуют этому.
+ *
+ * Иконка — /favicon-32.png: в собранном приложении dist лежит в корне,
+ * абсолютный путь работает и в app://, и в http://localhost.
+ */
+
+/** Есть ли в этой среде Notification API? */
+export const canWebNotify = (): boolean =>
+  typeof window !== "undefined" && "Notification" in window;
+
+/** Разрешение уже выдано? */
+export async function webNotifyGranted(): Promise<boolean> {
+  if (!canWebNotify()) return false;
+  try {
+    return Notification.permission === "granted";
+  } catch {
+    return false;
+  }
+}
+
+/** Спросить разрешение (браузер/оболочка покажут свой системный диалог). */
+export async function askWebNotify(): Promise<boolean> {
+  if (!canWebNotify()) return false;
+  try {
+    const r = await Notification.requestPermission();
+    return r === "granted";
+  } catch {
+    return false;
+  }
+}
+
+/** Настоящее уведомление в центр уведомлений Windows. */
+export async function sendWebNotification(
+  title: string,
+  body = "",
+  opts: { tag?: string; url?: string } = {},
+): Promise<boolean> {
+  if (!canWebNotify()) return false;
+  try {
+    let perm = Notification.permission as NotificationPermission;
+    if (perm === "default") perm = await Notification.requestPermission();
+    if (perm !== "granted") return false;
+    const n = new Notification(title, {
+      body,
+      icon: "/favicon-32.png",
+      badge: "/favicon-32.png",
+      tag: opts.tag || "chubgames",
+      silent: false,
+    });
+    // клик по уведомлению — фокус на окно игры
+    n.onclick = () => {
+      try { window.focus(); } catch { /* не всё разрешено */ }
+      n.close();
+    };
+    // сами закроем, чтобы не копить мусор в центре уведомлений
+    setTimeout(() => { try { n.close(); } catch { /* уже закрыто */ } }, 14000);
+    return true;
+  } catch {
+    return false;
+  }
+}

@@ -192,7 +192,18 @@ ok(/HERO_OMEGA/.test(brn)&&/heroStep/.test(brn),'герой ведётся пр�
 ok(/PARA_FALL/.test(brn)&&/Купол/.test(brn),'бонус спускается на парашюте');
 ok(brn.includes('drawHead(ctx, look'),'человечек меняется вместе с героем');
 const stg=fs.readFileSync('src/pages/Settings.tsx','utf8');
-ok(stg.includes('t.me/kayorisan'),'есть ссылка на автора');
+/* Просьба 1.28: «снизу везде убери плашку с тг и название CHUBUGAMES, просто
+   без кнопок напиши красиво … и она должна быть зафиксирована внизу-внизу».
+   Значит: в Настройках нет ни кнопки Telegram, ни подвала; имя, автор и
+   версия живут в строке состояния окна, которая не скроллится. */
+ok(!stg.includes('t.me/kayorisan') && !stg.includes('pc-foot'),'в Настройках нет плашки Telegram и подвала страницы');
+{
+  const appSrc=fs.readFileSync('src/App.tsx','utf8');
+  ok(/className="pc-statusbar"/.test(appSrc)&&/@kayorisan/.test(appSrc)&&/Version \{APP_VERSION\}/.test(appSrc),
+     'строка состояния окна: CHUBUGAMES, Developer: @kayorisan и версия');
+  ok(/\.pc-statusbar \{[\s\S]{0,240}?flex: 0 0 auto/.test(css)&&/\.pc-status-brand/.test(css),
+     'строка состояния — элемент каркаса (не «под плашками»), с своими классами');
+}
 const wfl=fs.readFileSync('.github/workflows/build-apk.yml','utf8');
 // Файл должен быть именно в индексе git: он был в .gitignore, из-за чего
 // сборка падала на «capacitor.config.json not found».
@@ -441,8 +452,27 @@ ok(!fs.existsSync('src/ui/PcSidebar.tsx') && fs.existsSync('src/ui/pc/PcTopBar.t
 const topbar = fs.readFileSync('src/ui/pc/PcTopBar.tsx', 'utf8');
 ok(topbar.includes('CHUBUGAMES') && topbar.includes('F11'),
   'в панели есть знак, кошелёк и подсказка по клавишам');
-ok(topbar.includes('"progress"') && topbar.includes('"settings"'),
-  'панель переключает все пять разделов');
+/* Просьба 1.28: «идёт так: ИКОНКА | CHUBUGAMES | МАГАЗИН | КАЗИНО |
+   ПЕРСОНАЖИ | ПРОГРЕСС», а «Настройки» и «Поддержать» — круглыми кнопками
+   над плашкой рекламы. То есть в панели их больше нет. */
+{
+  const list=topbar.slice(topbar.indexOf('const TABS'),topbar.indexOf('];',topbar.indexOf('const TABS')));
+  const ids=[...list.matchAll(/id: "(\w+)"/g)].map(m=>m[1]);
+  ok(ids[0]==='shop'&&ids.indexOf('casino')<ids.indexOf('progress')&&ids.indexOf('friends')<ids.indexOf('progress'),
+    'порядок разделов в панели: Магазин · Казино · Персонажи · Прогресс');
+  ok(!/id: "settings"/.test(list)&&!/pc-xtra/.test(topbar),
+    'кнопок «Настройки» и «Поддержать» в панели больше нет — они в углу');
+  const dock=fs.readFileSync('src/ui/pc/PcDock.tsx','utf8');
+  ok(/className="pc-dock"/.test(dock)&&/pc-round/.test(dock)&&/<PcBoost \/>/.test(dock),
+    'угол собран: круглые кнопки над плашкой бонуса, одним компонентом');
+  ok(/useDeferredUpdate/.test(dock)&&/pc-round-flag/.test(dock),
+    'пока обновление отложено — на кнопке горит «!»');
+  ok(/\.pc-dock \{[\s\S]{0,200}?position: fixed/.test(css),
+    'угол прибит к окну, и у плашки буста своя роль внутри него');
+  const upState=fs.readFileSync('src/core/updateState.ts','utf8');
+  ok(/deferUpdate/.test(upState)&&/clearDeferredUpdate/.test(upState)&&/useSyncExternalStore/.test(upState),
+    'отложенное обновление — отдельное состояние: «!» гаснет сам, когда версия стала свежей');
+}
 ok(/html\.is-desktop \.pc-home \{[\s\S]{0,320}?grid-template-columns:\s*minmax\(0, 1fr\);/.test(cssPc23),
   'главная на ПК — одна колонка во всю ширину (правая «колонка сведений» убрана)');
 ok(/\.pc-hero[\s\S]{0,220}?minmax\(0, 1fr\) 15\.5rem/.test(cssPc23),
@@ -477,16 +507,20 @@ const pkgJson = JSON.parse(fs.readFileSync('package.json', 'utf8'));
 ok(pkgJson.scripts && pkgJson.scripts.icons && fs.existsSync('scripts/build-icons.mjs'),
   'все иконки перегенерируются одной командой (npm run icons)');
 const brand = fs.readFileSync('src/ui/Brand.tsx', 'utf8');
-ok(brand.includes('var(--acc)') && !brand.includes('.png'),
-  'знак в интерфейсе — вектор, он красится акцентом темы');
+ok(brand.includes('var(--acc)') && /HAS_BRAND_LOGO \?/.test(brand) && brand.includes('<Burger'),
+  'знак в интерфейсе — вектор по умолчанию (красится акцентом темы), а растр включается только флагом генератора');
+ok(/LOGO && \(from === SRC\.badge \|\| from === SRC\.mark \|\| from === SRC\.mono\)/.test(fs.readFileSync('scripts/build-icons.mjs','utf8')),
+  'генератор умеет режим логотипа: растр вписывается целиком, не кромсается');
 const types23 = fs.readFileSync('src/core/types.ts', 'utf8');
 ok(types23.includes('"dark" | "graphite" | "light"'),
   'базовых темы три: чёрный, графит, белый');
 const content23 = fs.readFileSync('src/core/content.ts', 'utf8');
-ok(content23.includes('#FF7A18') && content23.indexOf('"ember"') < content23.indexOf('"amber"'),
-  'акцент по умолчанию — оранжевый «уголёк», он первый в списке');
-ok(fs.readFileSync('src/core/save.ts', 'utf8').includes('accent: "ember"'),
-  'новый профиль стартует с бесплатного акцента');
+ok(content23.includes('#A77BFF') && content23.indexOf('"violet"') < content23.indexOf('"ember"'),
+  'стандартная тема — «Фиолет»: он первый в списке акцентов (просьба 1.28)');
+ok(fs.readFileSync('src/core/save.ts', 'utf8').includes('accent: "violet"'),
+  'новый профиль стартует с фиолетового акцента');
+ok(/ownedThemes: \[[^\]]*"violet"/.test(fs.readFileSync('src/core/save.ts','utf8')),
+  'фиолет входит в бесплатный набор тем нового профиля');
 ok(cssPc23.includes('html.graphite'),
   'тема «графит» описана в палитре, а не только в настройке');
 ok(fs.readFileSync('src/App.tsx', 'utf8').includes('chub:nav'),
@@ -496,8 +530,8 @@ ok(fs.readFileSync('src/App.tsx', 'utf8').includes('chub:nav'),
 const pagesCss = fs.readFileSync('src/index.css', 'utf8');
 ok(/\.pc-cols,[\s\S]{0,30}\.pc-col\s*\{\s*display: contents;/.test(pagesCss),
   'две колонки не трогают телефонную вёрстку (контейнеры display:contents)');
-ok(fs.readFileSync('src/pages/Settings.tsx', 'utf8').includes('pc-cols'),
-  'настройки на ПК раскладываются в две колонки');
+ok(fs.readFileSync('src/pages/Settings.tsx', 'utf8').includes('pc-settings'),
+  'настройки на ПК — панель разделов слева и широкая сетка карточек справа');
 ok(fs.readFileSync('src/pages/Friends.tsx', 'utf8').includes('pc-pal-grid'),
   'персонажи: плитка по три карточки вместо списка');
 {
@@ -535,12 +569,10 @@ ok(fs.readFileSync('src/pages/Friends.tsx', 'utf8').includes('pc-pal-grid'),
     ok(!re.test(home), `на главной нет лишнего: ${what}`);
   }
   const boost = fs.readFileSync('src/ui/pc/PcBoost.tsx', 'utf8');
-  ok(/className="pc-boost"/.test(boost) && /\.pc-boost \{[\s\S]{0,220}?position: fixed/.test(css),
-    'бонус за ролик — плашка в углу поверх библиотеки, а не карточка на главной');
-  ok(/pc && !game && <PcBoost \/>/.test(fs.readFileSync('src/App.tsx', 'utf8')),
-    'плашка буста монтируется один раз на уровне приложения и прячется в игре');
-  ok(/id: "casino",\s*label: "Казино",[\s\S]{0,80}?id: "progress"/.test(bar),
-    'Казино — в верхней панели перед «Прогрессом»');
+  ok(/className="pc-boost"/.test(boost) && /html\.is-desktop \.pc-boost \{[\s\S]{0,160}?position: relative/.test(css),
+    'бонус за ролик — плашка внутри угла, а не карточка на главной и не «fixed» сама по себе');
+  ok(/pc && !game && \(\s*<PcDock/.test(fs.readFileSync('src/App.tsx', 'utf8')),
+    'угол монтируется один раз на уровне приложения и прячется в игре');
   ok(!/className="pc-head"/.test(home) || /html\.is-desktop \.pc-head \{/s.test(css),
     'шапка уровня и монет на ПК скрыта (уровень и кошелёк — в панели)');
 
@@ -555,14 +587,16 @@ ok(fs.readFileSync('src/pages/Friends.tsx', 'utf8').includes('pc-pal-grid'),
     'у игрового блока остаётся containing block — оверлеи не разлипаются по окну');
 
   const set = fs.readFileSync('src/pages/Settings.tsx', 'utf8');
-  ok(/className="pc-seg" role="tablist"/.test(set) && /pc-set-item/.test(set),
-    'настройки разбиты на вкладки-сегменты (как в Магазине), блоки — ячейки сетки');
+  ok(/className="pc-rail" role="tablist"/.test(set) && /pc-rail-item/.test(set) && /pc-set-blk/.test(set),
+    'настройки: панель разделов слева (.pc-rail), блоки — ячейки широкой сетки');
   ok(!/pc-blk pc-[ab] pc-r\d/.test(set),
     'в настройках больше нет жёстких строк pc-rN: блоки не наползают, когда один вырастает');
-  ok(/sec === "system" && \(/.test(set) && /sec === "screen" && \(/.test(set),
+  ok(/sec === "system" && \(/.test(set) && /sec === "look" && \(/.test(set),
     'каждая группа настроек режется активной вкладкой');
-  ok(/pc-foot-ver/.test(set) && /pc-foot-brand/.test(set),
-    'внизу настроек: знак по центру, версия в углу');
+  ok(!/pc-foot/.test(set),
+    'подвала с версией внутри настроек больше нет — он в строке состояния окна');
+  ok(/html\.is-desktop \.pc-rail-item\.on \{[\s\S]{0,260}?color: var\(--text\)/.test(css),
+    'выбранная вкладка настроек подписана читаемым цветом, а не «по акценту»');
   ok(!/<div className="pc-col">/.test(set), 'старых колонок pc-col в настройках больше нет');
 
   const shop = fs.readFileSync('src/pages/Shop.tsx', 'utf8');
@@ -574,11 +608,26 @@ ok(fs.readFileSync('src/pages/Friends.tsx', 'utf8').includes('pc-pal-grid'),
     || /html\.is-desktop \.pc-pal-grid \{[^}]*repeat\(3/s.test(css),
     'плитка персонажей на ПК — по три в ряд');
 }
-ok(['Progress', 'Casino', 'Network'].every((pg) => {
+ok(['Progress', 'Casino'].every((pg) => {
     const t = fs.readFileSync(`src/pages/${pg}.tsx`, 'utf8');
-    return t.includes('pc-tabs-row') || t.includes('pc-seg');
-  }),
+    // 1.28: Казино переехало на левую рейку (.pc-rail) — это тоже «панель»,
+    // а не тянущийся ряд чипов
+    return t.includes('pc-tabs-row') || t.includes('pc-seg') || t.includes('pc-rail');
+  }) && fs.readFileSync('src/pages/Network.tsx', 'utf8').includes('net-tabs'),
   'ряды вкладок на ПК — панель, а не тянущаяся на всю ширину полоска');
+{
+  /* Просьба 1.28: «вкладка Сеть — полный ужас, красиво расположи вкладки и
+     добавь анимации, типа вай-фай грузится». */
+  const net = fs.readFileSync('src/pages/Network.tsx', 'utf8');
+  ok(/className="net-tabs" role="tablist"/.test(net) && /className=\{`net-tab \$\{on \? "on" : ""\}`\}/.test(net),
+    'Сеть: вкладки «Глушилки» и «Скорость» — отдельная панель с подписями');
+  ok(/net-scan/.test(net) && /animation: net-scan/.test(css) && /@keyframes net-scan/.test(css),
+    'Сеть: полоски сигнала анимируются, когда идёт замер (CSS, без rAF)');
+  ok(/\.net-tab\.on \{[\s\S]{0,160}?--acc-ink/.test(css),
+    'Сеть: активная вкладка — акцент с контрастными чернилами, текст не сливается');
+  ok(/onBusy=\{setRunning\}/.test(net) && /export function NetPanel/.test(net),
+    'Сеть: панель знает, что замер идёт, и открывается и в Настройках, и на всю страницу');
+}
 
 console.log('\n[37] 1.27: общие вкладки, уровень первым, точка награды, казино');
 {
@@ -606,10 +655,10 @@ console.log('\n[37] 1.27: общие вкладки, уровень первым
     'клик по карточке — с классом-курсором и поддержкой клавиатуры (Card onClick)');
 
   const tabList = cas37.slice(cas37.indexOf('const TABS'), cas37.indexOf('];', cas37.indexOf('const TABS')));
-  ok(/\{ id: "slots",   name: "СЛОТЫ"/.test(tabList) && tabList.indexOf('"slots"') < tabList.indexOf('"farm"'),
-    'СЛОТЫ — первая вкладка казино, ферма в конце');
-  ok(/className="pc-seg" role="tablist"/.test(cas37),
-    'вкладки казино — те же сегменты, что у магазина и прогресса');
+  ok(/\{ id: "slots",\s+name: "Слоты"/.test(tabList) && tabList.indexOf('"slots"') < tabList.indexOf('"farm"'),
+    'СЛОТЫ — первая вкладка казино, ферма в конце (1.28: названия в нормальном регистре)');
+  ok(/className="pc-rail" role="tablist" aria-label=\{tr\("Разделы казино"\)\}/.test(cas37),
+    'вкладки казино — панель слева (.pc-rail), как в настройках (просьба 1.28)');
   ok(/html\.is-desktop \.pc-chips-bar \{[\s\S]{0,120}?display: flex/.test(css37),
     'шапка «жетоны казино» на ПК — компактная полоса, а не жирная плита');
 }
@@ -696,12 +745,18 @@ ok(ar19.includes('drawFighter') && ar19.includes('groundY'),
 const st18 = fs.readFileSync('src/pages/Settings.tsx', 'utf8');
 ok(st18.indexOf('settings.update') < st18.indexOf('settings.appearance'),
   'раздел обновления в самом верху настроек');
+/* Просьба 1.28: «вкладка Система: убери проверку сети оттуда, если и так
+   отдельная вкладка есть; обновление сверху, ниже уведомления — и растяни
+   плашки». */
+ok(!/onOpen\?\.\("network"\)/.test(st18) && !/Проверка сети на всю страницу/.test(st18),
+  'в «Системе» больше нет строки про проверку сети');
+ok(/pc-set-wide/.test(st18),
+  'плашки «Системы» растянуты на всю ширину, а не сложены колонкой');
 /* Просьба 1.27.2: из Настроек убрали автора/разработчика и подпись
    «все друзья, шутки…». Издатель при этом никуда не делся — он в свойствах
    exe (package.json → author.name, см. проверку builder-метаданных). */
-ok(!/KAYORISAN/.test(st18) && /t\("common\.version"\)/.test(st18),
-  'в Настройках только название, версия и связь: автора и «для своих» убрали');
-ok(/Telegram/.test(st18), 'кнопка Telegram в Настройках осталась');
+ok(!/KAYORISAN/.test(st18) && !/t\.me\//.test(st18) && !/variant="primary"[^>]*\n[^>]*Telegram/.test(st18),
+  'в Настройках нет ни плашки автора, ни кнопки Telegram: только содержательные блоки');
 ok(!/settings\.forOurs/.test(st18) && !/settings\.offline/.test(st18),
   'подвал Настроек: «работает офлайн» и «сделано для своих» убраны');
 ok(st18.includes('saveFileNative'), 'выгрузка сохранения работает на телефоне');
@@ -1646,9 +1701,13 @@ console.log('\n[41] 1.27: вкладки настроек и полный пер
   ok(/html\.is-desktop \.pc-cols > \.pc-set-span \{[^}]*grid-column: 1 \/ -1/.test(css),
     'плашка «Об игре» на всю ширину и по центру');
   ok(/chubgames\.settingsTab/.test(set), 'выбранная вкладка настроек запоминается');
-  for (const [id, label] of [['screen', 'Экран'], ['game', 'Игра'], ['profile', 'Профиль'], ['system', 'Система']]) {
-    ok(set.includes(`{ id: "${id}", label: "${label}"`), `вкладка настроек «${label}» есть`);
-  }
+  /* Просьба: вкладки слева и именно в этом порядке. */
+  const secs = set.slice(set.indexOf('const SECS'), set.indexOf('];', set.indexOf('const SECS')));
+  const secIds = [...secs.matchAll(/id: "(\w+)"/g)].map((m) => m[1]);
+  ok(JSON.stringify(secIds) === JSON.stringify(['system', 'look', 'net', 'game', 'profile']),
+    'вкладки настроек: Система · Оформление · Сеть · Игра · Профиль (в таком порядке, «Экран» удалён)');
+  ok(/hint: "/.test(secs) && /\.pc-rail-hint \{/.test(css),
+    'у каждой вкладки настроек есть подпись-пояснение (что там — видно сразу)');
 
   /* Язык менял «почти всё, кроме названий режимов от Лёхи бургера до Башни
      Лёхи» — проверим это машиной: у КАЖДОЙ строки GAME_META должен быть
@@ -2132,6 +2191,72 @@ console.log('\n[55] 1.27.2 · телефон: уровни и треки в РИ
     "фото в adaptive-иконке не вылезает за безопасную зону (66% холста)");
   ok(/branding\/photo\.jpg/.test(ico),
     "иконка переключается на фото одним файлом, вектор остаётся запасным");
+}
+
+console.log('\n[56] 1.28 · ПК: настройки с рейкой, угол с круглыми кнопками, экран обновления, шансы слотов');
+{
+  const css56 = fs.readFileSync('src/index.css', 'utf8');
+  const set56 = fs.readFileSync('src/pages/Settings.tsx', 'utf8');
+  const cas56 = fs.readFileSync('src/pages/Casino.tsx', 'utf8');
+  const up56 = fs.readFileSync('src/ui/UpdateBanner.tsx', 'utf8');
+  const flow = fs.readFileSync('src/pages/UpdateFlow.tsx', 'utf8');
+  const app56 = fs.readFileSync('src/App.tsx', 'utf8');
+  const desktopSet = fs.readFileSync('src/ui/DesktopSettings.tsx', 'utf8');
+
+  ok(/\.pc-rail-item \{[\s\S]{0,320}?color: var\(--text\)/.test(css56),
+    'подписи вкладок рейки — --text: не сливаются с фоном панели ни на одной теме');
+  ok(/html\.is-desktop \.pc-settings \{[\s\S]{0,200}?grid-template-columns: 15\.5rem minmax\(0, 1fr\)/.test(css56),
+    'настройки на ПК: панель 15.5rem слева + содержимое на остальную ширину');
+  ok(/html\.is-desktop \.pc-cas-split \{[\s\S]{0,140}?grid-template-columns: 12\.5rem/.test(css56),
+    'казино: та же рейка, но уже — шесть коротких названий');
+  ok(/pc-set-stack/.test(set56) && /html\.is-desktop \.pc-rail-body \.pc-set-stack \{[\s\S]{0,200}?auto-fit/.test(css56),
+    'вкладки «Игра» и прочие растянуты сеткой auto-fit, а не собраны в вертикальную полосу');
+  ok(/sendWebNotification/.test(set56) && /askWebNotify/.test(set56),
+    'уведомления на ПК идут через Notification API, а не через текст про Android');
+  ok(/\{desktop \? tr\("Разрешить уведомления Windows"\) : tr\("Разрешить уведомления"\)\}/.test(set56),
+    'подпись кнопки разрешения меняется по платформе — на ПК нет слов про телефон');
+  ok(/Напоминания на ПК шлёт открытое|напоминания работают, пока игра открыта/i.test(set56),
+    'честная формулировка: на ПК напоминания шлёт открытое приложение');
+  ok(/startDesktopNotify/.test(app56) && /notifyFlags/.test(app56),
+    'планировщик напоминаний ПК запускается один раз на уровне приложения и читает настройки через ref');
+  ok(/if \(pc && info\)/.test(up56) && /upd-plate/.test(up56) && /deferUpdate\(info\.version\)/.test(up56),
+    'на ПК плашка «вышло обновление» ведёт на экран обновления, а «попозже» оставляет «!»');
+  ok(/checkUpdate|api\.checkUpdate/.test(flow) && /downloadUpdate/.test(flow) && /pc-upd-orbit/.test(flow),
+    'экран обновления: проверка, загрузка с прогрессом и лобби ожидания');
+  ok(/useSystemBack\(true, onBack\)/.test(flow),
+    'экран обновления закрывается системным «назад», как любая подстраница');
+  ok(/className="pc-upd"/.test(flow) && /\.pc-upd \{[\s\S]{0,160}?grid-template-columns: 13\.5rem/.test(css56),
+    'экран обновления на ПК — ступени слева и большая сцена справа');
+  ok(!/DesktopSettings part="screen"/.test(set56) && desktopSet.includes('part = "all"'),
+    'блок «Экран» из настроек убран, а сам компонент оставлен для других мест');
+  ok(/className=\{`pc-slot-help/.test(cas56) && /export function slotOdds/.test(fs.readFileSync('src/core/gamble.ts','utf8')),
+    'шансы слотов — за кнопкой «?» и считаются из весов, а не переписаны в разметку');
+  ok(/pc-slot-bet-input/.test(cas56) && /setCustomBet/.test(cas56) && /BET_MAX_CAP/.test(cas56),
+    'ставка в слотах пишется руками и упирается в разумный потолок');
+  ok(/\.pc-statusbar \{[\s\S]{0,300}?border-top: 1px solid/.test(css56) && /\.pc-status-ver \{[\s\S]{0,120}?margin-left: auto/.test(css56),
+    'строка состояния: отделена линией, версия прижата к правому краю');
+  ok(/html\.is-desktop \.pc-page-head h1 \{[\s\S]{0,320}?line-height: 1\.32/.test(css56) &&
+     /html\.is-desktop \.pc-page-head h1 \{[\s\S]{0,320}?overflow: visible/.test(css56),
+    'заголовки страниц на ПК не обрезаются сверху и не сжимаются в одну строку');
+}
+
+console.log('\n[57] 1.28 · ЧУБ КЛИКЕР: FPS и пауза');
+{
+  const ck = fs.readFileSync('src/games/Clicker.tsx', 'utf8');
+  const shl = fs.readFileSync('src/games/shell.tsx', 'utf8');
+  ok(/export function softShadows/.test(shl), 'softShadows экспортируется — игры могут брать тот же приём');
+  ok(/renderScale\(r\.width, r\.height\)/.test(ck) && /onAdapt\(resize\)/.test(ck),
+    'кликер рисует столько, сколько тянет железо, и перестраивается, когда адаптив меняет растр');
+  ok(!/Math\.min\(2\.5, window\.devicePixelRatio/.test(ck),
+    'старый «dpr до 2.5» убран: на 27" это было ~10 млн пикселей на кадр');
+  ok(/if \(isPaused\(\)\) \{[\s\S]{0,200}?raf = requestAnimationFrame\(loop\);\n        return;/.test(ck),
+    'на паузе кликер не рисует кадры, но держит цикл и last — без прыжка лица после продолжения');
+  ok(/pushFloat\(\{/.test(ck) && !/setTimeout\(\(\) => setFloats\(\(p\) => p\.filter/.test(ck),
+    'всплывающие цифры сливаются в состояние пачкой (~9 раз/с), а не двумя апдейтами на тап');
+  ok(/ctx\.fillRect\(W \/ 2 - gr, cy - gr, gr \* 2, gr \* 2\)/.test(ck) && !/ctx\.fillRect\(0, 0, W, H\)/.test(ck),
+    'свечение лица ограничено рамкой лица: полноэкранного полупрозрачного градиента нет');
+  ok(!/createLinearGradient\(bx, by/.test(ck),
+    'языки пламени больше не строят по градиенту на каждый кадр');
 }
 
 console.log(fails===0?'\n✅ ВСЕ ПРОВЕРКИ ВЁРСТКИ ПРОЙДЕНЫ\n':`\n❌ ПРОВАЛЕНО: ${fails}\n`);

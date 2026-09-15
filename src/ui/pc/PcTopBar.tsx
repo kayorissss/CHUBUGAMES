@@ -13,40 +13,31 @@ import { hasLoot } from "../../core/rewards";
 /**
  * ВЕРХНЯЯ ПАНЕЛЬ ПК-ВЕРСИИ.
  *
- * Что в ней было до этого: знак, пять разделов, пять «вторых страниц»
- * (босс, казино, фанфики, сеть, поддержать), кошелёк, подсказка про F11 и
- * номер версии. Восемь групп в полосе высотой 3.5rem — они не влезали даже
- * на 1920 px: на узких окнах начиналось наслаивание, а половина кнопок
- * дублировала то, что уже есть на самой странице (босс, казино, фанфики).
+ * Порядок слева направо — ровно как просил пользователь:
  *
- * Теперь правило одно: в панели только то, что нужно ВСЕГДА и ВСЮДУ.
+ *   [ИКОНКА] CHUBUGAMES | МАГАЗИН | КАЗИНО | ПЕРСОНАЖИ | ПРОГРЕСС …… [ур.] [💰 🪙 💎 🎟]
  *
- *   CHUBUGAMES | Ур. 3 | 💰 26к 💎 310 🎟 40 | Прогресс Магазин Персонажи | … | Поддержать Настройки
- *
- * • CHUBUGAMES — кнопка «на главную»: отдельной вкладки «Игры» больше нет.
- * • Уровень, опыт и валюты — одна строка сверху: дублировать их в шапке
- *   главной страницы смысла нет (именно это и выглядело как «ужас справа»).
- * • Разделов три. Босс, казино и фанфики живут карточками на главной,
- *   сеть уехала в настройки — кнопки-дубли сверху лишние.
- * • Настройки — в правом углу, «Поддержать» сразу левее них.
- * • F11/Esc и номер версии убраны: подсказка по клавишам есть в настройках,
- *   а версия — внизу настроек же, где про неё и спрашивают.
+ *  • Знак + название = кнопка «на главную»: отдельной вкладки «Игры» нет.
+ *  • «Настройки» и «Поддержать» из панели убраны целиком: они переехали в
+ *    правый нижний угол круглыми кнопками-иконками (ui/pc/PcDock.tsx) — там,
+ *    где и просили, над плашкой бонуса за ролик. На 1280 px они влезали в
+ *    панель только ценой наложения групп, что и выглядело «криво».
+ *  • Освободившийся правый край отдали кошельку: уровень (компактный чип,
+ *    а не плашка на треть панели) и три валюты.
+ *  • Версия и подсказки F11/Esc из панели убраны: версия — в строке состояния
+ *    внизу окна, клавиши — в «Настройки → Игра».
  *
  * Ничего не накладывается: у панели `flex-wrap: nowrap`, каждая группа
- * `flex: 0 0 auto`, а сужается только то, что умеет (метки вкладок и лишние
- * валюты скрываются медиазапросами, а не наползанием друг на друга).
+ * `flex: 0 0 auto`, сужается только то, что умеет (метки вкладок скрываются
+ * медиазапросом, а не наползанием).
  */
 
-/**
- * Разделы. Казино — не «вторая страница» главной, а постоянный раздел: его
- * просили поднять в панель перед «Прогрессом», потому что с главной оно
- * уехало, а искать его в двух переходах — неудобно.
- */
+/** Разделы. Тот порядок, что назван пользователем, — справа от названия. */
 const TABS: { id: Tab | "casino"; label: string; icon: IconName; sub?: boolean }[] = [
-  { id: "casino", label: "Казино", icon: "ticket", sub: true },
-  { id: "progress", label: "Прогресс", icon: "chart" },
   { id: "shop", label: "Магазин", icon: "shop" },
+  { id: "casino", label: "Казино", icon: "ticket", sub: true },
   { id: "friends", label: "Персонажи", icon: "users" },
+  { id: "progress", label: "Прогресс", icon: "chart" },
 ];
 
 export default function PcTopBar({
@@ -76,67 +67,6 @@ export default function PcTopBar({
       </button>
 
       <span className="pc-bar-sep" aria-hidden />
-
-      {/* Уровень и опыт. Тап — в прогресс: больше nowhere уровень не нужен. */}
-      <button
-        type="button"
-        className="pc-bar-level"
-        onClick={() => go("progress")}
-        title={tr("Уровень и опыт")}
-      >
-        <span className="t-num pc-bar-lvl">{tr("Ур.")} {s.level}</span>
-        <span className="pc-bar-xp" aria-hidden>
-          <span style={{ width: `${levelPct}%` }} />
-        </span>
-        <span className="t-caption pc-bar-xp-num">{Math.round(levelPct)}%</span>
-      </button>
-
-      {/* Валюты. Тап по каждой — что это за валюта (просьба пользователя). */}
-      <div className="pc-bar-wallet">
-        <button
-          type="button"
-          className="pc-wallet-item"
-          onClick={() => {
-            haptic("light");
-            toast({
-              title: tr("ЧУБКОИНЫ"),
-              sub: tr("Основная валюта: игры, магазин, кейсы"),
-              icon: "coin",
-              tone: "gold",
-            });
-          }}
-        >
-          <span style={{ color: "var(--gold)", lineHeight: 0 }}><Icon name="coin" size={14} /></span>
-          <span className="t-num">{fmt(s.coins)}</span>
-        </button>
-        <button
-          type="button"
-          className="pc-wallet-item pc-wallet-gem"
-          onClick={() => {
-            haptic("light");
-            toast({
-              title: tr("АЛМАЗЫ"),
-              sub: tr("Редкая валюта: скины, крупные покупки"),
-              icon: "gem",
-              tone: "normal",
-            });
-          }}
-        >
-          <span style={{ color: "var(--violet)", lineHeight: 0 }}><Icon name="gem" size={14} /></span>
-          <span className="t-num">{fmt(s.gems)}</span>
-        </button>
-        {chips > 0 && (
-          <button
-            type="button"
-            className="pc-wallet-item pc-wallet-chips"
-            onClick={() => { haptic("light"); onOpen?.("casino"); }}
-            title={tr("Жетоны казино")}
-          >
-            <span style={{ color: "var(--violet)", lineHeight: 0 }}><Icon name="ticket" size={14} /></span>
-            <span className="t-num">{fmt(chips)}</span>
-          </button>
-        )}
-      </div>
 
       {/* Разделы */}
       <nav className="pc-bar-tabs" aria-label={tr("Разделы")}>
@@ -171,28 +101,66 @@ export default function PcTopBar({
         })}
       </nav>
 
-      {/* Правый угол: поддержка и настройки. Настройки — последними, в углу,
-          как и просили; «Поддержать» — сразу левее них. */}
+      {/* Правый край: кошелёк. Уровень — маленький чип ПЕРЕД валютами (так
+          просили), валюты по-прежнему кликабельны и объясняют себя тостом. */}
       <div className="pc-bar-tail">
         <button
           type="button"
-          className={`pc-xtra ${sub === "donate" ? "on" : ""}`}
-          onClick={() => { sfx.click(); haptic("light"); onOpen?.("donate"); }}
+          className="pc-bar-level"
+          onClick={() => go("progress")}
+          title={`${tr("Уровень")} ${s.level} · ${Math.round(levelPct)}% ${tr("до следующего")}`}
         >
-          <span style={{ lineHeight: 0 }}><Icon name="heart" size={14} /></span>
-          <span className="t-body">{tr("Поддержать")}</span>
-        </button>
-        <button
-          type="button"
-          className={`pc-tab pc-tab-gear ${tab === "settings" || sub === "network" ? "on" : ""}`}
-          aria-current={tab === "settings" && !sub ? "page" : undefined}
-          onClick={() => go("settings")}
-        >
-          <span className="pc-tab-ico">
-            <Icon name="settings" size={15} />
+          <span className="t-num pc-bar-lvl">{tr("Ур.")} {s.level}</span>
+          <span className="pc-bar-xp" aria-hidden>
+            <span style={{ width: `${levelPct}%` }} />
           </span>
-          <span className="t-body pc-tab-label">{tr("Настройки")}</span>
         </button>
+
+        <div className="pc-bar-wallet">
+          <button
+            type="button"
+            className="pc-wallet-item"
+            onClick={() => {
+              haptic("light");
+              toast({
+                title: tr("ЧУБКОИНЫ"),
+                sub: tr("Основная валюта: игры, магазин, кейсы"),
+                icon: "coin",
+                tone: "gold",
+              });
+            }}
+          >
+            <span style={{ color: "var(--gold)", lineHeight: 0 }}><Icon name="coin" size={14} /></span>
+            <span className="t-num">{fmt(s.coins)}</span>
+          </button>
+          <button
+            type="button"
+            className="pc-wallet-item pc-wallet-gem"
+            onClick={() => {
+              haptic("light");
+              toast({
+                title: tr("АЛМАЗЫ"),
+                sub: tr("Редкая валюта: скины, крупные покупки"),
+                icon: "gem",
+                tone: "normal",
+              });
+            }}
+          >
+            <span style={{ color: "var(--violet)", lineHeight: 0 }}><Icon name="gem" size={14} /></span>
+            <span className="t-num">{fmt(s.gems)}</span>
+          </button>
+          {chips > 0 && (
+            <button
+              type="button"
+              className="pc-wallet-item pc-wallet-chips"
+              onClick={() => { haptic("light"); onOpen?.("casino"); }}
+              title={tr("Жетоны казино")}
+            >
+              <span style={{ color: "var(--violet)", lineHeight: 0 }}><Icon name="ticket" size={14} /></span>
+              <span className="t-num">{fmt(chips)}</span>
+            </button>
+          )}
+        </div>
       </div>
     </header>
   );

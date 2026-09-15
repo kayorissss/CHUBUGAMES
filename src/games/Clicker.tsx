@@ -9,11 +9,18 @@ import {
 import { drawHead } from "../core/head";
 import { fmt } from "../core/format";
 import { sfx, haptic } from "../core/fx";
+import { isPaused } from "../core/pause";
+import { onAdapt, renderScale } from "../core/perf";
+import { softShadows } from "./shell";
 import Icon from "../ui/Icon";
 import type { IconName } from "../ui/Icon";
 import { Bar } from "../ui/Glass";
 
-interface FloatTxt { id: number; x: number; y: number; txt: string; crit: boolean }
+interface FloatTxt {
+  id: number; x: number; y: number; txt: string; crit: boolean;
+  /** когда родился — чистим по возрасту пачкой, а не таймером на цифру */
+  born: number;
+}
 
 /**
  * Ползунок «сколько уровней взять».
@@ -98,6 +105,38 @@ function LevelSlider({
 export default function Clicker({ onExit }: { onExit: () => void }) {
   const { s, set, mainFriend, addXp, bump, questProgress, finishGame } = useGame();
   const [floats, setFloats] = useState<FloatTxt[]>([]);
+  /*
+   * ВСПЛЫВАЮЩИЕ ЦИФРЫ — ПАЧКОЙ, А НЕ ПО ОДНОЙ.
+   *
+   * Жалоба друга: «в ЧУБ КЛИКЕРЕ FPS падает до 2, и с автокликером тоже».
+   * Одна из причин настоящая: каждый тап делал ДВА обновления React-состояния
+   * (добавить цифру и через 900 мс убрать её своим таймером), и каждое
+   * перерисовывало всю страницу — список апгрейдов, HUD, кнопки. На
+   * автокликере это 20–40 перерисовок в секунду при том, что контент
+   * изменился на одну строку.
+   *
+   * Теперь цифры копятся в ref и сливаются в состояние не чаще, чем раз в
+   * 110 мс (~9 обновлений в секунду вместо 40), а удаление идёт по возрасту
+   * в том же слиянии — отдельных setTimeout больше нет вовсе.
+   */
+  const floatQueue = useRef<FloatTxt[]>([]);
+  const floatTimer = useRef(0);
+  const flushFloats = useCallback(() => {
+    floatTimer.current = 0;
+    const now = Date.now();
+    // держим последние 8 и только живые
+    const aliveList = floatQueue.current.filter((f) => now - f.born < 900).slice(-8);
+    floatQueue.current = aliveList;
+    setFloats(aliveList);
+    if (aliveList.length > 0 && !floatTimer.current) {
+      floatTimer.current = window.setTimeout(flushFloats, 110);
+    }
+  }, []);
+  const pushFloat = useCallback((f: FloatTxt) => {
+    floatQueue.current = [...floatQueue.current, f].slice(-8);
+    if (!floatTimer.current) floatTimer.current = window.setTimeout(flushFloats, 110);
+  }, [flushFloats]);
+  useEffect(() => () => { if (floatTimer.current) clearTimeout(floatTimer.current); }, []);
   const [combo, setCombo] = useState(0);
   const [comboPct, setComboPct] = useState(0);
   const [tab, setTab] = useState<"tap" | "shop">("tap");
@@ -155,18 +194,40 @@ export default function Clicker({ onExit }: { onExit: () => void }) {
     const c = canvasRef.current;
     if (!c) return;
     let raf = 0;
-    const dpr = Math.min(2.5, window.devicePixelRatio || 1);
+    /*
+     * РАЗРЕШЕНИЕ РИСОВАНИЯ.
+     *
+     * Вторая причина «2 FPS в кликере»: здесь было Math.min(2.5, devicePixelRatio).
+     * На 27" мониторе с масштабированием 150 % это 2.5 — то есть внутренний
+     * буфер 4608×2304, ~10,6 млн пикселей на КАЖДЫЙ кадр, при том что игра
+     * рисует ещё и полноэкранное свечение. В остальных мини-играх плотность
+     * подбирает core/perf.ts (renderScale), и здесь теперь то же самое:
+     * слабое железо само ужимает растр, а не упорно рисует 10 мегапикселей.
+     */
+    let dpr = Math.min(2, window.devicePixelRatio || 1);
     const resize = () => {
       const r = c.getBoundingClientRect();
-      c.width = r.width * dpr;
-      c.height = r.height * dpr;
+      dpr = renderScale(r.width, r.height);
+      c.width = Math.max(1, Math.floor(r.width * dpr));
+      c.height = Math.max(1, Math.floor(r.height * dpr));
+      // «слабое железо» выключает растер теней прямо в контексте
+      softShadows(c);
     };
     resize();
     const ro = new ResizeObserver(resize);
     ro.observe(c);
+    const offAdapt = onAdapt(resize);
     let last = performance.now();
 
     const loop = (now: number) => {
+      /* На паузе кадр не рисуем (сцена под оверлеем всё равно стоит), но
+         last обновляем — иначе на первом кадре после продолжения анимация
+         лица прыгнет на всё время паузы. */
+      if (isPaused()) {
+        last = now;
+        raf = requestAnimationFrame(loop);
+        return;
+      }
       const dt = Math.min(50, now - last);
       last = now;
       const ctx = c.getContext("2d");
@@ -205,11 +266,16 @@ export default function Clicker({ onExit }: { onExit: () => void }) {
 
         // свечение усиливается со стадией
         const st = stageRef.current;
-        const glow = ctx.createRadialGradient(W / 2, cy, r * 0.4, W / 2, cy, r * (1.7 + st.idx * 0.16));
+        const gr = r * (1.7 + st.idx * 0.16);
+        const glow = ctx.createRadialGradient(W / 2, cy, r * 0.4, W / 2, cy, gr);
         glow.addColorStop(0, `rgba(255,176,32,${0.14 + st.idx * 0.06})`);
         glow.addColorStop(1, "rgba(255,176,32,0)");
         ctx.fillStyle = glow;
-        ctx.fillRect(0, 0, W, H);
+        /* Раньше это был fillRect(0, 0, W, H): полупрозрачный градиент на
+           ВЕСЬ экран — самый дорогой пиксельный операция в игре, и он же
+           рисовался под панелью настроек, где его не видно. Прямоугольник
+           ограничен лицом: то же свечение, в ~8 раз меньше растра. */
+        ctx.fillRect(W / 2 - gr, cy - gr, gr * 2, gr * 2);
 
         // лучи (со 2-й стадии)
         if (st.rays) {
@@ -217,13 +283,17 @@ export default function Clicker({ onExit }: { onExit: () => void }) {
           ctx.translate(W / 2, cy);
           ctx.rotate(now * 0.00022);
           const rays = 12;
+          /* createLinearGradient внутри цикла — 12 объектов градиента на
+             каждый кадр. Градиент живёт в системе координат момента
+             отрисовки, поэтому один объект спокойно служит всем лучам. */
+          const len = r * 1.56;
+          const g2 = ctx.createLinearGradient(0, -r * 0.9, 0, -len);
+          g2.addColorStop(0, `${st.color}55`);
+          g2.addColorStop(1, "rgba(0,0,0,0)");
+          ctx.fillStyle = g2;
           for (let i = 0; i < rays; i++) {
             ctx.rotate((Math.PI * 2) / rays);
-            const len = r * (1.5 + Math.sin(now * 0.002 + i) * 0.12);
-            const g2 = ctx.createLinearGradient(0, -r * 0.9, 0, -len);
-            g2.addColorStop(0, `${st.color}55`);
-            g2.addColorStop(1, "rgba(0,0,0,0)");
-            ctx.fillStyle = g2;
+            ctx.globalAlpha = 0.7 + Math.sin(now * 0.002 + i) * 0.3;
             ctx.beginPath();
             ctx.moveTo(-r * 0.07, -r * 0.9);
             ctx.lineTo(r * 0.07, -r * 0.9);
@@ -231,6 +301,7 @@ export default function Clicker({ onExit }: { onExit: () => void }) {
             ctx.closePath();
             ctx.fill();
           }
+          ctx.globalAlpha = 1;
           ctx.restore();
         }
 
@@ -306,7 +377,7 @@ export default function Clicker({ onExit }: { onExit: () => void }) {
       raf = requestAnimationFrame(loop);
     };
     raf = requestAnimationFrame(loop);
-    return () => { cancelAnimationFrame(raf); ro.disconnect(); };
+    return () => { cancelAnimationFrame(raf); ro.disconnect(); offAdapt(); };
     /* ВАЖНО: `tab` в зависимостях.
        Вкладка «АПГРЕЙДЫ» размонтирует <canvas>, а при возврате React
        создаёт НОВЫЙ элемент. Раньше зависимостью был только mainFriend,
@@ -355,11 +426,7 @@ export default function Clicker({ onExit }: { onExit: () => void }) {
       const fx = e.clientX - rect.left;
       const fy = e.clientY - rect.top;
       const id = ++fid.current;
-      setFloats((p) => [
-        ...p.slice(-14),
-        { id, x: fx, y: fy, txt: `+${fmt(gain)}`, crit: isCrit },
-      ]);
-      setTimeout(() => setFloats((p) => p.filter((f) => f.id !== id)), 900);
+      pushFloat({ id, x: fx, y: fy, txt: `+${fmt(gain)}`, crit: isCrit, born: Date.now() });
 
       const a = anim.current;
       a.squish = 1;
@@ -777,10 +844,11 @@ function drawEvolution(
       const len = r * (0.26 + wob * 0.3);
       const bx = cx + Math.cos(a) * r * 0.97;
       const by = cy + Math.sin(a) * r * 0.97;
-      const fg = ctx.createLinearGradient(bx, by, bx + Math.cos(a) * len, by + Math.sin(a) * len);
-      fg.addColorStop(0, `${st.color}bb`);
-      fg.addColorStop(1, `${st.color}00`);
-      ctx.fillStyle = fg;
+      /* Девять createLinearGradient на кадр — при «lighter» это дорого, а
+         эффект даёт почти незаметный: язык пламени и так тонкий. Цвет +
+         альфа по тому же «wob» выглядят так же и стоят одного fill. */
+      ctx.globalAlpha = 0.5 + wob * 0.45;
+      ctx.fillStyle = st.color;
       ctx.beginPath();
       ctx.moveTo(bx + Math.cos(a + 0.16) * r * 0.1, by + Math.sin(a + 0.16) * r * 0.1);
       ctx.lineTo(bx + Math.cos(a) * len, by + Math.sin(a) * len);
@@ -788,6 +856,7 @@ function drawEvolution(
       ctx.closePath();
       ctx.fill();
     }
+    ctx.globalAlpha = 1;
     ctx.globalCompositeOperation = "source-over";
   }
 

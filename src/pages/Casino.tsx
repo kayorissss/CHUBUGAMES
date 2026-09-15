@@ -12,6 +12,7 @@ import { RARITY_COLOR, RARITY_LABEL } from "../core/content";
 import {
   FREE_CHIPS, GAMBLE_CASES, SLOT_SYMBOLS, freeChipsIn, freeChipsReady, symbolName,
   ITEMS, itemById, readGamble, rollItem, runBattle, shiftItem, slotPayout, spinReel,
+  fmtOdd, fmtPct, slotOdds,
   updateGamble,
   type GambleCase, type GambleSave, type GambleStore, type ItemDef, type SkinKind, type SlotSymbol,
 } from "../core/gamble";
@@ -34,13 +35,13 @@ type Tab = "farm" | "slots" | "cases" | "battle" | "upgrade" | "stuff";
  */
 /* Порядок вкладок — по значимости, а не по алфавиту кода: СЛОТЫ первыми
    (просьба буквальная), ферма — в конец, как второстепенный фарм. */
-const TABS: { id: Tab; name: string; icon: IconName }[] = [
-  { id: "slots",   name: "СЛОТЫ",   icon: "dice" },
-  { id: "cases",   name: "КЕЙСЫ",   icon: "case" },
-  { id: "upgrade", name: "АПГРЕЙД", icon: "bolt" },
-  { id: "battle",  name: "БАТЛ",    icon: "skull" },
-  { id: "stuff",   name: "ВЕЩИ",    icon: "gift" },
-  { id: "farm",    name: "ФЕРМА",   icon: "leaf" },
+const TABS: { id: Tab; name: string; icon: IconName; hint: string }[] = [
+  { id: "slots",   name: "Слоты",    icon: "dice",  hint: "три символа, множители" },
+  { id: "cases",   name: "Кейсы",    icon: "case",  hint: "вскрытие и дроп" },
+  { id: "upgrade", name: "Апгрейд",  icon: "bolt",  hint: "обмен предметов" },
+  { id: "battle",  name: "Батл",     icon: "skull", hint: "кейсы наперегонки" },
+  { id: "stuff",   name: "Вещи",     icon: "gift",  hint: "инвентарь и продажа" },
+  { id: "farm",    name: "Ферма",    icon: "leaf",  hint: "жетоны каплями" },
 ];
 
 /** Значок символа слота */
@@ -182,25 +183,37 @@ export default function Casino({ onBack }: { onBack: () => void }) {
         </div>
       </Panel>
 
-      {/* Вкладки — общие сегменты (.pc-seg), тот же стиль, что в Магазине и
-          Прогрессе: иконка + подпись, активная залита акцентом. Раньше это
-          была вереница кнопок-таблеток, из-за чего казино выглядело
-          «не вписанным» в остальное приложение. */}
-      <div className="pc-seg" role="tablist">
-        {TABS.map((t) => (
-          <button
-            key={t.id}
-            type="button"
-            role="tab"
-            aria-selected={tab === t.id}
-            className={`pc-seg-item ${tab === t.id ? "on" : ""}`}
-            onClick={() => { sfx.click(); setTab(t.id); }}
-          >
-            <Icon name={t.icon} size={14} />
-            <span className="t-label clip1">{tr(t.name)}</span>
-          </button>
-        ))}
-      </div>
+      {/*
+        * Вкладки казино — СЛЕВА, той же панелью, что и в Настройках
+        * (.pc-rail). Просьба: «стиль другой и отличается от всех… вкладки
+        * надо поставить тоже слева… текст на вкладках починить, он сливается».
+        * Три правки сразу: раскладка как у всех, подпись в --text вместо
+        * выцветшего mute, и строка-пояснение под именем — без неё «АПГРЕЙД»
+        * и «БАТЛ» были загадкой.
+        */}
+      <div className="pc-split pc-cas-split">
+      <nav className="pc-rail" role="tablist" aria-label={tr("Разделы казино")}>
+        {TABS.map((t) => {
+          const on = tab === t.id;
+          return (
+            <button
+              key={t.id}
+              type="button"
+              role="tab"
+              aria-selected={on}
+              className={`pc-rail-item ${on ? "on" : ""}`}
+              onClick={() => { sfx.click(); setTab(t.id); }}
+            >
+              <span className="pc-rail-ico"><Icon name={t.icon} size={15} /></span>
+              <span className="pc-rail-txt">
+                <span className="pc-rail-label">{tr(t.name)}</span>
+                <span className="pc-rail-hint">{tr(t.hint)}</span>
+              </span>
+            </button>
+          );
+        })}
+      </nav>
+      <div className="pc-rail-body">
 
       <AnimatePresence mode="wait">
         <motion.div
@@ -218,6 +231,8 @@ export default function Casino({ onBack }: { onBack: () => void }) {
           {tab === "stuff"   && <Stuff g={g} save={save} />}
         </motion.div>
       </AnimatePresence>
+      </div>
+      </div>
     </Screen>
   );
 }
@@ -225,6 +240,18 @@ export default function Casino({ onBack }: { onBack: () => void }) {
 /* ═══════════════════════════ СЛОТЫ ═══════════════════════════ */
 
 const BETS = [10, 25, 50, 100, 250];
+
+/**
+ * Ставка «не только кнопками»: нижняя и верхняя границы. Минимум — 5, чтобы
+ * «своя ставка» не превращалась в спин за 1 жетон (анимация длиннее, чем
+ * смысл), максимум — чтобы опечатка в «999999» не съела весь кошелёк с одного
+ * нажатия: не больше половины запаса и не больше 5 000.
+ */
+const BET_MIN = 5;
+const BET_MAX_CAP = 5000;
+
+/** Шансы считаются из весов символа (core/gamble.ts), а не переписаны сюда */
+const ODDS = slotOdds();
 
 /**
  * СЛОТЫ.
@@ -254,6 +281,18 @@ const BETS = [10, 25, 50, 100, 250];
  */
 function Slots({ g, save }: { g: GambleStore; save: GambleSave }) {
   const [bet, setBet] = useState(25);
+  /** своё число в поле ставки, пока игрок набирает */
+  const [custom, setCustom] = useState("");
+  /** открыта ли справка с шансами (кнопка «?») */
+  const [showOdds, setShowOdds] = useState(false);
+  const betMax = Math.max(BET_MIN, Math.min(BET_MAX_CAP, Math.floor(g.chips / 2) || BET_MIN));
+
+  const setCustomBet = (raw: string) => {
+    const only = raw.replace(/[^0-9]/g, "").slice(0, 5);
+    setCustom(only);
+    const n = parseInt(only, 10);
+    if (Number.isFinite(n) && n > 0) setBet(Math.max(BET_MIN, Math.min(betMax, n)));
+  };
   /** длина ленты каждого барабана: разная — поэтому остановка по очереди */
   const LEN = [30, 34, 38];
   const [pos, setPos] = useState<number[]>([0, 0, 0]);
@@ -360,6 +399,15 @@ function Slots({ g, save }: { g: GambleStore; save: GambleSave }) {
       <div className={`pc-slot ${tone === "win" ? "win" : ""}`}>
         <div className="pc-slot-top">
           <span className="t-label">{tr("СЛОТЫ «ЧУБКОЙ»")}</span>
+          <button
+            type="button"
+            className={`pc-slot-help ${showOdds ? "on" : ""}`}
+            aria-expanded={showOdds}
+            title={tr("Шансы и выплаты")}
+            onClick={() => { sfx.click(); setShowOdds((v) => !v); }}
+          >
+            ?
+          </button>
           <span className="pc-slot-chips">
             <Icon name="ticket" size={12} />
             <b className="t-num">{fmt(g.chips)}</b>
@@ -446,6 +494,36 @@ function Slots({ g, save }: { g: GambleStore; save: GambleSave }) {
                 {b}
               </button>
             ))}
+            {/* Своя ставка: «ставить можно не только автоматом, но и самому
+                писать» — поле рядом с чипами, со стрелками −/+ и подсказкой
+                о пределах. Оно не спорит с чипами: кнопка ставит ровно то,
+                что набрано. */}
+            <span className="pc-slot-bet-custom">
+              <button
+                type="button"
+                className="pc-slot-bet-step t-num"
+                disabled={spinning}
+                onClick={() => { sfx.click(); setCustom(""); setBet(Math.max(BET_MIN, bet - 5)); }}
+                aria-label={tr("уменьшить ставку")}
+              >−</button>
+              <input
+                className="pc-slot-bet-input t-num"
+                inputMode="numeric"
+                value={custom || String(bet)}
+                disabled={spinning}
+                onChange={(e) => setCustomBet(e.target.value)}
+                onBlur={() => setCustom("")}
+                aria-label={tr("Своя ставка")}
+                title={`${tr("от")} ${BET_MIN} ${tr("до")} ${betMax}`}
+              />
+              <button
+                type="button"
+                className="pc-slot-bet-step t-num"
+                disabled={spinning}
+                onClick={() => { sfx.click(); setCustom(""); setBet(Math.min(betMax, bet + 5)); }}
+                aria-label={tr("увеличить ставку")}
+              >+</button>
+            </span>
           </div>
         </div>
 
@@ -460,41 +538,57 @@ function Slots({ g, save }: { g: GambleStore; save: GambleSave }) {
         </button>
       </div>
 
-      {/* ── таблица выплат: символы с именами ── */}
+      {/* ── справки: выплаты + настоящие шансы, по кнопке «?» ──
+          Раньше таблица висела под автоматом всегда и занимала пол-экрана,
+          а вероятностей в ней не было вообще. Теперь это сворачиваемая
+          панель, и в каждой строке — шанс на спин, «1 к N» и вклад символа
+          в возврат. Считается по весам (core/gamble.ts), поэтому не врёт. */}
+      <AnimatePresence initial={false}>
+      {showOdds && (
+      <motion.div
+        initial={{ opacity: 0, y: -8 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: -8 }}
+        transition={{ duration: 0.18 }}
+      >
       <Panel r="lg" style={{ padding: 14 }}>
-        <div className="t-label" style={{ marginBottom: 10 }}>{tr("Выплаты")}</div>
-        <div className="flex items-center" style={{ gap: 10, paddingBottom: 6 }}>
-          <span style={{ width: 18 }} />
-          <span className="t-caption flex-1" style={{ fontSize: 9.5 }}>{tr("символ")}</span>
-          <span className="t-caption shrink-0" style={{ fontSize: 9.5, width: 54, textAlign: "right" }}>{tr("три подряд")}</span>
-          <span className="t-caption shrink-0" style={{ fontSize: 9.5, width: 46, textAlign: "right" }}>{tr("пара")}</span>
+        <div className="t-label" style={{ marginBottom: 10 }}>{tr("Выплаты и шансы")}</div>
+        <div className="pc-slot-odds-sum">
+          <span className="t-caption">{tr("тройка хоть какого символа")}</span>
+          <b className="t-num">{fmtPct(ODDS.anyTripPct)} · {fmtOdd(ODDS.anyTripPct)}</b>
+          <span className="t-caption">{tr("пара")}</span>
+          <b className="t-num">{fmtPct(ODDS.anyPairPct)} · {fmtOdd(ODDS.anyPairPct)}</b>
+          <span className="t-caption">{tr("возврат игроку (RTP)")}</span>
+          <b className="t-num" style={{ color: ODDS.rtpPct >= 100 ? "var(--ok)" : "var(--warn)" }}>{ODDS.rtpPct.toFixed(1).replace(".", ",")} %</b>
         </div>
-        {SLOT_SYMBOLS.map((sy) => (
-          <div
-            key={sy.id}
-            className="flex items-center"
-            style={{ gap: 10, padding: "6px 0", borderTop: "1px solid var(--surface-brd)" }}
-          >
-            <SlotGlyph id={sy.id} size={18} />
-            <span className="t-body flex-1 clip1" style={{ fontSize: 11 }}>{tr(sy.name)}</span>
-            <span className="t-num shrink-0" style={{ fontSize: 12, width: 54, textAlign: "right", color: "var(--ok)" }}>
-              ×{sy.pay3}
-            </span>
-            <span
-              className="t-num shrink-0"
-              style={{
-                fontSize: 12, width: 46, textAlign: "right",
-                color: sy.pay2 >= 1 ? "var(--ok)" : "var(--warn)",
-              }}
-            >
-              ×{sy.pay2}
-            </span>
-          </div>
-        ))}
+        <div className="pc-slot-odds-head">
+          <span style={{ width: 18 }} />
+          <span className="t-caption">{tr("символ")}</span>
+          <span className="t-caption">{tr("три подряд")}</span>
+          <span className="t-caption">{tr("шанс тройки")}</span>
+          <span className="t-caption">{tr("пара")}</span>
+          <span className="t-caption">{tr("шанс пары")}</span>
+        </div>
+        {SLOT_SYMBOLS.map((sy) => {
+          const row = ODDS.rows.find((r) => r.id === sy.id)!;
+          return (
+            <div key={sy.id} className="pc-slot-odds-row">
+              <SlotGlyph id={sy.id} size={18} />
+              <span className="t-body clip1" style={{ fontSize: 11 }}>{tr(sy.name)}</span>
+              <span className="t-num ok-num">×{sy.pay3}</span>
+              <span className="t-num dim-num">{fmtPct(row.tripPct)}</span>
+              <span className="t-num" style={{ color: sy.pay2 >= 1 ? "var(--ok)" : "var(--warn)" }}>×{sy.pay2}</span>
+              <span className="t-num dim-num">{fmtPct(row.pairPct)}</span>
+            </div>
+          );
+        })}
         <div className="t-caption" style={{ marginTop: 9, lineHeight: 1.5 }}>
           {tr("Жёлтая пара платит меньше ставки — часть жетонов возвращается, но спин всё равно в минус.")}
         </div>
       </Panel>
+      </motion.div>
+      )}
+      </AnimatePresence>
     </>
   );
 }

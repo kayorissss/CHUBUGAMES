@@ -1,4 +1,5 @@
 import type { CSSProperties } from "react";
+import { BRAND_LOGO_URL, HAS_BRAND_LOGO } from "../core/brandAsset";
 
 /**
  * ЗНАК ПРИЛОЖЕНИЯ.
@@ -164,7 +165,27 @@ export function BrandMark({
           background: "radial-gradient(120% 90% at 50% 42%, color-mix(in srgb, var(--acc) 26%, transparent), transparent 62%)",
         }}
       />
-      <Burger size={Math.round(size * 0.72)} glow={glow} style={{ position: "relative" }} />
+      {/* Знак: если прислан растровый логотип (branding/logo.png → npm run
+          icons), показываем его — «иконку везде сделай» из ТЗ 1.28. Флаг
+          компилируется генератором, поэтому на пустом месте <img> не
+          дёргается и 404 в консоли нет. Нет растра — рисуем векторный
+          бургер, он же ездит в заставку. */}
+      {HAS_BRAND_LOGO ? (
+        <img
+          src={BRAND_LOGO_URL}
+          alt="CHUBUGAMES"
+          draggable={false}
+          style={{
+            position: "relative",
+            width: "86%",
+            height: "86%",
+            objectFit: "contain",
+            pointerEvents: "none",
+          }}
+        />
+      ) : (
+        <Burger size={Math.round(size * 0.72)} glow={glow} style={{ position: "relative" }} />
+      )}
     </span>
   );
 }

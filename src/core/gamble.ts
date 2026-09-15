@@ -342,3 +342,87 @@ export function runBattle(c: GambleCase, rounds: number): {
   }
   return { list, mineTotal, foeTotal, win: mineTotal >= foeTotal };
 }
+
+/* ═══════════════════════ ШАНСЫ СЛОТОВ ═══════════════════════
+ *
+ * Просьба: «шансы запихнуть в кнопочку вопросика — наводишься и вылазит там
+ * всё». Чтобы кнопка не врала, вероятности считаются здесь, из тех же
+ * весов, из которых крутится барабан, а не переписываются руками во втором
+ * месте (раньше любая «справка» расходилась с кодом через одну правку).
+ *
+ * Математика честная и простая: каждый барабан — независимый выбор символа
+ * с вероятностью p = weight / сумма весов.
+ *   тройка i:        p³
+ *   ровно пара i:    3·p²·(1−p)
+ *   RTP:             Σ (pay3·p³ + pay2·3p²(1−p)) — сколько возвращается
+ *                    на одну поставленную монету, в долях.
+ */
+
+export type SlotOddsRow = {
+  id: SlotSymbol;
+  name: string;
+  /** множители */
+  pay3: number;
+  pay2: number;
+  /** вероятности, в процентах на один спин */
+  tripPct: number;
+  pairPct: number;
+  /** вклад символа в возврат, в процентах ставки */
+  contribPct: number;
+};
+
+export type SlotOdds = {
+  rows: SlotOddsRow[];
+  anyTripPct: number;
+  anyPairPct: number;
+  rtpPct: number;
+  /** сколько казино забирает в среднем, % (100 − RTP) */
+  edgePct: number;
+};
+
+export function slotOdds(): SlotOdds {
+  const total = SLOT_SYMBOLS.reduce((a, b) => a + b.weight, 0);
+  let trip = 0;
+  let pair = 0;
+  let rtp = 0;
+  const rows: SlotOddsRow[] = SLOT_SYMBOLS.map((sy) => {
+    const p = sy.weight / total;
+    const t = p * p * p;
+    const q = 3 * p * p * (1 - p);
+    const contrib = sy.pay3 * t + sy.pay2 * q;
+    trip += t;
+    pair += q;
+    rtp += contrib;
+    return {
+      id: sy.id,
+      name: sy.name,
+      pay3: sy.pay3,
+      pay2: sy.pay2,
+      tripPct: t * 100,
+      pairPct: q * 100,
+      contribPct: contrib * 100,
+    };
+  });
+  return {
+    rows: rows.sort((a, b) => b.tripPct - a.tripPct),
+    anyTripPct: trip * 100,
+    anyPairPct: pair * 100,
+    rtpPct: rtp * 100,
+    edgePct: (1 - rtp) * 100,
+  };
+}
+
+/** Процент по-человечески: «1 к 34», «0,9 %», «12,4 %» */
+export function fmtPct(v: number): string {
+  if (v <= 0) return "0 %";
+  if (v < 1) return `${v.toFixed(2).replace(".", ",")} %`;
+  if (v < 10) return `${v.toFixed(1).replace(".", ",")} %`;
+  return `${Math.round(v)} %`;
+}
+
+/** «1 к N» — так шанс читается лучше, чем 2,94 % */
+export function fmtOdd(pct: number): string {
+  if (pct <= 0) return "—";
+  const n = 100 / pct;
+  return `1 к ${n >= 10 ? Math.round(n) : n.toFixed(1).replace(".", ",")}`;
+}

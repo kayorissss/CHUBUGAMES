@@ -28,36 +28,41 @@ const COLOR: Record<NetVerdict["status"], string> = {
  */
 export function NetPanel() {
   const [tab, setTab] = useState<Tab>("block");
+  /** идёт ли сейчас замер — по нему анимируются полоски сигнала на вкладке */
+  const [running, setRunning] = useState(false);
 
   return (
     <>
-      {/* Вкладки */}
-      <div
-        className="flex pc-tabs-row"
-        style={{
-          gap: 4, padding: 4, marginBottom: 16,
-          background: "var(--btn-bg)", border: "1px solid var(--btn-brd)",
-          borderRadius: "var(--r-md)",
-        }}
-      >
-        {([["block", tr("ГЛУШИЛКИ"), "shield"], ["speed", tr("СКОРОСТЬ"), "speed"]] as const).map(
+      {/*
+         Вкладки «ГЛУШИЛКИ» / «СКОРОСТЬ».
+
+         Просьба: «Вкладка Сеть — полный ужас. Красиво расположи вкладки и
+         добавь анимации, типа вай-фай грузится». Ряд стал настоящей
+         панелью (.net-tabs): у активной вкладки — акцентная заливка с
+         --acc-ink (текст не сливается ни на одной теме), в неактивной —
+         --text-dim вместо прежнего --text-mute, и полоски «сигнала», которые
+         бегут, пока идёт замер. Это CSS-анимация, а не rAF: интерфейс не
+         тратит кадры и не просит ни одного таймера.
+      */}
+      <div className="net-tabs" role="tablist">
+        {([[ "block", tr("ГЛУШИЛКИ"), "shield" ], [ "speed", tr("СКОРОСТЬ"), "speed" ]] as const).map(
           ([id, label, icon]) => {
             const on = tab === id;
             return (
               <button
                 key={id}
                 type="button"
+                role="tab"
+                aria-selected={on}
+                className={`net-tab ${on ? "on" : ""}`}
                 onClick={() => { sfx.click(); haptic("light"); setTab(id); }}
-                className="flex-1 t-title-sm flex items-center justify-center"
-                style={{
-                  gap: 7, padding: "10px 8px", borderRadius: "var(--r-sm)",
-                  background: on ? "var(--acc)" : "transparent",
-                  color: on ? "var(--acc-ink)" : "var(--text-mute)",
-                  fontSize: 12, fontWeight: 700, letterSpacing: "0.04em",
-                  transition: "background 0.16s, color 0.16s",
-                }}
               >
-                <Icon name={icon} size={14} /> {label}
+                <Icon name={on ? icon : icon} size={14} />
+                <span className="clip1">{label}</span>
+                <span className={`net-scan ${running ? "" : "on"}`} aria-hidden>
+                  <i /><i /><i /><i />
+                  {running && <><span className="net-wave two" /><span className="net-wave three" /></>}
+                </span>
               </button>
             );
           },
@@ -73,7 +78,7 @@ export function NetPanel() {
             exit={{ opacity: 0, x: -12 }}
             transition={{ duration: 0.18 }}
           >
-            <BlockCheck />
+            <BlockCheck onBusy={setRunning} />
           </motion.div>
         ) : (
           <motion.div
@@ -83,7 +88,7 @@ export function NetPanel() {
             exit={{ opacity: 0, x: 12 }}
             transition={{ duration: 0.18 }}
           >
-            <SpeedTest />
+            <SpeedTest onBusy={setRunning} />
           </motion.div>
         )}
       </AnimatePresence>
@@ -118,8 +123,10 @@ export default function Network({ onBack }: { onBack: () => void }) {
 
 /* ================= ВКЛАДКА: ГЛУШИЛКИ ================= */
 
-function BlockCheck() {
-  const [busy, setBusy] = useState(false);
+function BlockCheck({ onBusy }: { onBusy?: (v: boolean) => void } = {}) {
+  const [busy, setBusyState] = useState(false);
+  /** о занятости докладывает панели: по ней анимируются полоски на вкладке */
+  const setBusy = (v: boolean) => { setBusyState(v); onBusy?.(v); };
   const [v, setV] = useState<NetVerdict | null>(null);
   /*
    * Что уже проверено и на каком хосте мы прямо сейчас. Это и есть та самая
@@ -346,8 +353,9 @@ function PingBars({ ms }: { ms: number }) {
 
 /* ================= ВКЛАДКА: СКОРОСТЬ ================= */
 
-function SpeedTest() {
-  const [busy, setBusy] = useState(false);
+function SpeedTest({ onBusy }: { onBusy?: (v: boolean) => void } = {}) {
+  const [busy, setBusyState] = useState(false);
+  const setBusy = (v: boolean) => { setBusyState(v); onBusy?.(v); };
   const [live, setLive] = useState(0);
   const [loaded, setLoaded] = useState(0);
   const [res, setRes] = useState<SpeedResult | null>(null);

@@ -136,7 +136,7 @@ export function useCanvas(
  * писали, просто растер стоит им нечего. Как только железо снова справляется
  * (адаптив вернул разрешение), подмену снимаем — картинка чинится сама.
  */
-function softShadows(c: HTMLCanvasElement) {
+export function softShadows(c: HTMLCanvasElement) {
   const ctx = c.getContext("2d");
   if (!ctx) return;
   const off = isLowFx() || adaptValue() < 0.999;

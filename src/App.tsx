@@ -5,10 +5,12 @@ import { GameProvider, useGame } from "./core/store";
 import { Aurora } from "./ui/Glass";
 import Nav, { type Tab } from "./components/Nav";
 
-/** Подстраницы поверх вкладок */
-export type SubPage = "network" | "casino" | "donate" | "boss" | "fanfic";
+/** Подстраницы поверх вкладок. «update» — экран обновления (с 1.28.0) */
+export type SubPage = "network" | "casino" | "donate" | "boss" | "fanfic" | "update";
 import { Toasts, OfflineModal } from "./components/Overlays";
-import PcBoost from "./ui/pc/PcBoost";
+import PcDock from "./ui/pc/PcDock";
+import UpdateFlow from "./pages/UpdateFlow";
+import { APP_VERSION } from "./core/version";
 import UpdateBanner from "./ui/UpdateBanner";
 import WhatsNew from "./ui/WhatsNew";
 import {
@@ -25,6 +27,8 @@ import {
 } from "./core/perf";
 import { initDesktopKeys, initStage, isDesktop, hasKeyboard } from "./core/desktop";
 import { installSystemBack } from "./core/android";
+import { startDesktopNotify } from "./core/notifyDesktop";
+import { claimableCount, claimables } from "./core/claimable";
 import BootScreen from "./ui/BootScreen";
 import PcTopBar from "./ui/pc/PcTopBar";
 import { FpsHud, KeyCursor } from "./ui/PcHud";
@@ -218,6 +222,37 @@ function Shell() {
   }, [s.settings.notifyNews]);
 
   /*
+   * НАПОМИНАНИЯ НА КОМПЬЮТЕРЕ.
+   *
+   * На телефоне их планируют точные будильники, на компьютере такой роскоши
+   * нет: Electron не держит фоновый процесс. Поэтому здесь — честный путь:
+   * пока окно игры открыто (или свёрнуто), раз в минуту смотрим, не заступил
+   * ли босс, не вышла ли версия и не лежит ли нетронутой ежедневка, и шлём
+   * обычное системное уведомление Windows — то самое, что приходит из Telegram.
+   *
+   * Настройки читаются через ref: иначе интервал весь день работает по тем
+   * флагам, которые были на момент запуска.
+   */
+  const notifyFlags = useRef({ boss: false, news: false, updates: false, ready: false });
+  notifyFlags.current = {
+    boss: !!s.settings.notifyBoss,
+    news: !!s.settings.notifyNews,
+    updates: !!s.settings.notifyUpdates,
+    ready: claimableCount(claimables(s)) > 0,
+  };
+  useEffect(() => {
+    if (!isDesktop()) return;
+    return startDesktopNotify({
+      flags: () => ({
+        boss: notifyFlags.current.boss,
+        news: notifyFlags.current.news,
+        updates: notifyFlags.current.updates,
+      }),
+      dailyReady: () => notifyFlags.current.ready,
+    });
+  }, []);
+
+  /*
    * Слежка за кадрами интерфейса. Главная страница — не игра: там нет
    * канваса, который сам умеет ужиматься, поэтому если монитор не тянет
    * пульсации, стекло и тени, лёгкий режим обязан включиться сам.
@@ -384,6 +419,7 @@ function Shell() {
             {sub === "donate" && <Donate onBack={() => setSub(null)} />}
             {sub === "boss" && <BossFight onBack={() => setSub(null)} />}
             {sub === "fanfic" && <FanficPage onBack={() => setSub(null)} />}
+            {sub === "update" && <UpdateFlow onBack={() => setSub(null)} />}
           </motion.div>
         )}
       </AnimatePresence>
@@ -452,6 +488,23 @@ function Shell() {
       </AnimatePresence>
       </div>
 
+      {/* НИЖНЯЯ СТРОКА ОКНА — «везде зафиксирована на одном месте, внизу-внизу».
+          Раньше «CHUBUGAMES» и версия жили в конце страницы настроек: на
+          коротких вкладках они висели сразу под плашками, на длинных — уезжали
+          за скролл, и выглядело это как брошенный кусок текста. Теперь это
+          строка состояния оболочки: она НЕ скроллится, она всегда одна и та же
+          и она без кнопок — просто имя, автор и версия (плашку с Telegram
+          убрали целиком по той же просьбе). */}
+      {pc && !game && (
+        <footer className="pc-statusbar">
+          <span className="pc-status-brand">CHUBUGAMES</span>
+          <span className="pc-status-sep" aria-hidden />
+          <span className="pc-status-dev">Developer: <b>@kayorisan</b></span>
+          <span className="pc-status-sep" aria-hidden />
+          <span className="pc-status-ver">Version {APP_VERSION}</span>
+        </footer>
+      )}
+
       {/* Оверлеи — через портал в body. Пока они стояли внутри страницы,
           любая анимация входа с transform делала их position:fixed
           «fixed внутри блока»: плашки вылезали по середине экрана, а когда
@@ -464,16 +517,26 @@ function Shell() {
 
           <Toasts />
           <OfflineModal />
-          {!game && <UpdateBanner />}
+          {!game && <UpdateBanner onOpenUpdate={() => setSub("update")} />}
           {!game && <WhatsNew />}
         </>,
         document.body,
       )}
 
-      {/* Бонус за ролик — маленькая плашка в правом нижнем углу поверх всей
-          библиотеки (просили именно так): она нужна там, где игрок устал, а
-          не только на главной. Внутри игры её нет, чтобы не перекрывать сцену. */}
-      {pc && !game && <PcBoost />}
+      {/* ПРАВЫЙ НИЖНИЙ УГОЛ. С 1.28.0 это одна колонка: круглые кнопки
+          «Поддержать» и «Настройки» (а при отложенном обновлении — кнопка
+          обновления со знаком «!»), и под ними плашка бонуса за ролик.
+          Просили именно так: «кнопки перенести над плашкой смотреть рекламу,
+          в круглые кнопки и просто иконки». Внутри игры угла нет, чтобы не
+          перекрывать сцену. */}
+      {pc && !game && (
+        <PcDock
+          tab={tab}
+          sub={sub}
+          onTab={(next) => { setSub(null); setTab(next); }}
+          onOpen={setSub}
+        />
+      )}
 
       <AnimatePresence>
         {splash && (

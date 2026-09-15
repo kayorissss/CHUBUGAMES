@@ -31,8 +31,24 @@ import { ACCENTS } from "../core/content";
 import { SAVE_KEY, migrate, persistNow } from "../core/save";
 import { sfx, haptic, unlockAudio } from "../core/fx";
 import { fmt } from "../core/format";
-import { APP_VERSION } from "../core/version";
+import { useDeferredUpdate} from "../core/updateState";
+import { askWebNotify, sendWebNotification, webNotifyGranted } from "../core/notify";
 import type { SubPage } from "../App";
+
+/**
+ * Разделы настроек на компьютере — СЛЕВА, в названном пользователем порядке:
+ * Система, Оформление, Сеть, Игра, Профиль. Подпись под названием обязательна:
+ * без неё «Система» и «Игра» — гадание, а не интерфейс.
+ */
+type Sec = "system" | "look" | "net" | "game" | "profile";
+
+const SECS: { id: Sec; label: string; icon: IconName; hint: string }[] = [
+  { id: "system", label: "Система", icon: "gear", hint: "обновления и уведомления" },
+  { id: "look", label: "Оформление", icon: "sun", hint: "тема, акцент, язык" },
+  { id: "net", label: "Сеть", icon: "wifi", hint: "глушилки и скорость" },
+  { id: "game", label: "Игра", icon: "speed", hint: "звук, сложность, кадры" },
+  { id: "profile", label: "Профиль", icon: "user", hint: "сохранение и сброс" },
+];
 
 export default function Settings({
   onOpen,
@@ -44,6 +60,8 @@ export default function Settings({
 }) {
   const { s, set, hardReset, toast, t } = useGame();
   const [confirmReset, setConfirmReset] = useState(false);
+  /** версия обновления, отложенная пользователем (для флага «!» на «Системе») */
+  const later = useDeferredUpdate();
   /**
    * Раздел настроек. Раньше это был один бесконечный список из девяти
    * блоков: чтобы поменять громкость, надо было ПРОЛИСТАТЬ dangerous-зону,
@@ -53,8 +71,8 @@ export default function Settings({
    * Теперь группы режутся вкладками, а внутри группы — обычная сетка
    * `align-items: start`, где строки не фиксированы.
    */
-  const [sec, setSec] = useState<"screen" | "game" | "net" | "profile" | "system">(
-    () => (localStorage.getItem("chubgames.settingsTab") as "screen") || "screen",
+  const [sec, setSec] = useState<Sec>(
+    () => (localStorage.getItem("chubgames.settingsTab") as Sec) || "system",
   );
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -158,47 +176,81 @@ export default function Settings({
           поэтому «Экран» и «Обновление» идут на одной высоте и ничего не
           сползает, когда один из блоков вырастает. */}
       {/* Вкладки — тот же сегментный ряд, что в Магазине и Прогрессе. */}
-      <div className="pc-seg" role="tablist">
-        {([
-          { id: "screen", label: "Экран", icon: "sun" },
-          { id: "game", label: "Игра", icon: "speed" },
-          { id: "profile", label: "Профиль", icon: "user" },
-          { id: "net", label: "Сеть", icon: "wifi" },
-          { id: "system", label: "Система", icon: "gear" },
-        ] as const).map((it) => (
-          <button
-            key={it.id}
-            type="button"
-            role="tab"
-            aria-selected={sec === it.id}
-            className={`pc-seg-item ${sec === it.id ? "on" : ""}`}
-            onClick={() => {
-              sfx.click();
-              haptic("light");
-              setSec(it.id);
-              try { localStorage.setItem("chubgames.settingsTab", it.id); } catch { /* приватный режим */ }
-            }}
-          >
-            <Icon name={it.icon} size={14} />
-            <span className="t-label clip1">{tr(it.label)}</span>
-          </button>
-        ))}
-      </div>
+      {/*
+        * ПАНЕЛЬ РАЗДЕЛОВ.
+        *
+        * Просьба: «Название „Настройки“ криво и без стиля; вкладки должны быть
+        * слева; порядок — Система, Оформление, Сеть, Игра, Профиль».
+        *
+        * На компьютере это левая колонка .pc-rail: у каждого раздела иконка,
+        * название и строка-пояснение, выбранный раздел подсвечен акцентом
+        * слева, а на «Системе» горит «!», пока отложенное обновление не
+        * установлено. На телефоне тот же DOM складывается в горизонтальный
+        * сегмент (CSS), поэтому разметка одна и разъехаться нечему.
+        */}
+      <div className="pc-settings">
+      <nav className="pc-rail" role="tablist" aria-label={tr("Разделы настроек")}>
+        {SECS.map((it) => {
+          const on = sec === it.id;
+          const flag = it.id === "system" && !!later;
+          return (
+            <button
+              key={it.id}
+              type="button"
+              role="tab"
+              aria-selected={on}
+              className={`pc-rail-item ${on ? "on" : ""}`}
+              onClick={() => {
+                sfx.click();
+                haptic("light");
+                setSec(it.id);
+                try { localStorage.setItem("chubgames.settingsTab", it.id); } catch { /* приватный режим */ }
+              }}
+            >
+              <span className="pc-rail-ico"><Icon name={it.icon} size={15} /></span>
+              <span className="pc-rail-txt">
+                <span className="pc-rail-label">{tr(it.label)}</span>
+                <span className="pc-rail-hint">{tr(it.hint)}</span>
+              </span>
+              {flag && <span className="pc-rail-flag" aria-label={tr("есть обновление")} />}
+            </button>
+          );
+        })}
+      </nav>
 
-      <div className="pc-cols pc-set-cols">
-
-      {isDesktop() && sec === "screen" && (
-      <div className="pc-blk pc-set-item">
-      <SectionTitle>{tr("Экран")}</SectionTitle>
-      <DesktopSettings part="screen" />
-      </div>
-      )}
+      <div className="pc-rail-body pc-set-stack">
 
 {sec === "system" && (
-      <div className="pc-blk pc-set-item">
+      <div className="pc-set-blk pc-set-wide">
       <SectionTitle>{t("settings.update")}</SectionTitle>
       {isDesktop() ? (
-        <DesktopSettings part="update" />
+        <>
+          <Card r="lg" style={{ padding: 14, marginBottom: 0, overflow: "hidden" }}>
+            <div className="pc-upd-strip">
+              <div className="min-w-0">
+                <div className="t-title-sm">{tr("Обновление приложения")}</div>
+                <div className="t-caption" style={{ marginTop: 3 }}>
+                  {later
+                    ? `${tr("Отложено:")} ${later} — ${tr("знак горит, пока не поставишь")}`
+                    : tr("Проверка релизов, загрузка с прогрессом и установка в один клик")}
+                </div>
+              </div>
+              <Button
+                variant={later ? "primary" : "secondary"}
+                sound="power"
+                onClick={() => { sfx.click(); onOpen?.("update"); }}
+                style={{ flex: "0 0 auto" }}
+              >
+                <span className="inline-flex items-center" style={{ gap: 7 }}>
+                  <Icon name="arrowUp" size={14} />
+                  {later ? tr("Открыть обновление") : tr("Проверить и обновить")}
+                </span>
+              </Button>
+            </div>
+          </Card>
+          {/* Старый блок «Экран» (масштаб окна, полный экран) убран по просьбе.
+              Качество картинки осталось — оно в разделе «Игра». */}
+        </>
       ) : (
         <Card r="lg" style={{ padding: 0, overflow: "hidden" }}>
           <UpdateCheckRow />
@@ -208,9 +260,9 @@ export default function Settings({
       )}
 
 {sec === "profile" && (
-      <div className="pc-blk pc-set-item">
+      <div className="pc-set-blk">
       <SectionTitle>{t("settings.save")}</SectionTitle>
-      <Card r="lg" style={{ padding: 14, marginBottom: 22 }}>
+      <Card r="lg" style={{ padding: 14, marginBottom: 0 }}>
         <div className="t-body" style={{ marginBottom: 14 }}>
           Прогресс хранится только на этом телефоне и не требует интернета.
           Перед сменой устройства выгрузи файл сохранения.
@@ -229,18 +281,18 @@ export default function Settings({
       )}
 
 {sec === "system" && (
-      <div className="pc-blk pc-set-item">
+      <div className="pc-set-blk">
       <SectionTitle>{tr("Уведомления")}</SectionTitle>
-      <Card r="lg" style={{ marginBottom: 22, overflow: "hidden" }}>
-        <NotifyBlock />
+      <Card r="lg" style={{ marginBottom: 0, overflow: "hidden" }}>
+        <NotifyBlock onOpenUpdate={() => onOpen?.("update")} />
       </Card>
       </div>
       )}
 
-{sec === "screen" && (
-      <div className="pc-blk pc-set-item">
+{sec === "look" && (
+      <div className="pc-set-blk">
       <SectionTitle>{t("settings.appearance")}</SectionTitle>
-      <Card r="lg" style={{ marginBottom: 22, overflow: "hidden" }}>
+      <Card r="lg" style={{ marginBottom: 0, overflow: "hidden" }}>
         {/* Базовых темы три: чёрный, тёмно-серый и белый. Акцентный цвет
             подбирается отдельно ниже — так «шикарное игровое» оформление
             не превращается в один сплошной оранжевый экран. */}
@@ -323,9 +375,9 @@ export default function Settings({
       )}
 
 {sec === "profile" && (
-      <div className="pc-blk pc-set-item">
+      <div className="pc-set-blk">
       <SectionTitle>{t("settings.danger")}</SectionTitle>
-      <Card r="lg" style={{ padding: 14, marginBottom: 22 }}>
+      <Card r="lg" style={{ padding: 14, marginBottom: 0 }}>
         {!confirmReset ? (
           <Button
             variant="danger"
@@ -358,32 +410,21 @@ export default function Settings({
       )}
 
 {sec === "net" && (
-      /* «Глушилки» переехали сюда отдельной вкладкой: раньше это была
-         отдельная страница в «Инструментах», и найти её было невозможно. */
-      <div className="pc-blk pc-set-span">
+      /* «Глушилки» и «Скорость» — одна страница настроек: раньше это была
+         отдельная вкладка в «Инструментах», и найти её было невозможно. */
+      <div className="pc-set-blk pc-set-wide">
       <SectionTitle>{tr("Проверка сети")}</SectionTitle>
       <NetPanel />
       </div>
       )}
 
-{sec === "system" && (
-      <div className="pc-blk pc-set-item">
-      <SectionTitle>{tr("Инструменты")}</SectionTitle>
-      <Card r="lg" style={{ padding: 0, marginBottom: 22, overflow: "hidden" }}>
-        <NavRow
-          icon="wifi"
-          title={tr("Проверка сети на всю страницу")}
-          sub={tr("та же проверка, но крупнее")}
-          onClick={() => onOpen?.("network")}
-        />
-      </Card>
-      </div>
-      )}
-
 {sec === "game" && (
-      <div className="pc-blk pc-set-item">
+      <div className="pc-set-blk pc-set-wide">
       <SectionTitle>{t("settings.game")}</SectionTitle>
-      <Card r="lg" style={{ marginBottom: 22, overflow: "hidden" }}>
+      {/* Просьба: «вкладку Игра бы растянуть до конца страницы, а то это
+          вертикальная фигня». Карточки теперь ложатся в широкую сетку, а не
+          в одну колонку на всю высоту окна. */}
+      <Card r="lg" style={{ marginBottom: 0, overflow: "hidden" }}>
         <DiffPicker
           value={s.settings.difficulty}
           onPick={(v) => set((d) => { d.settings.difficulty = v; })}
@@ -436,63 +477,44 @@ export default function Settings({
       </div>
       )}
 
-      <div className="pc-blk pc-set-span">
-      <Card r="lg" style={{ padding: 14, marginBottom: 22 }}>
-        {/* Просьба: «убери в настройках автора и разработчика, и надпись
-            „все друзья, шутки…“». Осталась одна кнопка связи — она и нужна,
-            когда человеку есть что сказать. */}
-        <div>
-          <Button
-            variant="primary"
-            full
-            sound="power"
-            onClick={() => {
-              try {
-                window.open("https://t.me/kayorisan", "_blank", "noopener,noreferrer");
-              } catch {
-                location.href = "https://t.me/kayorisan";
-              }
-            }}
-          >
-            Telegram: @kayorisan
-          </Button>
-        </div>
-      </Card>
       </div>
       </div>
 
-      {/* Низ страницы: здесь же и «CHUBUGAMES», и номер версии. Раньше версия
-          висела в правом углу верхней панели — место, куда её никто не
-          смотрит; теперь она там, где о ней спрашивают. */}
-      <div className="pc-foot">
-        {/* Просьба: «убери снизу „работает офлайн“ и „сделано для своих“,
-            оставь название и всё». Так и оставили: марка и номер версии. */}
-        <div className="pc-foot-brand">
-          <div className="t-display-sm" style={{ color: "var(--text-dim)" }}>CHUBUGAMES</div>
-        </div>
-        <div className="t-caption pc-foot-ver">
-          {t("common.version")} {APP_VERSION}
-        </div>
-      </div>
+      {/* НИЗА СТРАНИЦЫ БОЛЬШЕ НЕТ. Плашка с Telegram и «CHUBUGAMES + версия»
+          под списком карточек убраны: имя, автор и номер версии теперь в
+          строке состояния окна (App.tsx → .pc-statusbar), которая не скроллится
+          и стоит на одном месте на всех разделах. */}
     </Screen>
   );
 }
 
 /**
- * Уведомления.
+ * Уведомления — ДВЕ ЧЕСТНЫЕ ВЕТКИ.
  *
- * Два переключателя — что именно присылать, — и переход в системные
- * настройки телефона, где каналы НОВИНКИ / ОБНОВЛЕНИЯ / БОССЫ
- * выключаются по отдельности средствами Android.
+ * Претензия: «я тыкаю на компьютере — пишет про Android, а на телефоне —
+ * про ПК». Дальше ветвиться по платформе нельзя: текст и кнопки должны
+ * соответствовать тому, что реально делает система.
+ *
+ *  • Android: каналы (НОВИНКИ / ОБНОВЛЕНИЯ / БОССЫ), точные будильники,
+ *    фоновый раннер — напоминание дойдёт, даже когда игра закрыта;
+ *  • компьютер: обычный Notification API. Центр уведомлений Windows, тот же
+ *    механизм, что у Telegram. Фона нет — Electron не держит процесс, поэтому
+ *    напоминания шлёт открытое приложение (core/notifyDesktop.ts), и честно
+ *    об этом написано в подсказке.
  */
-function NotifyBlock() {
+function NotifyBlock({ onOpenUpdate }: { onOpenUpdate?: () => void } = {}) {
   const { s, set, toast } = useGame();
   const [busy, setBusy] = useState(false);
   /** null — ещё не смотрели, false — разрешения нет, true — есть */
   const [perm, setPerm] = useState<boolean | null>(null);
+  /** компьютерная ветка: веб-уведомления вместо Android-плагинов */
+  const desktop = isDesktop();
 
   /** Общая часть: убедиться, что разрешение есть */
-  const ensurePerm = async () => (await notifyGranted()) || (await askNotifyPermission());
+  const ensurePerm = async () =>
+    desktop
+      ? (await webNotifyGranted()) || (await askWebNotify())
+      : (await notifyGranted()) || (await askNotifyPermission());
 
   /*
    * РЕАЛЬНАЯ ПРОВЕРКА РАЗРЕШЕНИЯ.
@@ -504,18 +526,29 @@ function NotifyBlock() {
    * чинятся кнопками отсюда, по третьей — переход в системные настройки.
    * Статус читаем честно: не «включено», а «разрешение выдано».
    */
-  const nativeNow = isNativeApp() || isDesktop();
+  const nativeNow = isNativeApp() || desktop;
   useEffect(() => {
     if (!nativeNow) return;
     let alive = true;
-    void notifyGranted().then((g) => { if (alive) setPerm(g); });
+    const read = desktop ? webNotifyGranted() : notifyGranted();
+    void read.then((g) => { if (alive) setPerm(g); });
     return () => { alive = false; };
-  }, [nativeNow]);
+  }, [nativeNow, desktop]);
 
   const askNow = async () => {
     if (busy) return;
     setBusy(true);
     try {
+      if (desktop) {
+        const ok = await askWebNotify();
+        setPerm(ok);
+        toast(
+          ok
+            ? { title: tr("Разрешение есть"), sub: tr("Windows покажет уведомление от CHUBUGAMES"), icon: "check", tone: "gold" }
+            : { title: tr("Разрешения нет"), sub: tr("Браузер или Windows заблокировали уведомления"), icon: "warn" },
+        );
+        return;
+      }
       const ok = await askNotifyPermission();
       if (ok) await ensureExactAlarms();
       setPerm(ok);
@@ -533,6 +566,18 @@ function NotifyBlock() {
     if (busy) return;
     setBusy(true);
     try {
+      if (desktop) {
+        const ok = await sendWebNotification(
+          "CHUBUGAMES",
+          tr("Вот так выглядят уведомления от игры на компьютере"),
+        );
+        toast(
+          ok
+            ? { title: tr("Глянь центр уведомлений"), sub: tr("Пришло за секунду — всё работает"), icon: "check", tone: "gold" }
+            : { title: tr("Не ушло"), sub: tr("Разрешения нет — нажми «Разрешить уведомления» выше"), icon: "warn" },
+        );
+        return;
+      }
       const ok = await sendTestNotification();
       toast(
         ok
@@ -548,19 +593,27 @@ function NotifyBlock() {
     if (busy) return;
     if (s.settings.notifyUpdates) {
       set((d) => { d.settings.notifyUpdates = false; });
-      void disableBackgroundCheck();
+      if (!desktop) void disableBackgroundCheck();
       toast({ title: tr("Больше не напоминаю об обновлениях"), icon: "check" });
       return;
     }
     setBusy(true);
     try {
       const ok = await ensurePerm();
-      await enableBackgroundCheck();
+      // фоновый раннер — только Android: на компьютере его нет и включать нечего
+      if (!desktop) await enableBackgroundCheck();
       set((d) => { d.settings.notifyUpdates = true; });
       toast(
-        ok
-          ? { title: tr("Напомню о новой версии"), sub: tr("Проверяю примерно раз в час"), icon: "check", tone: "gold" }
-          : { title: tr("Включил напоминания"), sub: tr("Разреши уведомления в настройках телефона, чтобы они приходили"), icon: "warn" },
+        desktop
+          ? {
+              title: tr("Напомню о новой версии"),
+              sub: tr("Проверяю раз в час, пока игра открыта"),
+              icon: "check",
+              tone: "gold",
+            }
+          : ok
+            ? { title: tr("Напомню о новой версии"), sub: tr("Проверяю примерно раз в час"), icon: "check", tone: "gold" }
+            : { title: tr("Включил напоминания"), sub: tr("Разреши уведомления в настройках телефона, чтобы они приходили"), icon: "warn" },
       );
     } finally {
       setBusy(false);
@@ -571,15 +624,17 @@ function NotifyBlock() {
     if (busy) return;
     if (s.settings.notifyBoss) {
       set((d) => { d.settings.notifyBoss = false; });
-      void cancelBossNotifications();
+      if (!desktop) void cancelBossNotifications();
       toast({ title: tr("Больше не напоминаю о боссах"), icon: "check" });
       return;
     }
     setBusy(true);
     try {
       const ok = await ensurePerm();
-      await ensureChannels();
-      await scheduleBossNotifications(upcomingBosses());
+      if (!desktop) {
+        await ensureChannels();
+        await scheduleBossNotifications(upcomingBosses());
+      }
       set((d) => { d.settings.notifyBoss = true; });
       toast(
         ok
@@ -602,8 +657,10 @@ function NotifyBlock() {
     setBusy(true);
     try {
       const ok = await ensurePerm();
-      await ensureChannels();
-      await scheduleNewsNotifications();
+      if (!desktop) {
+        await ensureChannels();
+        await scheduleNewsNotifications();
+      }
       set((d) => { d.settings.notifyNews = true; });
       toast(
         ok
@@ -618,11 +675,10 @@ function NotifyBlock() {
   /*
    * Где уведомления вообще работают.
    *
-   * На Android — через системные каналы, на ПК — средствами Electron.
+   * На Android — через системные каналы, на ПК — средствами Notification API.
    * Раньше проверялось только isNativeApp(), поэтому в десктопной сборке
    * все тумблеры были серыми и нажать их было нельзя.
    */
-  const desktop = isDesktop();
   const native = isNativeApp() || desktop;
 
   return (
@@ -661,7 +717,7 @@ function NotifyBlock() {
         <div className="flex" style={{ gap: 8, padding: "12px 14px 0" }}>
           {perm === false && (
             <Button variant="primary" full sound="click" disabled={busy} onClick={() => { void askNow(); }}>
-              {tr("Разрешить уведомления")}
+              {desktop ? tr("Разрешить уведомления Windows") : tr("Разрешить уведомления")}
             </Button>
           )}
           <Button
@@ -678,8 +734,25 @@ function NotifyBlock() {
       {nativeNow && perm !== null && (
         <div className="t-caption" style={{ padding: "9px 14px 0", lineHeight: 1.5 }}>
           {perm
-            ? tr("Разрешение выдано: напоминания доходят до шторки.")
-            : tr("Разрешения нет — ни одно напоминание не придёт, пока не разрешишь.")}
+            ? desktop
+              ? tr("Разрешение выдано: уведомление появится в центре уведомлений Windows.")
+              : tr("Разрешение выдано: напоминания доходят до шторки.")
+            : desktop
+              ? tr("Разрешения нет — Windows не покажет ни одного уведомления, пока не разрешишь.")
+              : tr("Разрешения нет — ни одно напоминание не придёт, пока не разрешишь.")}
+        </div>
+      )}
+      {desktop && (
+        <div style={{ padding: "12px 14px 0" }}>
+          <div className="t-caption" style={{ marginBottom: 9, lineHeight: 1.55 }}>
+            {tr("На компьютере напоминания работают, пока игра открыта или свёрнута: закрытое приложение разбудить нечем.")}
+          </div>
+          <Button variant="secondary" full sound="click" onClick={() => { sfx.click(); onOpenUpdate?.(); }}>
+            <span className="inline-flex items-center" style={{ gap: 7 }}>
+              <Icon name="arrowUp" size={14} />
+              {tr("Экран обновления: загрузка и установка")}
+            </span>
+          </Button>
         </div>
       )}
       <div style={{ padding: "13px 14px" }}>
@@ -797,40 +870,6 @@ function Seg({
         })}
       </div>
     </div>
-  );
-}
-
-/** Строка-переход на отдельный экран */
-function NavRow({
-  icon, title, sub, onClick,
-}: {
-  icon: IconName; title: string; sub: string; onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={() => { sfx.click(); haptic("light"); onClick(); }}
-      className="w-full flex items-center text-left"
-      style={{ gap: 12, padding: "14px 14px" }}
-    >
-      <span
-        className="shrink-0 flex items-center justify-center"
-        style={{
-          width: 36, height: 36, borderRadius: "var(--r-sm)",
-          background: "var(--btn-bg)", border: "1px solid var(--btn-brd)",
-          color: "var(--acc)",
-        }}
-      >
-        <Icon name={icon} size={17} />
-      </span>
-      <span className="min-w-0 flex-1">
-        <span className="t-title-sm block">{title}</span>
-        <span className="t-caption block clip1" style={{ marginTop: 2 }}>{sub}</span>
-      </span>
-      <span className="shrink-0" style={{ color: "var(--text-mute)" }}>
-        <Icon name="chevron" size={15} />
-      </span>
-    </button>
   );
 }
 

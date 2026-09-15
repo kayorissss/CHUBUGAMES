@@ -117,6 +117,32 @@ jobs:
           echo "release=$REL" >> "$GITHUB_OUTPUT"
           echo "Режим: $([ "$REL" = true ] && echo 'РЕЛИЗ' || echo 'проверка (только артефакт)')"
 
+      # Authenticode-подпись. Поле «Издатель» в диалоге SmartScreen и в
+      # свойствах файла берётся НЕ из метаданных exe, а из цифровой подписи:
+      # без сертификата издателя у сборки не будет никогда, как бы ни был
+      # заполнен author.name в package.json. Поэтому: если в Secrets лежат
+      # WIN_CERT_PFX_B64 и WIN_CERT_PASSWORD — electron-builder подписывает
+      # оба .exe сам (CSC_LINK / CSC_KEY_PASSWORD — его стандартные
+      # переменные, подписывают и portable, и nsis-установщик). Если нет —
+      # собираем как раньше, честно предупреждая в аннотации, почему Windows
+      # показывает «Неизвестный издатель».
+      - name: Prepare Authenticode certificate
+        shell: bash
+        env:
+          PFX_B64: ${{ secrets.WIN_CERT_PFX_B64 }}
+          PFX_PASS: ${{ secrets.WIN_CERT_PASSWORD }}
+        run: |
+          if [ -z "$PFX_B64" ] || [ -z "$PFX_PASS" ]; then
+            echo "::warning::Сертификата подписи нет (WIN_CERT_PFX_B64 / WIN_CERT_PASSWORD) — .exe уйдёт неподписанным, и SmartScreen покажет «Издатель: Неизвестный издатель». Как это лечится: desktop/CERTIFICATE.md"
+            exit 0
+          fi
+          printf '%s' "$PFX_B64" | base64 -d > "$RUNNER_TEMP/chub.cer.pfx"
+          {
+            echo "CSC_LINK=$RUNNER_TEMP/chub.cer.pfx"
+            echo "CSC_KEY_PASSWORD=$PFX_PASS"
+          } >> "$GITHUB_ENV"
+          echo "Сертификат поднят: оба .exe будут подписаны."
+
       - name: Build Windows EXE
         run: npx electron-builder --config desktop/builder.yml --win --publish never
 

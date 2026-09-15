@@ -17,6 +17,7 @@ import { isDesktop } from "../core/desktop";
 import { useSystemBack } from "../core/android";
 import { CHANGELOG } from "../core/changelog";
 import { cmpVer } from "./ChangelogView";
+import { deferUpdate } from "../core/updateState";
 
 const SKIP_KEY = "chubgames.skipVersion";
 
@@ -105,10 +106,13 @@ function ProgressLine({ pct }: { pct: number }) {
 export default function UpdateBanner({
   external = null,
   onClose,
+  onOpenUpdate,
 }: {
   /** Обновление, найденное снаружи (кнопка «Проверить» в настройках). */
   external?: UpdateInfo | null;
   onClose?: () => void;
+  /** Открыть экран обновления внутри приложения (ПК). */
+  onOpenUpdate?: () => void;
 } = {}) {
   const { toast } = useGame();
   /** На компьютере обновление — окно лаунчера, а не полноэкранная полоса. */
@@ -229,6 +233,68 @@ export default function UpdateBanner({
     }));
   })();
   const eta = speed > 0 && total > loaded ? Math.ceil((total - loaded) / speed) : 0;
+
+  /*
+   * ПК: вместо полноэкранного окна — плашка.
+   *
+   * Просьба: «заходишь в приложение — вылезает красивая плашка „вышло
+   * обновление“, нажимаешь — переходишь на страницу в приложении с этапом
+   * загрузки и лобби ожидания». То есть сама плашка ничего не качает: она
+   * зовёт на UpdateFlow, где есть ступени, честные цифры и анимация ожидания.
+   * Кнопка «Попозже» не закрывает молча: она оставляет знак «!» на круглой
+   * кнопке настроек и на вкладке «Система» (core/updateState.ts), пока версия
+   * не станет свежей.
+   */
+  if (pc && info) {
+    const bullets = sections.flatMap((sec) => sec.items).slice(0, 3);
+    return (
+      <motion.div
+        className="upd-plate"
+        initial={{ opacity: 0, y: 18, scale: 0.98 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        exit={{ opacity: 0, y: 10, scale: 0.98 }}
+        transition={{ type: "spring", stiffness: 340, damping: 30 }}
+      >
+        <div className="upd-plate-glow" aria-hidden />
+        <div className="upd-plate-head">
+          <span className="upd-plate-kicker t-label">{tr("ВЫШЛО ОБНОВЛЕНИЕ")}</span>
+          <span className="upd-plate-ver t-display">{info.version}</span>
+          <span className="upd-plate-swap t-caption">
+            {APP_VERSION}
+            <Icon name="chevron" size={11} />
+            <b className="acc-text">{info.version}</b>
+            {info.size > 0 && <> · {fmtBytes(info.size)}</>}
+          </span>
+        </div>
+        {bullets.length > 0 && (
+          <ul className="upd-plate-list">
+            {bullets.map((b) => <li key={b}>{b}</li>)}
+          </ul>
+        )}
+        <div className="upd-plate-btns">
+          <button
+            type="button"
+            className="upd-plate-go"
+            onClick={() => {
+              sfx.power?.();
+              haptic("light");
+              setInfo(null);
+              onOpenUpdate?.();
+            }}
+          >
+            <Icon name="download" size={13} /> {tr("Обновить")}
+          </button>
+          <button
+            type="button"
+            className="upd-plate-later"
+            onClick={() => { sfx.click(); deferUpdate(info.version); setInfo(null); }}
+          >
+            {tr("Попозже")}
+          </button>
+        </div>
+      </motion.div>
+    );
+  }
 
   return (
     <AnimatePresence>

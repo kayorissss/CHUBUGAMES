@@ -71,7 +71,11 @@ export function freshSave(): SaveState {
     daily: { lastClaim: "", streak: 0, quests: pickQuests(today()), questsDate: today() },
     season: { id: 1, xp: 0, claimed: [], startedAt: now },
     settings: {
-      theme: "dark", lang: "ru", accent: "ember", sound: true, haptics: true,
+      /* Акцент по умолчанию — «Фиолет» (просьба пользователя: стандартная
+         тема фиолетовая). «Уголёк» остаётся в списке бесплатных: он цвет
+         бренда, но на серых поверхностях оранжевый режет глаза дольше, чем
+         фиолетовый. Смена акцента пересчитывает контраст (core/theme.ts). */
+      theme: "dark", lang: "ru", accent: "violet", sound: true, haptics: true,
       fx: true, controls: "touchpad", difficulty: "normal",
       notifyUpdates: false,
       notifyBoss: false,
@@ -123,6 +127,25 @@ export function migrate(s: any): SaveState {
   // бесплатные темы доступны всем, включая старые сохранения
   for (const free of ["ember", "amber", "violet", "grey", "red", "yellow", "radomir", "sky"]) {
     if (!out.ownedThemes.includes(free)) out.ownedThemes.push(free);
+  }
+  /*
+   * 1.28.0: стандартной темой стал «Фиолет», и по решению автора он
+   * ставится ВСЕМ при первом запуске версии — один раз, отметкой в
+   * localStorage. Почему отметкой, а не проверкой «акцент ли это старый»:
+   * после миграции человек вправе выбрать любой цвет, и при следующем
+   * запуску мы обязаны его выбор не переть. Отметка ставится до
+   * записи сохранения, поэтому повторной смены не будет никогда.
+   */
+  const THEME_MIGRATE_KEY = "chubgames.accent.v1.28";
+  try {
+    if (localStorage.getItem(THEME_MIGRATE_KEY) !== "1") {
+      out.settings.accent = "violet";
+      localStorage.setItem(THEME_MIGRATE_KEY, "1");
+    }
+  } catch {
+    /* приватный режим или телефон без localStorage: просто стартуем с
+       фиолетового — хуже не станет, выбор сохранится в самом сейве */
+    out.settings.accent = "violet";
   }
   // Все мини-игры доступны сразу — в том числе в старых сохранениях
   out.unlockedGames = ALL_GAMES.slice();

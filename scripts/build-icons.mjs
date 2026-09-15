@@ -41,6 +41,56 @@ const PHOTO = ["branding/photo.jpg", "branding/photo.png"]
   .map((p) => path.join(ROOT, p))
   .find((p) => existsSync(p));
 
+/**
+ * РЕЖИМ ЛОГОТИПА (с 1.28.0).
+ *
+ * Логотип — не фото, его нельзя кромсать по краю. Если в branding/ лежит
+ * растровый логотип (любое из имён ниже — как пришлют), он важнее
+ * фото-режима: картинка вписывается в квадрат ЦЕЛИКОМ (fit: "inside"),
+ * вокруг — фирменный тёмный фон, в adaptive-foreground — только внутри
+ * безопасной зоны 66 %, в monochrome — обесцвеченный силуэт (Android
+ * перекрашивает его сам).
+ *
+ * Тот же файл копируется в public/brand/logo.png: им пользуется интерфейс
+ * (знак в шапке ПК и в заставке), а src/core/brandAsset.ts получает отметку,
+ * что растр есть, — иначе интерфейс ловил бы 404 у всех, у кого файла нет.
+ */
+const LOGO = [
+  "branding/logo.png",
+  "branding/logo.jpg",
+  "branding/logo.jpeg",
+  "branding/chubugamesmaxlogo.png",
+  "branding/chubulogo.png",
+]
+  .map((p) => path.join(ROOT, p))
+  .find((p) => existsSync(p));
+
+/** Фирменный фон плашки — тот же, что у adaptive-иконки в CI */
+const BRAND_BG = "#0D0D10";
+
+/**
+ * Логотип → иконка. `full` — заполняет весь квадрат (легаси-плашка),
+ * иначе только безопасную зону 66 % (adaptive foreground, фон прозрачный).
+ */
+async function logoPng(size, { full = false, mono = false } = {}) {
+  const side = full ? size : Math.max(4, Math.round(size * 0.66));
+  const mark = await sharp(LOGO).resize(side, side, { fit: "inside" }).ensureAlpha().toBuffer();
+  const base = sharp({
+    create: {
+      width: size,
+      height: size,
+      channels: 4,
+      background: full ? BRAND_BG : "#00000000",
+    },
+  });
+  const off = Math.round((size - side) / 2);
+  const buf = await base
+    .composite([{ input: mark, left: off, top: off }])
+    .png({ palette: true, quality: 96, effort: 8 })
+    .toBuffer();
+  return mono ? await sharp(buf).grayscale().png({ palette: true, quality: 96, effort: 8 }).toBuffer() : buf;
+}
+
 /** Плотности Android: базовая иконка 48dp, adaptive-слой 108dp */
 const DENSITIES = { mdpi: 1, hdpi: 1.5, xhdpi: 2, xxhdpi: 3, xxxhdpi: 4 };
 
@@ -57,6 +107,13 @@ const ensure = (p) => mkdirSync(path.dirname(p), { recursive: true });
 const PH_PNG = { palette: true, quality: 96, effort: 8 };
 
 async function png(from, size, withAlpha = true) {
+  /* Логотип важнее фото: он не режется, а вписывается */
+  if (LOGO && (from === SRC.badge || from === SRC.mark || from === SRC.mono)) {
+    return logoPng(size, {
+      full: from === SRC.badge,
+      mono: from === SRC.mono,
+    });
+  }
   if (PHOTO && from === SRC.badge) {
     return sharp(PHOTO)
       .resize(size, size, { fit: "cover", position: "centre" })
@@ -127,6 +184,32 @@ function writeIco(file, pairs) {
 async function main() {
   for (const f of Object.values(SRC)) {
     if (!existsSync(f)) throw new Error("нет исходника: " + f);
+  }
+
+  /* ── логотип для интерфейса ──
+     Копируем растр в public/brand/ и пишем флаг в src/core/brandAsset.ts.
+     Флаг нужен, чтобы <img> не пытались грузить там, где файла нет: 404 в
+     консоли игрок видит как «ошибка», а пустое место в шапке — как «сломалось». */
+  {
+    const flagPath = path.join(ROOT, "src/core/brandAsset.ts");
+    const body = LOGO
+      ? `// ФАЙЛ ГЕНЕРИРУЕТСЯ: npm run icons. Руками не править — перезапишется.\n` +
+        `// Исходник: ${path.relative(ROOT, LOGO)}\n\n` +
+        `/** Прислан ли растровый логотип — интерфейс показывает его вместо вектора. */\n` +
+        `export const HAS_BRAND_LOGO = true;\n\n` +
+        `/** Путь внутри собранного приложения (public/ лежит в корне dist). */\n` +
+        `export const BRAND_LOGO_URL = "/brand/logo.png";\n`
+      : `// ФАЙЛ ГЕНЕРИРУЕТСЯ: npm run icons. Руками не править — перезапишется.\n` +
+        `// Логотипа в branding/ нет — интерфейс рисует векторный знак (branding/mark.svg).\n\n` +
+        `export const HAS_BRAND_LOGO = false;\n\n` +
+        `export const BRAND_LOGO_URL = "/brand/logo.png";\n`;
+    writeFileSync(flagPath, body);
+    if (LOGO) {
+      ensure(out("public/brand/logo.png"));
+      writeFileSync(out("public/brand/logo.png"), await sharp(LOGO).png().toBuffer());
+      console.log("интерфейсный логотип: " + path.relative(ROOT, LOGO) + " → public/brand/logo.png");
+    }
+    console.log("флаг логотипа: src/core/brandAsset.ts → HAS_BRAND_LOGO = " + (LOGO ? "true" : "false"));
   }
 
   const report = [];
