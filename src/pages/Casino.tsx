@@ -1200,9 +1200,42 @@ function Battle({ g, save }: { g: GambleStore; save: GambleSave }) {
                   <span className="t-label">{foe.toUpperCase()}</span>
                   <span className="t-num pc-battle-total">{fmt(foeSum)}</span>
                 </div>
+                {/* «полоски-бой» (просьба 1.28): у обоих участников своя
+                    шкала, заполненная от большего счёта, и дорожка раундов —
+                    по ней видно, кто забрал какой раунд, не считая цифры */}
+                <div className="pc-battle-bars">
+                  <span className="pc-battle-bar">
+                    <i
+                      className="me"
+                      style={{ width: `${(mineSum / Math.max(mineSum, foeSum, 1)) * 100}%` }}
+                    />
+                  </span>
+                  <span className="pc-battle-bar">
+                    <i
+                      className="foe"
+                      style={{ width: `${(foeSum / Math.max(mineSum, foeSum, 1)) * 100}%` }}
+                    />
+                  </span>
+                </div>
                 <div className="pc-battle-status">
                   <span className="t-label">
                     {tr("раунд")} {Math.min(step, live.list.length)}/{live.list.length}
+                  </span>
+                  <span className="pc-battle-pips" aria-hidden>
+                    {live.list.map((rr, i) => (
+                      <i
+                        key={i}
+                        className={
+                          i >= step
+                            ? "wait"
+                            : rr.mine.value > rr.foe.value
+                              ? "win"
+                              : rr.mine.value < rr.foe.value
+                                ? "lose"
+                                : "tie"
+                        }
+                      />
+                    ))}
                   </span>
                   <span className={`pc-battle-lead ${lead > 0 ? "up" : lead < 0 ? "down" : ""}`}>
                     {lead > 0 ? tr("ведёшь ты") : lead < 0 ? tr("ведёт соперник") : tr("равно")}
@@ -1285,7 +1318,12 @@ function Battle({ g, save }: { g: GambleStore; save: GambleSave }) {
 
 function Upgrade({ g, save }: { g: GambleStore; save: GambleSave }) {
   const owned = Object.entries(g.items).filter(([, n]) => n > 0);
-  const [fromId, setFromId] = useState<string | null>(owned[0]?.[0] ?? null);
+  /**
+   * 1.28: «апгрейд — мультивыбор предметов». Ставка собирается из НЕСКОЛЬКИХ
+   * вещей: выбрал дубли/мусор, слил их в один спин и крутишь колесо на
+   * суммарную ценность. Одиночный выбор остаётся тем же случаем мультивыбора.
+   */
+  const [sel, setSel] = useState<Record<string, boolean>>({});
   const [multId, setMultId] = useState(WHEEL_MULTS[1].id);
   const [fast, setFast] = useState(false);
   const [spinning, setSpinning] = useState(false);
@@ -1293,15 +1331,23 @@ function Upgrade({ g, save }: { g: GambleStore; save: GambleSave }) {
   const [res, setRes] = useState<null | { zone: WheelZone; gained: number }>(null);
   const [help, setHelp] = useState(false);
 
-  const from = fromId ? itemById(fromId) : null;
+  const picked = owned
+    .filter(([id]) => !!sel[id])
+    .map(([id, n]) => ({ id, n, it: itemById(id) }))
+    .filter((x): x is { id: string; n: number; it: ItemDef } => !!x.it);
+  const stake = picked.reduce((a, x) => a + x.it.value, 0);
   const mult = WHEEL_MULTS.find((m) => m.id === multId) ?? WHEEL_MULTS[1];
   const sectors = buildWheel(mult.mult);
   const chance = winChance(mult.mult);
 
-  // Если предмет кончился, переключаемся на любой оставшийся
+  // Если выбранная вещь закончилась (её сожгли или продали) — убираем из ставки
   useEffect(() => {
-    if (fromId && !g.items[fromId]) setFromId(Object.keys(g.items)[0] ?? null);
-  }, [g.items, fromId]);
+    setSel((v) => {
+      const next: Record<string, boolean> = {};
+      for (const k of Object.keys(v)) if (v[k] && g.items[k]) next[k] = true;
+      return Object.keys(next).length === Object.keys(v).length ? v : next;
+    });
+  }, [g.items]);
 
   /**
    * ЗАВИСАНИЕ КОЛЕСА — что было сломано.
@@ -1320,7 +1366,7 @@ function Upgrade({ g, save }: { g: GambleStore; save: GambleSave }) {
    * RAF вообще не пойдут (вкладка ушла в фон, слабый телефон), стоит
    * страховочный таймер: он доведёт спин до конца в любом случае.
    */
-  const pendingRef = useRef<null | { zone: WheelZone; itemId: string; staked: number; mult: number }>(null);
+  const pendingRef = useRef<null | { zone: WheelZone; ids: string[]; staked: number; mult: number }>(null);
   const guardRef = useRef(0);
 
   const settle = useCallback(() => {
@@ -1331,18 +1377,32 @@ function Upgrade({ g, save }: { g: GambleStore; save: GambleSave }) {
 
     const gained = zonePayout(p.zone, p.staked, p.mult);
     // Выигрыш и утешительные выплаты приходят жетонами: подбирать
-    // предмет ровно нужной цены не всегда возможно.
-    save((x) => ({ items: shiftItem(x, p.itemId, -1), chips: x.chips + gained }));
+    // предмет ровно нужной цены не всегда возможно. Сгорают же сами вещи —
+    // все выбранные, одним save(), иначе часть стека осталась бы на складе.
+    save((x) => {
+      let items = x.items;
+      const eq = { ...x.equipped };
+      for (const id of p.ids) {
+        const it = itemById(id);
+        const left = (items[id] || 0) - 1;
+        items = { ...items, [id]: Math.max(0, left) };
+        if (left <= 0) {
+          delete items[id];
+          if (it && eq[it.kind] === id) delete eq[it.kind];
+        }
+      }
+      return { items, equipped: eq, chips: x.chips + gained };
+    });
     setRes({ zone: p.zone, gained });
     setSpinning(false);
     wheelStopFeedback(p.zone === "win");
   }, [save]);
 
   const start = () => {
-    if (!from || spinning || pendingRef.current) return;
+    if (!picked.length || spinning || pendingRef.current) return;
     setRes(null);
     const r = spinTo(sectors, mult.mult);
-    pendingRef.current = { zone: r.zone, itemId: from.id, staked: from.value, mult: mult.mult };
+    pendingRef.current = { zone: r.zone, ids: picked.map((x) => x.id), staked: stake, mult: mult.mult };
     setAngle(r.angle);
     setSpinning(true);
     sfx.click();
@@ -1406,18 +1466,37 @@ function Upgrade({ g, save }: { g: GambleStore; save: GambleSave }) {
       </AnimatePresence>
 
       <Panel r="lg" style={{ padding: 15, marginBottom: 12 }}>
-        <div className="t-label" style={{ marginBottom: 9 }}>{tr("1 · ЧТО СТАВИМ")}</div>
+        <div className="pc-up-pickhead">
+          <span className="t-label">{tr("1 · ЧТО СТАВИМ — можно несколько вещей")}</span>
+          <button
+            type="button"
+            className="t-label pc-up-pickall"
+            disabled={spinning}
+            onClick={() => {
+              sfx.click();
+              setSel((v) => {
+                const any = owned.some(([id]) => !v[id]);
+                const next: Record<string, boolean> = {};
+                if (any) for (const [id] of owned) next[id] = true;
+                return next;
+              });
+              setRes(null);
+            }}
+          >
+            {tr("выбрать всё / очистить")}
+          </button>
+        </div>
         <div className="flex flex-wrap" style={{ gap: 6, marginBottom: 16 }}>
           {owned.map(([id, n]) => {
             const it = itemById(id);
             if (!it) return null;
-            const on = fromId === id;
+            const on = !!sel[id];
             return (
               <button
                 key={id}
                 type="button"
                 disabled={spinning}
-                onClick={() => { sfx.click(); setFromId(id); setRes(null); }}
+                onClick={() => { sfx.tap(); haptic("light"); setSel((v) => ({ ...v, [id]: !v[id] })); setRes(null); }}
                 className="flex items-center"
                 style={{
                   gap: 7, padding: "9px 12px", borderRadius: "var(--r-sm)",
@@ -1435,6 +1514,9 @@ function Upgrade({ g, save }: { g: GambleStore; save: GambleSave }) {
                 <ItemIcon id={id} size={18} />
                 <span className="t-body clip1" style={{ fontSize: 10.5 }}>{it.name}</span>
                 <span className="t-num" style={{ fontSize: 11.5 }}>×{n}</span>
+                <span className={`pc-up-tick ${on ? "on" : ""}`} aria-hidden>
+                  <Icon name="check" size={9} />
+                </span>
               </button>
             );
           })}
@@ -1468,7 +1550,7 @@ function Upgrade({ g, save }: { g: GambleStore; save: GambleSave }) {
         </div>
       </Panel>
 
-      {from && (
+      {picked.length > 0 && (
         <Panel r="lg" style={{ padding: 15 }}>
           <Wheel
             sectors={sectors}
@@ -1484,11 +1566,17 @@ function Upgrade({ g, save }: { g: GambleStore; save: GambleSave }) {
             className="flex items-center justify-center"
             style={{ gap: 8, marginTop: 12, marginBottom: 12 }}
           >
-            <span style={{ color: RARITY_COLOR[from.rarity], lineHeight: 0 }}>
-              <ItemIcon id={from.id} size={26} />
-            </span>
+            {picked.slice(0, 5).map((x) => (
+              <span key={x.id} style={{ color: RARITY_COLOR[x.it.rarity], lineHeight: 0 }}>
+                <ItemIcon id={x.id} size={24} />
+              </span>
+            ))}
+            {picked.length > 5 ? (
+              <span className="t-label pc-up-more">+{picked.length - 5}</span>
+            ) : null}
             <Icon name="chevron" size={14} />
-            <span className="t-num acc-text" style={{ fontSize: 16 }}>{mult.label}</span>
+            <span className="t-num acc-text" style={{ fontSize: 15 }}>{fmt(stake)}</span>
+            <span className="t-label" style={{ fontSize: 8 }}>{tr("ставка")} · {mult.label}</span>
           </div>
 
           <AnimatePresence mode="wait">

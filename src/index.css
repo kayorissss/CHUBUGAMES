@@ -7194,3 +7194,78 @@ html.is-desktop .pc-cas-split .pc-cases {
   width: 100%;
   min-width: 0;
 }
+
+
+/* ---------- АПГРЕЙД 1.28: мультивыбор в ставку ---------- */
+.pc-up-pickhead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 9px;
+}
+.pc-up-pickall {
+  padding: 4px 9px;
+  border-radius: 999px;
+  background: var(--btn-bg);
+  border: 1px solid var(--btn-brd);
+  color: var(--text-mute);
+  letter-spacing: 0.06em;
+  cursor: pointer;
+  transition: color 0.16s, border-color 0.16s;
+}
+.pc-up-pickall:hover { color: var(--acc); border-color: var(--acc); }
+.pc-up-pickall:disabled { opacity: 0.4; cursor: default; }
+.pc-up-tick {
+  width: 14px;
+  height: 14px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface-2);
+  border: 1px solid var(--btn-brd);
+  color: transparent;
+}
+.pc-up-tick.on { background: var(--acc); border-color: var(--acc); color: var(--acc-ink); }
+.pc-up-more {
+  color: var(--text-mute);
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: var(--surface-2);
+}
+
+/* бой-полоски: шкала каждого участника + дорожка раундов */
+.pc-battle-bars {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 3px;
+}
+.pc-battle-bar {
+  position: relative;
+  height: 7px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--n-000) 42%, transparent);
+  border: 1px solid var(--surface-brd);
+}
+.pc-battle-bar > i {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: 999px;
+  transition: width 0.42s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.pc-battle-bar > i.me { background: linear-gradient(90deg, color-mix(in srgb, var(--acc) 55%, transparent), var(--acc)); }
+.pc-battle-bar > i.foe { background: linear-gradient(90deg, color-mix(in srgb, var(--danger) 45%, transparent), var(--danger)); }
+.pc-battle-pips { display: inline-flex; gap: 3px; align-items: center; }
+.pc-battle-pips i {
+  width: 12px;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--surface-brd);
+}
+.pc-battle-pips i.win { background: var(--acc); }
+.pc-battle-pips i.lose { background: var(--danger); }
+.pc-battle-pips i.tie { background: var(--gold); }
+.pc-battle-pips i.wait { opacity: 0.45; }

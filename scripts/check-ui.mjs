@@ -1580,9 +1580,9 @@ console.log('\n[36] 1.27: кошелёк казино нельзя потеря�
     'в save() не передаётся объект, собранный из снимка рендера (stale closure = потерянные вещи)');
   ok(/save\(\(x\) => \(\{[\s\S]{0,220}?items: shiftItem\(x,/.test(casino),
     'приз кейса кладётся в актуальный инвентарь, а не в «g.items двухсекундной давности»');
-  ok(/save\(x => \(\{ items: shiftItem\(x, p\.itemId, -1\)/.test(casino) ||
-     /items: shiftItem\(x, p\.itemId, -1\)/.test(casino),
-    'ставка апгрейда снимается с актуального инвентаря');
+  ok(/for \(const id of p\.ids\)[\s\S]{0,260}?items = \{ \.\.\.items, \[id\]: Math\.max\(0, left\) \}/.test(casino) &&
+     /return \{ items, equipped: eq, chips: x\.chips \+ gained \}/.test(casino),
+    'ставка апгрейда сгорает целиком (все выбранные вещи) и от АКТУАЛЬНОГО инвентаря, а не от снимка рендера');
 }
 
 console.log('\n[38] 1.27: слоты — автомат, а не мигающие плашки');
@@ -2329,6 +2329,35 @@ console.log('\n[58] 1.28: казино — кейсы как в CS2/Standoff2 (�
     'итог показывается в тот же момент, когда лента встала');
   ok(!/2600\)/.test(cases), 'лишний таймаут между остановкой ленты и итогом убран');
   ok(/setSkip\(false\);\n\s*setArmed\(false\);/.test(cases), 'состояние «пропущено» сбрасывается при новом просмотре');
+}
+
+
+console.log('\n[59] 1.28: апгрейд — мультивыбор; батл — полоски');
+{
+  const src = fs.readFileSync('src/pages/Casino.tsx', 'utf8');
+  const css = fs.readFileSync('src/index.css', 'utf8');
+  const up = src.slice(src.indexOf('function Upgrade('), src.indexOf('/* ═══', src.indexOf('function Upgrade(')));
+  const bt = src.slice(src.indexOf('function Battle('), src.indexOf('/* ═══', src.indexOf('function Battle(')));
+
+  ok(/const \[sel, setSel\] = useState<Record<string, boolean>>\(\{\}\)/.test(up) &&
+     /setSel\(\(v\) => \(\{ \.\.\.v, \[id\]: !v\[id\] \}\)\)/.test(up),
+    'в апгрейд выбирается НЕСКОЛЬКО предметов (просьба 1.28: «мультивыбор»), тап переключает');
+  ok(/const stake = picked\.reduce\(\(a, x\) => a \+ x\.it\.value, 0\)/.test(up) &&
+     /staked: stake/.test(up),
+    'колесо крутится на суммарную ценность ставки, а не на одну вещь');
+  ok(/if \(left <= 0\) \{\n\s*delete items\[id\];/.test(up) && /if \(it && eq\[it\.kind\] === id\) delete eq\[it\.kind\]/.test(up),
+    'сгоревшие вещи удаляются из склада, а надетая сгоревшая вещь снимается с героя');
+  ok(/const \[fromId, setFromId\]/.test(up) === false,
+    'одиночный выбор из прошлого не остался второй параллельной системой');
+  ok(/pc-up-pickall/.test(up) && /\.pc-up-pickall \{/.test(css),
+    'есть «выбрать всё / очистить» — иначе мультивыбор был бы десятью тапами');
+
+  ok(/className="pc-battle-bars"/.test(bt) && /\.pc-battle-bars \{[\s\S]{0,120}?grid-column: 1 \/ -1/.test(css),
+    'у боя появились полоски участников на всю ширину табло');
+  ok(/className="pc-battle-pips"/.test(bt) && /\.pc-battle-pips i\.win \{/.test(css),
+    'дорожка раундов: забрал\|отдал\|ничья\|ещё не сыграно — видно без счёта в уме');
+  ok(/width: \`\$\{\(mineSum \/ Math\.max\(mineSum, foeSum, 1\)\) \* 100\}%\`/.test(bt),
+    'полоска считается от большего счёта: лидер заполнен, отстающий короче');
 }
 
 console.log(fails===0?'\n✅ ВСЕ ПРОВЕРКИ ВЁРСТКИ ПРОЙДЕНЫ\n':`\n❌ ПРОВАЛЕНО: ${fails}\n`);
