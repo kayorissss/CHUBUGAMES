@@ -7269,3 +7269,98 @@ html.is-desktop .pc-cas-split .pc-cases {
 .pc-battle-pips i.lose { background: var(--danger); }
 .pc-battle-pips i.tie { background: var(--gold); }
 .pc-battle-pips i.wait { opacity: 0.45; }
+
+
+/* ---------- ПЛАШКА БОССА 1.28: «как ивенты в других играх» ----------
+   Было: имя, две мета-строки и кнопка. Стало: лента «ивент часа», скобы по
+   углам, реплика дежурного, награда и его суровость цифрами. */
+.boss2-sweep {
+  position: absolute;
+  inset: 0 auto 0 -40%;
+  width: 42%;
+  background: linear-gradient(100deg, transparent, color-mix(in srgb, var(--n-000) 26%, transparent), transparent);
+  transform: skewX(-14deg);
+  animation: boss2sweep 7.5s linear infinite;
+  pointer-events: none;
+}
+@keyframes boss2sweep {
+  0% { transform: translateX(0) skewX(-14deg); }
+  55%, 100% { transform: translateX(340%) skewX(-14deg); }
+}
+html.low-fx .boss2-sweep { display: none; }
+.boss2-corners { position: absolute; inset: 0; pointer-events: none; }
+.boss2-corners i {
+  position: absolute;
+  width: 11px;
+  height: 11px;
+  border: 1.5px solid color-mix(in srgb, var(--acc) 55%, transparent);
+}
+.boss2.live .boss2-corners i { border-color: color-mix(in srgb, var(--danger) 62%, transparent); }
+.boss2-corners .c1 { left: 6px; top: 6px; border-right: 0; border-bottom: 0; border-top-left-radius: 4px; }
+.boss2-corners .c2 { right: 6px; top: 6px; border-left: 0; border-bottom: 0; border-top-right-radius: 4px; }
+.boss2-corners .c3 { left: 6px; bottom: 6px; border-right: 0; border-top: 0; border-bottom-left-radius: 4px; }
+.boss2-corners .c4 { right: 6px; bottom: 6px; border-left: 0; border-top: 0; border-bottom-right-radius: 4px; }
+.boss2-ribbon {
+  position: absolute;
+  right: 0;
+  top: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px 3px 12px;
+  border-radius: 0 var(--r-lg) 0 var(--r-md);
+  background: color-mix(in srgb, var(--acc) 88%, var(--n-000));
+  color: var(--acc-ink);
+  font-size: 8.5px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+.boss2.live .boss2-ribbon { background: color-mix(in srgb, var(--danger) 88%, var(--n-000)); color: #fff; }
+.boss2-quote {
+  display: block;
+  margin-top: 2px;
+  font-size: 0.68rem;
+  font-style: italic;
+  color: var(--text-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.boss2-loot { display: inline-flex; gap: 4px; margin-top: 5px; }
+.boss2-loot-i {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--n-000) 34%, transparent);
+  border: 1px solid var(--surface-brd);
+  color: var(--text-mute);
+  font-size: 10px;
+}
+.boss2-loot-i b { color: var(--text); }
+.boss2-stats {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  padding-top: 0.5rem;
+  margin-top: 0.1rem;
+  border-top: 1px solid var(--surface-brd);
+}
+.boss2-stat {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  color: var(--text-mute);
+  letter-spacing: 0.02em;
+}
+.boss2-stat b { color: var(--text); }
+.boss2-stat.dim { color: var(--text-dim); font-style: italic; letter-spacing: 0; }
+.boss2 { padding-top: 1.15rem; }
+.boss2-ribbon { z-index: 2; }
+.boss2-sweep { z-index: 0; }
+.boss2-corners { z-index: 1; }

@@ -272,16 +272,36 @@ function BossBanner({
   onOpen: () => void;
   open: boolean;
 }) {
+  /* Особая механика — своими словами: в бою её объясняют, а на плашке
+     раньше было только имя, и «чем он опасен» приходилось угадывать. */
+  const GIMMICK: Record<string, string> = {
+    gas: tr("газует: часть ударов уходит в туман"),
+    tank: tr("танкует: урон по нему снижен"),
+    sleep: tr("залипает: лови окно свободного урона"),
+    kind: tr("без фокусов — бьёт ровно как написано"),
+  };
+
   return (
     <div className={`boss2 ${bossOn ? "live" : ""}`}>
       {bossOn && <span className="boss2-glow" aria-hidden />}
+      {/* украшение: проход света по плашке и скобы по углам — то, чего не
+          хватало, чтобы это читалось как баннер события, а не как ещё одна
+          серая карточка */}
+      <span className="boss2-sweep" aria-hidden />
+      <span className="boss2-corners" aria-hidden>
+        <i className="c1" /><i className="c2" /><i className="c3" /><i className="c4" />
+      </span>
+      <span className="boss2-ribbon">
+        <Icon name="fire" size={10} />
+        {tr("ивент часа")}
+      </span>
 
       <span className="boss2-poster">
         <motion.span
           animate={bossOn ? { y: [0, -4, 0] } : {}}
           transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
         >
-          <HeadView friend={{ look: boss.look } as never} size={bossOn ? 64 : 56} />
+          <HeadView friend={{ look: boss.look } as never} size={bossOn ? 68 : 60} />
         </motion.span>
       </span>
 
@@ -291,6 +311,7 @@ function BossBanner({
           {bossOn ? tr("БОСС ПОЯВИЛСЯ") : bossLive ? tr("СМЕНА ЗАКРЫТА") : tr("СЛЕДУЮЩИЙ БОСС")}
         </span>
         <span className="boss2-name clip1">{boss.name}</span>
+        <span className="boss2-quote">«{boss.quote}»</span>
         <span className="boss2-tags">
           <span className="boss2-tag">{boss.nick}</span>
           {bossOn && bossKills > 0 && (
@@ -317,6 +338,22 @@ function BossBanner({
             {bossOn ? fmtLeft(windowLeft()) : nextBoss.name}
           </span>
         </span>
+        {/* «за что бьём» — награда всегда на виду, иначе плашка выглядит
+            как приглашение поработать бесплатно */}
+        <span className="boss2-loot">
+          <span className="boss2-loot-i" title={tr("монеты")}>
+            <Icon name="coin" size={11} />
+            <b className="t-num">{fmt(boss.reward.coins)}</b>
+          </span>
+          <span className="boss2-loot-i" title={tr("жетоны казино")}>
+            <Icon name="ticket" size={11} />
+            <b className="t-num">{fmt(boss.reward.chips)}</b>
+          </span>
+          <span className="boss2-loot-i" title={tr("опыт")}>
+            <Icon name="star" size={11} />
+            <b className="t-num">{fmt(boss.reward.xp)}</b>
+          </span>
+        </span>
         {open && (
           <button
             type="button"
@@ -327,6 +364,20 @@ function BossBanner({
             {bossOn ? tr("В БОЙ") : tr("ПОСМОТРЕТЬ")}
           </button>
         )}
+      </span>
+
+      {/* суровость дежурного цифрами: HP, урон, темп и механика — строкой
+          под текстом, чтобы не раздувать баннер */}
+      <span className="boss2-stats">
+        <span className="boss2-stat">
+          <Icon name="shield" size={10} />
+          {tr("прочность")} <b className="t-num">{fmt(boss.hp)}</b>
+        </span>
+        <span className="boss2-stat">
+          <Icon name="bolt" size={10} />
+          {tr("урон")} <b className="t-num">{boss.dmg}</b> / {(boss.every / 1000).toFixed(2).replace(".", ",")} {tr("с")}
+        </span>
+        <span className="boss2-stat dim">{GIMMICK[boss.gimmick]}</span>
       </span>
 
       {/* полоса смены: по ней видно, сколько осталось, не отрывая глаз от текста */}
@@ -344,3 +395,4 @@ function BossBanner({
     </div>
   );
 }
+
