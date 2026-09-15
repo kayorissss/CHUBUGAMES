@@ -319,7 +319,7 @@ ok(md.includes('Math.min(cleared, 12)'),'множитель выживания �
 const mp=fs.readFileSync('src/ui/ModesPanel.tsx','utf8');
 ok(mp.includes('startSurvival')&&mp.includes('startSprint'),'новые режимы выведены на главную');
 const shp=fs.readFileSync('src/pages/Shop.tsx','utf8');
-ok(/transition: transform 2\.[0-9]s cubic-bezier/.test(fs.readFileSync('src/index.css','utf8')) && !/nearEnd/.test(shp),
+ok(/transition: transform [2-9](\.[0-9])?s cubic-bezier/.test(fs.readFileSync('src/index.css','utf8')) && !/nearEnd/.test(shp),
   'у кейса длинное честное торможение ленты, без «мелкой тряски экрана»');
 ok(!/conic-gradient/.test(shp) && !/Искры вокруг легендарки/.test(shp),
   'вращающихся лучей и искр в вскрытии больше нет — «мультяшность» убрана');
@@ -1672,8 +1672,13 @@ console.log('\n[40] 1.27: кейс-батл понятен, у фермы ест
     'в раундах показаны имена предметов, а не только иконки с цифрами');
   ok(/className="pc-battle-record"/.test(cas), 'статистика побед осталась и подписана');
 
-  ok(/pc-farm-rule/.test(cas) && /на один забег, между забегами перерыва нет/.test(cas),
-    'у фермы указан срок забега и то, что перерыва между забегами нет');
+  ok(/pc-farm-rule/.test(cas) && /забег идёт, пока не завершишь; между забегами перерыва нет/.test(cas),
+    'у фермы описан забег: без таймера на 20 с, между забегами перерыва нет (просьба 1.28)');
+  ok(/const FARM_MS = 0/.test(cas) && /const TIMED = FARM_MS > 0/.test(cas) &&
+     /endAt.current = TIMED \? performance.now\(\) \+ FARM_MS : Infinity/.test(cas),
+    'срока у забега нет: обратный отсчёт выключён на уровне константы, а не «ещё 20 секунд, и ты свободен»');
+  ok(/if \(phase === "play"\) \{ setPhase\("over"\)/.test(cas),
+    'забег можно завершить самому — кнопка в тот же момент выдаёт наловленное');
   ok(/награда — жетоны: они тратятся на кейсы/.test(cas),
     'ферма объясняет, ЧТО за награда и куда она тратится');
   ok(/className="pc-farm-worth"/.test(cas) && /GAMBLE_CASES\[0\]\.price/.test(cas),
@@ -2257,6 +2262,73 @@ console.log('\n[57] 1.28 · ЧУБ КЛИКЕР: FPS и пауза');
     'свечение лица ограничено рамкой лица: полноэкранного полупрозрачного градиента нет');
   ok(!/createLinearGradient\(bx, by/.test(ck),
     'языки пламени больше не строят по градиенту на каждый кадр');
+}
+
+
+console.log('\n[58] 1.28: казино — кейсы как в CS2/Standoff2 (десять ступеней, иконки, шансы под «?», без лагов)');
+{
+  const gm = fs.readFileSync('src/core/gamble.ts', 'utf8');
+  const css = fs.readFileSync('src/index.css', 'utf8');
+  const src = fs.readFileSync('src/pages/Casino.tsx', 'utf8');
+  const cases = src.slice(src.indexOf('function Cases('), src.indexOf('function Battle('));
+
+  /* ── линейка из десяти ступеней ── */
+  ok((gm.match(/price: \d/g) || []).length === 10,
+    'кейсов ровно десять ступеней (просьба 1.28: «мало, мало иконок»)');
+  ok(/id: "pack"/.test(gm) && /id: "throne"/.test(gm),
+    'линейка начинается с «ПАЧКИ БУЛОК» и кончается «ТРОНОМ ХАБА»');
+  ok(/price: 10_?000/.test(gm), 'верхняя ступень стоит 10 000 — «дорогущий, самый верхний»');
+  ok(/tier: 1[,\n][\s\S]*tier: 10/.test(gm), 'ступени пронумерованы 1…10: порядок «от дешёвых к дорогим» честный');
+  ok(/export const caseById/.test(gm) && /export const CHEAPEST_CASE/.test(gm) && /export const TOP_CASE/.test(gm),
+    'линейка доступна отовсюду через caseById/CHEAPEST_CASE/TOP_CASE (ферма, итоги забега)');
+  ok(/jackpot: \d/.test(gm) && /cap: \d/.test(gm),
+    'у кейса в данных есть джекпот и потолок содержимого — карточке есть что показать вместо процентов');
+
+  /* ── иконки и цвет ступени ── */
+  ok(/icon: "(case|gift|lock|burger|bolt|trophy|star|skull|crown)"/.test(gm) &&
+     /<Icon name=\{c\.icon\}/.test(cases),
+    'у каждого кейса своя иконка из данных, и она нарисована на корпусе');
+  ok(/tint: "#/.test(gm) && /\["--tint" as never\]: c\.tint/.test(cases),
+    'цвет ступени приходит из данных кейса и ложится в --tint корпуса');
+  ok(/\.pc-case-glow \{[\s\S]{0,240}?var\(--tint\)/.test(css) && /\.pc-case-mark \{/.test(css),
+    'подсветка и плашка редкости окрашены тинтом — десять кейсов различаются издалека');
+
+  /* ── содержимое ограничено ступенью ── */
+  ok(/for \(let guard = 0; guard < 4; guard\+\+\)/.test(gm) && /i\.value <= c\.cap/.test(gm),
+    'из редкости берётся только то, что не дороже потолка ступени, иначе — скат на редкость ниже');
+  ok(/export function caseExpectation/.test(gm),
+    'средний возврат кейса считается из весов (нужен для плашки «до» и для честности)');
+
+  /* ── шансы: маленькая «?» вместо полосы процентов ── */
+  ok(/className=\{`pc-case-mhelp \$\{odds \? "on" : ""\}`\}/.test(cases),
+    'шансы вызываются крошечной кнопкой «?» в шапке модалки');
+  ok(/\{odds && \(\n\s*<div className="pc-case-odds">/.test(cases),
+    'панель шансов существует только когда её открыли');
+  ok(!/pc-case-odds-line/.test(cases) && /макс\. ценность/.test(cases) && /\{fmt\(c\.jackpot\)\}/.test(cases),
+    'проценты убраны с карточек кейсов: осталась максимальная ценность (претензия «шансы занимают больше всего места»)');
+
+  /* ── модалка: две колонки, которые не ползут друг по другу ── */
+  ok(/\.pc-case-mbody \{[\s\S]{0,140}?minmax\(0, 1\.35fr\) minmax\(0, 1fr\)/.test(css),
+    'тело модалки — две колонки через minmax(0, …): ничего не налезает и не разъезжается');
+  ok(/\.pc-case-mright \{[\s\S]{0,320}?min-width: 0[\s\S]{0,200}?max-height: min\(52vh, 30rem\)/.test(css),
+    'правая колонка прокручивается внутри своей плашки и не раздувает модалку');
+
+  /* ── анимация: большая, плавная, с пропуском ── */
+  ok(/const SPIN_MS = 4400/.test(cases) &&
+     /\.pc-case-strip-tape \{[\s\S]{0,700}?transition: transform 4\.4s/.test(css),
+    'лента едет 4,4 с одним CSS-переходом: без шагов, без тряски и без per-frame JS');
+  ok(/const PRIZE_AT = 41/.test(cases) && /const ROLL_LEN = 46/.test(cases) &&
+     /translateX\(calc\(var\(--step\) \* -\$\{PRIZE_AT\}\)\)/.test(cases) &&
+     /i === PRIZE_AT \? "prize"/.test(cases),
+    'призовая ячейка посчитана (42-я из 46), остановка ленты и подсветка смотрят ровно на неё');
+  ok(/className="pc-case-skip"/.test(cases) && /const fastForward = \(\)/.test(cases),
+    'во время прокрутки в окне есть «ПРОПУСТИТЬ» (просьба 1.28 про ожидание результата)');
+  ok(/\.pc-case-strip-tape\.skip \{[\s\S]{0,160}?transition: transform 0\.32s/.test(css),
+    '«пропустить» — короткий доезд тем же переходом, а не скачок в конец');
+  ok(/const land = \(prize: ItemDef\) => \{\n\s*setSpinning\(false\);\n\s*setGot\(prize\);/.test(cases),
+    'итог показывается в тот же момент, когда лента встала');
+  ok(!/2600\)/.test(cases), 'лишний таймаут между остановкой ленты и итогом убран');
+  ok(/setSkip\(false\);\n\s*setArmed\(false\);/.test(cases), 'состояние «пропущено» сбрасывается при новом просмотре');
 }
 
 console.log(fails===0?'\n✅ ВСЕ ПРОВЕРКИ ВЁРСТКИ ПРОЙДЕНЫ\n':`\n❌ ПРОВАЛЕНО: ${fails}\n`);
