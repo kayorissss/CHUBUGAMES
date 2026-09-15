@@ -7364,3 +7364,44 @@ html.low-fx .boss2-sweep { display: none; }
 .boss2-ribbon { z-index: 2; }
 .boss2-sweep { z-index: 0; }
 .boss2-corners { z-index: 1; }
+
+/* фишки фермы: pop-in и вылет чистым CSS (было по пружине framer-motion
+   на каждую фишку — лишние перерисовки ровно там, где палец и так занят) */
+.pc-farm-chip {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  background: var(--surface);
+  border: 2.5px solid var(--btn-brd);
+  color: var(--text);
+  pointer-events: none;
+  animation: farmIn 0.16s ease-out both;
+}
+.pc-farm-chip.gold {
+  width: 52px;
+  height: 52px;
+  font-size: 13px;
+  background: var(--acc);
+  border-color: var(--gold-brd);
+  color: var(--acc-ink);
+  box-shadow: 0 4px 16px -4px var(--acc-glow);
+}
+.pc-farm-chip.gone { animation: farmOut 0.22s ease-out both; }
+@keyframes farmIn {
+  from { transform: translate(-50%, -50%) scale(0.3); opacity: 0; }
+  to { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+}
+@keyframes farmOut {
+  from { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+  to { transform: translate(-50%, -50%) translateY(-22px) scale(1.5); opacity: 0; }
+}
+html.low-fx .pc-farm-chip,
+html.low-fx .pc-farm-chip.gone { animation: none; }

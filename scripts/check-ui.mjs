@@ -2387,5 +2387,25 @@ console.log('\n[60] 1.28: главная — плашка босса перед�
     'строка характеристик тянется на всю ширину баннера, а не ломает сетку');
 }
 
+
+console.log('\n[61] 1.28: ферма — оптимизация цикла');
+{
+  const src = fs.readFileSync('src/pages/Casino.tsx', 'utf8');
+  const farm = src.slice(src.indexOf('function ChipFarm('), src.indexOf('/* ═══', src.indexOf('function ChipFarm(')));
+  const css = fs.readFileSync('src/index.css', 'utf8');
+
+  ok(/chipsRef = useRef<FarmChip\[\]>\(\[\]\)/.test(farm) && !/useEffect\(\(\) => \{ chipsRef\.current = chips; \}/.test(farm),
+    'список фишек живёт в ref: зеркала «ref ← state ← ref» и второго прохода фильтра в кадр нет');
+  ok(!/setChips\(\(cs\) =>/.test(farm),
+    'в setChips больше нет сайд-эффектов: комбо и «упущено» считаются ВНЕ апдейтера (StrictMode удваивал счётчик промахов)');
+  ok(/if \(changed\) \{\n\s*chipsRef\.current = live;\n\s*setChips\(live\);/.test(farm),
+    'в React уезжает максимум один setChips за кадр — и только когда список реально изменился');
+  ok(/taken: performance\.now\(\)/.test(farm) && !/window\.setTimeout\(\(\) => \{\n\s*setChips\(\(cs\) => cs\.filter/.test(farm),
+    'вылет фишки считается по метке времени в цикле, а не отдельным setTimeout на каждый тап');
+  ok(/className=\{`pc-farm-chip \$\{c\.gold \? "gold" : ""\} \$\{c\.taken \? "gone" : ""\}`\}/.test(farm) &&
+     /@keyframes farmOut \{/.test(css) && /html\.low-fx \.pc-farm-chip,/.test(css),
+    'сама фишка — CSS-анимация вместо framer-motion на каждую: меньше перерисовок на слабом ПК, в лёгком режиме выключено');
+}
+
 console.log(fails===0?'\n✅ ВСЕ ПРОВЕРКИ ВЁРСТКИ ПРОЙДЕНЫ\n':`\n❌ ПРОВАЛЕНО: ${fails}\n`);
 process.exit(fails?1:0);

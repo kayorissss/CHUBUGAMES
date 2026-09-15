@@ -1676,6 +1676,8 @@ function Upgrade({ g, save }: { g: GambleStore; save: GambleSave }) {
  */
 const FARM_MS = 0;
 const FARM_SPAWN_MS = 620;
+/** сколько живёт уже собранная фишка: анимация вылета */
+const FARM_GONE_MS = 240;
 const TIMED = FARM_MS > 0;
 
 interface FarmChip {
@@ -1686,8 +1688,10 @@ interface FarmChip {
   life: number;
   val: number;
   gold: boolean;
-  /** уже собрана — проигрываем вылет и убираем */
-  taken?: boolean;
+  /** собран: время в мс, когда игрок её зацепил. По нему фишка и улетает —
+      отдельный setTimeout на каждый тап в слабом телефоне был лишней
+      пачкой таймеров (просьба 1.28: «ферму оптимизировать по максимуму») */
+  taken?: number;
 }
 
 /**
@@ -1723,10 +1727,18 @@ function ChipFarm({ save, onTab }: { save: GambleSave; onTab?: (t: Tab) => void 
   const lastSpawn = useRef(0);
   const rafRef = useRef(0);
   const comboRef = useRef(0);
+  /**
+   * Оптимизация (просьба 1.28). Список фишек ведётся в ref, и ОДИН раз за
+   * кадр уезжает в React, если изменился. Раньше aging и спавн работали
+   * внутри `setChips(prev => ...)`, а промахи и комбо обновлялись прямо там
+   * же — то есть сайд-эффекты внутри апдейтера: двойной вызов в StrictMode
+   * удваивал счётчик «Упустил», а лишний проход фильтра по массиву шёл
+   * каждый кадр.
+   */
   const chipsRef = useRef<FarmChip[]>([]);
-  useEffect(() => { chipsRef.current = chips; }, [chips]);
 
   const start = () => {
+    chipsRef.current = [];
     setChips([]); setEarned(0); setCombo(0); setMaxCombo(0); comboRef.current = 0;
     setMissed(0);
     setLeft(FARM_MS);
@@ -1748,41 +1760,45 @@ function ChipFarm({ save, onTab }: { save: GambleSave; onTab?: (t: Tab) => void 
         sfx.gameOver?.();
         return;
       }
+      /* один проход по списку: убираем улетевшие и просроченные, считаем
+         промахи, и только потом — новый спавн. За кадр максимум один setChips */
+      const prev = chipsRef.current;
+      let changed = false;
+      let expired = 0;
+      const live: FarmChip[] = [];
+      for (const c of prev) {
+        if (c.taken) {
+          /* собранная фишка доигрывает вылет и исчезает сама — по метке
+             времени, без отдельного таймера на каждый тап */
+          if (now - c.taken < FARM_GONE_MS) live.push(c);
+          else changed = true;
+          continue;
+        }
+        if (now - c.born >= c.life) { expired++; changed = true; continue; }
+        live.push(c);
+      }
+      if (expired > 0) {
+        comboRef.current = 0;
+        setCombo(0);
+        setMissed((m) => m + expired);
+      }
       if (now - lastSpawn.current > FARM_SPAWN_MS) {
         lastSpawn.current = now;
         const gold = Math.random() < 0.16;
-        setChips((cs) => {
-          // просроченные считаем промахом и рвём комбо
-          const expired = cs.filter((c) => !c.taken && now - c.born >= c.life).length;
-          if (expired > 0) {
-            comboRef.current = 0;
-            setCombo(0);
-            setMissed((m) => m + expired);
-          }
-          return [
-            ...cs.filter((c) => now - c.born < c.life),
-            {
-              id: nextId.current++,
-              x: 10 + Math.random() * 80,
-              y: 12 + Math.random() * 72,
-              born: now,
-              life: gold ? 1150 : 1700,
-              val: gold ? 25 : 8,
-              gold,
-            },
-          ];
+        changed = true;
+        live.push({
+          id: nextId.current++,
+          x: 10 + Math.random() * 80,
+          y: 12 + Math.random() * 72,
+          born: now,
+          life: gold ? 1150 : 1700,
+          val: gold ? 25 : 8,
+          gold,
         });
-      } else {
-        setChips((cs) => {
-          const expired = cs.filter((c) => !c.taken && now - c.born >= c.life).length;
-          if (expired > 0) {
-            comboRef.current = 0;
-            setCombo(0);
-            setMissed((m) => m + expired);
-          }
-          const alive = cs.filter((c) => now - c.born < c.life);
-          return alive.length === cs.length ? cs : alive;
-        });
+      }
+      if (changed) {
+        chipsRef.current = live;
+        setChips(live);
       }
       rafRef.current = requestAnimationFrame(loop);
     };
@@ -1812,10 +1828,8 @@ function ChipFarm({ save, onTab }: { save: GambleSave; onTab?: (t: Tab) => void 
     const bonus = 1 + Math.min(comboRef.current, 10) * 0.05;
     setEarned((e) => e + Math.round(c.val * bonus));
     // помечаем собранной — анимация вылета, затем удаление
-    setChips((cs) => cs.map((x) => (x.id === c.id ? { ...x, taken: true } : x)));
-    window.setTimeout(() => {
-      setChips((cs) => cs.filter((x) => x.id !== c.id));
-    }, 220);
+    chipsRef.current = chipsRef.current.map((x) => (x.id === c.id ? { ...x, taken: performance.now() } : x));
+    setChips(chipsRef.current);
     if (c.gold) { sfx.crit?.(); haptic("medium"); }
     else { sfx.coin?.(); haptic("light"); }
   }, []);
@@ -1930,33 +1944,17 @@ function ChipFarm({ save, onTab }: { save: GambleSave; onTab?: (t: Tab) => void 
           }}
         >
           {phase === "play" && chips.map((c) => (
-            <motion.div
+            /* Чистый CSS вместо `motion` на каждую фишку: пружина на
+               каждый спавн и на каждый вылет стоила React-перерисовок в
+               тот момент, когда игрок и так водит пальцем (2 кадра у
+               друга на ПК рождались в том числе здесь) */
+            <div
               key={c.id}
-              initial={{ scale: 0.3, opacity: 0 }}
-              animate={c.taken
-                ? { scale: 1.5, opacity: 0, y: -22 }
-                : { scale: 1, opacity: 1, y: 0 }}
-              transition={c.taken
-                ? { duration: 0.22, ease: "easeOut" }
-                : { type: "spring", stiffness: 520, damping: 22 }}
-              style={{
-                position: "absolute",
-                left: `${c.x}%`, top: `${c.y}%`,
-                transform: "translate(-50%, -50%)",
-                width: c.gold ? 52 : 44, height: c.gold ? 52 : 44,
-                marginLeft: c.gold ? -26 : -22,
-                marginTop: c.gold ? -26 : -22,
-                borderRadius: "50%",
-                background: c.gold ? "var(--acc)" : "var(--surface)",
-                border: `2.5px solid ${c.gold ? "var(--gold-brd)" : "var(--btn-brd)"}`,
-                color: c.gold ? "var(--acc-ink)" : "var(--text)",
-                display: "flex", alignItems: "center", justifyContent: "center",
-                boxShadow: c.gold ? "0 4px 16px -4px var(--acc-glow)" : "none",
-                pointerEvents: "none",
-              }}
+              className={`pc-farm-chip ${c.gold ? "gold" : ""} ${c.taken ? "gone" : ""}`}
+              style={{ left: `${c.x}%`, top: `${c.y}%` }}
             >
-              <span className="t-num" style={{ fontSize: c.gold ? 13 : 11 }}>{c.val}</span>
-            </motion.div>
+              {c.val}
+            </div>
           ))}
 
           {phase !== "play" && (
