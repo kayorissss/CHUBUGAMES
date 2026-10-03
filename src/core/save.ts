@@ -149,10 +149,26 @@ export function migrate(s: any): SaveState {
   }
   // Все мини-игры доступны сразу — в том числе в старых сохранениях
   out.unlockedGames = ALL_GAMES.slice();
-  // Досыпаем новых друзей тем, кто уже играл
+  // Досыпаем новых друзей и обновляем встроенных (имена, внешность, описание)
   const have = new Set(out.friends.map((f) => f.id));
   for (const f of base.friends) {
-    if (!have.has(f.id)) out.friends.push({ ...f, look: { ...f.look }, stats: { ...f.stats } });
+    if (!have.has(f.id)) {
+      out.friends.push({ ...f, look: { ...f.look }, stats: { ...f.stats } });
+    } else if (f.builtin) {
+      const idx = out.friends.findIndex((x) => x.id === f.id);
+      if (idx >= 0 && out.friends[idx].builtin) {
+        out.friends[idx] = {
+          ...out.friends[idx],
+          name: f.name,
+          nick: f.nick,
+          quote: f.quote,
+          rarity: f.rarity,
+          photo: out.friends[idx].photo || f.photo,
+          look: { ...f.look },
+          stats: { ...f.stats },
+        };
+      }
+    }
   }
   if (!out.friends.some((f) => f.id === out.mainFriendId)) out.mainFriendId = "lyoha";
   out.v = VERSION;

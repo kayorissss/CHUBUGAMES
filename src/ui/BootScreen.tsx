@@ -59,7 +59,7 @@ function SplashMark({ low }: { low: boolean }) {
   /* Векторная сборка остаётся — это движение заставки, — но заканчивается
      она настоящим присланным знаком: шапка, иконка launcher-а и заставка
      должны показывать одно и то же, а не «бургер наш, значок их». */
-  const glyph = HAS_BRAND_LOGO && BRAND_LOGO_IS_GLYPH;
+  const glyph = HAS_BRAND_LOGO;
   const glyphSpan = (style: CSSProperties, animate: boolean) => {
     const tr = animate ? { delay: 0.98, duration: 0.5, ease: EASE } : { duration: 0 };
     const base: CSSProperties = { position: "absolute", inset: 0, pointerEvents: "none", ...style };
@@ -86,7 +86,14 @@ function SplashMark({ low }: { low: boolean }) {
         initial={animate ? { opacity: 0, scale: 0.92 } : false}
         animate={{ opacity: 1, scale: 1 }}
         transition={tr}
-        style={{ objectFit: "cover", borderRadius: "20%", ...base }}
+        style={{
+          width: "100%",
+          height: "100%",
+          objectFit: "cover",
+          borderRadius: "24%",
+          boxShadow: "0 16px 40px -12px rgba(0,0,0,0.85), inset 0 0 0 1.5px rgba(167,123,255,0.4)",
+          ...base,
+        }}
       />
     );
   };

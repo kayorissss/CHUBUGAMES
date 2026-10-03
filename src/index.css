@@ -3850,35 +3850,23 @@ html.is-desktop .pc-play {
    .pc-page навешан на Glass.Screen, поэтому правки сразу для всех:
    Прогресс, Магазин, Друзья, Настройки, Казино, Босс, Фанфики, Сеть. */
 html.is-desktop .pc-page {
-  max-width: 78rem;
-  margin: 0 auto;
+  max-width: none;
+  margin: 0;
   width: 100%;
 }
 /*
  * ШАПКА СТРАНИЦЫ НА ПК (одна правка — все разделы: Прогресс, Магазин,
- * Казино, Персонажи, Настройки, Сеть, Босс, Донат).
- *
- * Претензия: «сверху текст стрёмный и обрезанный сверху слева, чисто пустота,
- * и бац — резко». Причины были три, все настоящие:
- *  1) на <h1> висел .clip1 (white-space: nowrap + overflow: hidden) — текст
- *     длиннее ширины обрезался по правому краю, а при line-height меньше
- *     высоты эм-квадрата Unbounded обрезался и СВЕРХУ (у шрифта высокие
- *     выносные элементы у «Д», «Р», «Б»);
- *  2) полоса отступа сверху была 1.15rem при заголовке 1.55rem — визуально
- *     шапка «прилипла» к панели и читалась как недоделанная;
- *  3) появление страницы не имело опоры: под заголовком не было ничего,
- *     кроме пустого градиента, поэтому взгляд «проваливался» и эффект
- *     вспышки воспринимался как резкий.
- * Теперь: акцентная засечка сверху, свободная высота строки, подложка с
- * лёгким акцентом, подпись в --text-dim (не --text-mute — она сливалась).
+ * Казино, Персонажи, Настройки, Дополнительное, Босс, Донат).
  */
 html.is-desktop .pc-page-head {
   position: relative;
+  width: 100%;
   padding: 1.5rem var(--pc-pad) 1.05rem !important;
   margin-bottom: 1.05rem;
   border-bottom: 1px solid var(--surface-brd);
   background: linear-gradient(180deg,
     color-mix(in srgb, var(--acc) 9%, transparent), transparent 76%);
+  overflow: visible;
 }
 html.is-desktop .pc-page-head::before {
   content: "";
@@ -3891,13 +3879,17 @@ html.is-desktop .pc-page-head::before {
   background: linear-gradient(90deg, var(--acc), color-mix(in srgb, var(--acc) 26%, transparent));
 }
 html.is-desktop .pc-page-body {
+  width: 100%;
+  max-width: 92rem;
+  margin: 0 auto;
   padding: 1.25rem var(--pc-pad) 3rem !important;
 }
 html.is-desktop .pc-page-head h1 {
   font-size: 1.62rem;
   /* 1.32 — с запасом сверху: при 1.16 Unbounded резался по верхней границе */
   line-height: 1.32;
-  padding-block: 0.08em 0;
+  padding-block: 0.08em 0.04em;
+  padding-inline: 0.02em;
   color: var(--text);
   white-space: normal;
   overflow: visible;
@@ -5249,10 +5241,14 @@ html:not(.is-desktop) .solid {
 html:not(.is-desktop) .pc-page-head h1 {
   font-size: clamp(21px, 6.4vw, 30px);
   letter-spacing: -0.02em;
-  line-height: 1.06;
+  line-height: 1.22;
+  padding-block: 0.06em 0.02em;
+  overflow: visible;
 }
 html:not(.is-desktop) .pc-page-head .t-caption {
-  opacity: 0.86;
+  opacity: 0.9;
+  overflow: visible;
+  white-space: normal;
 }
 
 /* ── нижнее меню: настоящая стеклянная полоска, а не наклеенный прямоугольник ── */
@@ -6252,12 +6248,12 @@ html.is-desktop .pc-set-wide { grid-column: 1 / -1; }
 }
 .pc-upd-strip > :first-child { flex: 1 1 14rem; min-width: 0; }
 
-/* ---------- ПРАВЫЙ НИЖНИЙ УГОЛ: круглые кнопки + плашка бонуса ---------- */
+/* ---------- ПРАВЫЙ НИЖНИЙ УГОЛ: плашка бонуса ---------- */
 .pc-dock {
   position: fixed;
   z-index: 78;
-  right: 1rem;
-  bottom: calc(0.55rem + 1.9rem);
+  right: 1.1rem;
+  bottom: 0.95rem;
   display: flex;
   flex-direction: column;
   align-items: flex-end;
@@ -6285,13 +6281,13 @@ html.is-desktop .pc-set-wide { grid-column: 1 / -1; }
 .pc-round-update { color: var(--acc); border-color: color-mix(in srgb, var(--acc) 45%, var(--surface-brd)); }
 .pc-round-flag {
   position: absolute;
-  top: -3px;
-  right: -3px;
-  width: 14px;
-  height: 14px;
+  top: -4px;
+  right: -4px;
+  width: 15px;
+  height: 15px;
   border-radius: 999px;
-  background: var(--danger);
-  color: #fff;
+  background: #ff3b30;
+  color: #ffffff;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -6309,39 +6305,6 @@ html.is-desktop .pc-boost {
   z-index: auto;
 }
 html.is-desktop .pc-boost-cap { color: var(--text-dim); }
-
-/* ---------- СТРОКА СОСТОЯНИЯ ОКНА («внизу-внизу-вниз») ----------
-   Роль: имя, автор и версия. Кнопок тут нет намеренно — плашку с Telegram
-   убрали, а версия раньше пряталась в конце длинного списка. */
-.pc-statusbar {
-  flex: 0 0 auto;
-  display: flex;
-  align-items: center;
-  gap: 0.7rem;
-  height: 1.9rem;
-  padding: 0 var(--pc-pad);
-  border-top: 1px solid var(--surface-brd);
-  background: linear-gradient(180deg, var(--surface), var(--n-000));
-  font-size: 0.66rem;
-  letter-spacing: 0.03em;
-  color: var(--text-dim);
-}
-.pc-status-brand {
-  font-family: "Unbounded", "Inter Variable", system-ui, sans-serif;
-  font-weight: 800;
-  font-size: 0.7rem;
-  letter-spacing: 0.06em;
-  color: var(--text);
-}
-.pc-status-dev b { color: var(--acc); font-weight: 800; }
-.pc-status-ver { margin-left: auto; font-variant-numeric: tabular-nums; }
-.pc-status-sep {
-  width: 3px;
-  height: 3px;
-  border-radius: 999px;
-  background: var(--text-mute);
-  opacity: 0.7;
-}
 html.is-desktop .pc-page { min-height: 0; }
 
 /* ---------- ПЛАШКА «ВЫШЛО ОБНОВЛЕНИЕ» (ПК) ---------- */
@@ -6349,7 +6312,7 @@ html.is-desktop .pc-page { min-height: 0; }
   position: fixed;
   z-index: 112;
   right: 1.15rem;
-  bottom: calc(2.1rem + 1.9rem);
+  bottom: 1.5rem;
   width: min(23.5rem, calc(100vw - 2.3rem));
   padding: 1rem 1.05rem 0.95rem;
   border-radius: var(--r-lg);
@@ -7405,3 +7368,1217 @@ html.low-fx .boss2-sweep { display: none; }
 }
 html.low-fx .pc-farm-chip,
 html.low-fx .pc-farm-chip.gone { animation: none; }
+
+/* ============================================================
+   CHUBUGAMES 2.0 · НЕОН-АРКАДНЫЙ ДИЗАЙН, КАСТОМНАЯ РАМКА EXE,
+   ВЕРХНИЕ КВАДРАТНО-ЗАКРУГЛЁННЫЕ КНОПКИ, ТЕАТР РЕКЛАМЫ И ХАБ @KAYORISSSS
+   ============================================================ */
+
+/* ── 1. Фирменная шапка окна EXE (без системной рамки Windows) ── */
+.pc-bar {
+  -webkit-app-region: drag;
+  user-select: none;
+  height: 3.65rem;
+  background:
+    linear-gradient(180deg,
+      color-mix(in srgb, var(--surface-2) 95%, var(--acc) 5%),
+      color-mix(in srgb, var(--surface) 96%, #000 4%) 85%);
+  border-bottom: 1px solid color-mix(in srgb, var(--acc) 22%, var(--surface-brd));
+  box-shadow:
+    0 16px 38px -26px rgba(0, 0, 0, 0.92),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+.pc-bar button,
+.pc-bar a,
+.pc-bar input,
+.pc-bar-tabs,
+.pc-bar-wallet,
+.pc-bar-tail,
+.pc-top-actions,
+.pc-win-controls {
+  -webkit-app-region: no-drag;
+}
+
+/* ── 2. Квадратно-закруглённые кнопки в верхней панели (Поддержать + Настройки) ── */
+.pc-top-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.42rem;
+  flex: 0 0 auto;
+}
+.pc-sq-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.42rem;
+  height: 2.2rem;
+  min-width: 2.2rem;
+  padding: 0 0.68rem;
+  border-radius: 10px;
+  border: 1px solid var(--btn-brd);
+  background: linear-gradient(180deg, var(--surface-2), var(--surface));
+  color: var(--text);
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  white-space: nowrap;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  transition:
+    transform 0.14s cubic-bezier(0.22, 1, 0.36, 1),
+    background 0.16s ease,
+    border-color 0.16s ease,
+    color 0.16s ease,
+    box-shadow 0.16s ease;
+}
+.pc-sq-btn:not(:has(.pc-sq-label)) {
+  padding: 0;
+  width: 2.2rem;
+}
+.pc-sq-btn:hover {
+  border-color: color-mix(in srgb, var(--acc) 55%, var(--btn-brd));
+  background: var(--surface-3);
+  color: var(--text);
+  transform: translateY(-1px);
+  box-shadow: 0 8px 20px -12px var(--acc-glow);
+}
+.pc-sq-btn:active {
+  transform: translateY(0) scale(0.96);
+}
+.pc-sq-btn.pc-sq-support {
+  border-color: color-mix(in srgb, var(--acc) 38%, var(--btn-brd));
+  background: linear-gradient(
+    165deg,
+    color-mix(in srgb, var(--acc) 16%, var(--surface-2)),
+    var(--surface)
+  );
+}
+.pc-sq-btn.pc-sq-support svg {
+  color: var(--acc-text);
+}
+.pc-sq-btn.on {
+  background: linear-gradient(170deg, var(--acc-hi), var(--acc) 54%, var(--acc-lo));
+  border-color: color-mix(in srgb, var(--acc) 68%, #ffffff);
+  color: var(--acc-ink);
+  box-shadow: 0 10px 24px -12px var(--acc-glow);
+}
+.pc-sq-btn.on svg,
+.pc-sq-btn.on .pc-sq-label {
+  color: var(--acc-ink);
+}
+.pc-sq-btn.has-update {
+  border-color: color-mix(in srgb, var(--acc) 60%, var(--btn-brd));
+}
+.pc-sq-label {
+  font-weight: 700;
+  line-height: 1;
+}
+.pc-bar-title {
+  font-family: var(--font-display);
+  font-size: 0.92rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  line-height: 1;
+  background-image: linear-gradient(96deg, var(--text) 32%, color-mix(in srgb, var(--acc) 92%, #fff));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  white-space: nowrap;
+}
+.pc-bar-lvl-badge {
+  font-size: 0.66rem;
+  font-weight: 800;
+  padding: 0.16rem 0.46rem;
+  border-radius: 99px;
+  background: var(--acc);
+  color: var(--acc-ink);
+  white-space: nowrap;
+}
+.pc-bar-xp-bar {
+  display: block;
+  width: 3.6rem;
+  height: 4px;
+  border-radius: 99px;
+  background: var(--n-300);
+  overflow: hidden;
+}
+.pc-bar-xp-bar > i {
+  display: block;
+  height: 100%;
+  border-radius: 99px;
+  background: var(--acc);
+  transition: width 0.35s ease;
+}
+.pc-bar-coin {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.36rem;
+  height: 2.15rem;
+  padding: 0 0.62rem;
+  border-radius: 10px;
+  border: 1px solid var(--surface-brd);
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: 0.76rem;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: border-color 0.16s, background 0.16s, transform 0.12s;
+}
+.pc-bar-coin:hover {
+  border-color: color-mix(in srgb, var(--acc) 45%, var(--btn-brd));
+  background: var(--surface-3);
+}
+.pc-bar-coin.gem {
+  border-color: var(--violet-brd);
+  background: var(--violet-soft);
+  color: var(--text);
+}
+.pc-bar-coin.chip {
+  border-color: var(--gold-brd);
+  background: var(--gold-soft);
+  color: var(--text);
+}
+.pc-coin-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--gold);
+  box-shadow: 0 0 0 2px var(--gold-soft);
+}
+.pc-gem-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  transform: rotate(45deg);
+  background: var(--violet);
+  box-shadow: 0 0 0 2px var(--violet-soft);
+}
+.pc-bar-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex: 0 0 auto;
+}
+.pc-sq-flag {
+  pointer-events: none;
+}
+
+/* ── 3. Кастомные кнопки управления окном EXE (- [] X) ── */
+.pc-win-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.28rem;
+  margin-left: 0.25rem;
+  padding-left: 0.45rem;
+  border-left: 1px solid var(--surface-brd);
+  -webkit-app-region: no-drag;
+}
+.pc-win-controls.floating {
+  position: fixed;
+  top: 0.6rem;
+  right: 0.75rem;
+  z-index: 160;
+  margin-left: 0;
+  padding: 0.22rem;
+  border-left: none;
+  border-radius: 11px;
+  background: color-mix(in srgb, var(--surface) 88%, #000 12%);
+  border: 1px solid var(--surface-brd);
+  backdrop-filter: blur(14px);
+  box-shadow: 0 12px 28px -14px rgba(0, 0, 0, 0.85);
+}
+.pc-win-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.02rem;
+  height: 2.02rem;
+  border-radius: 9px;
+  border: 1px solid transparent;
+  background: color-mix(in srgb, var(--surface-3) 55%, transparent);
+  color: var(--text-dim);
+  cursor: pointer;
+  transition:
+    background 0.14s ease,
+    color 0.14s ease,
+    border-color 0.14s ease,
+    transform 0.12s ease;
+}
+.pc-win-btn:hover {
+  background: var(--surface-3);
+  border-color: var(--btn-brd);
+  color: var(--text);
+}
+.pc-win-btn:active {
+  transform: scale(0.93);
+}
+.pc-win-btn.pc-win-close:hover {
+  background: #e83b35;
+  border-color: #ff6e68;
+  color: #ffffff;
+  box-shadow: 0 8px 20px -10px rgba(232, 59, 53, 0.7);
+}
+
+/* ── 4. Исправление контраста «!» бейджей и текста на акцентных кнопках ── */
+.pc-tab-dot,
+.pc-seg-dot,
+.m-nav-flag,
+.pc-rail-flag,
+.pc-round-flag {
+  position: relative;
+  z-index: 3;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 15px;
+  height: 15px;
+  padding: 0 3px;
+  border-radius: 999px;
+  background: #ff382e;
+  color: #ffffff !important;
+  font-family: var(--font-num);
+  font-size: 9.5px;
+  font-weight: 900;
+  line-height: 1;
+  border: 1.5px solid var(--surface);
+  box-shadow: 0 2px 8px rgba(255, 56, 46, 0.48);
+}
+.m-nav-flag {
+  position: absolute;
+  top: 0px;
+  right: 6px;
+}
+.pc-rail-flag {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+}
+.pc-round-flag {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+}
+/* Когда вкладка активна (залита акцентом), бейдж переключается на контрастный
+   к кнопке цвет, чтобы на красных/оранжевых темах кружок не сливался с фоном */
+.pc-tab.on .pc-tab-dot,
+.pc-seg-item.on .pc-seg-dot,
+.pc-sq-btn.on .pc-round-flag {
+  background: var(--acc-ink);
+  color: var(--acc) !important;
+  border-color: color-mix(in srgb, var(--acc) 60%, #ffffff);
+  box-shadow: none;
+}
+
+/* Гарантия читаемости подписей внутри активных/акцентных кнопок */
+.glass-acc .t-label,
+.glass-acc .t-caption,
+.glass-acc .t-body,
+.btn-acc .t-label,
+.btn-acc .t-caption,
+.pc-tab.on .t-label,
+.pc-seg-item.on .t-label,
+.pc-shop-tab.on .t-label,
+.pc-rail-item.on .t-label,
+.boss2-cta.on .t-label {
+  color: inherit !important;
+}
+.pc-shop-tab.on .pc-shop-tab-ico {
+  background: color-mix(in srgb, var(--acc-ink) 16%, transparent);
+  color: var(--acc-ink);
+}
+
+/* ── 5. Переработанный виджет «Кибер-контракт / Спонсорский дроп» (PcBoost) ── */
+.pc-boost-mini {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.42rem;
+  padding: 0.48rem 0.78rem;
+  border-radius: 12px;
+  background: linear-gradient(
+    145deg,
+    color-mix(in srgb, var(--surface-2) 92%, var(--ok) 8%),
+    var(--surface)
+  );
+  border: 1px solid var(--ok-brd);
+  color: var(--ok);
+  font-family: var(--font-display);
+  font-size: 0.72rem;
+  font-weight: 800;
+  cursor: pointer;
+  box-shadow: 0 14px 32px -18px rgba(0, 0, 0, 0.9);
+  transition: transform 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease;
+}
+.pc-boost-mini:hover {
+  transform: translateY(-2px);
+  border-color: var(--ok);
+  box-shadow: 0 16px 34px -16px rgba(92, 227, 155, 0.32);
+}
+.pc-boost-card {
+  width: 17.5rem;
+  padding: 0.72rem 0.82rem;
+  border-radius: 14px;
+  background:
+    radial-gradient(120% 120% at 100% 0%, color-mix(in srgb, var(--ok) 14%, transparent), transparent 65%),
+    linear-gradient(165deg, var(--surface-2), var(--surface));
+  border: 1px solid color-mix(in srgb, var(--ok) 38%, var(--surface-brd));
+  box-shadow:
+    0 20px 44px -22px rgba(0, 0, 0, 0.92),
+    inset 0 1px 0 rgba(255, 255, 255, 0.07);
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+.pc-boost-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4rem;
+}
+.pc-boost-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.56rem;
+  font-weight: 800;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--ok);
+}
+.pc-boost-pulse {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--ok);
+  box-shadow: 0 0 0 3px var(--ok-soft);
+}
+.pc-boost-min-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.35rem;
+  height: 1.35rem;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-mute);
+  cursor: pointer;
+  transition: background 0.14s, color 0.14s;
+}
+.pc-boost-min-btn:hover {
+  background: var(--surface-3);
+  color: var(--text);
+}
+.pc-boost-body {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+.pc-boost-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.2rem;
+  height: 2.2rem;
+  border-radius: 10px;
+  background: var(--ok-soft);
+  border: 1px solid var(--ok-brd);
+  color: var(--ok);
+  flex: 0 0 auto;
+}
+.pc-boost-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+.pc-boost-title {
+  font-size: 0.9rem;
+  font-weight: 800;
+  color: var(--text);
+  line-height: 1.15;
+}
+.pc-boost-sub {
+  font-size: 0.62rem;
+  font-weight: 600;
+  color: var(--text-dim);
+}
+.pc-boost-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.32rem;
+  padding: 0.48rem 0.72rem;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--ok) 60%, #ffffff);
+  background: var(--ok);
+  color: #071910;
+  font-family: var(--font-display);
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  cursor: pointer;
+  flex: 0 0 auto;
+  transition: filter 0.15s ease, transform 0.12s ease;
+}
+.pc-boost-cta:hover {
+  filter: brightness(1.08);
+}
+.pc-boost-cta:active {
+  transform: scale(0.96);
+}
+.pc-boost-progress {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 4px;
+}
+.pc-boost-progress i {
+  height: 3.5px;
+  border-radius: 999px;
+  background: var(--surface-3);
+  transition: background 0.2s ease;
+}
+.pc-boost-progress i.on {
+  background: var(--ok);
+}
+.pc-boost-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.42rem 0.68rem;
+  border-radius: 12px;
+  background: var(--surface-2);
+  border: 1px solid var(--ok-brd);
+  color: var(--text);
+  cursor: pointer;
+  transition: transform 0.14s ease, border-color 0.15s ease;
+}
+.pc-boost-pill:hover {
+  transform: translateY(-1px);
+  border-color: var(--ok);
+}
+.pc-boost-orb {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 9px;
+  background: var(--ok-soft);
+  border: 1px solid var(--ok-brd);
+  color: var(--ok);
+  flex: 0 0 auto;
+}
+.pc-boost-pill-txt {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--text);
+}
+.pc-boost-pill-tag {
+  padding: 0.14rem 0.4rem;
+  border-radius: 6px;
+  background: var(--ok);
+  color: #071910;
+  font-size: 0.62rem;
+  font-weight: 800;
+}
+.pc-boost-glow {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: radial-gradient(90% 90% at 100% 0%, color-mix(in srgb, var(--ok) 16%, transparent), transparent 70%);
+  pointer-events: none;
+}
+.pc-boost-titles {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+.pc-boost-kicker {
+  font-size: 0.54rem;
+  font-weight: 800;
+  letter-spacing: 0.09em;
+  color: var(--ok);
+  text-transform: uppercase;
+}
+.pc-boost-hide {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.4rem;
+  height: 1.4rem;
+  border-radius: 7px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-mute);
+  cursor: pointer;
+  transition: background 0.14s, color 0.14s;
+}
+.pc-boost-hide:hover {
+  background: var(--surface-3);
+  color: var(--text);
+}
+.pc-boost-loot {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+.pc-boost-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.26rem;
+  padding: 0.2rem 0.48rem;
+  border-radius: 7px;
+  background: var(--surface-2);
+  border: 1px solid var(--surface-brd);
+  color: var(--text);
+  font-size: 0.66rem;
+  font-weight: 700;
+}
+.pc-boost-chip.coin {
+  color: var(--gold);
+  border-color: var(--gold-brd);
+  background: var(--gold-soft);
+}
+.pc-boost-chip.gem {
+  color: var(--violet);
+  border-color: var(--violet-brd);
+  background: var(--violet-soft);
+}
+.pc-boost-chip.casino {
+  color: var(--ok);
+  border-color: var(--ok-brd);
+  background: var(--ok-soft);
+}
+.pc-boost-play-ico {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ── 6. Кибер-трансляция (AdModal) ── */
+.ad-theater-backdrop {
+  background: rgba(5, 5, 10, 0.86);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+.ad-theater-window {
+  width: min(30rem, 100%);
+  border-radius: 20px;
+  background: linear-gradient(175deg, var(--surface-2), var(--surface));
+  border: 1px solid color-mix(in srgb, var(--acc) 36%, var(--surface-brd));
+  box-shadow:
+    0 28px 70px -24px rgba(0, 0, 0, 0.95),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.ad-theater-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.85rem 1.1rem;
+  background: var(--surface);
+  border-bottom: 1px solid var(--surface-brd);
+}
+.ad-theater-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.66rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+.ad-theater-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--danger);
+  box-shadow: 0 0 0 3px var(--danger-soft);
+}
+.ad-theater-dot.done {
+  background: var(--ok);
+  box-shadow: 0 0 0 3px var(--ok-soft);
+}
+.ad-theater-progress-pill {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2.2rem;
+  height: 2.2rem;
+  padding: 0 0.5rem;
+  border-radius: 999px;
+  background: var(--surface-2);
+  border: 1px solid var(--surface-brd);
+  color: var(--text);
+}
+.ad-theater-progress-pill.done {
+  background: var(--ok-soft);
+  border-color: var(--ok-brd);
+  color: var(--ok);
+}
+.ad-theater-ring {
+  position: absolute;
+  inset: 2px;
+  width: calc(100% - 4px);
+  height: calc(100% - 4px);
+  transform: rotate(-90deg);
+}
+.ad-theater-stage {
+  position: relative;
+  padding: 1.8rem 1.4rem 1.5rem;
+  background:
+    radial-gradient(90% 90% at 50% 20%, color-mix(in srgb, var(--acc) 20%, transparent), transparent 72%),
+    var(--n-000);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 1.1rem;
+}
+.ad-theater-grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(to right, rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+  background-size: 24px 24px;
+  pointer-events: none;
+}
+.ad-theater-orb {
+  position: absolute;
+  width: 14rem;
+  height: 14rem;
+  top: -4rem;
+  border-radius: 999px;
+  background: radial-gradient(circle, var(--acc-glow), transparent 70%);
+  pointer-events: none;
+}
+.ad-theater-center {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.55rem;
+}
+.ad-theater-emblem {
+  position: relative;
+  width: 4.5rem;
+  height: 4.5rem;
+  border-radius: 18px;
+  background: linear-gradient(155deg, var(--surface-2), var(--surface));
+  border: 1px solid color-mix(in srgb, var(--acc) 50%, var(--surface-brd));
+  display: grid;
+  place-items: center;
+  box-shadow: 0 14px 32px -14px var(--acc-glow);
+}
+.ad-theater-emblem-ring {
+  position: absolute;
+  inset: -4px;
+  border-radius: 22px;
+  border: 1px dashed color-mix(in srgb, var(--acc) 45%, transparent);
+  pointer-events: none;
+}
+.ad-theater-title {
+  font-size: 1.25rem;
+  color: var(--text);
+  margin-top: 0.25rem;
+}
+.ad-theater-sub {
+  font-size: 0.8rem;
+  color: var(--text-dim);
+  max-width: 22rem;
+  line-height: 1.45;
+}
+.ad-theater-chips {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.45rem;
+  margin-top: 0.25rem;
+}
+.ad-theater-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.32rem 0.65rem;
+  border-radius: 999px;
+  background: var(--surface-2);
+  border: 1px solid var(--surface-brd);
+  color: var(--text-dim);
+  font-size: 0.68rem;
+  font-weight: 700;
+}
+.ad-theater-chip.ok {
+  background: var(--ok-soft);
+  border-color: var(--ok-brd);
+  color: var(--ok);
+}
+.ad-theater-timeline {
+  position: relative;
+  z-index: 2;
+  width: 100%;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--surface-3);
+  overflow: hidden;
+}
+.ad-theater-timeline > span {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--acc), var(--ok));
+  transition: width 0.1s linear;
+}
+.ad-theater-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem 1.15rem;
+  background: var(--surface);
+  border-top: 1px solid var(--surface-brd);
+}
+.ad-theater-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.ad-theater-cta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  padding: 0.72rem 1.15rem;
+  border-radius: 12px;
+  border: 1px solid var(--btn-brd);
+  background: var(--btn-bg);
+  color: var(--text-mute);
+  font-family: var(--font-display);
+  font-size: 0.74rem;
+  font-weight: 800;
+  cursor: not-allowed;
+  transition: all 0.18s ease;
+}
+.ad-theater-cta.ready {
+  cursor: pointer;
+  background: linear-gradient(170deg, var(--acc-hi), var(--acc) 54%, var(--acc-lo));
+  border-color: color-mix(in srgb, var(--acc) 68%, #ffffff);
+  color: var(--acc-ink);
+  box-shadow: 0 12px 28px -12px var(--acc-glow);
+}
+.ad-theater-cta.ready:hover {
+  filter: brightness(1.06);
+  transform: translateY(-1px);
+}
+
+/* ── 7. Раздел «ДОПОЛНИТЕЛЬНОЕ» — программы и релизы @kayorissss ── */
+.kayo-hub {
+  display: flex;
+  flex-direction: column;
+  gap: 1.1rem;
+}
+.kayo-hero {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 1rem;
+  padding: 1.15rem 1.25rem;
+  border-radius: var(--r-xl);
+  background:
+    radial-gradient(120% 140% at 0% 0%, color-mix(in srgb, var(--acc) 18%, transparent), transparent 60%),
+    linear-gradient(160deg, var(--surface-2), var(--surface));
+  border: 1px solid color-mix(in srgb, var(--acc) 35%, var(--surface-brd));
+  box-shadow: 0 18px 42px -26px rgba(0, 0, 0, 0.9);
+}
+.kayo-hero-badge {
+  width: 100%;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--acc-text);
+}
+.kayo-hero-main {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  min-width: 0;
+  flex: 1 1 16rem;
+}
+.kayo-hero-avatar {
+  width: 3rem;
+  height: 3rem;
+  border-radius: 14px;
+  background: linear-gradient(145deg, var(--acc-hi), var(--acc-lo));
+  color: var(--acc-ink);
+  font-family: var(--font-display);
+  font-size: 1.25rem;
+  font-weight: 800;
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  box-shadow: 0 10px 24px -10px var(--acc-glow);
+}
+.kayo-hero-title {
+  font-size: 1.1rem;
+  color: var(--text);
+}
+.kayo-hero-sub {
+  font-size: 0.78rem;
+  color: var(--text-dim);
+  margin-top: 0.18rem;
+  line-height: 1.4;
+}
+.kayo-hero-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.kayo-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.42rem;
+  padding: 0.58rem 0.9rem;
+  border-radius: 10px;
+  font-size: 0.74rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform 0.14s ease, background 0.16s ease, border-color 0.16s ease;
+}
+.kayo-btn-primary {
+  background: linear-gradient(170deg, var(--acc-hi), var(--acc) 54%, var(--acc-lo));
+  border: 1px solid color-mix(in srgb, var(--acc) 65%, #ffffff);
+  color: var(--acc-ink);
+  box-shadow: 0 10px 24px -12px var(--acc-glow);
+}
+.kayo-btn-ghost {
+  background: var(--btn-bg);
+  border: 1px solid var(--btn-brd);
+  color: var(--text);
+}
+.kayo-btn:hover {
+  transform: translateY(-1px);
+}
+.kayo-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 24rem), 1fr));
+  gap: 1rem;
+}
+.kayo-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  padding: 1.15rem;
+  border-radius: var(--r-xl);
+  background: var(--surface);
+  border: 1px solid var(--surface-brd);
+  box-shadow: 0 16px 36px -26px rgba(0, 0, 0, 0.85);
+}
+.kayo-card-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.8rem;
+}
+.kayo-card-icon {
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 12px;
+  border: 1px solid;
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+}
+.kayo-card-title-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+.kayo-card-title {
+  font-family: var(--font-display);
+  font-size: 1rem;
+  font-weight: 800;
+  color: var(--text);
+}
+.kayo-tag {
+  padding: 0.16rem 0.48rem;
+  border-radius: 6px;
+  border: 1px solid;
+  font-size: 0.6rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+}
+.kayo-tag-ver {
+  padding: 0.16rem 0.46rem;
+  border-radius: 6px;
+  background: var(--surface-2);
+  border: 1px solid var(--surface-brd);
+  color: var(--text-dim);
+  font-size: 0.62rem;
+  font-weight: 700;
+}
+.kayo-card-sub {
+  font-size: 0.76rem;
+  color: var(--text-dim);
+  margin-top: 0.15rem;
+}
+.kayo-ext-btn {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 8px;
+  border: 1px solid var(--btn-brd);
+  background: var(--btn-bg);
+  color: var(--text-dim);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+.kayo-ext-btn:hover {
+  color: var(--text);
+  border-color: var(--acc);
+}
+.kayo-card-desc {
+  font-size: 0.8rem;
+  line-height: 1.48;
+  color: var(--text-dim);
+}
+.kayo-highlights {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.38rem;
+}
+.kayo-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.24rem 0.55rem;
+  border-radius: 8px;
+  background: var(--surface-2);
+  border: 1px solid var(--surface-brd);
+  color: var(--text);
+  font-size: 0.68rem;
+  font-weight: 600;
+}
+.kayo-release-box {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  padding: 0.85rem;
+  border-radius: var(--r-lg);
+  background: var(--surface-2);
+  border: 1px solid var(--surface-brd);
+}
+.kayo-release-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+.kayo-release-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.74rem;
+  font-weight: 800;
+  color: var(--text);
+}
+.kayo-release-date {
+  font-size: 0.68rem;
+  color: var(--text-mute);
+}
+.kayo-release-loading {
+  font-size: 0.75rem;
+  color: var(--text-dim);
+  padding: 0.4rem 0;
+}
+.kayo-assets {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+.kayo-asset {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.65rem;
+  flex-wrap: wrap;
+  padding: 0.58rem 0.7rem;
+  border-radius: 10px;
+  background: var(--surface);
+  border: 1px solid var(--surface-brd);
+  overflow: hidden;
+}
+.kayo-asset-main {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  min-width: 0;
+  flex: 1 1 11rem;
+}
+.kayo-asset-badge {
+  padding: 0.24rem 0.48rem;
+  border-radius: 6px;
+  font-size: 0.6rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  background: var(--surface-3);
+  color: var(--text);
+  flex: 0 0 auto;
+}
+.kayo-asset-badge.setup,
+.kayo-asset-badge.portable {
+  background: var(--info-soft);
+  border: 1px solid var(--info-brd);
+  color: var(--info);
+}
+.kayo-asset-badge.apk {
+  background: var(--ok-soft);
+  border: 1px solid var(--ok-brd);
+  color: var(--ok);
+}
+.kayo-asset-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.kayo-asset-label {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--text);
+}
+.kayo-asset-meta {
+  font-size: 0.66rem;
+  color: var(--text-mute);
+}
+.kayo-asset-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.kayo-dl-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.44rem 0.72rem;
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--acc) 55%, var(--btn-brd));
+  background: var(--acc-soft);
+  color: var(--acc-text);
+  font-size: 0.7rem;
+  font-weight: 800;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s ease, color 0.15s ease, transform 0.12s ease;
+}
+.kayo-dl-btn:hover {
+  background: var(--acc);
+  color: var(--acc-ink);
+  border-color: var(--acc);
+}
+.kayo-dl-btn.done {
+  background: var(--ok-soft);
+  border-color: var(--ok-brd);
+  color: var(--ok);
+}
+.kayo-progress-bar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 3px;
+  background: var(--surface-3);
+}
+.kayo-progress-bar > span {
+  display: block;
+  height: 100%;
+  background: var(--acc);
+  transition: width 0.15s linear;
+}
+.kayo-release-notes {
+  font-size: 0.72rem;
+  line-height: 1.45;
+  color: var(--text-dim);
+  white-space: pre-line;
+  padding-top: 0.25rem;
+  border-top: 1px solid var(--surface-brd);
+}
+.kayo-footer-note {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.75rem 1rem;
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  border: 1px solid var(--surface-brd);
+  color: var(--text-dim);
+  font-size: 0.74rem;
+}
+.kayo-footer-note b {
+  color: var(--text);
+}
+
+/* ── 8. Адаптивность под любые мониторы, мини-окно и F11 ── */
+@media (max-width: 1240px) {
+  .pc-sq-label {
+    display: none;
+  }
+  .pc-sq-btn {
+    padding: 0;
+    width: 2.2rem;
+  }
+}
+@media (max-width: 860px) {
+  html.is-desktop {
+    --pc-pad: 0.9rem;
+    --pc-gap: 0.85rem;
+  }
+  html.is-desktop .pc-hero {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  html.is-desktop .pc-cols,
+  html.is-desktop .pc-split,
+  html.is-desktop .pc-settings,
+  html.is-desktop .pc-shop,
+  html.is-desktop .pc-shop-skins {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  html.is-desktop .pc-rail {
+    flex-direction: row;
+    overflow-x: auto;
+    position: static;
+    margin-bottom: 0.75rem;
+  }
+  html.is-desktop .pc-rail-item {
+    width: auto;
+  }
+}
+@media (min-width: 1920px) {
+  html.is-desktop {
+    --pc-pad: 2.2rem;
+  }
+  html.is-desktop .pc-page-body {
+    max-width: 108rem;
+  }
+}
+

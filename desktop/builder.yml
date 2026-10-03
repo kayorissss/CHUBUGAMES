@@ -50,12 +50,7 @@ win:
   # нельзя, можно только купить сертификат (см. файл выше) или уйти в
   # Microsoft Store, где пакет подписывает Microsoft.
   signAndEditExecutable: true
-  # publisherName — опция ИМЕННО `win:` (в схеме electron-builder она в
-  # WindowsConfiguration; у `nsis:` additionalProperties:false, и прошлая
-  # правка «издателя в nsis» роняла CI на валидации конфига до сборки).
-  # Electron-builder кладёт её в свойства установщика и в реестр удаления;
-  # поле «Издатель» в диалоге SmartScreen по-прежнему берется из цифровой
-  # подписи — без сертификата там «Неизвестный издатель» при любом значении.
+  requestedExecutionLevel: asInvoker
   publisherName: "KAYORISAN"
   target:
     - target: portable
@@ -70,6 +65,7 @@ nsis:
   artifactName: CHUBUGAMES-${version}-setup.exe
   oneClick: false
   perMachine: false
+  allowElevation: false
   allowToChangeInstallationDirectory: true
   createDesktopShortcut: true
   createStartMenuShortcut: true

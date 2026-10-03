@@ -1,41 +1,69 @@
 /**
- * Мост между игрой и оболочкой ПК-версии.
+ * Узкий мост между веб-игрой и Electron.
  *
- * Окно работает в песочнице с contextIsolation, поэтому страница не имеет
- * доступа к Node. Всё, что ей нужно от системы (обновление, полный экран,
- * размер окна), пробрасываем сюда точечно и только на чтение/вызов.
+ * Никакого прямого доступа к Node или ipcRenderer страница не получает —
+ * только перечисленные здесь вызовы: кастомная шапка окна, проверка и
+ * установка обновлений, а также прямая загрузка программ @kayorissss
+ * в папку «Загрузки» пользователя.
  */
-
 const { contextBridge, ipcRenderer } = require("electron");
 
 contextBridge.exposeInMainWorld("chubDesktop", {
-  /** Версия оболочки (совпадает с версией игры) */
+  isDesktop: true,
+  platform: process.platform,
+
+  /** Версия установленного .exe (из package.json на момент сборки) */
   version: () => ipcRenderer.invoke("app:version"),
 
-  /* ─── Обновление ─── */
-
-  /** Спросить у GitHub, есть ли новая версия для ПК */
+  /** Проверить, есть ли на GitHub более свежая сборка */
   checkUpdate: () => ipcRenderer.invoke("update:check"),
 
   /**
-   * Скачать и запустить установщик.
-   * Прогресс приходит колбэком: { received, total, percent }.
+   * Скачать и запустить установщик новой версии.
+   * onProgress получает { received, total, percent }.
    */
-  downloadUpdate(onProgress) {
-    const ch = "update:progress";
-    const handler = (_e, p) => onProgress?.(p);
-    ipcRenderer.on(ch, handler);
+  downloadUpdate: (onProgress) => {
+    const listener = (_e, p) => {
+      try { onProgress?.(p); } catch { /* noop */ }
+    };
+    ipcRenderer.on("update:progress", listener);
     return ipcRenderer.invoke("update:download").finally(() => {
-      ipcRenderer.removeListener(ch, handler);
+      ipcRenderer.removeListener("update:progress", listener);
     });
   },
+  installUpdate: (info) => ipcRenderer.invoke("update:download", info),
+  onUpdateProgress: (cb) => {
+    const handler = (_e, data) => cb(data);
+    ipcRenderer.on("update:progress", handler);
+    return () => ipcRenderer.removeListener("update:progress", handler);
+  },
 
-  /* ─── Окно ─── */
-
+  /** Полный экран (F11) и размер окна */
   isFullscreen: () => ipcRenderer.invoke("win:isFullscreen"),
   toggleFullscreen: () => ipcRenderer.invoke("win:toggleFullscreen"),
-  /** Подогнать размер окна под логическое разрешение сцены */
   resizeTo: (w, h) => ipcRenderer.invoke("win:resize", { w, h }),
-  /** Список доступных размеров рабочей области монитора */
+  setWindowSize: (w, h) => ipcRenderer.invoke("win:resize", { w, h }),
   screenInfo: () => ipcRenderer.invoke("win:screen"),
+
+  /** Управление кастомной оболочкой окна (без системной рамки Windows) */
+  minimize: () => ipcRenderer.invoke("win:minimize"),
+  maximize: () => ipcRenderer.invoke("win:maximize"),
+  close: () => ipcRenderer.invoke("win:close"),
+  getWinState: () => ipcRenderer.invoke("win:state"),
+  onWinState: (cb) => {
+    const handler = (_e, data) => cb(data);
+    ipcRenderer.on("win:state", handler);
+    return () => ipcRenderer.removeListener("win:state", handler);
+  },
+
+  /** Загрузка релизов @kayorissss прямо в папку «Загрузки» на ПК */
+  downloadToDownloads: (url, fileName) =>
+    ipcRenderer.invoke("ext:download", { url, fileName }),
+  onDownloadProgress: (cb) => {
+    const handler = (_e, data) => cb(data);
+    ipcRenderer.on("ext:progress", handler);
+    return () => ipcRenderer.removeListener("ext:progress", handler);
+  },
+  showInFolder: (filePath) => ipcRenderer.invoke("ext:showInFolder", filePath),
+  openExternal: (url) => ipcRenderer.invoke("ext:openExternal", url),
 });

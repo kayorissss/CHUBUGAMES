@@ -27,9 +27,9 @@ import type { Move, Position } from "../core/checkers";
 type VsMode = "bot" | "duo";
 
 const LEVELS = [
-  { id: 1 as const, name: "НОВИЧОК", sub: "Стас отвлекается" },
-  { id: 2 as const, name: "КРЕПКИЙ", sub: "Стас собран" },
-  { id: 3 as const, name: "ЗВЕРЬ", sub: "Стас играет на деньги" },
+  { id: 1 as const, name: "НОВИЧОК", sub: "Атлас разминается" },
+  { id: 2 as const, name: "КРЕПКИЙ", sub: "Атлас собран" },
+  { id: 3 as const, name: "ЗВЕРЬ", sub: "Атлас играет всерьёз" },
 ];
 
 const STEP_MS = 240;
@@ -259,7 +259,7 @@ export default function Checkers({ onExit }: { onExit: () => void }) {
       <div className="absolute inset-0 flex flex-col" style={{ background: "var(--bg)" }}>
         <GameHUD score={0} best={best} onExit={onExit} label={tr("ОЧКИ")} rulesId="checkers" />
         <BoardMenu
-          title={tr("ШАШКИ У СТАСА")}
+          title={tr("ШАШКИ С АТЛАСОМ")}
           subtitle={tr("Русские шашки. Бить обязательно, даже когда очень не хочется.")}
           icon="dice"
           vs={vs}

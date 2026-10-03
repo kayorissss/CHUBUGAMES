@@ -85,9 +85,9 @@ export function inkOn(accent: string): string {
 export function accentText(accent: string, surface: string, light: boolean): string {
   let out = accent;
   const step = light ? BLACK : WHITE;
-  for (let k = 0; k <= 0.55; k += 0.05) {
+  for (let k = 0; k <= 0.72; k += 0.04) {
     out = mix(accent, step, k);
-    if (contrast(out, surface) >= 4.5) return out;
+    if (contrast(out, surface) >= 4.8) return out;
   }
   return out;
 }

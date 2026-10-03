@@ -195,6 +195,55 @@ export default function Home({
         <ChestCard />
       </section>
 
+      {!pc && onOpen && (
+        <div className="grid grid-cols-2" style={{ gap: 10, marginTop: 10, marginBottom: 14 }}>
+          <button
+            type="button"
+            onClick={() => { sfx.click(); haptic("light"); onOpen("casino"); }}
+            className="glass tap text-left flex items-center"
+            style={{ gap: 10, padding: "11px 13px", borderRadius: "var(--r-lg)" }}
+          >
+            <span
+              className="flex items-center justify-center shrink-0"
+              style={{
+                width: 36, height: 36, borderRadius: "var(--r-md)",
+                background: "var(--acc-soft)", color: "var(--acc-text)",
+              }}
+            >
+              <Icon name="dice" size={18} />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="t-title block truncate" style={{ fontSize: 12.5 }}>{tr("КАЗИНО")}</span>
+              <span className="t-caption block truncate" style={{ fontSize: 10.5 }}>
+                {tr("слоты, рулетка, кейсы")}
+              </span>
+            </span>
+          </button>
+          <button
+            type="button"
+            onClick={() => { sfx.click(); haptic("light"); onOpen("network"); }}
+            className="glass tap text-left flex items-center"
+            style={{ gap: 10, padding: "11px 13px", borderRadius: "var(--r-lg)" }}
+          >
+            <span
+              className="flex items-center justify-center shrink-0"
+              style={{
+                width: 36, height: 36, borderRadius: "var(--r-md)",
+                background: "var(--acc-soft)", color: "var(--acc-text)",
+              }}
+            >
+              <Icon name="globe" size={18} />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="t-title block truncate" style={{ fontSize: 12.5 }}>{tr("ДОПОЛНИТЕЛЬНОЕ")}</span>
+              <span className="t-caption block truncate" style={{ fontSize: 10.5 }}>
+                @kayorissss · GitHub
+              </span>
+            </span>
+          </button>
+        </div>
+      )}
+
       {/* ИГРЫ — основная зона: во всю ширину, плитка сама подбирает колонки */}
       <div className="pc-games">
         <div className="pc-games-head">

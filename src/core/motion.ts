@@ -39,16 +39,16 @@ export const tweenOut: Transition = { duration: 0.16, ease: EASE_IN };
  * уходит вниз — так глаз понимает, что старое ушло, а не мигнуло.
  */
 export const pageVariants: Variants = {
-  initial: { opacity: 0, y: 14, scale: 0.995 },
-  animate: { opacity: 1, y: 0, scale: 1, transition: tweenIn },
-  exit: { opacity: 0, y: -10, scale: 0.995, transition: tweenOut },
+  initial: { opacity: 0, y: 8 },
+  animate: { opacity: 1, y: 0, transition: tweenIn },
+  exit: { opacity: 0, y: -6, transition: tweenOut },
 };
 
-/** Подстраница выезжает справа, как в родных приложениях */
+/** Подстраница плавно поднимается без бокового сдвига шапки */
 export const subPageVariants: Variants = {
-  initial: { opacity: 0, x: 34 },
-  animate: { opacity: 1, x: 0, transition: { duration: 0.28, ease: EASE } },
-  exit: { opacity: 0, x: 28, transition: tweenOut },
+  initial: { opacity: 0, y: 10 },
+  animate: { opacity: 1, y: 0, transition: { duration: 0.24, ease: EASE } },
+  exit: { opacity: 0, y: -6, transition: tweenOut },
 };
 
 /** Запуск игры: экран «наезжает» на игрока */

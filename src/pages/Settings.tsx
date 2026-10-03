@@ -45,7 +45,7 @@ type Sec = "system" | "look" | "net" | "game" | "profile";
 const SECS: { id: Sec; label: string; icon: IconName; hint: string }[] = [
   { id: "system", label: "Система", icon: "gear", hint: "обновления и уведомления" },
   { id: "look", label: "Оформление", icon: "sun", hint: "тема, акцент, язык" },
-  { id: "net", label: "Сеть", icon: "wifi", hint: "глушилки и скорость" },
+  { id: "net", label: "Дополнительное", icon: "download", hint: "программы и релизы @kayorissss" },
   { id: "game", label: "Игра", icon: "speed", hint: "звук, сложность, кадры" },
   { id: "profile", label: "Профиль", icon: "user", hint: "сохранение и сброс" },
 ];
@@ -410,10 +410,8 @@ export default function Settings({
       )}
 
 {sec === "net" && (
-      /* «Глушилки» и «Скорость» — одна страница настроек: раньше это была
-         отдельная вкладка в «Инструментах», и найти её было невозможно. */
       <div className="pc-set-blk pc-set-wide">
-      <SectionTitle>{tr("Проверка сети")}</SectionTitle>
+      <SectionTitle>{tr("Дополнительное · Программы @kayorissss")}</SectionTitle>
       <NetPanel />
       </div>
       )}

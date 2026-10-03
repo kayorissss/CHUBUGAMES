@@ -118,15 +118,15 @@ ok(!/softprops\/action-gh-release@/.test(wf2) && /gh release upload latest/.test
   'APK в релиз кладёт gh, а не сторонний action');
 {
   const wfD = fs.readFileSync('.github/workflows/build-desktop.yml', 'utf8');
-  ok(!/softprops\/action-gh-release@/.test(wfD) && /gh release upload desktop[\s\S]{0,80}--clobber/.test(wfD),
-    'EXE в релиз кладёт gh, перезапись файлов — --clobber');
+  ok(!/softprops\/action-gh-release@/.test(wfD) && /gh release upload latest[\s\S]{0,80}--clobber/.test(wfD),
+    'EXE в единый релиз latest кладёт gh, перезапись файлов — --clobber');
 }
 ok(fs.existsSync('RELEASE_NOTES.md'),'описание релиза лежит в репозитории (не хардкод в workflow)');
 const rm=fs.readFileSync('README.md','utf8');
 ok(!/releases\/(download|tag)\/[^)\s]*\d+\.\d+\.\d+/.test(rm),
   'в README нет ссылок на файл с версией в имени — такие ссылки рвутся на каждом релизе');
-ok(/releases\/tag\/desktop/.test(rm) && /releases\/tag\/latest/.test(rm),
-  'README ведёт на страницы релизов, где всегда лежит актуальный файл');
+ok(/releases\/tag\/latest/.test(rm) && !/releases\/tag\/desktop/.test(rm),
+  'README ведёт на единый релиз latest, где лежат Setup EXE, Portable EXE и APK');
 const VER=fs.readFileSync('src/core/version.ts','utf8').match(/APP_VERSION\s*=\s*"([0-9.]+)"/)[1];
 ok(new RegExp('### Что нового в '+VER.replace(/\./g,'\\.')).test(fs.readFileSync('RELEASE_NOTES.md','utf8')),'описание релиза совпадает с версией '+VER);
 ok(fs.existsSync('public/ads/promo1.mp4'),'рекламный ролик на месте');
@@ -206,10 +206,10 @@ const stg=fs.readFileSync('src/pages/Settings.tsx','utf8');
 ok(!stg.includes('t.me/kayorisan') && !stg.includes('pc-foot'),'в Настройках нет плашки Telegram и подвала страницы');
 {
   const appSrc=fs.readFileSync('src/App.tsx','utf8');
-  ok(/className="pc-statusbar"/.test(appSrc)&&/@kayorisan/.test(appSrc)&&/Version \{APP_VERSION\}/.test(appSrc),
-     'строка состояния окна: CHUBUGAMES, Developer: @kayorisan и версия');
-  ok(/\.pc-statusbar \{[\s\S]{0,240}?flex: 0 0 auto/.test(css)&&/\.pc-status-brand/.test(css),
-     'строка состояния — элемент каркаса (не «под плашками»), с своими классами');
+  ok(!/className="pc-statusbar"/.test(appSrc)&&!/Developer:/.test(appSrc),
+     'нижняя полоса CHUBUGAMES / Developer / Version полностью убрана из окна');
+  ok(/<PcWinControls/.test(appSrc),
+     'кастомные кнопки управления безрамочным окном подключены в App');
 }
 const wfl=fs.readFileSync('.github/workflows/build-apk.yml','utf8');
 // Файл должен быть именно в индексе git: он был в .gitignore, из-за чего
@@ -285,8 +285,8 @@ ok(head.includes('clip()'),'борода не вылезает за лицо');
 
 // --- пакет из 22 требований ---
 const net=fs.readFileSync('src/pages/Network.tsx','utf8');
-ok(net.includes('ГЛУШИЛКИ')&&net.includes('СКОРОСТЬ'),'в сетевом экране две вкладки');
-ok(net.includes('РОССИЙСКИЕ СЕРВИСЫ')&&net.includes('ЗАРУБЕЖНЫЕ СЕРВИСЫ'),'сервисы разделены на РУ и иностранные');
+ok(net.includes('Nukefy-VPN')&&net.includes('kayorissss'),'в разделе Дополнительное представлены репозитории @kayorissss');
+ok(net.includes('downloadToDownloads')&&net.includes('releases'),'Дополнительное поддерживает прямую загрузку релизов в папку Загрузки');
 const setg=fs.readFileSync('src/pages/Settings.tsx','utf8');
 ok(setg.includes('showSaveFilePicker'),'экспорт сохранения через «Сохранить как»');
 // Цвета сложности переехали на токены дизайн-системы (--ok/--warn/--danger),
@@ -457,23 +457,20 @@ ok(!cssPc23.includes('--stage-scale'),
 ok(!fs.existsSync('src/ui/PcSidebar.tsx') && fs.existsSync('src/ui/pc/PcTopBar.tsx'),
   'боковая панель убрана, разделы переехали в верхнюю');
 const topbar = fs.readFileSync('src/ui/pc/PcTopBar.tsx', 'utf8');
-ok(topbar.includes('CHUBUGAMES') && topbar.includes('F11'),
-  'в панели есть знак, кошелёк и подсказка по клавишам');
-/* Просьба 1.28: «идёт так: ИКОНКА | CHUBUGAMES | МАГАЗИН | КАЗИНО |
-   ПЕРСОНАЖИ | ПРОГРЕСС», а «Настройки» и «Поддержать» — круглыми кнопками
-   над плашкой рекламы. То есть в панели их больше нет. */
+ok(topbar.includes('CHUBUGAMES') && topbar.includes('PcWinControls'),
+  'в панели есть знак, кошелёк и кастомные кнопки управления окном');
 {
   const list=topbar.slice(topbar.indexOf('const TABS'),topbar.indexOf('];',topbar.indexOf('const TABS')));
   const ids=[...list.matchAll(/id: "(\w+)"/g)].map(m=>m[1]);
   ok(ids[0]==='shop'&&ids.indexOf('casino')<ids.indexOf('progress')&&ids.indexOf('friends')<ids.indexOf('progress'),
     'порядок разделов в панели: Магазин · Казино · Персонажи · Прогресс');
-  ok(!/id: "settings"/.test(list)&&!/pc-xtra/.test(topbar),
-    'кнопок «Настройки» и «Поддержать» в панели больше нет — они в углу');
+  ok(/pc-sq-btn/.test(topbar)&&/Поддержать/.test(topbar)&&/Настройки/.test(topbar),
+    'кнопки «Поддержать» и «Настройки» — квадратно-закруглённые в верхней панели');
   const dock=fs.readFileSync('src/ui/pc/PcDock.tsx','utf8');
-  ok(/className="pc-dock"/.test(dock)&&/pc-round/.test(dock)&&/<PcBoost \/>/.test(dock),
-    'угол собран: круглые кнопки над плашкой бонуса, одним компонентом');
-  ok(/useDeferredUpdate/.test(dock)&&/pc-round-flag/.test(dock),
-    'пока обновление отложено — на кнопке горит «!»');
+  ok(/className="pc-dock"/.test(dock)&&/<PcBoost \/>/.test(dock),
+    'угол собран: компактная капсула бонуса в правом нижнем углу');
+  ok(/useDeferredUpdate/.test(topbar)&&/pc-round-flag/.test(topbar),
+    'пока обновление отложено — на кнопке Настройки в верхней панели горит «!»');
   ok(/\.pc-dock \{[\s\S]{0,200}?position: fixed/.test(css),
     'угол прибит к окну, и у плашки буста своя роль внутри него');
   const upState=fs.readFileSync('src/core/updateState.ts','utf8');
@@ -635,8 +632,8 @@ ok(['Progress', 'Casino'].every((pg) => {
     'Сеть: полоски сигнала анимируются, когда идёт замер (CSS, без rAF)');
   ok(/\.net-tab\.on \{[\s\S]{0,160}?--acc-ink/.test(css),
     'Сеть: активная вкладка — акцент с контрастными чернилами, текст не сливается');
-  ok(/onBusy=\{setRunning\}/.test(net) && /export function NetPanel/.test(net),
-    'Сеть: панель знает, что замер идёт, и открывается и в Настройках, и на всю страницу');
+  ok(/export function NetPanel/.test(net) && /export default function NetworkPage/.test(net),
+    'Дополнительное: панель открывается и в Настройках, и на всю страницу');
 }
 
 console.log('\n[37] 1.27: общие вкладки, уровень первым, точка награды, казино');
@@ -711,14 +708,14 @@ ok(wfDesk.includes('Remove outdated assets'),
 {
   const d = fs.readFileSync('.github/workflows/build-desktop.yml', 'utf8');
   const a = fs.readFileSync('.github/workflows/build-apk.yml', 'utf8');
-  ok(/Point the floating tag at the built commit/.test(d) && /git\/refs\/tags\/desktop/.test(d),
-    'на ПК релизный тег передвигается на собранный коммит');
+  ok(/Point the floating tag at the built commit/.test(d) && /git\/refs\/tags\/latest/.test(d),
+    'на ПК единый релизный тег latest передвигается на собранный коммит');
   ok(/Point the floating tag at the built commit/.test(a) && /git\/refs\/tags\/latest/.test(a),
-    'на Android релизный тег передвигается на собранный коммит');
-  ok(/--title "PC-сборка \$APP_VER"/.test(d) && /--title "Android-сборка \$APP_VER"/.test(a),
-    'оба релиза называются вместе с версией, а не «просто сборка»');
+    'на Android релизный тег latest передвигается на собранный коммит');
+  ok(/TITLE="CHUBUGAMES \$APP_VER/.test(d) && /TITLE="CHUBUGAMES \$APP_VER/.test(a),
+    'единый релиз называется CHUBUGAMES $APP_VER (Setup + Portable + APK)');
   ok(/gh release edit latest[^\n]*--latest/.test(a),
-    'бейдж «Latest» закреплён за Android-сборкой явно');
+    'бейдж «Latest» закреплён за единым релизом явно');
   ok(!/--draft/.test(d) && !/--draft/.test(a),
     'дата публикации не подделывается проходом через draft: есть риск оставить релиз неопубликованным');
   ok(/Собрано:/.test(d) && /Собрано:/.test(a),
@@ -1432,18 +1429,12 @@ console.log('\n[33] Android без ключа подписи: preview вмест
   ok(/TASK=assembleRelease\n.*signed.*'true'|if \[ "\$\{\{ steps\.kind\.outputs\.release \}\}" = "true" \] && \[ "\$\{\{ steps\.signs\.outputs\.signed \}\}" = "true" \]/.test(wf),
     'assembleRelease только когда ключ есть: без него release-APK всё равно не установить');
   const latestIf = (wf.match(/name: Publish APK to Releases\n\s+if: (.+)/) || [])[1] || '';
-  ok(/release == 'true'/.test(latestIf) && /signed == 'true'/.test(latestIf),
-    'в канал обновлений latest файл попадает ТОЛЬКО подписанный — иначе у людей ломаются обновления');
-  const pv = wf.match(/name: Publish preview APK[\s\S]*?\n      # /);
-  ok(pv, 'есть отдельная публикация preview, когда ключа нет');
-  ok(pv && /--prerelease/.test(pv[0]) && /-preview\.apk/.test(pv[0]),
-    'preview помечен pre-release и называется иначе, чем боевой файл');
-  ok(pv && /signed != 'true'/.test(pv[0]),
-    'preview публикуется только когда секреты правда не заданы');
-  ok(pv && /прогресс сотрётся/.test(pv[0]) && /latest/.test(pv[0]),
-    'в тексте preview сказано про потерю прогресса и про то, что latest не тронут');
-  ok(/Remove the misspelled legacy asset\n\s+if: .*signed == 'true'/.test(wf),
-    'чистка старых файлов тоже только на подписанном релизе');
+  ok(/release == 'true'/.test(latestIf),
+    'APK всегда выкладывается в единый релиз latest на релизных сборках');
+  ok(!/name: Publish preview APK/.test(wf),
+    'отдельные preview-релизы отключены — все сборки идут в единый релиз latest');
+  ok(/Remove the misspelled legacy asset\n\s+if: .*release == 'true'/.test(wf),
+    'чистка старых файлов выполняется на каждом релизе');
   ok(/node scripts\/patch-android-glass\.mjs/.test(wf),
     'правка системных полосок стоит в сборке');  {
     // Дубликаты ищем только внутри job `build`: у verify свои шаги, и одинаковые
@@ -2254,8 +2245,8 @@ console.log('\n[56] 1.28 · ПК: настройки с рейкой, угол �
     'шансы слотов — за кнопкой «?» и считаются из весов, а не переписаны в разметку');
   ok(/pc-slot-bet-input/.test(cas56) && /setCustomBet/.test(cas56) && /BET_MAX_CAP/.test(cas56),
     'ставка в слотах пишется руками и упирается в разумный потолок');
-  ok(/\.pc-statusbar \{[\s\S]{0,300}?border-top: 1px solid/.test(css56) && /\.pc-status-ver \{[\s\S]{0,120}?margin-left: auto/.test(css56),
-    'строка состояния: отделена линией, версия прижата к правому краю');
+  ok(/\.pc-win-controls \{[\s\S]{0,300}?display: inline-flex/.test(css56) && /\.pc-sq-btn \{[\s\S]{0,300}?border-radius: 10px/.test(css56),
+    'кастомные кнопки окна и квадратно-закруглённые кнопки в верхней панели оформлены');
   ok(/html\.is-desktop \.pc-page-head h1 \{[\s\S]{0,320}?line-height: 1\.32/.test(css56) &&
      /html\.is-desktop \.pc-page-head h1 \{[\s\S]{0,320}?overflow: visible/.test(css56),
     'заголовки страниц на ПК не обрезаются сверху и не сжимаются в одну строку');

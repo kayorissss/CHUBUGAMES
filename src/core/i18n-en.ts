@@ -1485,4 +1485,156 @@ export const EN_TEXT: Record<string, string> = {
   "Защита": "Defense",
   "Тапай по врагам, пока они не дошли до двери.":
     "Tap the enemies before they reach the door.",
+  "КАЙЗЕР-БУРГЕР": "KAISER BURGER",
+  "Кайзер запускает комбо-снаряды с двух метров. Уклоняйся от всех.":
+    "Kaiser launches combo projectiles from two metres. Dodge every one.",
+  "ХВАТКА РЕЙЗЕРА": "RAZER'S GRIP",
+  "Держи палец и копи. Рейзер атакует — успей убрать руку.":
+    "Hold to charge. Razer strikes — pull your hand back in time.",
+  "ПОБЕГ ОТ КОРТЕКСА": "ESCAPE FROM CORTEX",
+  "Кортекс преследует тебя по комплексу. Прыгай через терминалы.":
+    "Cortex chases you through the complex. Jump over the terminals.",
+  "РИТМ НЕОНА": "NEON'S RHYTHM",
+  "Лови ноты под синт-трек. Неон зажигает танцпол.":
+    "Catch the notes to the synth track. Neon lights up the floor.",
+  "БАШНЯ КАЙЗЕРА": "KAISER'S TOWER",
+  "Башня Кайзера не выдержала": "Kaiser's tower collapsed",
+  "ПОЛЁТ НЕОНА": "NEON'S FLIGHT",
+  "ОБОРОНА ШТАБА": "HQ DEFENSE",
+  "БОРОДА ТИТАНА": "TITAN'S BEARD",
+  "Приведи бороду Титана в идеальный порядок под лупой.":
+    "Bring Titan's beard into spotless order under the magnifier.",
+  "Ощипай Титана начисто: борода, грудь, руки.": "Groom Titan clean: beard, chest, arms.",
+  "Дёргаешь подряд — Титан звереет и сбивает прицел": "Yank too fast and Titan snaps, knocking your aim off",
+  "Титан на пределе — подожди пару секунд, злость спадёт сама": "Titan is at his limit — wait a couple of seconds, the rage will fade",
+  "Грудь гуще бороды — Титан злится быстрее": "The chest is denser than the beard — Titan gets angry faster",
+  "МОТО РЕЙЗЕР": "MOTO RAZER",
+  "Веди спортбайк Рейзера по ночной трассе до финиша.":
+    "Ride Razer's sportbike down the night highway to the finish.",
+  "Доведи Рейзера до финиша и уцелей на последних метрах.": "Get Razer to the finish and survive the last stretch.",
+  "Рейзер сошёл с трассы": "Razer went off the track",
+  "ПЕРЕХВАТ ФАНТОМА": "PHANTOM INTERCEPT",
+  "Фантом тянет руки к сейф-кейсу. Отбивай перехваты.":
+    "Phantom reaches for the vault case. Slap his hands away.",
+  "Не дай Фантому вытащить трофеи из кейса.": "Stop Phantom from pulling loot out of the case.",
+  "Фантом унёс всё до последнего": "Phantom took every last thing",
+  "ШАХМАТЫ С КОРТЕКСОМ": "CHESS WITH CORTEX",
+  "Полные шахматы против главного тактика. Три уровня расчёта.":
+    "Full chess against the master tactician. Three levels of calculation.",
+  "Поставь мат Кортексу.": "Checkmate Cortex.",
+  "Кортекс на разминке": "Cortex warming up",
+  "Кортекс в фокусе": "Cortex in focus",
+  "Кортекс на максимуме": "Cortex at full power",
+  "Кортекс забрал листок": "Cortex confiscated the sheet",
+  "Кортекс всё видел": "Cortex saw everything",
+  "ШАШКИ С АТЛАСОМ": "CHECKERS WITH ATLAS",
+  "Съешь все шашки Атласа или запри их.": "Capture all of Atlas's checkers or block them in.",
+  "Атлас разминается": "Atlas warming up",
+  "Атлас собран": "Atlas is focused",
+  "Атлас играет всерьёз": "Atlas plays for keeps",
+  "НАРДЫ С ВАНГАРДОМ": "BACKGAMMON WITH VANGUARD",
+  "Длинные нарды. Вангард разыгрывает комбинации без ошибок.":
+    "Long backgammon. Vanguard plays combinations with zero mistakes.",
+  "Длинные нарды. Вангард играет в них как гроссмейстер, так что не расслабляйся.":
+    "Long backgammon. Vanguard plays like a grandmaster, so stay sharp.",
+  "Выведи все 15 фишек с доски раньше Вангарда.": "Bear off all 15 checkers before Vanguard does.",
+  "Вангарду нечем ходить": "Vanguard has no moves",
+  "Дополнительное": "Extras",
+  "ДОПОЛНИТЕЛЬНОЕ": "EXTRAS",
+  "Все программы @kayorissss": "All apps by @kayorissss",
+  "Все программы @kayorissss · Nukefy VPN и свежие релизы": "All @kayorissss apps · Nukefy VPN & latest releases",
+  "Программы и свежие релизы с GitHub напрямую в Загрузки": "Apps and latest releases from GitHub straight to Downloads",
+  "программы и релизы @kayorissss": "apps and releases by @kayorissss",
+  "Обновить релизы": "Refresh releases",
+  "Проверка релизов…": "Checking releases…",
+  "В Загрузки": "To Downloads",
+  "Скачать": "Download",
+  "Открыть в папке": "Show in folder",
+  "Папка Загрузки": "Downloads folder",
+  "Свернуть окно": "Minimize window",
+  "Развернуть окно": "Maximize window",
+  "Восстановить окно": "Restore window",
+  "Закрыть игру": "Close game",
+  "БУРГЕР-ШТОРМ": "BURGER STORM",
+  "Кайзер мечет бургеры на сверхзвуке. Уклоняйся и лови бонусы!":
+    "Kaiser hurls burgers at supersonic speed. Dodge them and grab bonuses!",
+  "Тапай по герою, прокачивай модули и собирай миллиарды монет.":
+    "Tap the hero, upgrade modules and stack billions of coins.",
+  "СТАЛЬНОЙ КАПКАН": "STEEL TRAP",
+  "Держи палец и копи множитель. Рейзер атакует — успей убрать руку!":
+    "Hold your finger and build the multiplier. Razer strikes — pull your hand back in time!",
+  "Кортекс преследует тебя по коридорам комплекса. Прыгай через системники!":
+    "Cortex chases you down the complex corridors. Jump over the server racks!",
+  "НЕОНОВЫЙ РИТМ": "NEON RHYTHM",
+  "Лови биты под трек. Неон включает максимум драйва на танцполе.":
+    "Catch the beats to the track. Neon turns the drive up to the max on the dancefloor.",
+  "СЛИЯНИЕ ГЕРОЕВ": "HERO MERGE",
+  "Объединяй одинаковых бойцов в новых и дойди до легенды 2048.":
+    "Merge matching fighters into new ones and reach the 2048 legend.",
+  "ОХОТА ЗА ТЕНЯМИ": "SHADOW HUNT",
+  "Цели появляются на долю секунды. Бей точно и не задень своих!":
+    "Targets flash for a split second. Strike cleanly and don't hit your allies!",
+  "МЕГА-БАШНЯ": "MEGA TOWER",
+  "Укладывай ярусы идеально ровно. Промахнулся — край срезало.":
+    "Stack the tiers perfectly straight. Miss, and the overhang gets sliced off.",
+  "ТИХИЙ ВЗЛОМ": "SILENT BREACH",
+  "Пока Кортекс отвернулся — качай данные. Повернулся — замри!":
+    "While Cortex looks away — download the data. When he turns — freeze!",
+  "НОЧНОЙ ЛИФТ": "NIGHT ELEVATOR",
+  "Развози экипаж по этажам. Перегрузил кабину — сработает тревога.":
+    "Deliver the crew across floors. Overload the cabin and the alarm goes off.",
+  "ЭКСПРЕСС-БАР": "EXPRESS BAR",
+  "Раздавай заказы по цветам. Очередь не ждёт ни секунды.":
+    "Serve orders by color. The queue won't wait a single second.",
+  "КОД ПАМЯТИ": "MEMORY CODE",
+  "Сигналы вспыхивают по очереди. Повтори комбинацию без ошибок.":
+    "Signals flash in sequence. Repeat the combination without mistakes.",
+  "НЕОНОВЫЙ ПОЛЁТ": "NEON FLIGHT",
+  "Держи высоту и пролетай сквозь узкие энергетические шлюзы.":
+    "Hold your altitude and fly through narrow energy gates.",
+  "ОБОРОНА БАЗЫ": "BASE DEFENSE",
+  "Отбивай волны штурмовиков, пока они не прорвали ворота.":
+    "Repel waves of raiders before they breach the gates.",
+  "СТРИТ-БАСКЕТ": "STREET BASKET",
+  "Свайп — бросок. Кольцо двигается, чистые попадания растят комбо.":
+    "Swipe to shoot. The hoop moves, and clean swishes build your combo.",
+  "НЕОН-ВОЛЕЙБОЛ": "NEON VOLLEYBALL",
+  "Веди и отбивай мяч в воздухе. Три промаха — партия окончена.":
+    "Track and volley the ball in mid-air. Three misses and the match is over.",
+  "СЕРИЯ ПЕНАЛЬТИ": "PENALTY SERIES",
+  "Бей свайпом мимо вратаря. Попадание в девятку — двойные очки.":
+    "Swipe to shoot past the keeper. Top-corner hits score double.",
+  "НЕОНОВЫЙ БИЛЬЯРД": "NEON POOL",
+  "Тяни кий и забивай. Каждый точный шар возвращает удар.":
+    "Pull back the cue and pot the balls. Every clean shot grants another turn.",
+  "ШИФР-КРОССВОРД": "CIPHER CROSSWORD",
+  "Разгадай кодовую сетку слов и докажи своё мастерство.":
+    "Solve the code word grid and prove your mastery.",
+  "МАРШРУТ №12": "ROUTE #12",
+  "Пробейся к выходу сквозь плотную толпу за шесть остановок.":
+    "Push through the packed crowd to the exit within six stops.",
+  "КИБЕР-ТАМАГОЧИ": "CYBER PET",
+  "Корми, тренируй и следи за настроением своего бойца.":
+    "Feed, train and keep an eye on your fighter's mood.",
+  "БАРБЕР-МАСТЕР": "BARBER MASTER",
+  "Действуй ювелирно и не спеши — одно резкое движение сорвёт серию.":
+    "Work with precision and don't rush — one sharp move breaks the streak.",
+  "ТУРБО-БАЙК": "TURBO BIKE",
+  "Держи полный газ и следи за перегревом двигателя на трассе.":
+    "Hold full throttle and watch the engine temperature on the track.",
+  "ТОПЛИВНЫЙ РЕЙД": "FUEL RAID",
+  "Прокладывай маршрут по заправкам на остатке бака.":
+    "Plot your route across fuel stations on the remaining tank.",
+  "Чужие руки тянутся к кейсу. Бей по ним, но не задень свою!":
+    "Rival hands reach for the case. Slap them away, but don't hit your own!",
+  "5 уровней кампании, сектора со своим гарнизоном, общий штурм и ранг синдиката.":
+    "5 campaign levels, garrisoned sectors, coordinated assault and syndicate rank.",
+  "Полные шахматы против архитектора сети. Три уровня сложности.":
+    "Full chess against the network architect. Three difficulty levels.",
+  "Русские шашки: обязательный бой и прорыв в дамки через всю доску.":
+    "Russian checkers: mandatory captures and kings flying across the board.",
+  "Длинные нарды против куратора штаба: тактика, куш и точный расчёт.":
+    "Long backgammon against the HQ curator: tactics, high stakes and sharp calculation.",
+  "Захвати все сектора (5 уровней кампании): от первого рубежа до всего комплекса. Раунды кончатся — кампания провалена.":
+    "Capture all sectors (5 campaign levels): from the first outpost to the entire complex. Run out of rounds and the campaign fails.",
 };

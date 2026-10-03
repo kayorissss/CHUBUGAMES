@@ -639,7 +639,7 @@ export default function MotoArtyom({ onExit }: { onExit: () => void }) {
           onRetry={restart}
           onExit={onExit}
           title={dist >= ROAD_LEN ? tr("ДОЕХАЛ ЦЕЛЫМ") : tr("НЕ ДОЕХАЛ")}
-          sub={dist >= ROAD_LEN ? tr("Голова на месте") : tr("Артём сошёл с трассы")}
+          sub={dist >= ROAD_LEN ? tr("Голова на месте") : tr("Рейзер сошёл с трассы")}
         />
       )}
     </div>

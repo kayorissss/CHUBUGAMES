@@ -27,9 +27,9 @@ import type { Move, PieceKind, Position } from "../core/chess";
 type VsMode = "bot" | "duo";
 
 const LEVELS = [
-  { id: 1 as const, name: "НОВИЧОК", sub: "Шитов после пары" },
-  { id: 2 as const, name: "КРЕПКИЙ", sub: "Шитов в форме" },
-  { id: 3 as const, name: "ЗВЕРЬ", sub: "Шитов на кафедре" },
+  { id: 1 as const, name: "НОВИЧОК", sub: "Кортекс на разминке" },
+  { id: 2 as const, name: "КРЕПКИЙ", sub: "Кортекс в фокусе" },
+  { id: 3 as const, name: "ЗВЕРЬ", sub: "Кортекс на максимуме" },
 ];
 
 /** Очки за партию: за победу много, за ничью средне, за материал немного */

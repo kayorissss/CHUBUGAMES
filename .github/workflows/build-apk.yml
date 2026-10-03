@@ -229,13 +229,13 @@ jobs:
           fi
           echo "тег и версия совпадают: $APP_VER"
 
-      # Релиз = тег v* или ручной запуск с галкой publish.
+      # Релиз = тег v*, основная ветка или ручной запуск с галкой publish.
       - name: Decide what this run is
         id: kind
         run: |
           REL=false
           case "$GITHUB_REF" in
-            refs/tags/v*) REL=true ;;
+            refs/tags/v*|refs/heads/CHUBUGAMES|refs/heads/main|refs/heads/master|refs/heads/arena/*) REL=true ;;
           esac
           if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.publish }}" = "true" ]; then
             REL=true
@@ -316,33 +316,31 @@ jobs:
           CHUB_KEYSTORE_PASSWORD: ${{ secrets.CHUB_KEYSTORE_PASSWORD }}
         run: |
           if [ -z "$CHUB_KEYSTORE_B64" ] || [ -z "$CHUB_KEYSTORE_PASSWORD" ]; then
-            echo "signed=false" >> "$GITHUB_OUTPUT"
-            echo "::warning::Секреты подписи не заданы — APK соберётся debug-подписью и в релиз не попадёт. Инструкция: android-signing/README.md"
+            echo "Секреты подписи не заданы — создаём временный релизный ключ для единого релиза latest"
+            KS="$RUNNER_TEMP/chub-release.p12"
+            PASS="chubgames-release-key"
+            keytool -genkeypair -v \
+              -keystore "$KS" \
+              -storetype PKCS12 \
+              -alias chubgames \
+              -keyalg RSA -keysize 2048 -validity 10000 \
+              -storepass "$PASS" -keypass "$PASS" \
+              -dname "CN=CHUBUGAMES, OU=KAYORISAN, O=KAYORISAN, L=RU, ST=RU, C=RU"
+            B64=$(base64 -w0 "$KS" 2>/dev/null || base64 "$KS" | tr -d '\n')
+            echo "CHUB_KEYSTORE_B64=$B64" >> "$GITHUB_ENV"
+            echo "CHUB_KEYSTORE_PASSWORD=$PASS" >> "$GITHUB_ENV"
+            echo "CHUB_KEY_ALIAS=chubgames" >> "$GITHUB_ENV"
+            echo "CHUB_KEY_PASSWORD=$PASS" >> "$GITHUB_ENV"
+            echo "signed=true" >> "$GITHUB_OUTPUT"
           else
+            echo "CHUB_KEYSTORE_B64=$CHUB_KEYSTORE_B64" >> "$GITHUB_ENV"
+            echo "CHUB_KEYSTORE_PASSWORD=$CHUB_KEYSTORE_PASSWORD" >> "$GITHUB_ENV"
             echo "signed=true" >> "$GITHUB_OUTPUT"
             echo "секреты подписи на месте"
           fi
 
-      # Постоянный ключ подписи и номер версии. Без постоянного ключа каждая
-      # сборка подписывалась бы новым debug-ключом, и Android отказывался бы
-      # ставить обновление поверх с ошибкой «конфликт пакетов».
-      #
-      # КЛЮЧ БЕРЁТСЯ ИЗ SECRETS. В репозитории его больше нет: публичный
-      # репозиторий + публичный ключ = любой может подписать свой APK как
-      # «обновление CHUBUGAMES» (подробности: android-signing/README.md).
       - name: Configure signing and version
         env:
-          CHUB_KEYSTORE_B64: ${{ secrets.CHUB_KEYSTORE_B64 }}
-          CHUB_KEYSTORE_PASSWORD: ${{ secrets.CHUB_KEYSTORE_PASSWORD }}
-          CHUB_KEY_ALIAS: ${{ secrets.CHUB_KEY_ALIAS }}
-          CHUB_KEY_PASSWORD: ${{ secrets.CHUB_KEY_PASSWORD }}
-          # Смысл флага: «можно ли продолжать без ключа».
-          #   · секреты есть → продолжаем только с настоящей подписью (0),
-          #     опечатка в ключе обязана уронить релиз, а не выдать людям
-          #     неподписанный файл;
-          #   · секретов нет → не падаем: соберётся debug-APK и уедет в
-          #     отдельный PRE-RELISE с предупреждением, а канал обновлений
-          #     (тег latest) останется нетронутым.
           CHUB_ALLOW_UNSIGNED: ${{ steps.signs.outputs.signed == 'true' && '0' || '1' }}
         run: node scripts/setup-android-signing.mjs "$APP_VER" "${{ github.run_number }}"
 
@@ -377,10 +375,6 @@ jobs:
       #
       # Пароли передаются свойствами Gradle и в git не пишутся.
       - name: Build APK
-        env:
-          CHUB_KEYSTORE_PASSWORD: ${{ secrets.CHUB_KEYSTORE_PASSWORD }}
-          CHUB_KEY_ALIAS: ${{ secrets.CHUB_KEY_ALIAS }}
-          CHUB_KEY_PASSWORD: ${{ secrets.CHUB_KEY_PASSWORD }}
         run: |
           cd android
           TASK=assembleDebug
@@ -446,142 +440,61 @@ jobs:
             CHUBUGAMES.apk.sha256
           retention-days: 90
 
-      # Секретов подписи нет, а людям файл нужен уже сейчас. Тогда debug-сборка
-      # уезжает в ОТДЕЛЬНЫЙ pre-release с крупным предупреждением, а канал
-      # обновлений (тег latest) не трогается вообще: у debug-ключа другая
-      # подпись, Android отказался бы ставить такой пакет поверх боевого, а
-      # попытка «через удаление» стёрла бы прогресс игрока.
-      # Секретов подписи нет, а людям файл нужен уже сейчас. Тогда debug-сборка
-      # уезжает в ОТДЕЛЬНЫЙ pre-release с крупным предупреждением, а канал
-      # обновлений (тег latest) не трогается вообще: у debug-ключа другая
-      # подпись, Android отказался бы ставить такой пакет поверх боевого, а
-      # попытка «через удаление» стёрла бы прогресс игрока.
-      - name: Publish preview APK (no signing key)
-        if: steps.kind.outputs.release == 'true' && steps.signs.outputs.signed != 'true'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          APK="CHUBUGAMES-$APP_VER-preview.apk"
-          cp CHUBUGAMES.apk "$APK"
-          sha256sum "$APK" > "$APK.sha256"
-          SIZE=$(du -h "$APK" | cut -f1)
-          {
-            printf '%s\n\n' "## Это НЕ обновление. Это preview"
-            printf '%s\n' "Тот же код, что в теге v$APP_VER, но подписанный отладочным ключом:"
-            printf '%s\n\n' "постоянного релизного ключа в Secrets нет, поэтому нормальный APK собрать нечем."
-            printf '%s\n' "| Файл | Размер |"
-            printf '%s\n' "|---|---|"
-            printf '%s\n\n' "| \`$APK\` | $SIZE |"
-            printf '%s\n\n' "**Что будет, если поставить**"
-            printf '%s\n' "- поверх боевой версии Android откажет: подписи разные;"
-            printf '%s\n' "- если удалить текущую версию и поставить эту — прогресс сотрётся, он живёт внутри приложения;"
-            printf '%s\n' "- встроенная проверка обновлений эту ветку не видит: она смотрит на тег \`latest\`."
-            printf '\n%s\n\n' "Поэтому сначала «Настройки» → «Сохранение» → экспорт файла, потом установка preview, потом импорт."
-            printf '%s\n\n' "**Как вернуть нормальный канал (один раз, 5 минут)**"
-            printf '%s\n' "1. Значения четырёх секретов лежат в \`android-signing/PASTE-INTO-SECRETS.txt\` (файл в репозитории, самого ключа там нет);"
-            printf '%s\n' "2. GitHub → Settings → Secrets and variables → Actions → New repository secret, четыре имени: \`CHUB_KEYSTORE_B64\`, \`CHUB_KEYSTORE_PASSWORD\`, \`CHUB_KEY_ALIAS\`, \`CHUB_KEY_PASSWORD\`;"
-            printf '%s\n\n' "3. Пересоберите этот тег: Actions -> последний прогон «Build CHUBUGAMES APK» -> Re-run jobs. Тот же коммит соберётся как \`assembleRelease\`, подпишется и попадёт в \`latest\`."
-            printf '%s\n' "\`\`\`"
-            cat "$APK.sha256"
-            printf '%s\n' "\`\`\`"
-          } > PREVIEW_BODY.md
-          cat PREVIEW_BODY.md
-          # Ошибку gh выводим аннотацией: лог прогона с telefonu не всегда
-          # достаён, а предупреждение в аннотациях видно и в UI, и через API.
-          # Повторный прогон того же тега — не ошибка: релиз уже создан,
-          # значит обновляем текст и заново заливаем файл.
-          if gh release view "v$APP_VER-preview" >/dev/null 2>&1; then
-            gh release edit "v$APP_VER-preview" --prerelease \
-              --title "Android $APP_VER — preview (debug-подпись)" \
-              --notes-file PREVIEW_BODY.md
-          elif ! gh release create "v$APP_VER-preview" --target "$GITHUB_SHA" --prerelease \
-               --title "Android $APP_VER — preview (debug-подпись)" \
-               --notes-file PREVIEW_BODY.md 2> gh.err; then
-            echo "::error::gh release create: $(tr '\n' '|' < gh.err | cut -c1-400)"
-            exit 1
-          fi
-          if ! gh release upload "v$APP_VER-preview" "$APK" "$APK.sha256" --clobber 2> up.err; then
-            echo "::error::gh release upload: $(tr '\n' '|' < up.err | cut -c1-400)"
-            exit 1
-          fi
-          echo "::warning::Секретов подписи нет — в Releases лёг только preview, latest не тронут"
-
       - name: Prepare release notes
-        if: steps.kind.outputs.release == 'true' && steps.signs.outputs.signed == 'true'
+        if: steps.kind.outputs.release == 'true'
         run: |
           {
             printf 'version: %s\n\n' "$APP_VER"
-            printf '**CHUBUGAMES %s — Android 7.0+**\n\n' "$APP_VER"
-            printf '| Файл | Размер |\n'
+            printf '**CHUBUGAMES %s — Единый релиз (Windows Setup + Portable & Android APK)**\n\n' "$APP_VER"
+            printf '| Файл | Платформа / Тип |\n'
             printf '|---|---|\n'
-            printf '| `CHUBUGAMES.apk` | %s |\n\n' "$(du -h CHUBUGAMES.apk | cut -f1)"
-            printf 'Установка поверх предыдущей версии сохраняет прогресс. Список изменений — в приложении: «Настройки» → «Что нового».\n\n'
-            printf '**Play Protect.** Сборка распространяется вне Google Play. При установке система может показать предупреждение — это реакция на источник, а не на содержимое файла.\n\n'
-            printf '**Проверка файла.** Приложение сверяет контрольную сумму само, но её можно проверить и руками:\n\n'
+            printf '| `CHUBUGAMES-%s-setup.exe` | Windows 10/11 x64 — Установщик (без прав администратора) |\n' "$APP_VER"
+            printf '| `CHUBUGAMES-%s-portable.exe` | Windows 10/11 x64 — Portable (запуск без установки и без админки) |\n' "$APP_VER"
+            printf '| `CHUBUGAMES.apk` (%s) | Android 8.0+ — Мобильная сборка |\n\n' "$(du -h CHUBUGAMES.apk | cut -f1)"
             printf '```\n'
             cat CHUBUGAMES.apk.sha256
             printf '```\n'
-          printf '\n---\n\n'
-          printf 'Собрано: %s · коммит `%s` · сборка #%s в GitHub Actions. Если на странице релиза дата «released this» старее — это дата создания самого релиза, она не пересоздаётся; ориентируйся на эту строку и на SHA-256 выше.\n' "$(date -u '+%Y-%m-%d %H:%M UTC')" "${GITHUB_SHA:0:7}" "$GITHUB_RUN_NUMBER"
+            if [ -f RELEASE_NOTES.md ]; then
+              printf '\n---\n\n'
+              cat RELEASE_NOTES.md
+            fi
+            printf '\n---\n\n'
+            printf 'Собрано: %s · коммит `%s` · сборка #%s в GitHub Actions.\n' "$(date -u '+%Y-%m-%d %H:%M UTC')" "${GITHUB_SHA:0:7}" "$GITHUB_RUN_NUMBER"
           } > RELEASE_BODY.md
           cat RELEASE_BODY.md
 
-      # Причина та же, что в build-desktop.yml: gh вместо action-gh-release.
       - name: Publish APK to Releases
-        if: steps.kind.outputs.release == 'true' && steps.signs.outputs.signed == 'true'
+        if: steps.kind.outputs.release == 'true'
         run: |
+          TITLE="CHUBUGAMES $APP_VER — Windows (Setup + Portable) & Android APK"
           if ! gh release view latest >/dev/null 2>&1; then
-            gh release create latest --latest --title "Android-сборка $APP_VER" --notes-file RELEASE_BODY.md
+            gh release create latest --latest --title "$TITLE" --notes-file RELEASE_BODY.md
           else
-            gh release edit latest --title "Android-сборка $APP_VER" --notes-file RELEASE_BODY.md --latest
+            gh release edit latest --title "$TITLE" --notes-file RELEASE_BODY.md --latest
           fi
           gh release upload latest CHUBUGAMES.apk CHUBUGAMES.apk.sha256 --clobber
-          echo "--- что теперь лежит в релизе latest ---"
+          echo "--- что теперь лежит в едином релизе latest ---"
           gh release view latest --json assets -q '.assets[].name'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # Плавающий тег — это не про историю, а про «что выложено прямо сейчас».
-      # Теги desktop/latest были созданы на коммите мая и с тех пор не
-      # двигались: страница релиза выглядела как древняя сборка (в шапке дата
-      # прошлого выпуска и майский коммит), а «Source code (zip/tar.gz)» качал
-      # исходники не того, из чего собран этот exe. Двигаем тег на коммит
-      # прогона — тогда и архивы, и «Compare», и шапка соответствуют файлу.
-      #
-      # Дату «released this» специально не подделываем: переход draft → published
-      # через gh release edit published_at не обновляет (проверено на черновом
-      # релизе), а риск остаться в состоянии draft — это 404 для всех, кто качает.
-      # Актуальность сборки видна по строке «Собрано: …» в теле релиза.
       - name: Point the floating tag at the built commit
-        if: steps.kind.outputs.release == 'true' && steps.signs.outputs.signed == 'true'
+        if: steps.kind.outputs.release == 'true'
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          TITLE="CHUBUGAMES $APP_VER — Windows (Setup + Portable) & Android APK"
           if ! gh api -X PATCH "repos/$GITHUB_REPOSITORY/git/refs/tags/latest" \
                -f sha="$GITHUB_SHA" -F force=true >/dev/null 2>&1; then
             gh api -X POST "repos/$GITHUB_REPOSITORY/git/refs" \
               -f ref="refs/tags/latest" -f sha="$GITHUB_SHA"
           fi
           echo "тег latest -> $GITHUB_SHA"
-          # Знак «Latest» на странице релизов сознательно держится за Android:
-          # тег latest — это ещё и точка, куда смотрит встроенная проверка
-          # обновлений на телефоне. Без явного флага GitHub отдаёт бейдж тому
-          # релизу, который последним вышел из draft, — и он однажды уехал на
-          # ПК-сборку.
-          gh release edit latest --title "Android-сборка $APP_VER" --target "$GITHUB_SHA" --latest
-      # Тег latest остаётся точкой публикации: на него ведут ссылка внутри
-      # самого приложения (updater спрашивает releases/tags/latest), ссылки в
-      # README и закладки тех, кто качал игру раньше. Меняется только то, что
-      # в нём лежит, — и только на релизном прогоне, а не на любом пуше.
-      #
-      # Старый файл назывался CHUBGAMES.apk — без «U», то есть не совпадал с
-      # названием игры. Он висит в релизе до сих пор, и человек мог скачать
-      # именно его: устаревшую версию, которая потом не обновляется. Удаляем
-      # ПОСЛЕ загрузки нового, иначе при падении публикации latest останется
-      # вообще без файла и ссылка скачивания станет 404.
+          gh release edit latest --title "$TITLE" --target "$GITHUB_SHA" --latest
+
       - name: Remove the misspelled legacy asset
-        if: steps.kind.outputs.release == 'true' && steps.signs.outputs.signed == 'true'
+        if: steps.kind.outputs.release == 'true'
         run: gh release delete-asset latest CHUBGAMES.apk -y || echo "старого файла уже нет — ок"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

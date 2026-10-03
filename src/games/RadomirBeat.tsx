@@ -747,7 +747,7 @@ export default function RadomirBeat({ onExit }: { onExit: () => void }) {
       <AnimatePresence>
         {phase === "menu" && (
           <GameIntro
-            title={tr("РИТМ РАДОМИРА")}
+            title={tr("РИТМ НЕОНА")}
             subtitle={tr("Короткие ноты — тап, длинные — держи палец до конца хвоста.")}
             icon="note"
             startLabel={tr("ИГРАТЬ")}

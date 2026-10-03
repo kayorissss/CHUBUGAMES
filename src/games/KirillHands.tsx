@@ -497,7 +497,7 @@ export default function KirillHands({ onExit }: { onExit: () => void }) {
           onRetry={restart}
           onExit={onExit}
           title={tr("ОБНЕСЛИ")}
-          sub={tr("Кирилл унёс всё до последнего")}
+          sub={tr("Фантом унёс всё до последнего")}
         />
       )}
     </div>

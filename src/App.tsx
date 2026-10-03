@@ -10,7 +10,6 @@ export type SubPage = "network" | "casino" | "donate" | "boss" | "fanfic" | "upd
 import { Toasts, OfflineModal } from "./components/Overlays";
 import PcDock from "./ui/pc/PcDock";
 import UpdateFlow from "./pages/UpdateFlow";
-import { APP_VERSION } from "./core/version";
 import UpdateBanner from "./ui/UpdateBanner";
 import WhatsNew from "./ui/WhatsNew";
 import {
@@ -30,7 +29,7 @@ import { installSystemBack } from "./core/android";
 import { startDesktopNotify } from "./core/notifyDesktop";
 import { claimableCount, claimables } from "./core/claimable";
 import BootScreen from "./ui/BootScreen";
-import PcTopBar from "./ui/pc/PcTopBar";
+import PcTopBar, { PcWinControls } from "./ui/pc/PcTopBar";
 import { FpsHud, KeyCursor } from "./ui/PcHud";
 import { initGameKeys, handlesKeysNatively } from "./core/keymouse";
 import { setPlaying } from "./core/play";
@@ -481,29 +480,13 @@ function Shell() {
                 кадры считает цикл useCanvas (core/perf.ts). */}
             {s.settings.fpsHud !== false && <FpsHud />}
             {s.settings.keys !== false && hasKeyboard() && !handlesKeysNatively(game) && <KeyCursor />}
+            {pc && <PcWinControls floating />}
             </div>
             <PauseOverlay label={(() => { const g = GAME_META.find((x) => x.id === game); return g ? tr(g.name) : undefined; })()} />
           </motion.div>
         )}
       </AnimatePresence>
       </div>
-
-      {/* НИЖНЯЯ СТРОКА ОКНА — «везде зафиксирована на одном месте, внизу-внизу».
-          Раньше «CHUBUGAMES» и версия жили в конце страницы настроек: на
-          коротких вкладках они висели сразу под плашками, на длинных — уезжали
-          за скролл, и выглядело это как брошенный кусок текста. Теперь это
-          строка состояния оболочки: она НЕ скроллится, она всегда одна и та же
-          и она без кнопок — просто имя, автор и версия (плашку с Telegram
-          убрали целиком по той же просьбе). */}
-      {pc && !game && (
-        <footer className="pc-statusbar">
-          <span className="pc-status-brand">CHUBUGAMES</span>
-          <span className="pc-status-sep" aria-hidden />
-          <span className="pc-status-dev">Developer: <b>@kayorisan</b></span>
-          <span className="pc-status-sep" aria-hidden />
-          <span className="pc-status-ver">Version {APP_VERSION}</span>
-        </footer>
-      )}
 
       {/* Оверлеи — через портал в body. Пока они стояли внутри страницы,
           любая анимация входа с transform делала их position:fixed

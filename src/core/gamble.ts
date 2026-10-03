@@ -139,7 +139,7 @@ export const GAMBLE_CASES: GambleCase[] = [
     odds: { common: 0.28, rare: 0.44, epic: 0.24, legend: 0.04 },
   },
   {
-    id: "garage", name: "Гараж Артёма", tag: "металл и дым", tier: 5, price: 360,
+    id: "garage", name: "Гараж Рейзера", tag: "металл и дым", tier: 5, price: 360,
     tint: "#C9773B", icon: "bolt", jackpot: 520,
     cap: 900,
     odds: { common: 0.15, rare: 0.38, epic: 0.39, legend: 0.08 },
@@ -151,7 +151,7 @@ export const GAMBLE_CASES: GambleCase[] = [
     odds: { common: 0.06, rare: 0.34, epic: 0.47, legend: 0.13 },
   },
   {
-    id: "studio", name: "Студия Радомира", tag: "светомузыка", tier: 7, price: 1800,
+    id: "studio", name: "Студия Неона", tag: "светомузыка", tier: 7, price: 1800,
     tint: "#FF9FD6", icon: "star", jackpot: 3800,
     cap: 5200,
     odds: { common: 0.02, rare: 0.26, epic: 0.52, legend: 0.20 },

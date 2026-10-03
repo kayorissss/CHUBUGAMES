@@ -606,7 +606,7 @@ export default function ShitovRun({ onExit }: { onExit: () => void }) {
       <AnimatePresence>
         {showAd && (
           <AdModal
-            reason="Убежать от Шитова"
+            reason="Уйти от погони Кортекса"
             onReward={() => { revivedRef.current = true; noteRevive(); }}
             onClose={() => {
               setShowAd(false);

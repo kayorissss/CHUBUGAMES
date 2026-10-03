@@ -33,9 +33,9 @@ const fs = require("node:fs");
 /** Где лежит собранная игра: в разработке — dist/, в сборке — внутри app.asar */
 const ROOT = path.join(__dirname, "..", "dist");
 
-/** Репозиторий и метка релиза с ПК-сборками */
+/** Репозиторий и единая метка релиза (Setup + Portable + APK) */
 const REPO = "kayorissss/CHUBUGAMES";
-const DESKTOP_TAG = "desktop";
+const DESKTOP_TAG = "latest";
 
 /**
  * Одна копия игры на компьютер: второй запуск просто показывает окно.
@@ -126,20 +126,24 @@ function writeWinState(patch) {
   }
 }
 
+function winStatePayload() {
+  if (!win || win.isDestroyed()) return { fullscreen: false, maximized: false };
+  return {
+    fullscreen: win.isFullScreen(),
+    maximized: win.isMaximized(),
+  };
+}
+
+function emitWinState() {
+  if (!win || win.isDestroyed()) return;
+  try {
+    win.webContents.send("win:state", winStatePayload());
+  } catch {
+    /* noop */
+  }
+}
+
 function createWindow() {
-  /*
-   * РАЗМЕР И РЕЖИМ ОКНА.
-   *
-   * Раньше окно открывалось вертикальным (480x900) — телефон на рабочем
-   * столе. Теперь интерфейс альбомный и сам раскладывает содержимое по
-   * ширине окна (колонки игр + правая панель сведений), поэтому окну не
-   * нужны ни фиксированная ширина, ни «сцена» с transform: масштабом
-   * управляет только крупность шрифта (src/core/stage.ts).
-   *
-   * Полный экран — режим по умолчанию: попросили, чтобы игра сразу
-   * занимала весь монитор, а F11 из него выходил. Как закрыли окно, так
-   * следующий запуск и откроется (см. readWinState/writeWinState).
-   */
   const area = screen.getPrimaryDisplay().workAreaSize;
   const st = readWinState();
   const winW = st.w >= 900 ? st.w : Math.min(1600, Math.round(area.width * 0.9));
@@ -148,20 +152,18 @@ function createWindow() {
   win = new BrowserWindow({
     width: winW,
     height: winH,
-    // координаты помним только вместе с размером: при первом запуске
-    // и x, и y нулевые, а это «в левый верхний угол экрана» вместо
-    // обычного центрирования окна
     x: st.w >= 900 && st.x > 0 ? st.x : undefined,
     y: st.w >= 900 && st.y > 0 ? st.y : undefined,
-    minWidth: 900,
-    minHeight: 560,
-    backgroundColor: "#08080A",
+    minWidth: 720,
+    minHeight: 520,
+    frame: false,
+    titleBarStyle: "hidden",
+    backgroundColor: "#07060d",
     autoHideMenuBar: true,
     show: false,
     title: "CHUBUGAMES",
     icon: path.join(__dirname, "res", "icon.png"),
     webPreferences: {
-      // Игре не нужен доступ к Node — держим песочницу закрытой
       nodeIntegration: false,
       contextIsolation: true,
       sandbox: true,
@@ -178,25 +180,24 @@ function createWindow() {
   if (st.fullscreen) win.setFullScreen(true);
   else if (st.maximized) win.maximize();
 
-  /*
-   * F11 — переключает режим и запоминает выбор.
-   *
-   * Вешаем на главный процесс, а не на страницу: в полноэкранном режиме
-   * Electron по умолчанию перехватывает F11 сам, и обработчик в WebView до
-   * него не доживает. Заодно так одна и та же клавиша работает и на
-   * телефонной раскладке окна, и в полном экране.
-   */
   win.webContents.on("before-input-event", (e, input) => {
     if (input.type === "keyDown" && input.key === "F11") {
       e.preventDefault();
       const next = !win.isFullScreen();
       win.setFullScreen(next);
       writeWinState({ fullscreen: next });
+      emitWinState();
     }
   });
 
-  win.on("enter-full-screen", () => writeWinState({ fullscreen: true }));
-  win.on("leave-full-screen", () => writeWinState({ fullscreen: false }));
+  win.on("enter-full-screen", () => {
+    writeWinState({ fullscreen: true });
+    emitWinState();
+  });
+  win.on("leave-full-screen", () => {
+    writeWinState({ fullscreen: false });
+    emitWinState();
+  });
 
   // Помним обычный размер окна, чтобы следующий запуск был таким же
   win.on("resized", () => {
@@ -205,15 +206,23 @@ function createWindow() {
       const [x, y] = win.getPosition();
       writeWinState({ w, h, x, y });
     }
+    emitWinState();
   });
-  win.on("maximize", () => writeWinState({ maximized: true }));
-  win.on("unmaximize", () => writeWinState({ maximized: false }));
+  win.on("maximize", () => {
+    writeWinState({ maximized: true });
+    emitWinState();
+  });
+  win.on("unmaximize", () => {
+    writeWinState({ maximized: false });
+    emitWinState();
+  });
 
   // Показываем окно, когда страница отрисована: без белой вспышки
   win.once("ready-to-show", () => {
     // На небольшом мониторе разворачиваем сразу — иначе поля съедают экран
     if (!st.fullscreen && area.width <= 1440) win.maximize();
     win.show();
+    emitWinState();
   });
 
   /*
@@ -596,17 +605,48 @@ ipcMain.handle("win:toggleFullscreen", () => {
   // событие enter/leave-full-screen тоже пишет состояние, но не всегда
   // успевает до закрытия окна — пишем сразу
   writeWinState({ fullscreen: next });
+  emitWinState();
   return next;
 });
 
+ipcMain.handle("win:minimize", () => {
+  if (win && !win.isDestroyed()) win.minimize();
+  return winStatePayload();
+});
+
+ipcMain.handle("win:maximize", () => {
+  if (!win || win.isDestroyed()) return winStatePayload();
+  if (win.isFullScreen()) {
+    win.setFullScreen(false);
+    writeWinState({ fullscreen: false });
+  } else if (win.isMaximized()) {
+    win.unmaximize();
+    writeWinState({ maximized: false });
+  } else {
+    win.maximize();
+    writeWinState({ maximized: true });
+  }
+  emitWinState();
+  return winStatePayload();
+});
+
+ipcMain.handle("win:close", () => {
+  if (win && !win.isDestroyed()) win.close();
+  return true;
+});
+
+ipcMain.handle("win:state", () => winStatePayload());
+
 ipcMain.handle("win:resize", (_e, { w, h }) => {
-  if (!win || win.isFullScreen()) return false;
+  if (!win) return false;
+  if (win.isFullScreen()) win.setFullScreen(false);
+  if (win.isMaximized()) win.unmaximize();
   const area = screen.getPrimaryDisplay().workAreaSize;
-  // не даём окну вылезти за пределы рабочей области монитора
-  const width = Math.max(320, Math.min(Math.round(w), area.width));
-  const height = Math.max(480, Math.min(Math.round(h), area.height));
+  const width = Math.max(720, Math.min(Math.round(w), area.width));
+  const height = Math.max(520, Math.min(Math.round(h), area.height));
   win.setSize(width, height, true);
   win.center();
+  emitWinState();
   return true;
 });
 
@@ -617,6 +657,59 @@ ipcMain.handle("win:screen", () => {
     height: d.workAreaSize.height,
     scaleFactor: d.scaleFactor,
   };
+});
+
+/* ─────────────────── Скачивание релизов в папку «Загрузки» ─────────────────── */
+
+ipcMain.handle("ext:download", async (_evt, payload) => {
+  const url = String((payload && payload.url) || "");
+  const rawName = String(
+    (payload && payload.fileName) || path.basename(url.split("?")[0]) || "download.bin",
+  );
+  const safeName = rawName.replace(/[<>:"/\\|?*\x00-\x1F]/g, "_");
+  if (!/^https:\/\/(github\.com|api\.github\.com|[a-z0-9.-]*githubusercontent\.com)\//i.test(url)) {
+    return { ok: false, error: "Недопустимый источник файла" };
+  }
+  try {
+    const downloadsDir = app.getPath("downloads");
+    fs.mkdirSync(downloadsDir, { recursive: true });
+    const dest = path.join(downloadsDir, safeName);
+    await download(url, dest, (p) => {
+      if (win && !win.isDestroyed()) {
+        win.webContents.send("ext:progress", {
+          url,
+          fileName: safeName,
+          pct: p.percent,
+          got: p.received,
+          total: p.total,
+        });
+      }
+    });
+    return { ok: true, path: dest, dir: downloadsDir, fileName: safeName };
+  } catch (err) {
+    return { ok: false, error: String((err && err.message) || err) };
+  }
+});
+
+ipcMain.handle("ext:showInFolder", (_evt, filePath) => {
+  try {
+    if (filePath && fs.existsSync(filePath)) {
+      shell.showItemInFolder(filePath);
+    } else {
+      shell.openPath(app.getPath("downloads"));
+    }
+    return true;
+  } catch {
+    return false;
+  }
+});
+
+ipcMain.handle("ext:openExternal", (_evt, url) => {
+  if (typeof url === "string" && /^https:\/\//i.test(url)) {
+    shell.openExternal(url);
+    return true;
+  }
+  return false;
 });
 
 app.on("window-all-closed", () => {

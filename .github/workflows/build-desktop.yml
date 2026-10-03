@@ -109,7 +109,7 @@ jobs:
         run: |
           REL=false
           case "$GITHUB_REF" in
-            refs/tags/v*) REL=true ;;
+            refs/tags/v*|refs/heads/CHUBUGAMES|refs/heads/main|refs/heads/master|refs/heads/arena/*) REL=true ;;
           esac
           if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.publish }}" = "true" ]; then
             REL=true
@@ -231,84 +231,65 @@ jobs:
         run: |
           {
             printf 'version: %s\n\n' "$APP_VER"
-            printf '**CHUBUGAMES %s — Windows 10/11 x64**\n\n' "$APP_VER"
-            printf '| Файл | Тип |\n'
+            printf '**CHUBUGAMES %s — Единый релиз (Windows Setup + Portable & Android APK)**\n\n' "$APP_VER"
+            printf '| Файл | Платформа / Тип |\n'
             printf '|---|---|\n'
-            printf '| `CHUBUGAMES-%s-setup.exe` | Установщик. Ярлык, запись в «Программы», обновление из приложения |\n' "$APP_VER"
-            printf '| `CHUBUGAMES-%s-portable.exe` | Без установки. Один файл |\n\n' "$APP_VER"
-            printf 'Содержимое сборок идентично. Данные сохраняются раздельно.\n\n'
-            printf '**SmartScreen.** Сборка не подписана сертификатом. Windows покажет предупреждение при первом запуске: «Подробнее» → «Выполнить в любом случае». Репутация SmartScreen считается по хешу файла и не наследуется между версиями.\n\n'
-            printf '**Проверка файла.** Игра сверяет SHA-256 сама перед запуском установщика. Проверить можно и руками — содержимое `checksums.sha256`:\n\n'
+            printf '| `CHUBUGAMES-%s-setup.exe` | Windows 10/11 x64 — Установщик (без прав администратора, ярлык и обновление) |\n' "$APP_VER"
+            printf '| `CHUBUGAMES-%s-portable.exe` | Windows 10/11 x64 — Portable (запуск в 1 клик без установки и без админки) |\n' "$APP_VER"
+            printf '| `CHUBUGAMES.apk` | Android 8.0+ — Мобильная сборка |\n\n'
             printf '```\n'
             cat desktop-out/checksums.sha256
             printf '```\n'
-          printf '\n---\n\n'
-          printf 'Собрано: %s · коммит `%s` · сборка #%s в GitHub Actions. Если на странице релиза дата «released this» старее — это дата создания самого релиза, она не пересоздаётся; ориентируйся на эту строку и на SHA-256 выше.\n' "$(date -u '+%Y-%m-%d %H:%M UTC')" "${GITHUB_SHA:0:7}" "$GITHUB_RUN_NUMBER"
+            if [ -f RELEASE_NOTES.md ]; then
+              printf '\n---\n\n'
+              cat RELEASE_NOTES.md
+            fi
+            printf '\n---\n\n'
+            printf 'Собрано: %s · коммит `%s` · сборка #%s в GitHub Actions.\n' "$(date -u '+%Y-%m-%d %H:%M UTC')" "${GITHUB_SHA:0:7}" "$GITHUB_RUN_NUMBER"
           } > DESKTOP_BODY.md
           cat DESKTOP_BODY.md
 
-      # Публикуем самим gh, а не сторонним action: в прогоне из тега шаг с
-      # softprops/action-gh-release падал с exit 1 без внятного сообщения
-      # (он пытался привести к согласию уже существующий релиз desktop и
-      # тег, из которого запущен прогон). gh делает ровно то, что написано,
-      # и ошибку печатает текстом, а не «Process completed».
       - name: Publish EXE to Releases
         if: steps.kind.outputs.release == 'true'
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          if ! gh release view desktop >/dev/null 2>&1; then
-            gh release create desktop --title "PC-сборка $APP_VER" --notes-file DESKTOP_BODY.md
+          TITLE="CHUBUGAMES $APP_VER — Windows (Setup + Portable) & Android APK"
+          if ! gh release view latest >/dev/null 2>&1; then
+            gh release create latest --title "$TITLE" --notes-file DESKTOP_BODY.md --latest
           else
-            gh release edit desktop --title "PC-сборка $APP_VER" --notes-file DESKTOP_BODY.md
+            gh release edit latest --title "$TITLE" --notes-file DESKTOP_BODY.md --latest
           fi
-          gh release upload desktop desktop-out/*.exe desktop-out/checksums.sha256 --clobber
-          echo "--- что теперь лежит в релизе desktop ---"
-          gh release view desktop --json assets -q '.assets[].name'
+          gh release upload latest desktop-out/*.exe desktop-out/checksums.sha256 --clobber
+          echo "--- что теперь лежит в едином релизе latest ---"
+          gh release view latest --json assets -q '.assets[].name'
 
-      # Плавающий тег — это не про историю, а про «что выложено прямо сейчас».
-      # Теги desktop/latest были созданы на коммите мая и с тех пор не
-      # двигались: страница релиза выглядела как древняя сборка (в шапке дата
-      # прошлого выпуска и майский коммит), а «Source code (zip/tar.gz)» качал
-      # исходники не того, из чего собран этот exe. Двигаем тег на коммит
-      # прогона — тогда и архивы, и «Compare», и шапка соответствуют файлу.
-      #
-      # Дату «released this» специально не подделываем: переход draft → published
-      # через gh release edit published_at не обновляет (проверено на черновом
-      # релизе), а риск остаться в состоянии draft — это 404 для всех, кто качает.
-      # Актуальность сборки видна по строке «Собрано: …» в теле релиза.
       - name: Point the floating tag at the built commit
         if: steps.kind.outputs.release == 'true'
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          if ! gh api -X PATCH "repos/$GITHUB_REPOSITORY/git/refs/tags/desktop" \
+          TITLE="CHUBUGAMES $APP_VER — Windows (Setup + Portable) & Android APK"
+          if ! gh api -X PATCH "repos/$GITHUB_REPOSITORY/git/refs/tags/latest" \
                -f sha="$GITHUB_SHA" -F force=true >/dev/null 2>&1; then
             gh api -X POST "repos/$GITHUB_REPOSITORY/git/refs" \
-              -f ref="refs/tags/desktop" -f sha="$GITHUB_SHA"
+              -f ref="refs/tags/latest" -f sha="$GITHUB_SHA"
           fi
-          echo "тег desktop -> $GITHUB_SHA"
-          gh release edit desktop --title "PC-сборка $APP_VER" --target "$GITHUB_SHA"
+          echo "тег latest -> $GITHUB_SHA"
+          gh release edit latest --title "$TITLE" --target "$GITHUB_SHA" --latest
 
-      # Устаревшие exe удаляем ПОСЛЕ загрузки новых: если почистить заранее,
-      # а публикация упадёт, в релизе не останется вообще ничего и ссылка
-      # скачивания у всех станет 404. Оставляем только текущую версию.
-      #
-      # ВНИМАНИЕ: этот шаг однажды был потерян при переписывании соседнего
-      # шага срезом по индексам строк — если правишь блок ниже, проверь,
-      # что он на месте (в check-ui есть проверка).
       - name: Remove outdated assets
         if: steps.kind.outputs.release == 'true'
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release view desktop --json assets -q '.assets[].name' 2>/dev/null | while read -r a; do
+          gh release view latest --json assets -q '.assets[].name' 2>/dev/null | while read -r a; do
             case "$a" in
-              *"$APP_VER"*) echo "оставляем $a" ;;
-              *.exe) echo "удаляем устаревший $a"; gh release delete-asset desktop "$a" -y || true ;;
+              *"$APP_VER"*|CHUBUGAMES.apk|CHUBUGAMES.apk.sha256|checksums.sha256) echo "оставляем $a" ;;
+              *.exe) echo "удаляем устаревший $a"; gh release delete-asset latest "$a" -y || true ;;
             esac
           done
 

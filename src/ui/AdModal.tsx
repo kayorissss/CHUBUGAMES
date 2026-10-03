@@ -1,294 +1,261 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import { tr } from "../core/i18n";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
-import Icon from "./Icon";
+import { pickClip, AD_SKIP_AFTER, AD_FALLBACK_LEN } from "../core/ads";
 import { sfx, haptic } from "../core/fx";
-import { AD_FALLBACK_LEN, AD_SKIP_AFTER, pickClip } from "../core/ads";
-import { useGame } from "../core/store";
+import { tr } from "../core/i18n";
+import { pcApi } from "../core/desktop";
+import Icon from "./Icon";
+import { useSystemBack } from "../core/android";
 
 /**
- * Показ рекламного ролика — полноэкранный, как в обычных мобильных играх.
+ * МОДАЛЬНОЕ ОКНО СПОНСОРСКОГО ТРАНСЛЯТОРА (AdModal).
  *
- * Пользователь просил:
- *  • ролик на весь экран, без интерфейса приложения вокруг;
- *  • кнопки «Пропустить», метка «Реклама» и звук — ПОВЕРХ видео;
- *  • при повторном входе ролик начинается сначала, а не с того же места;
- *  • после просмотра — плашка по центру «ЗА ПРОСМОТР РЕКЛАМЫ» с наградой.
- *
- * Награда не выдаётся только если закрыть до появления кнопки пропуска.
+ * Полностью переработано: вместо глухого чёрного экрана на весь монитор —
+ * стильное кибер-окно трансляции с неоновой рамкой, статус-баром, плавной
+ * шкалой прогресса, индикатором награды и аккуратным плеером по центру.
  */
 export default function AdModal({
+  open = true,
   reason,
   onReward,
   onClose,
 }: {
-  /** Что игрок получит — показываем в плашке награды */
+  open?: boolean;
   reason: string;
   onReward: () => void;
   onClose: () => void;
 }) {
-  const { s: save } = useGame();
-  const [clip] = useState(() => pickClip());
+  const ad = useMemo(
+    () =>
+      pickClip() || {
+        id: "fallback",
+        src: "ads/promo1.mp4",
+        link: "https://t.me/kayorisan",
+        label: "СПОНСОРСКИЙ КОНТРАКТ",
+      },
+    [open],
+  );
   const videoRef = useRef<HTMLVideoElement>(null);
-  /**
-   * Со звуком, если он не выключен в настройках. Окно открывается по нажатию
-   * игрока, поэтому автозапуск со звуком браузер разрешает. Если всё же
-   * заблокирует — молча падаем в беззвучный режим.
-   */
-  const [muted, setMuted] = useState(() => !save.settings.sound);
-  const [t, setT] = useState(0);
-  const [len, setLen] = useState(AD_FALLBACK_LEN);
-  /** Награда получена — показываем итоговую плашку вместо ролика */
+  const [elapsed, setElapsed] = useState(0);
+  const [dur, setDur] = useState(AD_FALLBACK_LEN);
   const [done, setDone] = useState(false);
   const [failed, setFailed] = useState(false);
-  const rewarded = useRef(false);
+  const [muted, setMuted] = useState(false);
 
-  const canSkip = t >= AD_SKIP_AFTER || failed;
-  const left = Math.max(0, Math.ceil(AD_SKIP_AFTER - t));
+  useEffect(() => {
+    if (!open) return;
+    setElapsed(0);
+    setDur(AD_FALLBACK_LEN);
+    setDone(false);
+    setFailed(false);
+    setMuted(false);
+  }, [open]);
 
-  const giveReward = useCallback(() => {
-    if (rewarded.current) return;
-    rewarded.current = true;
-    onReward();
-  }, [onReward]);
+  useEffect(() => {
+    if (!open || !failed) return;
+    const id = setInterval(() => {
+      setElapsed((e) => {
+        const next = e + 0.25;
+        if (next >= AD_SKIP_AFTER) setDone(true);
+        return next;
+      });
+    }, 250);
+    return () => clearInterval(id);
+  }, [open, failed]);
 
-  /** Награда + переход на плашку итога */
-  const finish = useCallback(() => {
-    giveReward();
-    videoRef.current?.pause();
-    sfx.coin();
+  const target = Math.min(dur, AD_SKIP_AFTER);
+  const left = Math.max(0, Math.ceil(target - elapsed));
+  const pct = Math.min(1, elapsed / Math.max(1, target));
+
+  const claim = () => {
+    if (!done) return;
+    sfx.legend();
     haptic("success");
-    setDone(true);
-  }, [giveReward]);
-
-  // Пытаемся стартовать со звуком; если браузер против — без него.
-  useEffect(() => {
-    const v = videoRef.current;
-    if (!v || !clip) return;
-    // Всегда с нуля: браузер может помнить позицию закешированного файла,
-    // а игрок жаловался, что ролик «продолжается с того же момента».
-    try { v.currentTime = 0; } catch { /* не критично */ }
-    v.muted = muted;
-    v.play().catch(() => {
-      if (!v.muted) {
-        v.muted = true;
-        setMuted(true);
-        v.play().catch(() => {});
-      }
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [clip]);
-
-  /** Переключатель звука на самом ролике */
-  const toggleMute = (e: React.MouseEvent) => {
-    e.stopPropagation(); // не открывать ссылку рекламодателя
-    const v = videoRef.current;
-    if (!v) return;
-    const next = !muted;
-    v.muted = next;
-    setMuted(next);
-    if (!next) v.play().catch(() => {});
-    haptic("light");
+    onReward();
   };
 
-  // Ролик не загрузился — не наказываем игрока, просто отдаём награду
-  useEffect(() => {
-    if (!clip) {
-      setFailed(true);
-      giveReward();
-      setDone(true);
-    }
-  }, [clip, giveReward]);
-
-  /** «Пропустить» — доступно с шестой секунды, награда засчитывается */
-  const skip = () => {
-    if (!canSkip) return;
-    sfx.click();
-    finish();
+  const openSponsor = () => {
+    if (!ad.link) return;
+    const api = pcApi();
+    if (api?.openExternal) api.openExternal(ad.link);
+    else window.open(ad.link, "_blank", "noopener,noreferrer");
   };
 
-  /** Тап по видео — переход по ссылке рекламодателя */
-  const openLink = () => {
-    if (!clip?.link) return;
-    haptic("light");
-    window.open(clip.link, "_blank", "noopener,noreferrer");
-  };
+  useSystemBack(open, () => {
+    if (done) claim();
+    else onClose();
+  });
 
-  const pct = Math.min(1, len ? t / len : 0);
+  if (typeof document === "undefined") return null;
 
-  return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      className="fixed inset-0 z-[95]"
-      style={{ background: "#000" }}
-    >
-      {/* ===== Ролик на весь экран ===== */}
-      {!done && !failed && (
-        <video
-          ref={videoRef}
-          src={clip?.src}
-          autoPlay
-          playsInline
-          onClick={openLink}
-          onTimeUpdate={(e) => setT(e.currentTarget.currentTime)}
-          onLoadedMetadata={(e) => {
-            const d = e.currentTarget.duration;
-            if (Number.isFinite(d) && d > 0) setLen(d);
+  return createPortal(
+    <AnimatePresence>
+      {open && (
+        <motion.div
+          className="fixed inset-0 z-[140] flex items-center justify-center p-4 ad-theater-backdrop"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.2 }}
+          onClick={() => {
+            if (done) claim();
           }}
-          onEnded={finish}
-          onError={() => { setFailed(true); giveReward(); setDone(true); }}
-          style={{
-            position: "absolute",
-            inset: 0,
-            width: "100%",
-            height: "100%",
-            objectFit: "cover",
-            background: "#000",
-            cursor: clip?.link ? "pointer" : "default",
-          }}
-        />
-      )}
-
-      {/* ===== Элементы поверх видео ===== */}
-      {!done && (
-        <>
-          {/* тонкая полоса прогресса у самого верха — не «интерфейс», а как в AdMob */}
-          <div
-            style={{
-              position: "absolute", top: 0, left: 0, right: 0, height: 2.5,
-              background: "var(--fill-3)", pointerEvents: "none",
-            }}
-          >
-            <div
-              style={{
-                width: `${pct * 100}%`, height: "100%",
-                background: "#fff", transition: "width .2s linear",
-              }}
-            />
-          </div>
-
-          {/* метка «Реклама» */}
-          <div
-            className="t-label"
-            style={{
-              position: "absolute",
-              top: "calc(var(--sat) + 14px)", left: 14,
-              padding: "5px 9px", borderRadius: 5,
-              background: "rgba(0,0,0,0.55)", color: "rgba(255,255,255,0.92)",
-              fontSize: 9, letterSpacing: "0.1em", pointerEvents: "none",
-            }}
-          >
-            {clip?.label || tr("РЕКЛАМА")}
-          </div>
-
-          {/* звук */}
-          <button
-            type="button"
-            onClick={toggleMute}
-            aria-label={muted ? tr("Включить звук") : tr("Выключить звук")}
-            className="flex items-center justify-center"
-            style={{
-              position: "absolute",
-              top: "calc(var(--sat) + 10px)", right: 14,
-              width: 38, height: 38, borderRadius: 999,
-              background: "rgba(0,0,0,0.55)", border: "none", color: "#fff",
-            }}
-          >
-            <Icon name={muted ? "soundOff" : "sound"} size={17} />
-          </button>
-
-          {/* пропустить */}
-          <button
-            type="button"
-            onClick={skip}
-            disabled={!canSkip}
-            className="t-title-sm flex items-center"
-            style={{
-              position: "absolute",
-              bottom: "calc(var(--sab) + 26px)", right: 14,
-              gap: 7, padding: "11px 16px", borderRadius: 999,
-              background: canSkip ? "rgba(255,255,255,0.94)" : "rgba(0,0,0,0.55)",
-              color: canSkip ? "#0a0a0d" : "rgba(255,255,255,0.75)",
-              border: "none", fontSize: 12.5,
-              transition: "background .2s, color .2s",
-            }}
-          >
-            {canSkip ? (
-              <>{tr("ПРОПУСТИТЬ")}<Icon name="chevron" size={13} /></>
-            ) : (
-              <>{tr("ПРОПУСК ЧЕРЕЗ")} {left}</>
-            )}
-          </button>
-        </>
-      )}
-
-      {/* ===== Плашка награды по центру ===== */}
-      <AnimatePresence>
-        {done && (
+        >
           <motion.div
-            className="absolute inset-0 flex items-center justify-center"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            style={{ background: "var(--scrim-strong)", padding: 26 }}
+            className="ad-theater-window"
+            initial={{ opacity: 0, scale: 0.93, y: 18 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95, y: 12 }}
+            transition={{ type: "spring", stiffness: 360, damping: 28 }}
+            onClick={(e) => e.stopPropagation()}
           >
-            <motion.div
-              initial={{ scale: 0.88, y: 14, opacity: 0 }}
-              animate={{ scale: 1, y: 0, opacity: 1 }}
-              transition={{ type: "spring", stiffness: 320, damping: 26 }}
-              className="w-full text-center"
-              style={{
-                maxWidth: 320, padding: "26px 22px 22px",
-                borderRadius: "var(--r-lg)",
-                background: "var(--surface)",
-                border: "1px solid var(--surface-brd)",
-                boxShadow: "0 24px 70px -24px rgba(0,0,0,0.9)",
-              }}
-            >
-              <motion.span
-                className="inline-flex items-center justify-center"
-                initial={{ scale: 0.6, rotate: -12 }}
-                animate={{ scale: 1, rotate: 0 }}
-                transition={{ type: "spring", stiffness: 260, damping: 16, delay: 0.08 }}
-                style={{
-                  width: 62, height: 62, borderRadius: "var(--r-md)",
-                  background: "var(--acc)", color: "var(--acc-ink)",
-                }}
-              >
-                <Icon name={failed ? "warn" : "gift"} size={30} />
-              </motion.span>
+            {/* Верхняя шапка трансляции */}
+            <div className="ad-theater-bar">
+              <div className="ad-theater-badge">
+                <span className={`ad-theater-dot ${done ? "done" : ""}`} />
+                <span>{tr(ad.label || "СПОНСОРСКИЙ ЭФИР")}</span>
+              </div>
 
-              <div
-                className="t-label"
-                style={{ marginTop: 16, fontSize: 9.5, letterSpacing: "0.12em" }}
-              >
-                {tr("ЗА ПРОСМОТР РЕКЛАМЫ")}
+              <div className="flex items-center" style={{ gap: 8 }}>
+                {!failed && (
+                  <button
+                    type="button"
+                    className="pc-win-btn"
+                    onClick={() => {
+                      const v = videoRef.current;
+                      if (v) {
+                        v.muted = !v.muted;
+                        setMuted(v.muted);
+                      }
+                    }}
+                    title={muted ? tr("Включить звук") : tr("Выключить звук")}
+                  >
+                    <Icon name={muted ? "cross" : "sound"} size={14} />
+                  </button>
+                )}
+
+                <div className={`ad-theater-progress-pill ${done ? "done" : ""}`}>
+                  {done ? (
+                    <Icon name="check" size={13} />
+                  ) : (
+                    <span className="t-num" style={{ fontSize: 11 }}>{left}c</span>
+                  )}
+                </div>
+
+                <button
+                  type="button"
+                  className="pc-win-btn pc-win-close"
+                  onClick={() => {
+                    sfx.click();
+                    if (done) claim();
+                    else onClose();
+                  }}
+                  title={done ? tr("Забрать награду") : tr("Закрыть")}
+                >
+                  <Icon name="cross" size={13} />
+                </button>
               </div>
-              <div
-                className="t-display-sm acc-text"
-                style={{ marginTop: 8, fontSize: 26, lineHeight: 1.15, overflowWrap: "anywhere" }}
-              >
-                {reason}
-              </div>
-              {failed && (
-                <div className="t-caption" style={{ marginTop: 9, lineHeight: 1.5 }}>
-                  {tr("Ролик не загрузился — награду всё равно засчитали.")}
+            </div>
+
+            {/* Сцена видеоролика / кибер-контракта */}
+            <div className="ad-theater-stage">
+              <div className="ad-theater-grid" aria-hidden />
+              <div className="ad-theater-orb" aria-hidden />
+
+              {!failed ? (
+                <video
+                  ref={videoRef}
+                  src={ad.src}
+                  autoPlay
+                  playsInline
+                  muted={muted}
+                  onClick={openSponsor}
+                  onLoadedMetadata={(e) => {
+                    const d = e.currentTarget.duration;
+                    if (isFinite(d) && d > 0) setDur(d);
+                  }}
+                  onTimeUpdate={(e) => {
+                    const t = e.currentTarget.currentTime;
+                    setElapsed(t);
+                    if (t >= Math.min(dur, AD_SKIP_AFTER) - 0.15) setDone(true);
+                  }}
+                  onEnded={() => setDone(true)}
+                  onError={() => setFailed(true)}
+                  style={{
+                    position: "relative",
+                    zIndex: 2,
+                    width: "100%",
+                    maxHeight: 260,
+                    borderRadius: 12,
+                    background: "#050508",
+                    objectFit: "cover",
+                    cursor: ad.link ? "pointer" : "default",
+                    border: "1px solid var(--surface-brd)",
+                  }}
+                />
+              ) : (
+                <div className="ad-theater-center">
+                  <div className="ad-theater-emblem">
+                    <span className="ad-theater-emblem-ring" />
+                    <Icon name={done ? "gift" : "bolt"} size={28} accent />
+                  </div>
+                  <div className="t-display ad-theater-title">
+                    {done ? tr("КОНТРАКТ ВЫПОЛНЕН") : tr("СИНХРОНИЗАЦИЯ КАНАЛА")}
+                  </div>
+                  <div className="ad-theater-sub">{reason}</div>
+                  <div className="ad-theater-chips">
+                    <span className={`ad-theater-chip ${done ? "ok" : ""}`}>
+                      <Icon name={done ? "check" : "clock"} size={12} />
+                      <span>{done ? tr("Награда разблокирована") : `${tr("Осталось")} ${left} ${tr("сек")}`}</span>
+                    </span>
+                    {ad.link && (
+                      <button
+                        type="button"
+                        onClick={openSponsor}
+                        className="ad-theater-chip"
+                        style={{ cursor: "pointer" }}
+                      >
+                        <Icon name="globe" size={12} />
+                        <span>@kayorisan</span>
+                      </button>
+                    )}
+                  </div>
                 </div>
               )}
 
+              <div className="ad-theater-timeline">
+                <span style={{ width: `${Math.round(pct * 100)}%` }} />
+              </div>
+            </div>
+
+            {/* Нижняя панель */}
+            <div className="ad-theater-footer">
+              <div className="ad-theater-meta">
+                <div className="t-title-sm clip1">{reason}</div>
+                <div className="t-caption">
+                  {done
+                    ? tr("Награда готова к выдаче")
+                    : `${tr("Подожди ещё")} ${left} ${tr("сек.")}`}
+                </div>
+              </div>
+
               <button
                 type="button"
-                onClick={() => { sfx.click(); onClose(); }}
-                className="btn-acc w-full"
-                style={{ marginTop: 20, minHeight: 50, fontSize: 13 }}
+                disabled={!done}
+                onClick={claim}
+                className={`ad-theater-cta ${done ? "ready" : ""}`}
               >
-                {tr("ЗАБРАТЬ")}
+                <Icon name={done ? "gift" : "clock"} size={14} />
+                <span>
+                  {done ? tr("ЗАБРАТЬ НАГРАДУ") : `${left} c`}
+                </span>
               </button>
-            </motion.div>
+            </div>
           </motion.div>
-        )}
-      </AnimatePresence>
-    </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>,
+    document.body,
   );
 }

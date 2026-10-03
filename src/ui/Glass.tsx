@@ -349,8 +349,8 @@ export function Screen({
           }}
         >
           <div className="min-w-0">
-            <h1 className="t-display clip1">{title}</h1>
-            {sub && <div className="t-caption clip1" style={{ marginTop: 3 }}>{sub}</div>}
+            <h1 className="t-display">{title}</h1>
+            {sub && <div className="t-caption" style={{ marginTop: 3 }}>{sub}</div>}
           </div>
           {right}
         </div>

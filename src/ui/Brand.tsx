@@ -137,8 +137,10 @@ export function BrandMark({
   glow?: boolean;
   style?: CSSProperties;
 }) {
+  const r = radius ?? Math.max(7, Math.round(size * 0.24));
   return (
     <span
+      className="brand-mark-sq"
       style={{
         position: "relative",
         display: "inline-flex",
@@ -146,14 +148,15 @@ export function BrandMark({
         justifyContent: "center",
         width: size,
         height: size,
-        borderRadius: radius ?? Math.round(size * 0.26),
+        borderRadius: r,
         background:
-          "linear-gradient(140deg, color-mix(in srgb, var(--surface-3) 70%, #fff 4%), var(--n-050) 55%, var(--n-000))",
+          "linear-gradient(145deg, #17112b 0%, #0b0816 60%, #06040d 100%)",
         boxShadow: border
-          ? "inset 0 0 0 1px color-mix(in srgb, var(--acc) 30%, transparent), 0 10px 26px -14px rgba(0,0,0,0.9)"
+          ? "0 8px 22px -10px rgba(0,0,0,0.88), 0 0 18px -6px var(--acc-glow)"
           : undefined,
         overflow: "hidden",
         flexShrink: 0,
+        isolation: "isolate",
         ...style,
       }}
     >
@@ -172,11 +175,6 @@ export function BrandMark({
           бургер, он же ездит в заставку. */}
       {HAS_BRAND_LOGO ? (
         BRAND_LOGO_IS_GLYPH ? (
-          /* Прислан плоский знак: не картинка в плашке, а сам силуэт,
-             выкрашенный акцентом темы через маску. Так логотип одинаково
-             читается и на «Угольке», и на белой теме, и не спорит с
-             подсветкой плашки (просьба 1.28 — «иконка везде из присланного
-             логотипа»). */
           <span
             aria-hidden
             draggable={false}
@@ -202,12 +200,27 @@ export function BrandMark({
               width: "100%",
               height: "100%",
               objectFit: "cover",
+              borderRadius: "inherit",
               pointerEvents: "none",
             }}
           />
         )
       ) : (
         <Burger size={Math.round(size * 0.72)} glow={glow} style={{ position: "relative" }} />
+      )}
+      {border && (
+        <span
+          aria-hidden
+          style={{
+            position: "absolute",
+            inset: 0,
+            borderRadius: "inherit",
+            boxShadow:
+              "inset 0 0 0 1px color-mix(in srgb, var(--acc) 42%, rgba(255,255,255,0.18)), inset 0 1px 0 rgba(255,255,255,0.22)",
+            pointerEvents: "none",
+            zIndex: 2,
+          }}
+        />
       )}
     </span>
   );

@@ -1,89 +1,139 @@
 import { useState } from "react";
-import { AnimatePresence, motion } from "framer-motion";
+import { useGame } from "../../core/store";
+import { fmt } from "../../core/format";
+import { tr } from "../../core/i18n";
+import { sfx, haptic } from "../../core/fx";
+import { updateGamble } from "../../core/gamble";
 import Icon from "../Icon";
 import AdModal from "../AdModal";
-import { useGame } from "../../core/store";
-import { tr } from "../../core/i18n";
-import { fmt } from "../../core/format";
-import { autoRate } from "../../core/save";
-import { MAX_BONUS_PER_DAY, bonusesLeft, hasAds, noteBonus } from "../../core/ads";
 
 /**
- * БОНУС ЗА ПРОСМОТР — плашка в правом нижнем углу.
+ * СПОНСОРСКИЙ ДРОП (переработанный баннер просмотра ролика в углу экрана).
  *
- * Просили конкретно: «плашка с деньгами за просмотр рекламы — это просто
- * маленькая красивая плашечка в правом нижнем углу, поверх всего, и по нажатию
- * на неё он уже может посмотреть рекламу».
- *
- * Почему её больше нет в правой колонке главной: бонус нужен не на главной, а
- * ТАМ, где игрок устал, — то есть сразу после проигранной партии и в любом
- * разделе. В колонке он живёт только на одном экране и его никто не видит в
- * момент, когда он нужен.
- *
- * В углу, а не по центру: он не перекрывает ни меню, ни сцену. Компактный, а
- * не «карточка на пол-экрана»: сумма, точки остатка попыток и одна кнопка.
- * Внутри игры (game != null) и при пустом кошельке роликов плашка молча
- * исчезает — показывать «0 из 5» незачем.
+ * Компактная неоновая капсула в кибер-стиле игры с возможностью свернуть
+ * в мини-значок, чтобы не мешать обзору библиотеки.
  */
 export default function PcBoost() {
-  const { s, addCoins, toast } = useGame();
-  const [open, setOpen] = useState(false);
-  const [left, setLeft] = useState(() => bonusesLeft());
+  const { set, toast } = useGame();
+  const [ad, setAd] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
 
-  if (!hasAds() || left <= 0) return null;
+  const reward = () => {
+    setAd(false);
+    const coins = 10_000;
+    const gems = 10;
+    const chips = 75;
+    set((d) => {
+      d.coins += coins;
+      d.totalCoinsEver += coins;
+      d.gems += gems;
+    });
+    updateGamble((g) => ({ ...g, chips: g.chips + chips }));
+    sfx.legend();
+    haptic("success");
+    toast({
+      title: tr("ДРОП ПОЛУЧЕН!"),
+      sub: `+${fmt(coins)} ${tr("монет")} · +${gems} ◆ · +${chips} ${tr("жетонов")}`,
+      icon: "gift",
+      tone: "gold",
+    });
+  };
 
-  const reward = Math.max(500, Math.floor(autoRate(s) * 180) + s.level * 250);
+  if (collapsed) {
+    return (
+      <>
+        <div className="pc-boost pc-boost-mini">
+          <button
+            type="button"
+            className="pc-boost-pill"
+            onClick={() => {
+              sfx.click();
+              setCollapsed(false);
+            }}
+            title={tr("Развернуть бонус-дроп")}
+          >
+            <span className="pc-boost-orb">
+              <Icon name="gift" size={14} />
+            </span>
+            <span className="pc-boost-pill-txt">{tr("Бонус-дроп")}</span>
+            <span className="pc-boost-pill-tag">+10K</span>
+          </button>
+        </div>
+        <AdModal
+          open={ad}
+          reason={tr("Спонсорский дроп: +10 000 монет, +10 кристаллов и +75 жетонов")}
+          onReward={reward}
+          onClose={() => setAd(false)}
+        />
+      </>
+    );
+  }
 
   return (
     <>
-      <motion.aside
-        className="pc-boost"
-        initial={{ y: 16, opacity: 0 }}
-        animate={{ y: 0, opacity: 1 }}
-        transition={{ type: "spring", stiffness: 420, damping: 32 }}
-      >
-        <span className="pc-boost-ico" aria-hidden>
-          <Icon name="coin" size={14} />
-        </span>
-        <span className="pc-boost-text">
-          <span className="pc-boost-sum">+{fmt(reward)}</span>
-          <span className="pc-boost-cap">{tr("за ролик")}</span>
-        </span>
-        <span className="pc-boost-dots" title={`${left} ${tr("из")} ${MAX_BONUS_PER_DAY}`}>
-          {Array.from({ length: Math.min(MAX_BONUS_PER_DAY, 5) }).map((_, i) => (
-            <i key={i} className={i < left ? "on" : ""} />
-          ))}
-        </span>
+      <div className="pc-boost">
+        <span className="pc-boost-glow" aria-hidden />
+
+        <div className="pc-boost-head">
+          <span className="pc-boost-orb" aria-hidden>
+            <Icon name="gift" size={15} />
+          </span>
+          <div className="pc-boost-titles">
+            <span className="pc-boost-kicker">{tr("КИБЕР-КАПСУЛА · 15 СЕК")}</span>
+            <span className="pc-boost-title">{tr("Спонсорский дроп")}</span>
+          </div>
+          <button
+            type="button"
+            className="pc-boost-hide"
+            onClick={() => {
+              sfx.click();
+              setCollapsed(true);
+            }}
+            title={tr("Свернуть")}
+            aria-label={tr("Свернуть")}
+          >
+            <Icon name="cross" size={11} />
+          </button>
+        </div>
+
+        <div className="pc-boost-loot">
+          <span className="pc-boost-chip coin">
+            <Icon name="coin" size={11} />
+            <b>+10 000</b>
+          </span>
+          <span className="pc-boost-chip gem">
+            <Icon name="gem" size={11} />
+            <b>+10</b>
+          </span>
+          <span className="pc-boost-chip casino">
+            <Icon name="dice" size={11} />
+            <b>+75</b>
+          </span>
+        </div>
+
         <button
           type="button"
+          onClick={() => {
+            sfx.click();
+            setAd(true);
+          }}
           className="pc-boost-go"
-          onClick={() => setOpen(true)}
-          title={tr("Посмотреть ролик и получить бонус")}
         >
-          <Icon name="play" size={12} />
-          {tr("СМОТРЕТЬ")}
+          <span className="pc-boost-play-ico" aria-hidden>
+            <svg width="10" height="10" viewBox="0 0 12 12" fill="currentColor">
+              <path d="M3 2.2L10 6L3 9.8V2.2Z" />
+            </svg>
+          </span>
+          <span>{tr("Забрать награду")}</span>
         </button>
-      </motion.aside>
+      </div>
 
-      <AnimatePresence>
-        {open && (
-          <AdModal
-            reason={`+${fmt(reward)} ${tr("монет")}`}
-            onReward={() => {
-              addCoins(reward);
-              noteBonus();
-              setLeft(bonusesLeft());
-              toast({
-                title: tr("НАГРАДА ПОЛУЧЕНА"),
-                sub: `+${fmt(reward)}`,
-                icon: "coin",
-                tone: "gold",
-              });
-            }}
-            onClose={() => setOpen(false)}
-          />
-        )}
-      </AnimatePresence>
+      <AdModal
+        open={ad}
+        reason={tr("Спонсорский дроп: +10 000 монет, +10 кристаллов и +75 жетонов")}
+        onReward={reward}
+        onClose={() => setAd(false)}
+      />
     </>
   );
 }

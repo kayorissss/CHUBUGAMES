@@ -62,15 +62,22 @@ export function drawHead(
   ctx.roundRect(-w * 0.28, h * 0.62, w * 0.56, h * 0.55, w * 0.16);
   ctx.fill();
 
-  // Лицо
-  const grad = ctx.createLinearGradient(0, -h, 0, h);
-  grad.addColorStop(0, shade(look.skin, 22 + angry * 26));
+  // Лицо — объёмный 3D-градиент с мягким контуром скул и бликом лба
+  const grad = ctx.createRadialGradient(-w * 0.22, -h * 0.32, r * 0.1, 0, h * 0.08, Math.max(w, h) * 1.18);
+  grad.addColorStop(0, shade(look.skin, 28 + angry * 26));
   grad.addColorStop(0.55, look.skin);
-  grad.addColorStop(1, shade(look.skin, -30 + angry * 20));
+  grad.addColorStop(1, shade(look.skin, -34 + angry * 18));
   ctx.fillStyle = grad;
   ctx.beginPath();
   ctx.ellipse(0, 0, w, h, 0, 0, Math.PI * 2);
   ctx.fill();
+
+  // Тонкий контур челюсти для чёткости на любом фоне
+  ctx.strokeStyle = shade(look.skin, -48);
+  ctx.lineWidth = Math.max(1, r * 0.028);
+  ctx.beginPath();
+  ctx.ellipse(0, 0, w, h, 0, 0.12 * Math.PI, 0.88 * Math.PI);
+  ctx.stroke();
 
   if (angry > 0.02) {
     ctx.fillStyle = `rgba(220,60,40,${angry * 0.34})`;
@@ -129,31 +136,60 @@ export function drawHead(
     ctx.stroke();
   });
 
-  // Глаза — миндалевидные, а не круглые «шары»: круглый белок в пол-лица
-  // читается как испуг, поэтому глаз шире, чем выше.
+  // Глаза — выразительные миндалевидные с контуром верхнего века и двойным бликом
   const eyeY = -h * 0.08;
-  const eyeR = r * 0.125;
+  const eyeR = r * 0.128;
   [-1, 1].forEach((s) => {
     const ex = s * w * 0.38;
-    ctx.fillStyle = "#fbfbfd";
+    const eh = eyeR * (0.84 - blink * 0.78);
+    // тень глазницы
+    ctx.fillStyle = shade(look.skin, -24);
     ctx.beginPath();
-    ctx.ellipse(ex, eyeY, eyeR * 1.15, eyeR * (0.82 - blink * 0.76), 0, 0, Math.PI * 2);
+    ctx.ellipse(ex, eyeY - eyeR * 0.06, eyeR * 1.24, eh * 1.16, 0, 0, Math.PI * 2);
+    ctx.fill();
+    // склера
+    ctx.fillStyle = "#f8f9fc";
+    ctx.beginPath();
+    ctx.ellipse(ex, eyeY, eyeR * 1.16, eh, 0, 0, Math.PI * 2);
     ctx.fill();
     if (blink < 0.6) {
-      // радужка крупная относительно белка — взгляд «живой», без выпучивания
+      ctx.save();
+      ctx.beginPath();
+      ctx.ellipse(ex, eyeY, eyeR * 1.16, eh, 0, 0, Math.PI * 2);
+      ctx.clip();
+      // ободок радужки
+      ctx.fillStyle = shade(look.eyes, -38);
+      ctx.beginPath();
+      ctx.arc(ex + s * eyeR * 0.06, eyeY + eyeR * 0.03, eyeR * 0.68, 0, Math.PI * 2);
+      ctx.fill();
+      // радужка
       ctx.fillStyle = look.eyes;
       ctx.beginPath();
-      ctx.arc(ex + s * eyeR * 0.08, eyeY + eyeR * 0.04, eyeR * 0.66, 0, Math.PI * 2);
+      ctx.arc(ex + s * eyeR * 0.06, eyeY + eyeR * 0.03, eyeR * 0.58, 0, Math.PI * 2);
       ctx.fill();
-      ctx.fillStyle = "#0b0b0e";
+      // зрачок
+      ctx.fillStyle = "#090a10";
       ctx.beginPath();
-      ctx.arc(ex + s * eyeR * 0.08, eyeY + eyeR * 0.04, eyeR * 0.3, 0, Math.PI * 2);
+      ctx.arc(ex + s * eyeR * 0.06, eyeY + eyeR * 0.03, eyeR * 0.28, 0, Math.PI * 2);
       ctx.fill();
-      ctx.fillStyle = "rgba(255,255,255,0.9)";
+      // основной и вторичный блики
+      ctx.fillStyle = "rgba(255,255,255,0.94)";
       ctx.beginPath();
-      ctx.arc(ex - eyeR * 0.24, eyeY - eyeR * 0.3, eyeR * 0.19, 0, Math.PI * 2);
+      ctx.arc(ex - eyeR * 0.22, eyeY - eyeR * 0.26, eyeR * 0.2, 0, Math.PI * 2);
       ctx.fill();
+      ctx.fillStyle = "rgba(255,255,255,0.55)";
+      ctx.beginPath();
+      ctx.arc(ex + eyeR * 0.24, eyeY + eyeR * 0.22, eyeR * 0.09, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
     }
+    // линия верхнего века
+    ctx.strokeStyle = shade(look.hair, -28);
+    ctx.lineWidth = Math.max(1.4, r * 0.038);
+    ctx.lineCap = "round";
+    ctx.beginPath();
+    ctx.ellipse(ex, eyeY, eyeR * 1.18, eh, 0, Math.PI * 1.06, Math.PI * 1.94);
+    ctx.stroke();
   });
 
   // Мешки под глазами — «не спал», тёмные полукруги и складка
@@ -161,40 +197,66 @@ export function drawHead(
     ctx.save();
     [-1, 1].forEach((s) => {
       const ex = s * w * 0.38;
-      ctx.fillStyle = "rgba(90,60,80,0.30)";
+      ctx.fillStyle = "rgba(90,60,80,0.28)";
       ctx.beginPath();
-      ctx.ellipse(ex, eyeY + eyeR * 1.15, eyeR * 1.15, eyeR * 0.62, 0, 0, Math.PI);
+      ctx.ellipse(ex, eyeY + eyeR * 1.15, eyeR * 1.15, eyeR * 0.56, 0, 0, Math.PI);
       ctx.fill();
-      ctx.strokeStyle = "rgba(70,45,60,0.5)";
+      ctx.strokeStyle = "rgba(70,45,60,0.45)";
       ctx.lineWidth = Math.max(1, r * 0.022);
       ctx.beginPath();
       ctx.moveTo(ex - eyeR * 1.02, eyeY + eyeR * 0.82);
-      ctx.quadraticCurveTo(ex, eyeY + eyeR * 1.6, ex + eyeR * 1.02, eyeY + eyeR * 0.82);
+      ctx.quadraticCurveTo(ex, eyeY + eyeR * 1.55, ex + eyeR * 1.02, eyeY + eyeR * 0.82);
       ctx.stroke();
     });
     ctx.restore();
   }
 
-  // Очки
+  // Очки / тактический визор с лёгким тонированием линз и бликом
   if (look.glasses > 0) {
-    ctx.strokeStyle = "rgba(26,26,32,0.92)";
-    ctx.lineWidth = Math.max(1.8, r * 0.05);
     [-1, 1].forEach((s) => {
+      const gx = s * w * 0.4;
+      ctx.save();
       ctx.beginPath();
       if (look.glasses === 1) {
-        ctx.arc(s * w * 0.4, eyeY, eyeR * 1.42, 0, Math.PI * 2);
+        ctx.arc(gx, eyeY, eyeR * 1.44, 0, Math.PI * 2);
       } else {
-        // прямоугольные — заметно угловатее, лёгкое скругление
         ctx.roundRect(
-          s * w * 0.4 - eyeR * 1.62, eyeY - eyeR * 1.16,
-          eyeR * 3.24, eyeR * 2.32, eyeR * 0.18,
+          gx - eyeR * 1.64, eyeY - eyeR * 1.16,
+          eyeR * 3.28, eyeR * 2.32, eyeR * 0.24,
+        );
+      }
+      ctx.fillStyle = "rgba(120, 190, 255, 0.14)";
+      ctx.fill();
+      ctx.clip();
+      // косой блик на стекле
+      ctx.fillStyle = "rgba(255, 255, 255, 0.28)";
+      ctx.beginPath();
+      ctx.moveTo(gx - eyeR * 1.3, eyeY - eyeR * 1.3);
+      ctx.lineTo(gx - eyeR * 0.5, eyeY - eyeR * 1.3);
+      ctx.lineTo(gx - eyeR * 1.1, eyeY + eyeR * 1.3);
+      ctx.lineTo(gx - eyeR * 1.6, eyeY + eyeR * 1.3);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+
+      ctx.strokeStyle = "rgba(20, 22, 30, 0.94)";
+      ctx.lineWidth = Math.max(1.9, r * 0.052);
+      ctx.beginPath();
+      if (look.glasses === 1) {
+        ctx.arc(gx, eyeY, eyeR * 1.44, 0, Math.PI * 2);
+      } else {
+        ctx.roundRect(
+          gx - eyeR * 1.64, eyeY - eyeR * 1.16,
+          eyeR * 3.28, eyeR * 2.32, eyeR * 0.24,
         );
       }
       ctx.stroke();
     });
+    ctx.strokeStyle = "rgba(20, 22, 30, 0.94)";
+    ctx.lineWidth = Math.max(1.8, r * 0.048);
     ctx.beginPath();
-    ctx.moveTo(-w * 0.4 + eyeR * 1.45, eyeY);
-    ctx.lineTo(w * 0.4 - eyeR * 1.45, eyeY);
+    ctx.moveTo(-w * 0.4 + eyeR * 1.45, eyeY - eyeR * 0.12);
+    ctx.lineTo(w * 0.4 - eyeR * 1.45, eyeY - eyeR * 0.12);
     ctx.stroke();
   }
 
@@ -545,20 +607,25 @@ function drawHair(ctx: CanvasRenderingContext2D, look: FriendLook, w: number, h:
       break;
 
     case 1: // короткие
-      // купол по форме черепа + чуть спущенные виски, без «плиты» сверху
+      // купол по форме черепа + чуть спущенные виски и объёмный блик
       ctx.beginPath();
-      ctx.ellipse(0, -h * 0.3, w * 1.0, h * 0.74, 0, Math.PI, 0);
+      ctx.ellipse(0, -h * 0.3, w * 1.01, h * 0.75, 0, Math.PI, 0);
       ctx.fill();
       [-1, 1].forEach((sg) => {
         ctx.beginPath();
         ctx.ellipse(sg * w * 0.86, -h * 0.3, w * 0.16, h * 0.3, 0, 0, Math.PI * 2);
         ctx.fill();
       });
+      ctx.fillStyle = shade(look.hair, 32);
+      ctx.beginPath();
+      ctx.ellipse(-w * 0.2, -h * 0.78, w * 0.44, h * 0.14, -0.18, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = look.hair;
       break;
 
-    case 2: // шапка волос
+    case 2: // шапка волос / стильная укладка
       ctx.beginPath();
-      ctx.ellipse(0, -h * 0.42, w * 1.03, h * 0.72, 0, Math.PI, 0);
+      ctx.ellipse(0, -h * 0.42, w * 1.04, h * 0.73, 0, Math.PI, 0);
       ctx.fill();
       ctx.beginPath();
       ctx.moveTo(-w * 1.0, -h * 0.36);
@@ -567,6 +634,11 @@ function drawHair(ctx: CanvasRenderingContext2D, look: FriendLook, w: number, h:
       ctx.lineTo(w * 1.0, -h * 0.6);
       ctx.lineTo(-w * 1.0, -h * 0.6);
       ctx.fill();
+      ctx.fillStyle = shade(look.hair, 36);
+      ctx.beginPath();
+      ctx.ellipse(-w * 0.24, -h * 0.76, w * 0.46, h * 0.15, -0.15, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = look.hair;
       break;
 
     case 3: // ирокез

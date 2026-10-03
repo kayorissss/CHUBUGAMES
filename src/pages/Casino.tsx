@@ -1033,7 +1033,7 @@ function Cases({ g, save }: { g: GambleStore; save: GambleSave }) {
 
 /* ═══════════════════════════ КЕЙС-БАТЛ ═══════════════════════════ */
 
-const FOES = ["Лёха", "Макс", "Серёга", "Артём", "Кудря", "Шитов"];
+const FOES = ["Кайзер", "Титан", "Спарк", "Рейзер", "Мираж", "Кортекс"];
 
 function Battle({ g, save }: { g: GambleStore; save: GambleSave }) {
   const [rounds, setRounds] = useState(3);

@@ -278,11 +278,23 @@ async function main() {
   report.push("branding + assets: 1024/512");
 
   /* ── Windows ── */
+  const winRound = async (size) => {
+    const r = Math.max(3, Math.round(size * 0.22));
+    const mask = Buffer.from(
+      `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">` +
+        `<rect width="${size}" height="${size}" rx="${r}" ry="${r}" fill="#fff"/></svg>`,
+    );
+    const sq = await sharp(await png(SRC.badge, size)).ensureAlpha().toBuffer();
+    return sharp(sq)
+      .composite([{ input: mask, blend: "dest-in" }])
+      .png({ compressionLevel: 9 })
+      .toBuffer();
+  };
   ensure(out("desktop/res"));
-  writeFileSync(out("desktop/res/icon.png"), await png(SRC.badge, 512));
+  writeFileSync(out("desktop/res/icon.png"), await winRound(512));
   const sizes = [16, 24, 32, 48, 64, 128, 256];
   const pairs = [];
-  for (const s of sizes) pairs.push([s, await png(SRC.badge, s)]);
+  for (const s of sizes) pairs.push([s, await winRound(s)]);
   writeIco(out("desktop/res/icon.ico"), pairs);
   report.push(`desktop/res: icon.png + icon.ico (${sizes.join("/")})`);
 
