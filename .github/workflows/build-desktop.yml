@@ -257,11 +257,28 @@ jobs:
         run: |
           TITLE="CHUBUGAMES $APP_VER — Windows (Setup + Portable) & Android APK"
           if ! gh release view latest >/dev/null 2>&1; then
-            gh release create latest --title "$TITLE" --notes-file DESKTOP_BODY.md --latest
-          else
-            gh release edit latest --title "$TITLE" --notes-file DESKTOP_BODY.md --latest
+            gh release create latest --title "$TITLE" --notes "version: $APP_VER" --latest
           fi
           gh release upload latest desktop-out/*.exe desktop-out/checksums.sha256 --clobber
+          {
+            printf 'version: %s\n\n' "$APP_VER"
+            printf '**CHUBUGAMES %s — Единый релиз (Windows Setup + Portable & Android APK)**\n\n' "$APP_VER"
+            printf '| Файл | Платформа / Тип |\n'
+            printf '|---|---|\n'
+            printf '| `CHUBUGAMES-%s-setup.exe` | Windows 10/11 x64 — Установщик (без прав администратора, ярлык и обновление) |\n' "$APP_VER"
+            printf '| `CHUBUGAMES-%s-portable.exe` | Windows 10/11 x64 — Portable (запуск в 1 клик без установки и без админки) |\n' "$APP_VER"
+            printf '| `CHUBUGAMES.apk` | Android 8.0+ — Мобильная сборка |\n\n'
+            printf '```\n'
+            gh api "repos/$GITHUB_REPOSITORY/releases/tags/latest" --jq '.assets[] | select((.name | endswith(".exe")) or .name == "CHUBUGAMES.apk") | select(.digest != null) | (.digest | sub("^sha256:"; "")) + "  " + .name' 2>/dev/null || cat desktop-out/checksums.sha256
+            printf '```\n'
+            if [ -f RELEASE_NOTES.md ]; then
+              printf '\n---\n\n'
+              cat RELEASE_NOTES.md
+            fi
+            printf '\n---\n\n'
+            printf 'Собрано: %s · коммит `%s` · сборка #%s в GitHub Actions.\n' "$(date -u '+%Y-%m-%d %H:%M UTC')" "${GITHUB_SHA:0:7}" "$GITHUB_RUN_NUMBER"
+          } > DESKTOP_BODY.md
+          gh release edit latest --title "$TITLE" --notes-file DESKTOP_BODY.md --latest
           echo "--- что теперь лежит в едином релизе latest ---"
           gh release view latest --json assets -q '.assets[].name'
 
