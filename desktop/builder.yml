@@ -9,7 +9,11 @@
 
 appId: com.chubgames.app
 productName: CHUBUGAMES
-copyright: KAYORISAN
+# «Издатель» везде берётся из package.json → author.name (KAYORISAN):
+# electron-builder кладёт его и в версию exe (CompanyName), и в реестр
+# установки (Publisher) — это та строчка, что показывает UAC-диалог и
+# «Приложения и функции». Copyright — вторая строка свойств файла.
+copyright: "Copyright © 2026 KAYORISAN"
 
 directories:
   output: desktop-out
@@ -37,8 +41,17 @@ asarUnpack:
 win:
   icon: desktop/res/icon.ico
   # Без подписи Windows SmartScreen покажет предупреждение — это ожидаемо
-  # для бесплатной сборки, объяснение есть в README.
+  # для бесплатной сборки, объяснение есть в desktop/CERTIFICATE.md.
+  #
+  # signAndEditExecutable кладёт в свойства файла CompanyName/ProductName
+  # (из author.name и productName). Важно: поле «Издатель» в диалоге
+  # SmartScreen берётся НЕ отсюда, а из цифровой подписи. Без сертификата
+  # там будет «Неизвестный издатель» при любом author.name — обмануть это
+  # нельзя, можно только купить сертификат (см. файл выше) или уйти в
+  # Microsoft Store, где пакет подписывает Microsoft.
   signAndEditExecutable: true
+  requestedExecutionLevel: asInvoker
+  publisherName: "KAYORISAN"
   target:
     - target: portable
       arch: [x64]
@@ -52,10 +65,13 @@ nsis:
   artifactName: CHUBUGAMES-${version}-setup.exe
   oneClick: false
   perMachine: false
+  allowElevation: false
   allowToChangeInstallationDirectory: true
   createDesktopShortcut: true
   createStartMenuShortcut: true
   shortcutName: CHUBUGAMES
+  # в списке установленных программ подпись удалятора тоже должна быть нашей
+  uninstallDisplayName: "CHUBUGAMES (KAYORISAN)"
   # Удаление должно уносить и сохранения, если пользователь этого хочет
   deleteAppDataOnUninstall: false
 

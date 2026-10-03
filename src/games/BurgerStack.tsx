@@ -444,7 +444,7 @@ export default function BurgerStack({ onExit }: { onExit: () => void }) {
           onRetry={restart}
           onExit={onExit}
           title={tr("УПАЛО")}
-          sub={tr("Башня Лёхи не выдержала")}
+          sub={tr("Башня Кайзера не выдержала")}
         />
       )}
     </div>

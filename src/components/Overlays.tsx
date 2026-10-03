@@ -1,63 +1,70 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { tr } from "../core/i18n";
 import { useGame, useToasts } from "../core/store";
+import { isDesktop } from "../core/desktop";
+import { useSystemBack } from "../core/android";
 import { Panel, Tap } from "../ui/Glass";
 import { fmt, fmtTime } from "../core/format";
 import Icon from "../ui/Icon";
 
+/**
+ * УВЕДОМЛЕНИЯ.
+ *
+ * Как было: плашки сыпались стопкой по центру сверху, по три-семь
+ * штук одновременно, не закрывались руками и залепляли шапку с очками.
+ * Просьба: «уведомления стереть, и они по центру сверху, а не в углу».
+ *
+ * Как стало:
+ *  • угол — справа сверху на ПК (не перекрывает счёт и HUD), слева сверху на
+ *    телефоне (там справа живёт FPS и монеты);
+ *  • максимум три плашки, остальные ждут в очереди (store: MAX_TOASTS) и
+ *    выходят по одной — поток событий читается по порядку, а не кашей;
+ *  • у каждой плашки крестик: убрать можно не дожидаясь 3.4 с;
+ *  • наведение мышью на ПК откладывает авто-скрытие: читать с таймером
+ *    неудобно;
+ *  • клик по плашке тоже закрывает её.
+ */
 export function Toasts() {
   // подписан только на список тостов, а не на всё состояние игры
-  const { toasts } = useToasts();
+  const { toasts, dismiss } = useToasts();
+  const pc = isDesktop();
+
   return (
     <div
-      className="fixed left-0 right-0 z-[90] flex flex-col items-center gap-2 px-4 pointer-events-none"
-      style={{ top: "calc(var(--sat) + 10px)" }}
+      className={`toast-stack ${pc ? "pc" : ""}`}
+      role="status"
+      aria-live="polite"
     >
-      <AnimatePresence>
+      <AnimatePresence initial={false}>
         {toasts.map((t) => (
           <motion.div
             key={t.id}
-            initial={{ y: -60, opacity: 0, scale: 0.9 }}
+            layout={pc ? false : undefined}
+            initial={{ y: -18, opacity: 0, scale: 0.96 }}
             animate={{ y: 0, opacity: 1, scale: 1 }}
-            exit={{ y: -30, opacity: 0, scale: 0.94 }}
-            transition={{ type: "spring", stiffness: 420, damping: 30 }}
-            className="w-full max-w-xs"
+            exit={{ y: -12, opacity: 0, scale: 0.97 }}
+            transition={{ type: "spring", stiffness: 460, damping: 34 }}
+            className={`toast-item ${t.tone === "gold" ? "gold" : ""} ${t.tone === "bad" ? "bad" : ""}`}
+            onMouseEnter={() => holdToast(t.id, true)}
+            onMouseLeave={() => holdToast(t.id, false)}
           >
-            <div
-              className="px-3.5 py-3 flex items-center gap-3"
-              style={{
-                borderRadius: "var(--r-lg)",
-                /* Плотный НЕпрозрачный фон — сквозь тост не должно просвечивать */
-                background: "var(--toast-bg)",
-                border: `1.5px solid ${t.tone === "gold" ? "var(--acc)" : "var(--toast-brd)"}`,
-                boxShadow:
-                  t.tone === "gold"
-                    ? "0 16px 40px -10px rgba(0,0,0,0.9), 0 0 26px -8px var(--acc-glow)"
-                    : "0 16px 40px -10px rgba(0,0,0,0.9)",
-              }}
+            {t.icon && (
+              <span className="toast-ico">
+                <Icon name={t.icon} size={18} />
+              </span>
+            )}
+            <span className="toast-text">
+              <span className="toast-title">{t.title}</span>
+              {t.sub && <span className="toast-sub">{t.sub}</span>}
+            </span>
+            <button
+              type="button"
+              className="toast-x"
+              aria-label={tr("Закрыть")}
+              onClick={() => dismiss(t.id)}
             >
-              {t.icon && (
-                <span
-                  className="shrink-0 flex items-center justify-center"
-                  style={{ width: 24, height: 24, color: t.tone === "gold" ? "var(--acc)" : "var(--text)" }}
-                >
-                  <Icon name={t.icon} size={21} />
-                </span>
-              )}
-              <div className="flex-1 min-w-0">
-                <div
-                  className="t-title clip1"
-                  style={{ fontSize: 14, color: t.tone === "bad" ? "var(--danger)" : "var(--text)" }}
-                >
-                  {t.title}
-                </div>
-                {t.sub && (
-                  <div className="clip1" style={{ fontSize: 11.5, color: "var(--text-dim)", marginTop: 1 }}>
-                    {t.sub}
-                  </div>
-                )}
-              </div>
-            </div>
+              <Icon name="cross" size={13} />
+            </button>
           </motion.div>
         ))}
       </AnimatePresence>
@@ -65,8 +72,20 @@ export function Toasts() {
   );
 }
 
+/**
+ * Наведение мыши = «не убирай». Проще всего сказать это store-у через
+ * собственное событие: компонент не имеет права лезть в таймеры провайдера,
+ * а провайдер не знает про курсор.
+ */
+function holdToast(id: number, on: boolean): void {
+  window.dispatchEvent(new CustomEvent("chub:toastrule", { detail: { id, on } }));
+}
+
 export function OfflineModal() {
   const { offlineReport, clearOffline, mainFriend } = useGame();
+  const pc = isDesktop();
+  // «Назад» на Android забирает награду так же, как кнопка «ЗАБРАТЬ».
+  useSystemBack(!!offlineReport, clearOffline);
   return (
     <AnimatePresence>
       {offlineReport && (
@@ -80,8 +99,56 @@ export function OfflineModal() {
             initial={{ scale: 0.8, y: 40, opacity: 0 }}
             animate={{ scale: 1, y: 0, opacity: 1 }}
             transition={{ type: "spring", stiffness: 300, damping: 24 }}
-            className="w-full max-w-xs"
+            className={pc ? "pc-offline pc-modal-card" : "w-full max-w-xs"}
+            onClick={(e) => e.stopPropagation()}
           >
+            {pc ? (
+              <>
+                {/* На мониторе это окно лаунчера: шапка с пояснением, цифры
+                    и кнопка — в одну строку, подсказка про «Холодильник»
+                    внизу. Полноэкранная мобильная полоса на 27" выглядела
+                    как несжатая страница сайта. */}
+                <div className="pc-modal-head">
+                  <div className="flex items-center" style={{ gap: 10 }}>
+                    <span style={{ color: "var(--acc)", lineHeight: 0 }}><Icon name="snow" size={22} /></span>
+                    <span className="t-display" style={{ fontSize: 19 }}>{tr("ПОКА ТЕБЯ НЕ БЫЛО")}</span>
+                    <span className="flex-1" />
+                    <span className="t-caption" style={{ color: "var(--text-mute)" }}>
+                      {fmtTime(offlineReport.hours * 3600000)}
+                    </span>
+                  </div>
+                </div>
+                <div className="pc-modal-body flex items-center" style={{ gap: 20 }}>
+                  <div style={{ minWidth: 0 }}>
+                    <div className="t-body" style={{ color: "var(--text-dim)" }}>
+                      {mainFriend.name} жрал и накопил
+                    </div>
+                    <div
+                      className="t-num acc-text"
+                      style={{ fontSize: 40, marginTop: 6, textShadow: "0 0 30px var(--acc-glow)" }}
+                    >
+                      +{fmt(offlineReport.coins)}
+                    </div>
+                    <div className="t-label" style={{ fontSize: 9, color: "var(--text-mute)" }}>CHUBCOINS</div>
+                  </div>
+                  <Tap
+                    onClick={clearOffline}
+                    accent
+                    r="md"
+                    sound="coin"
+                    className="t-title"
+                    style={{ padding: "0 22px", minHeight: 46, fontSize: 13, flex: "0 0 auto", marginLeft: "auto" }}
+                  >
+                    {tr("ЗАБРАТЬ")}
+                  </Tap>
+                </div>
+                <div className="pc-modal-foot" style={{ justifyContent: "flex-start" }}>
+                  <span className="t-caption" style={{ color: "var(--text-mute)" }}>
+                    {tr("Качай «Холодильник» в CHUBCLICKER, чтобы копить дольше")}
+                  </span>
+                </div>
+              </>
+            ) : (
             <Panel r="xl" strong className="p-6 text-center">
               <div style={{ color: "var(--acc)" }}><Icon name="snow" size={42} /></div>
               <div className="t-display mt-2" style={{ fontSize: 22 }}>{tr("ПОКА ТЕБЯ НЕ БЫЛО")}</div>
@@ -95,6 +162,7 @@ export function OfflineModal() {
               <Tap onClick={clearOffline} accent r="md" className="w-full py-3.5 t-title" style={{ fontSize: 14 }} sound="coin">{tr("ЗАБРАТЬ")}</Tap>
               <div className="t-label mt-3" style={{ fontSize: 8, lineHeight: 1.5 }}>{tr("Качай «Холодильник» в CHUBCLICKER, чтобы копить дольше")}</div>
             </Panel>
+            )}
           </motion.div>
         </motion.div>
       )}

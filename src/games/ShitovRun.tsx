@@ -6,6 +6,7 @@ import { drawHead } from "../core/head";
 import { useCanvas, GameHUD, GameOver, Countdown, HudGauge } from "./shell";
 import AdModal from "../ui/AdModal";
 import { hasAds, noteRevive } from "../core/ads";
+import { actionFor } from "../core/keymap";
 import { sfx, haptic } from "../core/fx";
 
 /**
@@ -214,11 +215,14 @@ export default function ShitovRun({ onExit }: { onExit: () => void }) {
     window.addEventListener("pointercancel", up);
 
     const kd = (e: KeyboardEvent) => {
-      if (e.code === "Space" || e.key === "ArrowUp") { e.preventDefault(); jump(); }
-      if (e.key === "ArrowDown") G.current.ducking = true;
+      /* ПРОБЕЛ/ENTER и «вверх» из карты клавиш: прыжок — это и W, и ↑, и
+         пробел; присесть — S или ↓. */
+      const a = actionFor(e.code);
+      if (a === "act" || a === "up") { e.preventDefault(); jump(); }
+      if (a === "down") G.current.ducking = true;
     };
     const ku = (e: KeyboardEvent) => {
-      if (e.key === "ArrowDown") G.current.ducking = false;
+      if (actionFor(e.code) === "down") G.current.ducking = false;
     };
     window.addEventListener("keydown", kd);
     window.addEventListener("keyup", ku);
@@ -437,17 +441,59 @@ export default function ShitovRun({ onExit }: { onExit: () => void }) {
       }
     }
 
-    // ШИТОВ сзади
-    // чем меньше отрыв, тем ближе Шитов к спине героя
+    /* ШИТОВ сзади: чем меньше отрыв, тем ближе он к спине героя.
+       Раньше от «воспитателя» были голова и серая капсула туловища — отсюда
+       «как выглядит Шитов, это странно». Добавили форму: тёмная куртка на
+       плечах, ремень, кепи с козырьком и свисток на цепочке. Это силуэт,
+       который читается за кадр, а не раскраска. */
     const chaseX = heroX - g.gap * W * 0.42 - W * 0.06;
     const shHop = Math.abs(Math.sin(g.run * 0.9)) * 8;
+    const sx = chaseX + heroR * 0.4;
+    const sr = heroR * 0.92;
+    const shy = groundY - heroR * 1.35 - shHop;
     drawHead(
-      ctx, shitov.look, chaseX + heroR * 0.4, groundY - heroR * 1.35 - shHop,
-      heroR * 0.92,
-      { mouth: 0.4 + Math.sin(g.run) * 0.2, angry: 0.75, tilt: Math.sin(g.run * 0.5) * 0.1 },
+      ctx, shitov.look, sx, shy, sr,
+      { mouth: 0.4 + Math.sin(g.run) * 0.2, angry: 0.9, tilt: Math.sin(g.run * 0.5) * 0.1 },
     );
     // chub 1.55 — Шитов заметно плотнее героя, как и описан
-    drawRunnerBody(ctx, chaseX + heroR * 0.4, groundY - shHop, heroR * 0.92, g.run, "#4a5a6a", false, 1.55);
+    drawRunnerBody(ctx, sx, groundY - shHop, sr, g.run, "#4a5a6a", false, 1.55);
+
+    ctx.save();
+    // куртка: плотный тёмный блок поверх «капсулы» тела
+    ctx.fillStyle = "#2b3547";
+    ctx.beginPath();
+    ctx.roundRect(sx - sr * 1.12, shy + sr * 0.28, sr * 2.24, sr * 1.24, sr * 0.4);
+    ctx.fill();
+    // плечи чуть светлее — форма, а не мешок
+    ctx.fillStyle = "#37435a";
+    ctx.beginPath();
+    ctx.roundRect(sx - sr * 1.12, shy + sr * 0.28, sr * 2.24, sr * 0.3, sr * 0.14);
+    ctx.fill();
+    // ремень
+    ctx.fillStyle = "#161c26";
+    ctx.fillRect(sx - sr * 1.12, shy + sr * 1.06, sr * 2.24, sr * 0.18);
+    // свисток на цепочке
+    ctx.strokeStyle = "rgba(226,226,236,0.5)";
+    ctx.lineWidth = Math.max(1, sr * 0.06);
+    ctx.beginPath();
+    ctx.moveTo(sx - sr * 0.34, shy + sr * 0.4);
+    ctx.quadraticCurveTo(sx, shy + sr * 0.86, sx + sr * 0.34, shy + sr * 0.4);
+    ctx.stroke();
+    ctx.fillStyle = "#d9d9e4";
+    ctx.beginPath();
+    ctx.ellipse(sx + sr * 0.42, shy + sr * 0.44, sr * 0.17, sr * 0.12, -0.4, 0, Math.PI * 2);
+    ctx.fill();
+    // кепи: тулья и козырёк вперёд — силуэт дежурного по этажу
+    ctx.fillStyle = "#1c2433";
+    ctx.beginPath();
+    ctx.ellipse(sx, shy - sr * 0.72, sr * 0.94, sr * 0.4, 0, Math.PI, 0);
+    ctx.fill();
+    ctx.fillRect(sx - sr * 0.94, shy - sr * 0.78, sr * 1.88, sr * 0.16);
+    ctx.fillStyle = "#0f1420";
+    ctx.beginPath();
+    ctx.ellipse(sx + sr * 0.52, shy - sr * 0.68, sr * 0.56, sr * 0.15, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
 
     // ГЕРОЙ
     const hy = groundY - g.y * H;
@@ -463,11 +509,20 @@ export default function ShitovRun({ onExit }: { onExit: () => void }) {
       },
     );
 
-    // тени
-    ctx.fillStyle = "rgba(0,0,0,0.3)";
+    /* ТЕНЬ ГЕРОЯ.
+       Здесь и умирала игра: радиус считался как heroR * 0.8 * (1 - g.y * 2),
+       а на высокой точке прыжка g.y переваливало за 0.5 — множитель уходил
+       в минус, ctx.ellipse бросал IndexSizeError, и цикл отрисовки
+       обрывался. Дальше — чёрный экран, 0 FPS и «Ошибка в фоне» ровно после
+       прыжка, ровно как описывал игрок. Тень учимся гасить честно: масштаб
+       держим в [0.2, 1], прозрачность убываем. */
+    const shrink = Math.max(0.2, Math.min(1, 1 - g.y * 1.55));
+    ctx.globalAlpha = 0.3 * shrink;
+    ctx.fillStyle = "#000000";
     ctx.beginPath();
-    ctx.ellipse(heroX, groundY + 3, heroR * 0.8 * (1 - g.y * 2), heroR * 0.18, 0, 0, Math.PI * 2);
+    ctx.ellipse(heroX, groundY + 3, heroR * 0.8 * shrink, heroR * 0.18 * shrink, 0, 0, Math.PI * 2);
     ctx.fill();
+    ctx.globalAlpha = 1;
 
     // попапы
     ctx.textAlign = "center";
@@ -551,7 +606,7 @@ export default function ShitovRun({ onExit }: { onExit: () => void }) {
       <AnimatePresence>
         {showAd && (
           <AdModal
-            reason="Убежать от Шитова"
+            reason="Уйти от погони Кортекса"
             onReward={() => { revivedRef.current = true; noteRevive(); }}
             onClose={() => {
               setShowAd(false);

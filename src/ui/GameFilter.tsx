@@ -80,11 +80,11 @@ export default function GameFilter({
   const sortLabel = SORTS.find((x) => x.k === sort)?.label || SORTS[0].label;
 
   return (
-    <div style={{ marginBottom: 12 }}>
+    <div className="game-filter-bar" style={{ marginBottom: 12 }}>
       {/* Строка: поиск + сортировка */}
-      <div className="flex items-center" style={{ gap: 8, marginBottom: 9 }}>
+      <div className="flex items-center game-filter-search" style={{ gap: 8, marginBottom: 9 }}>
         <div
-          className="flex items-center flex-1 min-w-0"
+          className="flex items-center flex-1 min-w-0 game-filter-input-wrap"
           style={{
             gap: 8, padding: "9px 12px", borderRadius: "var(--r-sm)",
             background: "var(--surface-2)",
@@ -184,7 +184,7 @@ export default function GameFilter({
 
       {/* Категории вместо двадцати разрозненных тегов */}
       <div
-        className="flex items-center"
+        className="flex items-center game-filter-cats"
         style={{
           gap: 6, overflowX: "auto", paddingBottom: 2,
           scrollbarWidth: "none",

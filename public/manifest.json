@@ -1,26 +1,59 @@
 {
-  "name": "CHUBGAMES",
-  "short_name": "CHUBGAMES",
-  "description": "Мини-игры про друзей. Работает без интернета.",
+  "name": "CHUBUGAMES",
+  "short_name": "CHUBUGAMES",
+  "description": "CHUBUGAMES — мини-игры про пацанов. 29 игр, всё офлайн.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait",
-  "background_color": "#08080A",
-  "theme_color": "#08080A",
-  "categories": ["games", "entertainment"],
+  "background_color": "#0A0A0D",
+  "theme_color": "#0A0A0D",
+  "categories": [
+    "games",
+    "entertainment"
+  ],
   "icons": [
     {
       "src": "/icon-192.png",
       "sizes": "192x192",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
     },
     {
       "src": "/icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Все игры",
+      "short_name": "Игры",
+      "url": "/?tab=home",
+      "icons": [
+        {
+          "src": "/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "Прогресс",
+      "short_name": "Прогресс",
+      "url": "/?tab=progress",
+      "icons": [
+        {
+          "src": "/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
     }
   ]
 }

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence } from "framer-motion";
 import { useGame } from "../core/store";
-import { scene } from "../core/palette";
+import { scene, canvasColor } from "../core/palette";
 import { sfx, haptic } from "../core/fx";
 import { useCanvas, GameHUD, GameOver, Countdown, HudStat } from "./shell";
 import { tr } from "../core/i18n";
@@ -465,7 +465,7 @@ export default function Basket({ onExit }: { onExit: () => void }) {
     ctx.textAlign = "center";
     for (const p of g.pops) {
       ctx.globalAlpha = Math.min(1, p.t * 1.6);
-      ctx.fillStyle = p.col;
+      ctx.fillStyle = canvasColor(p.col);
       ctx.font = "800 19px Unbounded, Inter, system-ui, sans-serif";
       ctx.fillText(p.txt, p.x, p.y - (1 - p.t) * 34);
     }

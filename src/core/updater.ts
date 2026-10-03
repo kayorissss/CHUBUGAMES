@@ -22,7 +22,40 @@ export type UpdateInfo = {
   url: string;
   size: number;
   published: string;
+  /** Ожидаемый SHA-256 файла из ассета GitHub (может отсутствовать) */
+  sha256?: string;
 };
+
+/**
+ * Откуда разрешено качать обновление.
+ *
+ * Редирект GitHub уводит на release-assets.githubusercontent.com, поэтому
+ * список — по конечным хостам, а не по «github.com». Смысл проверки: url
+ * приходит из ответа API, а вWebView его мог бы подменить любой, кто
+ * дорвался до localStorage/настроек — не выпускать из приложения запросы
+ * на произвольные хосты.
+ */
+const CDN_HOSTS = /(^|\.)(github\.com|githubusercontent\.com|githubassets\.com)$/i;
+
+/** Проверка ссылки на файл обновления. Бросает понятную ошибку. */
+export function assertDownloadUrl(url: string): URL {
+  let u: URL;
+  try {
+    u = new URL(url);
+  } catch {
+    throw new Error("Ссылка на обновление повреждена");
+  }
+  if (u.protocol !== "https:") throw new Error("Обновление отдаётся не по https");
+  if (!CDN_HOSTS.test(u.hostname)) throw new Error("Неизвестный источник файла: " + u.hostname);
+  return u;
+}
+
+/** hex-строка SHA-256 из ArrayBuffer */
+async function sha256hex(buf: ArrayBuffer): Promise<string> {
+  if (!crypto?.subtle) return "";
+  const d = await crypto.subtle.digest("SHA-256", buf);
+  return [...new Uint8Array(d)].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
 
 export const isNative = () => Capacitor.getPlatform() === "android";
 
@@ -100,7 +133,11 @@ export async function checkForUpdate(): Promise<UpdateInfo | null> {
     url: asset.browser_download_url,
     size: asset.size || 0,
     published: json.published_at || json.created_at || "",
+    sha256: String(asset.digest || "").replace(/^sha256:/i, "").toLowerCase() || undefined,
   };
+
+  // Ссылку проверяем сразу: до того, как пользователь нажмёт «Скачать»
+  assertDownloadUrl(info.url);
 
   return isNewer(info.version, APP_VERSION) ? info : null;
 }
@@ -122,7 +159,9 @@ export async function downloadApkNative(
   url: string,
   name: string,
   onProgress: (loaded: number, total: number) => void,
+  expectedSize = 0,
 ): Promise<string> {
+  assertDownloadUrl(url);
   let handle: PluginListenerHandle | null = null;
   try {
     handle = await Filesystem.addListener("progress", (p) => {
@@ -141,6 +180,27 @@ export async function downloadApkNative(
       path: name,
       directory: Directory.Cache,
     });
+
+    /*
+     * Целостность на телефоне: размер проверяем обязательно, SHA-256 —
+     * не всегда возможно прочитать 22 МБ целиком. Подпись APK проверит
+     * Android при установке: чужой файл он просто не примет.
+     */
+    try {
+      const { Filesystem: FS } = await import("@capacitor/filesystem");
+      const stat = await FS.stat({ path: name, directory: Directory.Cache });
+      const size = (stat as unknown as { size?: number }).size ?? 0;
+      if (expectedSize && size && size !== expectedSize) {
+        throw new Error(
+          `Файл докачался не целиком: ${(size / 1048576).toFixed(1)} МБ вместо ${fmtBytes(expectedSize)}`,
+        );
+      }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "";
+      if (/целиком/.test(msg)) throw e;
+      // stat не поддержан плагином — не роняем установку из-за проверки
+    }
+
     return res.path || uri;
   } finally {
     await handle?.remove();
@@ -190,6 +250,35 @@ export async function downloadApk(
   });
   onProgress(blob.size, blob.size || total);
   return blob;
+
+
+}
+
+/**
+ * Проверить скачанный файл.
+ *
+ * На телефоне дополнительно считаем SHA-256 только если он пришёл из
+ * API и файл не гигантский: гонять 22 МБ через subtle.digest на дешёвом
+ * WebView смысла нет — там целостность гарантирует сама система: Android
+ * НЕ поставит APK поверх, если подпись не совпадает с установленной.
+ * Именно поэтому приватный ключ подписи нельзя держать в репозитории.
+ */
+async function verifyDownloaded(
+  bytes: Uint8Array,
+  info: Pick<UpdateInfo, "size" | "sha256">,
+): Promise<void> {
+  if (info.size && bytes.byteLength !== info.size) {
+    throw new Error(
+      `Файл докачался не целиком: ${(bytes.byteLength / 1048576).toFixed(1)} МБ ` +
+      `вместо ${fmtBytes(info.size)}`,
+    );
+  }
+  if (info.sha256 && bytes.byteLength <= 40 * 1048576) {
+    const hex = await sha256hex(bytes.buffer.slice(0, bytes.byteLength) as ArrayBuffer);
+    if (hex && hex !== info.sha256) {
+      throw new Error("Контрольная сумма файла не совпала — не устанавливайте его");
+    }
+  }
 }
 
 function blobToBase64(blob: Blob): Promise<string> {
@@ -252,15 +341,20 @@ export async function downloadAndInstall(
      * Прогресс дублируем в уведомление, чтобы игру можно было свернуть
      * и всё равно видеть, сколько осталось.
      */
-    const uri = await downloadApkNative(info.url, name, (loaded, total) => {
-      onProgress(loaded, total);
-      if (total > 0) {
-        void showDownloadProgress(
-          (loaded / total) * 100,
-          `${fmtBytes(loaded)} из ${fmtBytes(total)}`,
-        );
-      }
-    });
+    const uri = await downloadApkNative(
+      info.url,
+      name,
+      (loaded, total) => {
+        onProgress(loaded, total);
+        if (total > 0) {
+          void showDownloadProgress(
+            (loaded / total) * 100,
+            `${fmtBytes(loaded)} из ${fmtBytes(total)}`,
+          );
+        }
+      },
+      info.size,
+    );
     await showDownloadProgress(100, "");
     await installApk(uri);
     void clearDownloadProgress();
@@ -268,6 +362,8 @@ export async function downloadAndInstall(
   }
 
   const blob = await downloadApk(info.url, onProgress, signal);
+  // В этой ветке файл уже целиком в памяти — сверяем размер и SHA-256
+  await verifyDownloaded(new Uint8Array(await blob.arrayBuffer()), info);
   const uri = await saveApk(blob, name);
   await installApk(uri);
   return uri;
@@ -276,6 +372,10 @@ export async function downloadAndInstall(
 /** Установка из файла, выбранного пользователем в проводнике */
 export async function installFromFile(file: File) {
   if (!/\.apk$/i.test(file.name)) throw new Error("Это не APK-файл");
+  // Файл человек принёс сам — подпись проверит Android, но пустой или
+  // обрезанный файл лучше отклонить сразу, а не показывать системный
+  // установщик с «пакет повреждён».
+  if (file.size < 1_000_000) throw new Error("Файл слишком маленький — похоже, он не докачался");
   const uri = await saveApk(file, file.name);
   await installApk(uri);
   return uri;

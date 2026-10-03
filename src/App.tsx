@@ -1,12 +1,15 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { AnimatePresence, motion, MotionConfig } from "framer-motion";
 import { GameProvider, useGame } from "./core/store";
 import { Aurora } from "./ui/Glass";
 import Nav, { type Tab } from "./components/Nav";
 
-/** Подстраницы поверх вкладок */
-export type SubPage = "network" | "casino" | "donate" | "boss" | "fanfic";
+/** Подстраницы поверх вкладок. «update» — экран обновления (с 1.28.0) */
+export type SubPage = "network" | "casino" | "donate" | "boss" | "fanfic" | "update";
 import { Toasts, OfflineModal } from "./components/Overlays";
+import PcDock from "./ui/pc/PcDock";
+import UpdateFlow from "./pages/UpdateFlow";
 import UpdateBanner from "./ui/UpdateBanner";
 import WhatsNew from "./ui/WhatsNew";
 import {
@@ -18,9 +21,19 @@ import {
   syncInstalledVersion,
 } from "./core/notify";
 import { upcomingBosses } from "./core/bosses";
-import { applyPerfMode, isLowFx, measurePerfOnce } from "./core/perf";
-import { initDesktopKeys, initStage, isDesktop } from "./core/desktop";
-import PcBoot from "./ui/PcBoot";
+import {
+  applyPerfMode, isLowFx, measurePerfOnce, resetFps, startUiWatch,
+} from "./core/perf";
+import { initDesktopKeys, initStage, isDesktop, hasKeyboard } from "./core/desktop";
+import { installSystemBack } from "./core/android";
+import { startDesktopNotify } from "./core/notifyDesktop";
+import { claimableCount, claimables } from "./core/claimable";
+import BootScreen from "./ui/BootScreen";
+import PcTopBar, { PcWinControls } from "./ui/pc/PcTopBar";
+import { FpsHud, KeyCursor } from "./ui/PcHud";
+import { initGameKeys, handlesKeysNatively } from "./core/keymouse";
+import { setPlaying } from "./core/play";
+import { tr } from "./core/i18n";
 import FanficPage from "./pages/Fanfic";
 import Home from "./pages/Home";
 import { ModesProvider } from "./core/modes";
@@ -57,147 +70,88 @@ import Europa from "./games/Europa";
 import Chess from "./games/Chess";
 import Checkers from "./games/Checkers";
 import Backgammon from "./games/Backgammon";
-import { EASE, pageVariants, subPageVariants, gameVariants } from "./core/motion";
+import { pageVariants, subPageVariants, gameVariants } from "./core/motion";
 import Canteen from "./games/Canteen";
 import WhoWasIt from "./games/WhoWasIt";
 import RadomirFlight from "./games/RadomirFlight";
 import DormDefense from "./games/DormDefense";
 import { unlockAudio } from "./core/fx";
 import { pushBack } from "./core/nav";
+import { resumeNow, setPauseExitHandler } from "./core/pause";
+import PauseOverlay from "./ui/PauseOverlay";
+import BugGuard, { installCrashWatch } from "./ui/BugGuard";
+import { GAME_META } from "./core/content";
 import type { GameId } from "./core/types";
 
 /**
- * Загрузчик приложения.
- *
- * Пользователь просил обновить его полностью: раньше это была прыгающая
- * иконка бургера, аврора на весь экран и тонкая полоска, которая рисовала
- * фиктивные полторы секунды. Смотрелось как заглушка и вдобавок тянуло
- * дорогое размытие на самом старте — то есть первое, что видел человек,
- * подтормаживало на слабом телефоне.
- *
- * Что теперь:
- *  • монограмма ЧГ, которая собирается из двух половин, — без blur-фильтров;
- *  • реальные подписи стадий (сохранение → друзья → игры), чтобы загрузка
- *    выглядела осмысленной;
- *  • прогресс идёт по стадиям, а не «просто анимация до 100%»;
- *  • всё уложено в 1.5 с и уважает режим слабого телефона.
+ * Заставка вынесена в src/ui/BootScreen.tsx: она одна на телефон и на
+ * компьютер. Раньше их было две — мобильная (в этом файле) и десктопная
+ * (PcBoot), и они успели разъехаться по анимациям и размерам.
  */
-const BOOT_STEPS = ["ЗАГРУЖАЮ СОХРАНЕНИЕ", "СОБИРАЮ ПАЦАНОВ", "РАЗОГРЕВАЮ ИГРЫ"];
 
-function Splash({ done }: { done: () => void }) {
-  const [step, setStep] = useState(0);
-  const low = isLowFx();
-
-  useEffect(() => {
-    const timers = BOOT_STEPS.map((_, i) =>
-      window.setTimeout(() => setStep(i), 260 + i * 420),
-    );
-    const end = window.setTimeout(done, low ? 1150 : 1650);
-    return () => { timers.forEach(clearTimeout); clearTimeout(end); };
-  }, [done, low]);
-
-  const pct = ((step + 1) / BOOT_STEPS.length) * 100;
-
-  return (
-    <motion.div
-      className="fixed inset-0 z-[120] flex flex-col items-center justify-center"
-      style={{ background: "var(--bg)" }}
-      exit={{ opacity: 0 }}
-      transition={{ duration: 0.34, ease: EASE }}
-    >
-      {/* Монограмма */}
-      <div className="relative flex items-center justify-center" style={{ marginBottom: 26 }}>
-        <motion.div
-          initial={{ scale: 0.82, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          transition={{ type: "spring", stiffness: 260, damping: 20 }}
-          className="flex items-center justify-center"
-          style={{
-            width: 92, height: 92, borderRadius: 26,
-            background: "var(--acc)", color: "var(--acc-ink)",
-            overflow: "hidden", position: "relative",
-          }}
-        >
-          <span className="t-display" style={{ fontSize: 38, letterSpacing: "-0.02em" }}>ЧГ</span>
-          {/* блик пробегает по монограмме — дёшево, без blur */}
-          {!low && (
-            <motion.span
-              initial={{ x: "-130%" }}
-              animate={{ x: "130%" }}
-              transition={{ duration: 1.4, repeat: Infinity, ease: "easeInOut", repeatDelay: 0.35 }}
-              style={{
-                position: "absolute", top: 0, bottom: 0, width: "48%",
-                background: "linear-gradient(100deg, transparent, rgba(255,255,255,0.5), transparent)",
-              }}
-            />
-          )}
-        </motion.div>
-      </div>
-
-      <motion.div
-        initial={{ y: 10, opacity: 0 }}
-        animate={{ y: 0, opacity: 1 }}
-        transition={{ delay: 0.12, duration: 0.34, ease: EASE }}
-        className="t-display text-center"
-        style={{ fontSize: 34, lineHeight: 1 }}
-      >
-        CHUBUGAMES
-      </motion.div>
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ delay: 0.26 }}
-        className="t-label"
-        style={{ marginTop: 9, fontSize: 9.5, letterSpacing: "0.16em" }}
-      >
-        МИНИ-ИГРЫ ПРО СВОИХ ПАЦАНОВ
-      </motion.div>
-
-      {/* Прогресс со стадиями */}
-      <div
-        className="absolute flex flex-col items-center"
-        style={{ bottom: "calc(var(--sab) + 44px)", width: "min(240px, 68vw)" }}
-      >
-        <div
-          style={{
-            width: "100%", height: 4, borderRadius: 999,
-            background: "var(--n-300)", overflow: "hidden",
-          }}
-        >
-          <motion.div
-            initial={false}
-            animate={{ width: `${pct}%` }}
-            transition={{ duration: 0.38, ease: EASE }}
-            style={{ height: "100%", background: "var(--acc)" }}
-          />
-        </div>
-        <div style={{ height: 15, marginTop: 11, position: "relative", width: "100%" }}>
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={step}
-              initial={{ opacity: 0, y: 5 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -5 }}
-              transition={{ duration: 0.2 }}
-              className="t-label absolute inset-0 text-center"
-              style={{ fontSize: 9, letterSpacing: "0.12em" }}
-            >
-              {BOOT_STEPS[step]}
-            </motion.div>
-          </AnimatePresence>
-        </div>
-      </div>
-    </motion.div>
+/** Мост между глобальными обработчиками и очередью уведомлений. */
+function CrashWatch() {
+  const { toast } = useGame();
+  useEffect(
+    () =>
+      installCrashWatch((title, detail) => {
+        toast({ title: title, sub: detail, icon: "warn", tone: "bad", ms: 5200 });
+      }),
+    [toast],
   );
+  return null;
 }
 
 function Shell() {
-  const { s } = useGame();
+  const { s, toast } = useGame();
+  /** ПК-раскладка: верхняя панель вместо нижнего меню, широкая сетка разделов */
+  const [pc, setPc] = useState(() => {
+    const on = isDesktop();
+    if (typeof document !== "undefined") {
+      document.documentElement.classList.toggle("is-desktop", on);
+    }
+    return on;
+  });
   const [splash, setSplash] = useState(true);
-  const [tab, setTab] = useState<Tab>("home");
+  /*
+   * Стартовый раздел умеет приходить из адреса: ?tab=settings. Нужно это
+   * ярлыкам PWA (public/manifest.json → shortcuts) и ссылкам из уведомлений:
+   * без проверки человек получил бы всегда домашний экран.
+   */
+  const [tab, setTab] = useState<Tab>(() => {
+    const want = new URLSearchParams(location.search).get("tab");
+    return (["home", "progress", "shop", "friends", "settings"] as const).includes(want as Tab)
+      ? (want as Tab)
+      : "home";
+  });
   const [game, setGame] = useState<GameId | null>(null);
+  /** контейнер игры — нужен, чтобы посадить на него клавиатурный слой */
+  const playRef = useRef<HTMLDivElement>(null);
   // отдельные подстраницы поверх вкладок
   const [sub, setSub] = useState<SubPage | null>(null);
+
+  /*
+   * Первый запуск: про ежедневный вход нужно сказать сразу — иначе о награде
+   * узнают только из любопытства, а она тем временем лежит и сгорает (серия
+   * обнуляется при пропуске). Одно напоминание за сессию, и только если вход
+   * ещё ни разу не забирали; раздел сами не переключаем — это решит сам
+   * игрок, красная точка на вкладке «Прогресс» для этого и есть.
+   */
+  const nudgeRef = useRef(false);
+  useEffect(() => {
+    if (nudgeRef.current || s.daily.lastClaim || splash) return;
+    nudgeRef.current = true;
+    const t = window.setTimeout(() => {
+      toast({
+        title: tr("Ежедневный вход ждёт"),
+        sub: tr("награда за первый день — в Прогрессе, серия до 7 дней"),
+        icon: "gift",
+        tone: "gold",
+        ms: 6000,
+      });
+    }, 2400);
+    return () => window.clearTimeout(t);
+  }, [s.daily.lastClaim, splash, toast]);
   // Влияет на анимации: в облегчённом режиме их выключаем целиком
   const [lowFx, setLowFx] = useState(() => isLowFx());
 
@@ -222,11 +176,19 @@ function Shell() {
    * нет, поэтому вешаем Escape на тот же стек слоёв (core/nav.ts).
    * Класс на <html> позволяет прятать чисто мобильные элементы.
    */
-  /** Заставка показывается один раз за запуск программы */
-  const [pcBoot, setPcBoot] = useState(() => isDesktop());
+  useEffect(() => {
+    const syncPc = () => {
+      const next = isDesktop();
+      document.documentElement.classList.toggle("is-desktop", next);
+      setPc(next);
+    };
+    syncPc();
+    window.addEventListener("resize", syncPc);
+    return () => window.removeEventListener("resize", syncPc);
+  }, []);
 
   useEffect(() => {
-    if (!isDesktop()) return;
+    if (!pc) return;
     document.documentElement.classList.add("is-desktop");
     const offKeys = initDesktopKeys();
     const offStage = initStage();
@@ -242,11 +204,23 @@ function Shell() {
       offStage();
       window.removeEventListener("chub:nav", onNav);
     };
+  }, [pc]);
+
+  /* При первом запуске система сама спросит про уведомления — тумблер в
+     настройках после этого только включает и выключает напоминания.
+     Спрашиваем не в первую миллисекунду: диалог Android, приехавший до
+     конца запуска, иногда теряется — человек его не видит, а разрешение
+     уже «спрошенное» и больше не показывается. */
+  useEffect(() => {
+    const t = setTimeout(() => { void initNotificationsOnFirstRun(); }, 1400);
+    return () => clearTimeout(t);
   }, []);
 
-  // При первом запуске система сама спросит про уведомления — тумблер в
-  // настройках после этого только включает и выключает напоминания.
-  useEffect(() => { void initNotificationsOnFirstRun(); }, []);
+  // Системный «назад» и жест свайпом на Android: закрыть оверлей → снять
+  // паузу → выйти из слоя → на корневом экране свернуть приложение. Без
+  // этого жеста игра отвечала ровно то, на что жаловались: «ничего не
+  // происходит». В браузере и на компьютере слушатель не ставится.
+  useEffect(() => installSystemBack(), []);
 
   // Напоминания о боссах. Расписание считается формулой, поэтому ставим
   // их сразу на 12 часов вперёд — приложение может долго не открываться.
@@ -263,17 +237,103 @@ function Shell() {
     else void cancelNewsNotifications();
   }, [s.settings.notifyNews]);
 
+  /*
+   * НАПОМИНАНИЯ НА КОМПЬЮТЕРЕ.
+   *
+   * На телефоне их планируют точные будильники, на компьютере такой роскоши
+   * нет: Electron не держит фоновый процесс. Поэтому здесь — честный путь:
+   * пока окно игры открыто (или свёрнуто), раз в минуту смотрим, не заступил
+   * ли босс, не вышла ли версия и не лежит ли нетронутой ежедневка, и шлём
+   * обычное системное уведомление Windows — то самое, что приходит из Telegram.
+   *
+   * Настройки читаются через ref: иначе интервал весь день работает по тем
+   * флагам, которые были на момент запуска.
+   */
+  const notifyFlags = useRef({ boss: false, news: false, updates: false, ready: false });
+  notifyFlags.current = {
+    boss: !!s.settings.notifyBoss,
+    news: !!s.settings.notifyNews,
+    updates: !!s.settings.notifyUpdates,
+    ready: claimableCount(claimables(s)) > 0,
+  };
+  useEffect(() => {
+    if (!isDesktop()) return;
+    return startDesktopNotify({
+      flags: () => ({
+        boss: notifyFlags.current.boss,
+        news: notifyFlags.current.news,
+        updates: notifyFlags.current.updates,
+      }),
+      dailyReady: () => notifyFlags.current.ready,
+    });
+  }, []);
+
+  /*
+   * Слежка за кадрами интерфейса. Главная страница — не игра: там нет
+   * канваса, который сам умеет ужиматься, поэтому если монитор не тянет
+   * пульсации, стекло и тени, лёгкий режим обязан включиться сам.
+   */
+  useEffect(() => {
+    return startUiWatch((fps) => {
+      if (!fps) return;
+      setLowFx(true);
+      toast({
+        title: tr("Интерфейс тормозил — включён лёгкий режим"),
+        sub: `${fps} FPS · ${tr("убрали стекло, тени и пульсации")}`,
+        icon: "speed",
+        tone: "normal",
+      });
+    });
+  }, [toast]);
+
   // системная кнопка/жест «назад» закрывает игру, а не приложение
   useEffect(() => {
     if (!game) return;
     return pushBack("game", () => setGame(null));
   }, [game]);
 
+  /*
+   * «Идёт игра». Один флаг на всё приложение: по нему прячется фоновая
+   * аура, засыпает тик автодохода в store и подсвечивается главный экран.
+   * Без этого под оверлеем игры continuosно перерисовываются пульсации
+   * босса, кубик казино и сундук — на слабом компьютере минус треть кадров.
+   */
+  useEffect(() => {
+    setPlaying(!!game);
+    if (game) resetFps();
+    return () => setPlaying(false);
+  }, [game]);
+
+  // Управление с клавиатуры: WASD и стрелки водят «палец» по полю игры,
+  // пробел нажимает. Ставится только пока игра открыта.
+  useEffect(() => {
+    // на компьютере с мышью и клавиатурой — всегда, даже если окно узкое
+    // и ПК-раскладка не включена: с клавиатуры играть никто не запрещал
+    if (!game || s.settings.keys === false) return;
+    if (!pc && !hasKeyboard()) return;
+    // четыре игры читают клавиши сами — слой удвоил бы каждое нажатие
+    if (handlesKeysNatively(game)) return;
+    const el = playRef.current;
+    if (!el) return;
+    return initGameKeys(el);
+  }, [game, pc, s.settings.keys]);
+
   // «назад» закрывает подстраницу
   useEffect(() => {
     if (!sub) return;
     return pushBack(`sub:${sub}`, () => setSub(null));
   }, [sub]);
+
+  /*
+   * ПАУЗА. Кнопка «Выйти в меню» в PauseOverlay не знает про setGame — она
+   * дёргает обработчик отсюда. При выходе паузу снимаем обязательно: иначе
+   * следующая игра стартовала бы «на паузе» с оверлеем поверх.
+   */
+  useEffect(() => {
+    setPauseExitHandler(game ? () => setGame(null) : null);
+    if (!game) resumeNow();
+    return () => setPauseExitHandler(null);
+  }, [game]);
 
   // с любой вкладки «назад» возвращает на Игры
   useEffect(() => {
@@ -293,8 +353,8 @@ function Shell() {
   }, []);
 
   const pages: Record<Tab, React.ReactNode> = {
-    home: <Home onPlay={(g) => setGame(g)} onOpenProfile={() => setTab("progress")} onOpen={setSub} onTab={setTab} />,
-    progress: <ProgressPage />,
+    home: <Home onPlay={(g) => setGame(g)} onOpenProfile={() => setTab("progress")} onOpen={setSub} />,
+    progress: <ProgressPage onPlay={(g) => setGame(g)} />,
     shop: <Shop />,
     friends: <Friends />,
     settings: <Settings onOpen={setSub} onTab={setTab} />,
@@ -307,14 +367,43 @@ function Shell() {
       bestOf={(g) => s.games[g]?.best ?? 0}
     >
     <MotionConfig reducedMotion={lowFx ? "always" : "never"}>
-    <div className="h-full w-full relative overflow-hidden" style={{ background: "var(--bg)" }}>
-      {/* Заставка запуска — только в десктопной сборке */}
-      {pcBoot && <PcBoot onDone={() => setPcBoot(false)} />}
+    <div className={pc ? "h-full w-full pc-shell" : "h-full w-full relative overflow-hidden"} style={{ background: "var(--bg)" }}>
+      {/* фон-аура: красиво, но это бесконечная анимация на весь экран.
+          Пока открыта игра, её всё равно не видно — значит и тратить на
+          неё кадры нечем. */}
+      {s.settings.fx && !lowFx && !game && <Aurora />}
 
-      {s.settings.fx && !lowFx && <Aurora />}
+      {/* ПК: разделы, профиль и кошелёк живут в верхней панели. На мониторе
+          нижнее меню выглядит чужим, а боковая колонка с разделами съедала
+          треть ширины, оставляя игры узкой полоской. */}
+      {pc && (
+        <PcTopBar
+          tab={tab}
+          sub={sub}
+          onTab={(next) => { setSub(null); setTab(next); }}
+          onOpen={setSub}
+        />
+      )}
 
-      <div className="relative h-full" style={{ zIndex: 1 }}>
+      {/* display:contents на телефоне — оболочка не влияет на мобильную
+          раскладку, но на ПК этоflex-колонка, внутри которой лежат
+          страницы, подстраницы и игры */}
+      <div className={pc ? "pc-body" : "contents"}>
+      <div
+        className={`relative h-full ${game ? "page-dormant" : ""}`}
+        style={{ zIndex: 1 }}
+      >
         <AnimatePresence mode="wait">
+          {/*
+           * На компьютере, пока открыта игра, главный экран не просто
+           * закрыт оверлеем — он размонтирован. Иначе под игрой продолжают
+           * жить пульсации босса, свечение сундука и казино: framer-motion
+           * считает их в своём rAF, даже когда их не видно. На слабом ПК
+           * это минус треть кадров в самой игре.
+           * На телефоне оставляем как было: там оверлей и так перекрывает
+           * экран, а резкий перемонст заметнее.
+           */}
+          {pc && game ? null : (
           <motion.div
             key={tab}
             variants={pageVariants}
@@ -323,8 +412,9 @@ function Shell() {
             exit="exit"
             className="h-full"
           >
-            {pages[tab]}
+            <BugGuard kind="page">{pages[tab]}</BugGuard>
           </motion.div>
+          )}
         </AnimatePresence>
       </div>
 
@@ -337,7 +427,7 @@ function Shell() {
             initial="initial"
             animate="animate"
             exit="exit"
-            className="absolute inset-0"
+            className="absolute inset-0 pc-sub"
             style={{ zIndex: 40, background: "var(--bg)" }}
           >
             {sub === "network" && <Network onBack={() => setSub(null)} />}
@@ -345,6 +435,7 @@ function Shell() {
             {sub === "donate" && <Donate onBack={() => setSub(null)} />}
             {sub === "boss" && <BossFight onBack={() => setSub(null)} />}
             {sub === "fanfic" && <FanficPage onBack={() => setSub(null)} />}
+            {sub === "update" && <UpdateFlow onBack={() => setSub(null)} />}
           </motion.div>
         )}
       </AnimatePresence>
@@ -353,7 +444,7 @@ function Shell() {
           поэтому переключение вкладки обязано закрывать подстраницу —
           иначе тапы по вкладкам «не работают». */}
       {/* На ПК разделы живут в боковой панели, нижнее меню там лишнее */}
-      {!game && !isDesktop() && (
+      {!game && !pc && (
         <Nav
           tab={tab}
           onTab={(next) => { setSub(null); setTab(next); }}
@@ -368,8 +459,9 @@ function Shell() {
             initial="initial"
             animate="animate"
             exit="exit"
-            className="fixed inset-0 z-[60]"
+            className={`fixed inset-0 z-[60] ${pc ? "pc-play-wrap" : ""}${game === "europa" ? " is-europa" : ""}${game === "clicker" ? " is-clicker" : ""}`}
           >
+            <div className={pc ? "pc-play game-stage" : "game-stage h-full w-full"} ref={playRef}>
             {game === "burger" && <BurgerRain onExit={() => setGame(null)} />}
             {game === "clicker" && <Clicker onExit={() => setGame(null)} />}
             {game === "merge" && <MergeHeads onExit={() => setGame(null)} />}
@@ -399,16 +491,62 @@ function Shell() {
             {game === "nards" && <Backgammon onExit={() => setGame(null)} />}
             {game === "cheat" && <Cheat onExit={() => setGame(null)} />}
             {game === "lift" && <Elevator onExit={() => setGame(null)} />}
+
+            {/* Счётчик кадров — прямо в игре, выключается в настройках
+                («Игра» → «Показывать FPS»). Отдельного rAF не тратит:
+                кадры считает цикл useCanvas (core/perf.ts). */}
+            {s.settings.fpsHud !== false && <FpsHud />}
+            {s.settings.keys !== false && hasKeyboard() && !handlesKeysNatively(game) && <KeyCursor />}
+            {pc && <PcWinControls floating />}
+            </div>
+            <PauseOverlay label={(() => { const g = GAME_META.find((x) => x.id === game); return g ? tr(g.name) : undefined; })()} />
           </motion.div>
         )}
       </AnimatePresence>
+      </div>
 
-      <Toasts />
-      <OfflineModal />
-      {!game && <UpdateBanner />}
-      {!game && <WhatsNew />}
+      {/* Оверлеи — через портал в body. Пока они стояли внутри страницы,
+          любая анимация входа с transform делала их position:fixed
+          «fixed внутри блока»: плашки вылезали по середине экрана, а когда
+          анимация заканчивалась — прыгали наверх. В body им мешать некому. */}
+      {createPortal(
+        <>
+          {/* Сторож фоновых ошибок: невыловленный reject в мини-игре раньше
+              просто останавливал анимацию, и выглядело это как «зависло». */}
+          <CrashWatch />
 
-      <AnimatePresence>{splash && <Splash done={() => setSplash(false)} />}</AnimatePresence>
+          <Toasts />
+          <OfflineModal />
+          {!game && <UpdateBanner onOpenUpdate={() => setSub("update")} />}
+          {!game && <WhatsNew />}
+        </>,
+        document.body,
+      )}
+
+      {/* ПРАВЫЙ НИЖНИЙ УГОЛ. С 1.28.0 это одна колонка: круглые кнопки
+          «Поддержать» и «Настройки» (а при отложенном обновлении — кнопка
+          обновления со знаком «!»), и под ними плашка бонуса за ролик.
+          Просили именно так: «кнопки перенести над плашкой смотреть рекламу,
+          в круглые кнопки и просто иконки». Внутри игры угла нет, чтобы не
+          перекрывать сцену. */}
+      {pc && !game && (
+        <PcDock
+          tab={tab}
+          sub={sub}
+          onTab={(next) => { setSub(null); setTab(next); }}
+          onOpen={setSub}
+        />
+      )}
+
+      <AnimatePresence>
+        {splash && (
+          <BootScreen
+            onDone={() => setSplash(false)}
+            minMs={lowFx ? 1000 : pc ? 1500 : 1250}
+            maxMs={pc ? 2200 : 1700}
+          />
+        )}
+      </AnimatePresence>
     </div>
     </MotionConfig>
     </ModesProvider>

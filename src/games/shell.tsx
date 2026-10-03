@@ -9,9 +9,10 @@ import type { IconName } from "../ui/Icon";
 import { useModes, MARATHON_ROUNDS, survivalMult } from "../core/modes";
 import ModeBadge from "../ui/ModeBadge";
 import { useGame } from "../core/store";
-import { canvasScaleCap, isLowFx } from "../core/perf";
+import { adaptValue, isLowFx, renderScale, fpsFeed, onAdapt } from "../core/perf";
 import RulesCard from "../ui/RulesCard";
 import { sfx, haptic } from "../core/fx";
+import { isPaused, pause } from "../core/pause";
 import type { GameId } from "../core/types";
 import { modalBackdrop, modalCard, springPop, springTap, EASE } from "../core/motion";
 
@@ -29,27 +30,83 @@ export function useCanvas(
     let raf = 0;
     let last = performance.now();
     let alive = true;
-    // На слабом телефоне рисуем в меньшем разрешении: разницы на глаз
-    // почти нет, а пикселей на кадр — вдвое меньше.
-    const dpr = Math.min(canvasScaleCap(), window.devicePixelRatio || 1);
+    /*
+     * РАЗРЕШЕНИЕ РИСОВАНИЯ.
+     *
+     * Внутренний буфер канваса берётся не «сколько показал
+     * devicePixelRatio», а сколько тянет железо (renderScale в
+     * core/perf.ts). На компьютере это главный источник FPS: окно
+     * 1920×1080 — это 2 млн пикселей на каждый кадр со всеми тенями и
+     * свечениями, и встраиваемый GPU на них и садится в 2–7 кадров.
+     *
+     * Важно: играм по-прежнему передаются CSS-пиксели (r.width/r.height),
+     * то есть вся логика, координаты мыши и размеры спрайтов не меняются —
+     * меняется только плотность растра.
+     */
+    let scale = 1;
 
     const resize = () => {
       const r = c.getBoundingClientRect();
-      c.width = Math.max(1, Math.floor(r.width * dpr));
-      c.height = Math.max(1, Math.floor(r.height * dpr));
+      scale = renderScale(r.width, r.height);
+      c.width = Math.max(1, Math.floor(r.width * scale));
+      c.height = Math.max(1, Math.floor(r.height * scale));
+      softShadows(c);
     };
     resize();
     const ro = new ResizeObserver(resize);
     ro.observe(c);
+    /* разрешение может поменять сам адаптив (меньше кадров → ужать буфер).
+       Окно при этом не менялось, поэтому ResizeObserver молчит — слушаем
+       отдельное событие. */
+    const offAdapt = onAdapt(resize);
 
+    let brokenFrames = 0;
     const loop = (now: number) => {
       if (!alive) return;
+      /*
+       * ПАУЗА. Кадры не рисуем, но цикл держим и last обновляем: иначе на
+       * первом кадре после продолжения dt был бы равен всему времени паузы,
+       * и персонаж одним шагом перелетел бы через половину экрана. Канвас при
+       * этом не чистится — на экране остаётся последний кадр, а не чёрный
+       * прямоугольник.
+       */
+      if (isPaused()) {
+        last = now;
+        raf = requestAnimationFrame(loop);
+        return;
+      }
       const dt = Math.min(50, now - last);
       last = now;
+      /* Кадры считаем здесь же — отдельный rAF на индикатор был бы ещё
+         одним потребителем того же дефицита. ВАЖНО: до рисования. По итогу
+         замера адаптив может тут же сменить разрешение (а смена c.width
+         очищает канвас); если сделать это после кадра, игрок увидел бы
+         чёрную вспышку. Здесь же — пересобираем буфер и рисуем кадр уже в
+         новом разрешении, без разрыва. */
+      fpsFeed(now);
       const ctx = c.getContext("2d");
       if (ctx) {
-        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-        drawRef.current(ctx, c.width / dpr, c.height / dpr, dt, now);
+        ctx.setTransform(scale, 0, 0, scale, 0, 0);
+        /* Страховка кадра. Один exception внутри отрисовки раньше убивал
+           весь цикл: канвас замирал на чёрном, FPS падал в ноль, а человек
+           видел «игра сломалась» (так и было в ПОБЕГЕ ОТ ШИТОВА после
+           прыжка — тень уходила в отрицательный радиус). Одиночный сбой
+           теперь просто пропускает кадр; если же игра падает 30 кадров
+           подряд, цикл останавливается и ошибка уходит в оболочку, чтобы
+           не крутить пустой rAF до бесконечности. */
+        try {
+          drawRef.current(ctx, c.width / scale, c.height / scale, dt, now);
+          brokenFrames = 0;
+        } catch (err) {
+          brokenFrames += 1;
+          console.error("[chub] кадр игры упал:", err);
+          if (brokenFrames >= 30) {
+            alive = false;
+            // наружу, чтобы это увидел BugGuard, а не только консоль
+            setTimeout(() => { throw err; }, 0);
+            return;
+          }
+        }
       }
       raf = requestAnimationFrame(loop);
     };
@@ -58,11 +115,50 @@ export function useCanvas(
       alive = false;
       cancelAnimationFrame(raf);
       ro.disconnect();
+      offAdapt();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, deps);
 
   return ref;
+}
+
+/*
+ * ТЕНИ В ЛЁГКОМ РЕЖИМЕ.
+ *
+ * ctx.shadowBlur = 12 стоит дороже, чем кажется: браузер размыживает тень
+ * по всей площади фигуры, а таких фигур на кадр — десятки. На слабом
+ * компьютере это ровно то, что роняет 60 кадров до 5.
+ *
+ * Править 18 игр по очереди нельзя — они разъедутся при первой же правке.
+ * Поэтому запрет теней устроен одним местом: на «слабом» канвасе свойству
+ * shadowBlur подменяем сеттер на пустой. Игры продолжают писать тени как
+ * писали, просто растер стоит им нечего. Как только железо снова справляется
+ * (адаптив вернул разрешение), подмену снимаем — картинка чинится сама.
+ */
+export function softShadows(c: HTMLCanvasElement) {
+  const ctx = c.getContext("2d");
+  if (!ctx) return;
+  const off = isLowFx() || adaptValue() < 0.999;
+  const anyCtx = ctx as unknown as { __chubNoShadow?: boolean };
+  if (off && !anyCtx.__chubNoShadow) {
+    anyCtx.__chubNoShadow = true;
+    Object.defineProperty(ctx, "shadowBlur", {
+      configurable: true,
+      get: () => 0,
+      set: () => {},
+    });
+    // цвет тени без радиуса всё равно стоит работы — обнуляем и его
+    Object.defineProperty(ctx, "shadowColor", {
+      configurable: true,
+      get: () => "rgba(0, 0, 0, 0)",
+      set: () => {},
+    });
+  } else if (!off && anyCtx.__chubNoShadow) {
+    anyCtx.__chubNoShadow = false;
+    delete (ctx as unknown as Record<string, unknown>).shadowBlur;
+    delete (ctx as unknown as Record<string, unknown>).shadowColor;
+  }
 }
 
 /**
@@ -236,6 +332,18 @@ export function GameHUD({
 
         {lives && <Lives value={lives.value} max={lives.max} icon={lives.icon} />}
         {extra}
+
+        {/* Пауза. На клавиатуре её же даёт Esc (core/desktop.ts), но на
+            телефоне клавиатуры нет, поэтому кнопка обязана быть видна. */}
+        <button
+          type="button"
+          onClick={() => { sfx.click(); haptic("light"); pause(); }}
+          className="hud-chip shrink-0 justify-center"
+          style={{ width: HUD_H, padding: 0 }}
+          aria-label={tr("Пауза")}
+        >
+          <Icon name="pause" size={17} />
+        </button>
 
         {gid && (
           <button
@@ -547,12 +655,13 @@ export function GameOver({
         variants={modalCard}
         initial="initial"
         animate="animate"
-        className="w-full max-w-sm"
+        className="go-plate-wrap"
       >
         {/* Итог забега — непрозрачная карточка со ступенями поверхностей.
             Раньше это было полупрозрачное стекло: поверх пёстрой игры
             цифры читались плохо. */}
         <div
+          className="go-plate"
           style={{
             borderRadius: "var(--r-xl)",
             background: "var(--surface)",
@@ -563,7 +672,7 @@ export function GameOver({
         >
           {/* Шапка: заголовок и результат на подложке потемнее */}
           <div
-            className="text-center"
+            className="text-center go-plate-l"
             style={{
               padding: "22px 20px 20px",
               background: "var(--surface-2)",
@@ -624,7 +733,7 @@ export function GameOver({
           </div>
 
           {/* Награда */}
-          <div style={{ padding: "16px 20px 20px" }}>
+          <div className="go-plate-r" style={{ padding: "16px 20px 20px" }}>
             <div className="flex" style={{ gap: 10, marginBottom: 16 }}>
               {[
                 { v: coins, l: tr("монет"), i: "coin" as const, d: 0.28 },

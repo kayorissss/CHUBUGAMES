@@ -64,6 +64,7 @@ function Reader({ fic, ch, onBack }: { fic: Fanfic; ch: FanficChapter; onBack: (
 
   return (
     <Screen
+      className="pc-reader"
       title={ch.title}
       sub={fic.title}
       right={

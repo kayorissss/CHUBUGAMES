@@ -65,19 +65,27 @@ export function freshSave(): SaveState {
     mainFriendId: "lyoha",
     heroSkin: "default",
     ownedSkins: ["default"],
-    ownedThemes: ["amber", "violet", "grey", "red", "yellow", "radomir", "sky"],
+    ownedThemes: ["ember", "amber", "violet", "grey", "red", "yellow", "radomir", "sky"],
     cards: { lyoha: 1 },
     achievements: {},
     daily: { lastClaim: "", streak: 0, quests: pickQuests(today()), questsDate: today() },
     season: { id: 1, xp: 0, claimed: [], startedAt: now },
     settings: {
-      theme: "dark", lang: "ru", accent: "amber", sound: true, haptics: true,
+      /* Акцент по умолчанию — «Фиолет» (просьба пользователя: стандартная
+         тема фиолетовая). «Уголёк» остаётся в списке бесплатных: он цвет
+         бренда, но на серых поверхностях оранжевый режет глаза дольше, чем
+         фиолетовый. Смена акцента пересчитывает контраст (core/theme.ts). */
+      theme: "dark", lang: "ru", accent: "violet", sound: true, haptics: true,
       fx: true, controls: "touchpad", difficulty: "normal",
       notifyUpdates: false,
       notifyBoss: false,
       notifyNews: false,
       favGames: [],
       gameSort: "default",
+      // Счётчик кадров включён: на компьютере без него невозможно понять,
+      // тормозит игра или нет; выключается одной кнопкой ниже.
+      fpsHud: true,
+      keys: true,
     },
     unlockedGames: ALL_GAMES.slice(),
     stats: {
@@ -115,17 +123,52 @@ export function migrate(s: any): SaveState {
   out.cards = s.cards || base.cards;
   out.achievements = s.achievements || {};
   out.ownedSkins = Array.isArray(s.ownedSkins) && s.ownedSkins.length ? s.ownedSkins : ["default"];
-  out.ownedThemes = Array.isArray(s.ownedThemes) && s.ownedThemes.length ? s.ownedThemes : ["amber"];
+  out.ownedThemes = Array.isArray(s.ownedThemes) && s.ownedThemes.length ? s.ownedThemes : ["ember"];
   // бесплатные темы доступны всем, включая старые сохранения
-  for (const free of ["amber", "violet", "grey", "red", "yellow", "radomir", "sky"]) {
+  for (const free of ["ember", "amber", "violet", "grey", "red", "yellow", "radomir", "sky"]) {
     if (!out.ownedThemes.includes(free)) out.ownedThemes.push(free);
+  }
+  /*
+   * 1.28.0: стандартной темой стал «Фиолет», и по решению автора он
+   * ставится ВСЕМ при первом запуске версии — один раз, отметкой в
+   * localStorage. Почему отметкой, а не проверкой «акцент ли это старый»:
+   * после миграции человек вправе выбрать любой цвет, и при следующем
+   * запуску мы обязаны его выбор не переть. Отметка ставится до
+   * записи сохранения, поэтому повторной смены не будет никогда.
+   */
+  const THEME_MIGRATE_KEY = "chubgames.accent.v1.28";
+  try {
+    if (localStorage.getItem(THEME_MIGRATE_KEY) !== "1") {
+      out.settings.accent = "violet";
+      localStorage.setItem(THEME_MIGRATE_KEY, "1");
+    }
+  } catch {
+    /* приватный режим или телефон без localStorage: просто стартуем с
+       фиолетового — хуже не станет, выбор сохранится в самом сейве */
+    out.settings.accent = "violet";
   }
   // Все мини-игры доступны сразу — в том числе в старых сохранениях
   out.unlockedGames = ALL_GAMES.slice();
-  // Досыпаем новых друзей тем, кто уже играл
+  // Досыпаем новых друзей и обновляем встроенных (имена, внешность, описание)
   const have = new Set(out.friends.map((f) => f.id));
   for (const f of base.friends) {
-    if (!have.has(f.id)) out.friends.push({ ...f, look: { ...f.look }, stats: { ...f.stats } });
+    if (!have.has(f.id)) {
+      out.friends.push({ ...f, look: { ...f.look }, stats: { ...f.stats } });
+    } else if (f.builtin) {
+      const idx = out.friends.findIndex((x) => x.id === f.id);
+      if (idx >= 0 && out.friends[idx].builtin) {
+        out.friends[idx] = {
+          ...out.friends[idx],
+          name: f.name,
+          nick: f.nick,
+          quote: f.quote,
+          rarity: f.rarity,
+          photo: out.friends[idx].photo || f.photo,
+          look: { ...f.look },
+          stats: { ...f.stats },
+        };
+      }
+    }
   }
   if (!out.friends.some((f) => f.id === out.mainFriendId)) out.mainFriendId = "lyoha";
   out.v = VERSION;

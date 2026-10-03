@@ -69,6 +69,11 @@ export interface GameStats {
    * к монетам именно в этой игре. Считается формулой из masteryLevel().
    */
   mx?: number;
+  /**
+   * Прогресс режима с уровнями: какой номер открыт (ЧУБУПА УНИВЕРСАЛИС —
+   * сколько уровней кампании пройдено). 1 — доступен только первый.
+   */
+  prog?: number;
   /** Лучший результат испытания дня и дата этого испытания (YYYY-MM-DD) */
   dcBest?: number;
   dcDay?: string;
@@ -103,7 +108,16 @@ export interface SeasonState {
 }
 
 export interface Settings {
-  theme: "dark" | "light";
+  /**
+   * Базовая тема интерфейса. «glass» из старой шкалы убрана: размытые
+   * полупрозрачные подложки по всему экрану на ПК превращались в кашу,
+   * а на телефоне ели FPS.
+   *  dark     — обсидиан, почти чёрный (по умолчанию)
+   *  graphite — тёмно-серый: мягче для глаз на большом мониторе
+   *  light    — белый
+   * Цвет акцента выбирается независимо (ACCENTS в core/content.ts).
+   */
+  theme: "dark" | "graphite" | "light";
   lang: "ru" | "en";
   accent: string;
   sound: boolean;
@@ -121,6 +135,10 @@ export interface Settings {
   favGames?: string[];
   /** Порядок игр в сетке */
   gameSort?: "default" | "best" | "recent" | "plays" | "name";
+  /** Показывать счётчик кадров прямо в игре (ПК и телефон) */
+  fpsHud?: boolean;
+  /** Управление с клавиатуры в играх: WASD и стрелки водят «палец», пробел жмёт */
+  keys?: boolean;
 }
 
 export interface SaveState {

@@ -1,19 +1,58 @@
 name: Build Desktop (Windows EXE)
 
+# См. комментарий в build-apk.yml: проверка и публикация разделены.
+# Пуш в ветку — только проверка и артефакт; релиз — тег v<версия> или
+# ручной запуск с флагом publish.
 on:
   push:
-    branches: [main, master, "arena/**"]
+    branches: [CHUBUGAMES, main, master, "arena/**"]
+    tags: ["v*"]
+  pull_request:
   workflow_dispatch:
+    inputs:
+      publish:
+        description: "Выложить EXE в Releases"
+        type: boolean
+        default: false
 
-# нужно для публикации сборок в Releases
 permissions:
   contents: write
 
+concurrency:
+  group: desktop-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+      - name: Install dependencies
+        run: npm ci
+        env:
+          ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
+      - name: Typecheck
+        run: npx tsc --noEmit
+      - name: Build web app
+        run: npm run build
+      - name: UI contract checks
+        run: npm run check:ui
+      - name: Performance & input logic checks
+        run: npm run check:perf
+      - name: Key files parse
+        run: node --check desktop/main.cjs && node --check desktop/preload.cjs
+
   build:
+    needs: verify
     # Собираем НА WINDOWS: так .exe получается нативно, без wine,
     # и подпись/иконка проставляются корректно.
     runs-on: windows-latest
+    timeout-minutes: 40
 
     steps:
       - name: Checkout code
@@ -26,7 +65,7 @@ jobs:
           cache: "npm"
 
       - name: Install dependencies
-        run: npm install
+        run: npm ci
 
       - name: Build web app (single offline HTML)
         run: npm run build
@@ -34,22 +73,75 @@ jobs:
       - name: Read app version
         shell: bash
         run: |
-          VER=$(node -p "require('fs').readFileSync('src/core/version.ts','utf8').match(/APP_VERSION\s*=\s*\"([0-9.]+)\"/)[1]")
+          VER=$(node -p "require('fs').readFileSync('src/core/version.ts','utf8').match(/APP_VERSION\\s*=\\s*\\\"([0-9.]+)\\\"/)[1]")
           echo "APP_VER=$VER" >> $GITHUB_ENV
           echo "Версия приложения: $VER"
 
-      # Версия в package.json задаёт имя файлов сборки — синхронизируем
-      # её с той, что показывает само приложение.
+      # Версия в package.json задаёт имя файлов сборки — она обязана
+      # совпадать с той, что показывает приложение: из package.json её
+      # берёт Electron (app.getVersion), и по ней же проверка обновлений
+      # решает, есть ли что ставить. Расхождение = «вечное обновление».
       - name: Sync package version
         shell: bash
         run: |
           node -e "
             const fs=require('fs');
             const p=JSON.parse(fs.readFileSync('package.json','utf8'));
+            if (p.version === process.env.APP_VER) { console.log('package.json уже актуален: '+p.version); process.exit(0); }
+            console.log('::warning::package.json '+p.version+' != '+process.env.APP_VER+' — правь файл в репозитории, а не CI');
             p.version=process.env.APP_VER;
             fs.writeFileSync('package.json', JSON.stringify(p,null,2)+'\n');
           "
           node -p "'package.json version -> '+require('./package.json').version"
+
+      - name: Tag matches the app version
+        shell: bash
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          if [ "$TAG" != "$APP_VER" ]; then
+            echo "Тег v$TAG, а в src/core/version.ts — $APP_VER"; exit 1
+          fi
+
+      - name: Decide what this run is
+        id: kind
+        shell: bash
+        run: |
+          REL=false
+          case "$GITHUB_REF" in
+            refs/tags/v*|refs/heads/CHUBUGAMES|refs/heads/main|refs/heads/master|refs/heads/arena/*) REL=true ;;
+          esac
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.publish }}" = "true" ]; then
+            REL=true
+          fi
+          echo "release=$REL" >> "$GITHUB_OUTPUT"
+          echo "Режим: $([ "$REL" = true ] && echo 'РЕЛИЗ' || echo 'проверка (только артефакт)')"
+
+      # Authenticode-подпись. Поле «Издатель» в диалоге SmartScreen и в
+      # свойствах файла берётся НЕ из метаданных exe, а из цифровой подписи:
+      # без сертификата издателя у сборки не будет никогда, как бы ни был
+      # заполнен author.name в package.json. Поэтому: если в Secrets лежат
+      # WIN_CERT_PFX_B64 и WIN_CERT_PASSWORD — electron-builder подписывает
+      # оба .exe сам (CSC_LINK / CSC_KEY_PASSWORD — его стандартные
+      # переменные, подписывают и portable, и nsis-установщик). Если нет —
+      # собираем как раньше, честно предупреждая в аннотации, почему Windows
+      # показывает «Неизвестный издатель».
+      - name: Prepare Authenticode certificate
+        shell: bash
+        env:
+          PFX_B64: ${{ secrets.WIN_CERT_PFX_B64 }}
+          PFX_PASS: ${{ secrets.WIN_CERT_PASSWORD }}
+        run: |
+          if [ -z "$PFX_B64" ] || [ -z "$PFX_PASS" ]; then
+            echo "::warning::Сертификата подписи нет (WIN_CERT_PFX_B64 / WIN_CERT_PASSWORD) — .exe уйдёт неподписанным, и SmartScreen покажет «Издатель: Неизвестный издатель». Как это лечится: desktop/CERTIFICATE.md"
+            exit 0
+          fi
+          printf '%s' "$PFX_B64" | base64 -d > "$RUNNER_TEMP/chub.cer.pfx"
+          {
+            echo "CSC_LINK=$RUNNER_TEMP/chub.cer.pfx"
+            echo "CSC_KEY_PASSWORD=$PFX_PASS"
+          } >> "$GITHUB_ENV"
+          echo "Сертификат поднят: оба .exe будут подписаны."
 
       - name: Build Windows EXE
         run: npx electron-builder --config desktop/builder.yml --win --publish never
@@ -116,12 +208,22 @@ jobs:
             fi
           done
 
+      # Хеши считаем ОДИН раз и складываем в файл: он уходит и в описание
+      # релиза, и как отдельный ассет. Приложение сверяет по нему скачанный
+      # файл перед запуском установщика.
+      - name: Checksums
+        shell: bash
+        run: |
+          ( cd desktop-out && sha256sum *.exe > checksums.sha256 )
+          cat desktop-out/checksums.sha256
+
       - name: Upload EXE (артефакт сборки)
         uses: actions/upload-artifact@v4
         with:
           name: CHUBUGAMES-Windows
           path: |
             desktop-out/*.exe
+            desktop-out/checksums.sha256
           retention-days: 90
 
       - name: Prepare release notes
@@ -129,46 +231,83 @@ jobs:
         run: |
           {
             printf 'version: %s\n\n' "$APP_VER"
-            printf '**CHUBUGAMES %s — Windows 10/11 x64**\n\n' "$APP_VER"
-            printf '| Файл | Тип |\n'
+            printf '**CHUBUGAMES %s — Единый релиз (Windows Setup + Portable & Android APK)**\n\n' "$APP_VER"
+            printf '| Файл | Платформа / Тип |\n'
             printf '|---|---|\n'
-            printf '| `CHUBUGAMES-%s-setup.exe` | Установщик. Ярлык, запись в «Программы», обновление из приложения |\n' "$APP_VER"
-            printf '| `CHUBUGAMES-%s-portable.exe` | Без установки. Один файл |\n\n' "$APP_VER"
-            printf 'Содержимое сборок идентично. Данные сохраняются раздельно.\n\n'
-            printf '**SmartScreen.** Сборка не подписана сертификатом. Windows покажет предупреждение при первом запуске: «Подробнее» → «Выполнить в любом случае». Репутация SmartScreen считается по хешу файла и не наследуется между версиями.\n\n'
-            printf '**SHA-256**\n\n'
+            printf '| `CHUBUGAMES-%s-setup.exe` | Windows 10/11 x64 — Установщик (без прав администратора, ярлык и обновление) |\n' "$APP_VER"
+            printf '| `CHUBUGAMES-%s-portable.exe` | Windows 10/11 x64 — Portable (запуск в 1 клик без установки и без админки) |\n' "$APP_VER"
+            printf '| `CHUBUGAMES.apk` | Android 8.0+ — Мобильная сборка |\n\n'
             printf '```\n'
-            ( cd desktop-out && sha256sum *.exe ) || true
+            cat desktop-out/checksums.sha256
             printf '```\n'
+            if [ -f RELEASE_NOTES.md ]; then
+              printf '\n---\n\n'
+              cat RELEASE_NOTES.md
+            fi
+            printf '\n---\n\n'
+            printf 'Собрано: %s · коммит `%s` · сборка #%s в GitHub Actions.\n' "$(date -u '+%Y-%m-%d %H:%M UTC')" "${GITHUB_SHA:0:7}" "$GITHUB_RUN_NUMBER"
           } > DESKTOP_BODY.md
           cat DESKTOP_BODY.md
 
-      # Старые сборки накапливались в релизе: после пяти версий там лежало
-      # десять файлов, и было неочевидно, какой качать. Оставляем только
-      # текущую версию.
-      #
-      # ВНИМАНИЕ: этот шаг однажды был потерян при переписывании соседнего
-      # шага срезом по индексам строк — если правишь блок ниже, проверь,
-      # что он на месте (в check-ui есть проверка).
-      - name: Remove outdated assets
+      - name: Publish EXE to Releases
+        if: steps.kind.outputs.release == 'true'
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release view desktop --json assets -q '.assets[].name' 2>/dev/null | while read -r a; do
+          TITLE="CHUBUGAMES $APP_VER — Windows (Setup + Portable) & Android APK"
+          if ! gh release view latest >/dev/null 2>&1; then
+            gh release create latest --title "$TITLE" --notes "version: $APP_VER" --latest
+          fi
+          gh release upload latest desktop-out/*.exe desktop-out/checksums.sha256 --clobber
+          {
+            printf 'version: %s\n\n' "$APP_VER"
+            printf '**CHUBUGAMES %s — Единый релиз (Windows Setup + Portable & Android APK)**\n\n' "$APP_VER"
+            printf '| Файл | Платформа / Тип |\n'
+            printf '|---|---|\n'
+            printf '| `CHUBUGAMES-%s-setup.exe` | Windows 10/11 x64 — Установщик (без прав администратора, ярлык и обновление) |\n' "$APP_VER"
+            printf '| `CHUBUGAMES-%s-portable.exe` | Windows 10/11 x64 — Portable (запуск в 1 клик без установки и без админки) |\n' "$APP_VER"
+            printf '| `CHUBUGAMES.apk` | Android 8.0+ — Мобильная сборка |\n\n'
+            printf '```\n'
+            gh api "repos/$GITHUB_REPOSITORY/releases/tags/latest" --jq '.assets[] | select((.name | endswith(".exe")) or .name == "CHUBUGAMES.apk") | select(.digest != null) | (.digest | sub("^sha256:"; "")) + "  " + .name' 2>/dev/null || cat desktop-out/checksums.sha256
+            printf '```\n'
+            if [ -f RELEASE_NOTES.md ]; then
+              printf '\n---\n\n'
+              cat RELEASE_NOTES.md
+            fi
+            printf '\n---\n\n'
+            printf 'Собрано: %s · коммит `%s` · сборка #%s в GitHub Actions.\n' "$(date -u '+%Y-%m-%d %H:%M UTC')" "${GITHUB_SHA:0:7}" "$GITHUB_RUN_NUMBER"
+          } > DESKTOP_BODY.md
+          gh release edit latest --title "$TITLE" --notes-file DESKTOP_BODY.md --latest
+          echo "--- что теперь лежит в едином релизе latest ---"
+          gh release view latest --json assets -q '.assets[].name'
+
+      - name: Point the floating tag at the built commit
+        if: steps.kind.outputs.release == 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TITLE="CHUBUGAMES $APP_VER — Windows (Setup + Portable) & Android APK"
+          if ! gh api -X PATCH "repos/$GITHUB_REPOSITORY/git/refs/tags/latest" \
+               -f sha="$GITHUB_SHA" -F force=true >/dev/null 2>&1; then
+            gh api -X POST "repos/$GITHUB_REPOSITORY/git/refs" \
+              -f ref="refs/tags/latest" -f sha="$GITHUB_SHA"
+          fi
+          echo "тег latest -> $GITHUB_SHA"
+          gh release edit latest --title "$TITLE" --target "$GITHUB_SHA" --latest
+
+      - name: Remove outdated assets
+        if: steps.kind.outputs.release == 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release view latest --json assets -q '.assets[].name' 2>/dev/null | while read -r a; do
             case "$a" in
-              *"$APP_VER"*) echo "оставляем $a" ;;
-              *.exe) echo "удаляем устаревший $a"; gh release delete-asset desktop "$a" -y || true ;;
+              *"$APP_VER"*|CHUBUGAMES.apk|CHUBUGAMES.apk.sha256|checksums.sha256) echo "оставляем $a" ;;
+              *.exe) echo "удаляем устаревший $a"; gh release delete-asset latest "$a" -y || true ;;
             esac
           done
 
-      - name: Publish EXE to Releases
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: desktop
-          name: PC-сборка
-          body_path: DESKTOP_BODY.md
-          files: desktop-out/*.exe
-          make_latest: false
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+

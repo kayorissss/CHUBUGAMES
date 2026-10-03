@@ -6,11 +6,13 @@ import {
   loadSave, persist, persistNow, freshSave, xpForLevel, xpMult,
   autoRate, offlineRate, offlineCapHours, prestigeGain, spentSkillPoints,
 } from "./save";
+import { isPlaying, onPlaying } from "./play";
 import {
   ACHIEVEMENTS, ACCENTS, QUEST_POOL, DAILY_LADDER, GAME_META,
   SEASON_XP_PER_TIER, SEASON_TIERS,
 } from "./content";
 import { refreshPalette } from "./palette";
+import { accentTokens } from "./theme";
 import { today, daysBetween } from "./format";
 import { sfx, haptic, setSound, setHaptics } from "./fx";
 import { pickQuests } from "./save";
@@ -21,12 +23,17 @@ import {
 } from "./friendship";
 import type { IconName } from "../ui/Icon";
 
+/** Сколько уведомлений живёт на экране одновременно, остальные ждут в очереди */
+const MAX_TOASTS = 3;
+
 export interface Toast {
   id: number;
   title: string;
   sub?: string;
   icon?: IconName;
   tone?: "normal" | "gold" | "bad";
+  /** сколько жить плашке, мс (по умолчанию 3400) */
+  ms?: number;
 }
 
 interface Ctx {
@@ -69,6 +76,8 @@ export const useGame = () => useContext(C);
 interface ToastCtx {
   toasts: Toast[];
   toast: (t: Omit<Toast, "id">) => void;
+  /** закрыть уведомление по id — нужно крестику в плашке */
+  dismiss: (id: number) => void;
 }
 const TC = createContext<ToastCtx>(null as any);
 export const useToasts = () => useContext(TC);
@@ -80,12 +89,56 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
   const ref = useRef(s);
   ref.current = s;
   const tid = useRef(0);
+  /** таймеры авто-скрыча: id → номер setTimeout (см. dropToast) */
+  const toastTimers = useRef<Map<number, number>>(new Map());
+
+  /**
+   * Снять уведомление — по крестику или по истечении срока.
+   *
+   * Таймеры держим в Map: без них «закрыть» только убирало плашку, а
+   * setTimeout всё равно стрелял через 3.4 с и дёргал лишнюю перерисовку.
+   */
+  const dropToast = useCallback((id: number) => {
+    const timer = toastTimers.current.get(id);
+    if (timer) {
+      clearTimeout(timer);
+      toastTimers.current.delete(id);
+    }
+    setToasts((p) => p.filter((x) => x.id !== id));
+  }, []);
 
   const toast = useCallback((t: Omit<Toast, "id">) => {
     const id = ++tid.current;
-    setToasts((p) => [...p.slice(-3), { ...t, id }]);
-    setTimeout(() => setToasts((p) => p.filter((x) => x.id !== id)), 3400);
-  }, []);
+    const ms = t.ms && t.ms > 0 ? t.ms : 3400;
+    // сверх лимита старые вытесняются: очередь, а не «стопа»
+    setToasts((p) => [...p, { ...t, id }].slice(-MAX_TOASTS));
+    const timer = window.setTimeout(() => dropToast(id), ms);
+    toastTimers.current.set(id, timer);
+  }, [dropToast]);
+
+  /*
+   * Наведение курсора на плашку = «не убирай пока читают». Компонент Toasts
+   * не лезет в таймеры провайдера — он сообщает о наведении событием, а здесь
+   * мы снимаем таймер и вешаем короткий после того, как курсор убрали.
+   */
+  useEffect(() => {
+    const hold = (e: Event) => {
+      const { id, on } = (e as CustomEvent).detail as { id: number; on: boolean };
+      const timer = toastTimers.current.get(id);
+      if (on) {
+        if (timer) {
+          clearTimeout(timer);
+          toastTimers.current.delete(id);
+        }
+        return;
+      }
+      if (!toastTimers.current.has(id)) {
+        toastTimers.current.set(id, window.setTimeout(() => dropToast(id), 1200));
+      }
+    };
+    window.addEventListener("chub:toastrule", hold);
+    return () => window.removeEventListener("chub:toastrule", hold);
+  }, [dropToast]);
 
   /**
    * Копия сейва перед изменением. structuredClone примерно в 10 раз быстрее
@@ -140,18 +193,45 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  /* --- тик автодохода --- */
+  /* --- тик автодохода ---
+     *
+     * Во время игры он не дёргает весь интерфейс каждую секунду: доход
+     * капает, но React перерисовывается раз в пять секунд (суммой). На
+     * слабом компьютере это буквально лишние пять перерисовок в секунду
+     * под канвасом, а деньги всё равно приходят честно — за те же пять
+     * секунд.
+     */
   useEffect(() => {
+    let pend = 0;
+    let n = 0;
+    const flush = () => {
+      if (pend <= 0) return;
+      const amount = pend;
+      pend = 0;
+      set((d) => {
+        d.coins += amount;
+        d.totalCoinsEver += amount;
+        d.lastSeen = Date.now();
+      });
+    };
     const iv = setInterval(() => {
       const r = autoRate(ref.current);
       if (r <= 0) return;
-      set((d) => {
-        d.coins += r;
-        d.totalCoinsEver += r;
-        d.lastSeen = Date.now();
-      });
+      pend += r;
+      n += 1;
+      if (!isPlaying() || n >= 5) {
+        n = 0;
+        flush();
+      }
     }, 1000);
-    return () => clearInterval(iv);
+    const off = onPlaying((v) => { if (!v) flush(); });
+    document.addEventListener("visibilitychange", flush);
+    return () => {
+      clearInterval(iv);
+      off();
+      document.removeEventListener("visibilitychange", flush);
+      flush();
+    };
   }, [set]);
 
   /* --- сохранение при уходе в фон --- */
@@ -171,13 +251,19 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const root = document.documentElement;
     root.classList.toggle("light", s.settings.theme === "light");
-    root.classList.toggle("dark", s.settings.theme === "dark");
+    root.classList.toggle("graphite", s.settings.theme === "graphite");
     root.classList.toggle("no-fx", !s.settings.fx);
     const acc = ACCENTS.find((a) => a.id === s.settings.accent) || ACCENTS[0];
-    root.style.setProperty("--acc", acc.hex);
-    root.style.setProperty("--acc-soft", hexA(acc.hex, 0.16));
-    root.style.setProperty("--acc-glow", hexA(acc.hex, 0.45));
-    root.style.setProperty("--acc-ink", s.settings.accent === "mono" ? "#0b0b0e" : "#12100a");
+    /* Чернила и «акцентный текст» считаются из яркости самого акцента, а не
+       зашиты константой: раньше на тёмных акцентах текст на кнопке тонул, а
+       на светлой теме бледнел до нечитаемого (жалоба «цвета сломались»). */
+    const light = s.settings.theme === "light";
+    const tk = accentTokens(acc.hex, {
+      light,
+      surface: light ? "#ffffff" : "#111726",
+      mono: acc.id === "mono" || acc.id === "grey",
+    });
+    for (const k in tk) root.style.setProperty(`--${k}`, tk[k]);
     const meta = document.querySelector('meta[name="theme-color"]');
     if (meta) meta.setAttribute("content", s.settings.theme === "light" ? "#ECECED" : "#08080A");
     // Канвас не понимает var(--…) и кеширует цвета — сбрасываем кеш,
@@ -453,18 +539,13 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
     ],
   );
 
-  const toastValue: ToastCtx = useMemo(() => ({ toasts, toast }), [toasts, toast]);
+  const toastValue: ToastCtx = useMemo(() => ({ toasts, toast, dismiss: dropToast }), [toasts, toast, dropToast]);
 
   return (
     <C.Provider value={value}>
       <TC.Provider value={toastValue}>{children}</TC.Provider>
     </C.Provider>
   );
-}
-
-function hexA(hex: string, a: number) {
-  const n = parseInt(hex.slice(1), 16);
-  return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
 }
 
 export { DAILY_LADDER, SEASON_XP_PER_TIER, SEASON_TIERS, daysBetween };

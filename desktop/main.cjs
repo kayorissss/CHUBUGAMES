@@ -26,15 +26,16 @@ const {
 } = require("electron");
 const os = require("node:os");
 const https = require("node:https");
+const crypto = require("node:crypto");
 const path = require("node:path");
 const fs = require("node:fs");
 
 /** Где лежит собранная игра: в разработке — dist/, в сборке — внутри app.asar */
 const ROOT = path.join(__dirname, "..", "dist");
 
-/** Репозиторий и метка релиза с ПК-сборками */
+/** Репозиторий и единая метка релиза (Setup + Portable + APK) */
 const REPO = "kayorissss/CHUBUGAMES";
-const DESKTOP_TAG = "desktop";
+const DESKTOP_TAG = "latest";
 
 /**
  * Одна копия игры на компьютер: второй запуск просто показывает окно.
@@ -96,44 +97,73 @@ const MIME = {
 
 let win = null;
 
+/* ───────────────────────  СОСТОЯНИЕ ОКНА  ─────────────────────── */
+
+/**
+ * Запомнить, как пользователь закрыл окно: во весь экран или в обычном
+ * размере. Первая версия всегда открывала окно «как окно», и каждый запуск
+ * приходилось жать F11 — а просили как раз обратное: игра на компьютере
+ * должна сразу занимать весь экран, а F11 — ВЫХОДИТЬ из этого режима.
+ */
+const WIN_STATE_FILE = () => path.join(app.getPath("userData"), "window.json");
+
+function readWinState() {
+  try {
+    return { fullscreen: true, w: 0, h: 0, x: 0, y: 0, ...JSON.parse(fs.readFileSync(WIN_STATE_FILE(), "utf8")) };
+  } catch {
+    // Первый запуск: полный экран — так и договорились.
+    return { fullscreen: true, w: 0, h: 0, x: 0, y: 0 };
+  }
+}
+
+function writeWinState(patch) {
+  try {
+    const next = { ...readWinState(), ...patch };
+    fs.mkdirSync(path.dirname(WIN_STATE_FILE()), { recursive: true });
+    fs.writeFileSync(WIN_STATE_FILE(), JSON.stringify(next));
+  } catch {
+    /* настройки окна не критичны — не из-за них падать */
+  }
+}
+
+function winStatePayload() {
+  if (!win || win.isDestroyed()) return { fullscreen: false, maximized: false };
+  return {
+    fullscreen: win.isFullScreen(),
+    maximized: win.isMaximized(),
+  };
+}
+
+function emitWinState() {
+  if (!win || win.isDestroyed()) return;
+  try {
+    win.webContents.send("win:state", winStatePayload());
+  } catch {
+    /* noop */
+  }
+}
+
 function createWindow() {
-  /*
-   * Размер окна.
-   *
-   * Раньше ширина была жёстко ограничена 620 px, и на большом мониторе
-   * игра выглядела узкой полоской — растянуть её было нельзя.
-   *
-   * Теперь ограничения нет: страница сама масштабирует себя как «сцену»
-   * через CSS transform (см. src/core/stage.ts). Это безопасно для
-   * модалок — элемент с transform создаёт containing block, поэтому
-   * потомки с position:fixed позиционируются относительно сцены, а не
-   * окна. Именно из-за неверного предположения об обратном в прошлой
-   * версии пришлось ограничивать ширину.
-   */
-  /*
-   * Размер окна под монитор.
-   *
-   * Раньше окно открывалось вертикальным (480x900) — это выглядело как
-   * телефон на рабочем столе. Интерфейс теперь альбомный, поэтому берём
-   * рабочую область монитора и занимаем её почти целиком, оставляя
-   * поля. На маленьких экранах окно просто разворачивается.
-   */
   const area = screen.getPrimaryDisplay().workAreaSize;
-  const winW = Math.min(1600, Math.round(area.width * 0.86));
-  const winH = Math.min(980, Math.round(area.height * 0.88));
+  const st = readWinState();
+  const winW = st.w >= 900 ? st.w : Math.min(1600, Math.round(area.width * 0.9));
+  const winH = st.h >= 560 ? st.h : Math.min(980, Math.round(area.height * 0.9));
 
   win = new BrowserWindow({
     width: winW,
     height: winH,
-    minWidth: 900,
-    minHeight: 560,
-    backgroundColor: "#08080A",
+    x: st.w >= 900 && st.x > 0 ? st.x : undefined,
+    y: st.w >= 900 && st.y > 0 ? st.y : undefined,
+    minWidth: 720,
+    minHeight: 520,
+    frame: false,
+    titleBarStyle: "hidden",
+    backgroundColor: "#07060d",
     autoHideMenuBar: true,
     show: false,
     title: "CHUBUGAMES",
     icon: path.join(__dirname, "res", "icon.png"),
     webPreferences: {
-      // Игре не нужен доступ к Node — держим песочницу закрытой
       nodeIntegration: false,
       contextIsolation: true,
       sandbox: true,
@@ -146,11 +176,53 @@ function createWindow() {
   // Меню Electron игре не нужно — оно только мешает
   Menu.setApplicationMenu(null);
 
+  // Полный экран включаем ДО показа: иначе видно, как окно «разъезжается»
+  if (st.fullscreen) win.setFullScreen(true);
+  else if (st.maximized) win.maximize();
+
+  win.webContents.on("before-input-event", (e, input) => {
+    if (input.type === "keyDown" && input.key === "F11") {
+      e.preventDefault();
+      const next = !win.isFullScreen();
+      win.setFullScreen(next);
+      writeWinState({ fullscreen: next });
+      emitWinState();
+    }
+  });
+
+  win.on("enter-full-screen", () => {
+    writeWinState({ fullscreen: true });
+    emitWinState();
+  });
+  win.on("leave-full-screen", () => {
+    writeWinState({ fullscreen: false });
+    emitWinState();
+  });
+
+  // Помним обычный размер окна, чтобы следующий запуск был таким же
+  win.on("resized", () => {
+    if (!win.isFullScreen() && !win.isMaximized()) {
+      const [w, h] = win.getSize();
+      const [x, y] = win.getPosition();
+      writeWinState({ w, h, x, y });
+    }
+    emitWinState();
+  });
+  win.on("maximize", () => {
+    writeWinState({ maximized: true });
+    emitWinState();
+  });
+  win.on("unmaximize", () => {
+    writeWinState({ maximized: false });
+    emitWinState();
+  });
+
   // Показываем окно, когда страница отрисована: без белой вспышки
   win.once("ready-to-show", () => {
     // На небольшом мониторе разворачиваем сразу — иначе поля съедают экран
-    if (area.width <= 1440) win.maximize();
+    if (!st.fullscreen && area.width <= 1440) win.maximize();
     win.show();
+    emitWinState();
   });
 
   /*
@@ -168,16 +240,41 @@ function createWindow() {
 
   win.loadURL("app://chubgames/index.html");
 
-  // Внешние ссылки (Telegram автора, донат) открываем в браузере,
-  // а не внутри игрового окна
+  /*
+   * Внешние ссылки (Telegram автора, донат, GitHub) открываем в браузере,
+   * а не внутри игрового окна.
+   *
+   * Показываем только известные домены. Формально страница у нас своя и
+   * ссылок из ненадёжного места быть не должно, но в игре есть рекламный
+   * ролик со ссылкой и импорт файла сохранения — а значит ссылка всё-таки
+   * может прийти из данных пользователя. Отдать произвольный url системе
+   * (= «открой что угодно, в том числе file:// или exe-протокол») было бы
+   * избыточным доверием.
+   */
+  const EXTERNAL_HOSTS = /^(www\.)?(github\.com|objects\.githubusercontent\.com|api\.github\.com|t\.me|pay\.cloudtips\.ru|boosty\.to|boosty\.ru)$/i;
+  const openExternalSafe = (url) => {
+    try {
+      const u = new URL(url);
+      if (u.protocol !== "https:" && u.protocol !== "http:") return false;
+      if (!EXTERNAL_HOSTS.test(u.hostname)) {
+        console.warn("ссылка вне списка разрешённых, не открываю:", u.hostname);
+        return false;
+      }
+      void shell.openExternal(u.href);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
   win.webContents.setWindowOpenHandler(({ url }) => {
-    if (/^https?:/.test(url)) shell.openExternal(url);
+    openExternalSafe(url);
     return { action: "deny" };
   });
   win.webContents.on("will-navigate", (e, url) => {
     if (!url.startsWith("app://")) {
       e.preventDefault();
-      if (/^https?:/.test(url)) shell.openExternal(url);
+      openExternalSafe(url);
     }
   });
 
@@ -207,9 +304,15 @@ app.whenReady().then(() => {
       let rel = decodeURIComponent(url.pathname).replace(/^\/+/, "");
       if (rel === "") rel = "index.html";
 
-      // Защита от выхода за пределы папки игры
+      // Защита от выхода за пределы папки игры.
+      //
+      // Раньше было `full.startsWith(ROOT)`, и это пропускало соседа:
+      // app://x/../dist-extra/y нормализуется в «…/dist-extra/y», что
+      // «начинается» с ROOT как со строкой. Сравнение с хвостовым
+      // разделителем такого не допускает.
+      const rootN = path.normalize(ROOT) + path.sep;
       let full = path.normalize(path.join(ROOT, rel));
-      if (!full.startsWith(path.normalize(ROOT))) {
+      if (full !== path.normalize(ROOT) && !full.startsWith(rootN)) {
         return new Response("forbidden", { status: 403 });
       }
       // SPA-фолбэк: всё неизвестное отдаём как index.html
@@ -277,6 +380,20 @@ app.whenReady().then(() => {
 function download(url, dest, onProgress, redirects = 0) {
   return new Promise((resolve, reject) => {
     if (redirects > 6) return reject(new Error("слишком много перенаправлений"));
+    /*
+     * Качаем только по https и только с GitHub: редирект может увести на
+     * чужой хост, а скачанный файл мы потом запускаем как установщик.
+     */
+    let where;
+    try {
+      where = new URL(url);
+    } catch {
+      return reject(new Error("некорректная ссылка на файл"));
+    }
+    if (where.protocol !== "https:") return reject(new Error("обновление отдаётся не по https"));
+    if (!/(^|\.)(github\.com|githubusercontent\.com|githubassets\.com)$/i.test(where.hostname)) {
+      return reject(new Error("скачивание не с github: " + where.hostname));
+    }
     https.get(url, { headers: { "User-Agent": "CHUBGAMES-Desktop" } }, (res) => {
       if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
         res.resume();
@@ -326,6 +443,38 @@ function isNewer(remote, local) {
  */
 const IS_PORTABLE = !!process.env.PORTABLE_EXECUTABLE_FILE;
 
+/** SHA-256 файла целиком. 100 МБ читаются кусками, в память не кладём */
+function sha256OfFile(file) {
+  return new Promise((resolve, reject) => {
+    const h = crypto.createHash("sha256");
+    const stream = fs.createReadStream(file);
+    stream.on("data", (b) => h.update(b));
+    stream.on("end", () => resolve(h.digest("hex")));
+    stream.on("error", reject);
+  });
+}
+
+/**
+ * Сравнить файл с ожидаемым хешем.
+ * Пустой expected (например, релиз опубликован без checksums) — не провал,
+ * а «проверить нечем»: тогда сверяем хотя бы размер и идём дальше.
+ */
+async function verifyChecksum(file, expected) {
+  if (!expected) {
+    console.warn("в релизе нет контрольной суммы — проверяю только размер");
+    return true;
+  }
+  try {
+    const got = await sha256OfFile(file);
+    const same = got.toLowerCase() === String(expected).toLowerCase();
+    if (!same) console.error("SHA-256 не совпал:", got, "!=", expected);
+    return same;
+  } catch (e) {
+    console.error("не удалось посчитать хеш:", e);
+    return false;
+  }
+}
+
 let pendingUpdate = null;
 
 ipcMain.handle("app:version", () => app.getVersion());
@@ -350,11 +499,29 @@ ipcMain.handle("update:check", async () => {
       || (json.assets || []).find((a) => /\.exe$/i.test(a.name));
     if (!asset) return { ok: false, error: "в релизе нет .exe" };
 
+    /*
+     * Ожидаемый SHA-256: сначала из API (asset.digest), потом из
+     * приложенного файла checksums.sha256 в описании релиза.
+     */
+    const shaFromBody = (() => {
+      const line = String(json.body || "")
+        .split("\n")
+        .find((l) => l.includes(asset.name));
+      const hex = line && line.match(/\b[0-9a-f]{64}\b/i);
+      return hex ? hex[0].toLowerCase() : "";
+    })();
+    const sha256 = String(asset.digest || "").replace(/^sha256:/i, "").toLowerCase() || shaFromBody;
+
     const m = String(json.body || "").match(/version:\s*([0-9]+(?:\.[0-9]+)*)/i);
     const version = m ? m[1] : String(json.tag_name || "");
     const cur = app.getVersion();
 
-    pendingUpdate = { url: asset.browser_download_url, name: asset.name, size: asset.size };
+    pendingUpdate = {
+      url: asset.browser_download_url,
+      name: asset.name,
+      size: asset.size,
+      sha256,
+    };
 
     return {
       ok: true,
@@ -364,6 +531,7 @@ ipcMain.handle("update:check", async () => {
       size: asset.size || 0,
       portable: IS_PORTABLE,
       asset: asset.name,
+      sha256,
       notes: String(json.body || "").replace(/version:\s*[0-9.]+\s*/i, "").trim(),
     };
   } catch (e) {
@@ -378,6 +546,34 @@ ipcMain.handle("update:download", async (e) => {
     await download(pendingUpdate.url, dest, (p) => {
       e.sender.send("update:progress", p);
     });
+
+    const got = fs.statSync(dest).size;
+    if (pendingUpdate.size && got !== pendingUpdate.size) {
+      try { fs.rmSync(dest); } catch { /* занят — не страшно */ }
+      return { ok: false, error: `файл докачался не целиком: ${got} Б вместо ${pendingUpdate.size} Б` };
+    }
+
+    /*
+     * Проверка целостности.
+     *
+     * В описании релиза лежит SHA-256 каждого файла — раньше он был нужен
+     * только человеку, который решит проверить файл руками. Теперь его
+     * сверяет сама программа ПЕРЕД запуском установщика: скачанный .exe
+     * иначе запускается ANY, какой отдаст сервер/прокси/зеркало.
+     *
+     * Источник истины — digest ассета из GitHub API (форма "sha256:<hex>"),
+     * запасной — строка из checksums.sha256 в описании релиза.
+     */
+    const okSum = await verifyChecksum(dest, pendingUpdate.sha256);
+    if (!okSum) {
+      try { fs.rmSync(dest); } catch { /* файл мог быть занят — пусть лежит */ }
+      return {
+        ok: false,
+        error:
+          "Контрольная сумма не совпала — файл удалён. " +
+          "Скачайте обновление вручную со страницы релиза и сверьте SHA-256.",
+      };
+    }
 
     if (IS_PORTABLE) {
       /*
@@ -406,17 +602,51 @@ ipcMain.handle("win:toggleFullscreen", () => {
   if (!win) return false;
   const next = !win.isFullScreen();
   win.setFullScreen(next);
+  // событие enter/leave-full-screen тоже пишет состояние, но не всегда
+  // успевает до закрытия окна — пишем сразу
+  writeWinState({ fullscreen: next });
+  emitWinState();
   return next;
 });
 
+ipcMain.handle("win:minimize", () => {
+  if (win && !win.isDestroyed()) win.minimize();
+  return winStatePayload();
+});
+
+ipcMain.handle("win:maximize", () => {
+  if (!win || win.isDestroyed()) return winStatePayload();
+  if (win.isFullScreen()) {
+    win.setFullScreen(false);
+    writeWinState({ fullscreen: false });
+  } else if (win.isMaximized()) {
+    win.unmaximize();
+    writeWinState({ maximized: false });
+  } else {
+    win.maximize();
+    writeWinState({ maximized: true });
+  }
+  emitWinState();
+  return winStatePayload();
+});
+
+ipcMain.handle("win:close", () => {
+  if (win && !win.isDestroyed()) win.close();
+  return true;
+});
+
+ipcMain.handle("win:state", () => winStatePayload());
+
 ipcMain.handle("win:resize", (_e, { w, h }) => {
-  if (!win || win.isFullScreen()) return false;
+  if (!win) return false;
+  if (win.isFullScreen()) win.setFullScreen(false);
+  if (win.isMaximized()) win.unmaximize();
   const area = screen.getPrimaryDisplay().workAreaSize;
-  // не даём окну вылезти за пределы рабочей области монитора
-  const width = Math.max(320, Math.min(Math.round(w), area.width));
-  const height = Math.max(480, Math.min(Math.round(h), area.height));
+  const width = Math.max(720, Math.min(Math.round(w), area.width));
+  const height = Math.max(520, Math.min(Math.round(h), area.height));
   win.setSize(width, height, true);
   win.center();
+  emitWinState();
   return true;
 });
 
@@ -427,6 +657,59 @@ ipcMain.handle("win:screen", () => {
     height: d.workAreaSize.height,
     scaleFactor: d.scaleFactor,
   };
+});
+
+/* ─────────────────── Скачивание релизов в папку «Загрузки» ─────────────────── */
+
+ipcMain.handle("ext:download", async (_evt, payload) => {
+  const url = String((payload && payload.url) || "");
+  const rawName = String(
+    (payload && payload.fileName) || path.basename(url.split("?")[0]) || "download.bin",
+  );
+  const safeName = rawName.replace(/[<>:"/\\|?*\x00-\x1F]/g, "_");
+  if (!/^https:\/\/(github\.com|api\.github\.com|[a-z0-9.-]*githubusercontent\.com)\//i.test(url)) {
+    return { ok: false, error: "Недопустимый источник файла" };
+  }
+  try {
+    const downloadsDir = app.getPath("downloads");
+    fs.mkdirSync(downloadsDir, { recursive: true });
+    const dest = path.join(downloadsDir, safeName);
+    await download(url, dest, (p) => {
+      if (win && !win.isDestroyed()) {
+        win.webContents.send("ext:progress", {
+          url,
+          fileName: safeName,
+          pct: p.percent,
+          got: p.received,
+          total: p.total,
+        });
+      }
+    });
+    return { ok: true, path: dest, dir: downloadsDir, fileName: safeName };
+  } catch (err) {
+    return { ok: false, error: String((err && err.message) || err) };
+  }
+});
+
+ipcMain.handle("ext:showInFolder", (_evt, filePath) => {
+  try {
+    if (filePath && fs.existsSync(filePath)) {
+      shell.showItemInFolder(filePath);
+    } else {
+      shell.openPath(app.getPath("downloads"));
+    }
+    return true;
+  } catch {
+    return false;
+  }
+});
+
+ipcMain.handle("ext:openExternal", (_evt, url) => {
+  if (typeof url === "string" && /^https:\/\//i.test(url)) {
+    shell.openExternal(url);
+    return true;
+  }
+  return false;
 });
 
 app.on("window-all-closed", () => {

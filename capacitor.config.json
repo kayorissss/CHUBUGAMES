@@ -11,5 +11,15 @@
       "interval": 60,
       "autoStart": true
     }
+  },
+  "android": {
+    "backgroundColor": "#0D0D10",
+    "zoomingEnabled": false,
+    "tintColor": "#FF7A18",
+    "tintColorDark": "#FF7A18",
+    "tintColorInvalid": "#FF6B4D",
+    "allowMixedContent": false,
+    "captureInput": false,
+    "webContentsDebuggingEnabled": false
   }
 }

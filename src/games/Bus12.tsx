@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence } from "framer-motion";
 import { useGame } from "../core/store";
-import { scene, alpha } from "../core/palette";
+import { scene, alpha, canvasColor } from "../core/palette";
 import { sfx, haptic } from "../core/fx";
 import { useCanvas, GameHUD, GameOver, Countdown, HudGauge, HudStat } from "./shell";
 import { drawHead } from "../core/head";
@@ -541,7 +541,7 @@ export default function Bus12({ onExit }: { onExit: () => void }) {
     ctx.textAlign = "center";
     for (const p of g.pops) {
       ctx.globalAlpha = Math.min(1, p.t * 1.6);
-      ctx.fillStyle = p.col;
+      ctx.fillStyle = canvasColor(p.col);
       ctx.font = "800 15px Unbounded, Inter, system-ui, sans-serif";
       ctx.fillText(p.txt, p.x, p.y - (1 - p.t) * 26);
     }

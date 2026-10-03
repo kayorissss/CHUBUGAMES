@@ -8,6 +8,8 @@ import { APP_VERSION } from "../core/version";
 import { CHANGELOG } from "../core/changelog";
 import { cmpVer } from "./ChangelogView";
 import { SAVE_KEY } from "../core/save";
+import { isDesktop } from "../core/desktop";
+import { useSystemBack } from "../core/android";
 
 const SEEN_KEY = "chubgames.seenVersion";
 
@@ -23,6 +25,8 @@ const SEEN_KEY = "chubgames.seenVersion";
  */
 export default function WhatsNew() {
   const [show, setShow] = useState(false);
+  /** На компьютере это окно, как экран обновления; на телефоне — страница. */
+  const pc = isDesktop();
 
   useEffect(() => {
     const seen = localStorage.getItem(SEEN_KEY);
@@ -51,6 +55,22 @@ export default function WhatsNew() {
     localStorage.setItem(SEEN_KEY, APP_VERSION);
     setShow(false);
   };
+
+  /* Жест «назад» на Android и Esc на компьютере закрывают окно: человек не
+     должен искать кнопку, когда хочет просто исчезнуть этот экран. */
+  useSystemBack(show, close);
+  useEffect(() => {
+    if (!pc || !show) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      e.preventDefault();
+      e.stopPropagation();
+      close();
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pc, show]);
 
   /**
    * НАКОПИТЕЛЬНЫЙ СПИСОК.
@@ -90,17 +110,32 @@ export default function WhatsNew() {
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.26 }}
-          className="fixed inset-0 z-[112] flex flex-col"
-          style={{ background: "var(--bg)" }}
+          className={`fixed inset-0 z-[112] flex ${pc ? "items-center justify-center p-6" : "flex-col"}`}
+          style={
+            pc
+              ? {
+                  background: "color-mix(in srgb, var(--n-000) 76%, transparent)",
+                  backdropFilter: "blur(10px)",
+                }
+              : { background: "var(--bg)" }
+          }
         >
+          <div
+            className={pc ? "pc-modal-card" : "flex flex-col min-h-0"}
+            style={pc ? undefined : { flex: 1, minHeight: 0 }}
+          >
           {/* Шапка */}
           <div
-            className="shrink-0"
-            style={{
-              padding: "calc(var(--sat) + 22px) 18px 18px",
-              background: "var(--surface)",
-              borderBottom: "1px solid var(--surface-brd)",
-            }}
+            className={pc ? "pc-modal-head" : "shrink-0"}
+            style={
+              pc
+                ? undefined
+                : {
+                    padding: "calc(var(--sat) + 22px) 18px 18px",
+                    background: "var(--surface)",
+                    borderBottom: "1px solid var(--surface-brd)",
+                  }
+            }
           >
             <div className="flex items-center" style={{ gap: 13 }}>
               <motion.span
@@ -129,7 +164,10 @@ export default function WhatsNew() {
           </div>
 
           {/* Список изменений */}
-          <div className="flex-1 scroll" style={{ padding: "14px 18px 8px", minHeight: 0, overflowY: "auto" }}>
+          <div
+            className={pc ? "pc-modal-body scroll" : "flex-1 scroll"}
+            style={pc ? undefined : { padding: "14px 18px 8px", minHeight: 0, overflowY: "auto" }}
+          >
             <div className="flex flex-col" style={{ gap: 9 }}>
               {groups.map((grp, gi) => (
                 <div key={grp.v} className="flex flex-col" style={{ gap: 9 }}>
@@ -200,21 +238,26 @@ export default function WhatsNew() {
 
           {/* Кнопка */}
           <div
-            className="shrink-0"
-            style={{
-              padding: "14px 18px calc(var(--sab) + 20px)",
-              background: "var(--surface)",
-              borderTop: "1px solid var(--surface-brd)",
-            }}
+            className={pc ? "pc-modal-foot" : "shrink-0"}
+            style={
+              pc
+                ? undefined
+                : {
+                    padding: "14px 18px calc(var(--sab) + 20px)",
+                    background: "var(--surface)",
+                    borderTop: "1px solid var(--surface-brd)",
+                  }
+            }
           >
             <button
               type="button"
               className="btn-acc"
-              style={{ width: "100%", minHeight: 50, fontSize: 14 }}
+              style={pc ? { minHeight: 44, fontSize: 13 } : { width: "100%", minHeight: 50, fontSize: 14 }}
               onClick={() => { sfx.power?.(); haptic("light"); close(); }}
             >
               {tr("Погнали играть")}
             </button>
+          </div>
           </div>
         </motion.div>
       )}

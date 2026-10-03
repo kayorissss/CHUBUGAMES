@@ -115,6 +115,57 @@ export async function notifyGranted(): Promise<boolean> {
 }
 
 /**
+ * Точные будильники (Android 12+).
+ *
+ * Вторая настоящая причина «уведомления совсем не приходят». Без этого
+ * разрешения система не будит приложение ровно в 19:00: запланированное
+ * уведомление переносится на «удобное время» и вполне может приехать на
+ * следующий день — или не приехать вовсе. Спрашиваем один раз при выдаче
+ * разрешения на уведомления, дальше молчим.
+ */
+export async function ensureExactAlarms(): Promise<boolean> {
+  const n = await notifications();
+  if (!n) return false;
+  try {
+    /* Поле называется exact_alarm: 'granted' | 'denied' | 'prompt' */
+    const cur = await n.checkExactNotificationSetting?.();
+    if (cur?.exact_alarm === "granted") return true;
+    const r = await n.changeExactNotificationSetting?.();
+    return r?.exact_alarm === "granted";
+  } catch {
+    /* нет метода (старый Android) — там точные будильники не нужны */
+    return true;
+  }
+}
+
+/**
+ * Пробное уведомление прямо сейчас — по той же дороге, что и настоящие.
+ *
+ * Нужно, чтобы «уведомления не работают» проверялось одним нажатием, а не
+ * ожиданием семи вечера: если пришло — работает всё, если нет — причина в
+ * системном разрешении или канале, и это видно на том же экране.
+ */
+export async function sendTestNotification(): Promise<boolean> {
+  const n = await notifications();
+  if (!n) return false;
+  if (!(await notifyGranted())) return false;
+  try {
+    await n.schedule({
+      notifications: [{
+        id: 7400,
+        channelId: channelId("news"),
+        title: "CHUBUGAMES на связи",
+        body: "Если видишь это в шторке — уведомления работают.",
+        schedule: { at: new Date(Date.now() + 700), allowWhileIdle: true },
+      }],
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Просит разрешение на уведомления.
  * Возвращает true, если человек согласился.
  */
@@ -449,14 +500,90 @@ export async function initNotificationsOnFirstRun(): Promise<void> {
      * после фактического ответа.
      */
     if (await notifyGranted()) {
+      await ensureExactAlarms();
       await enableBackgroundCheck();
       return;
     }
 
     const ok = await askNotifyPermission();
     localStorage.setItem(ASKED_KEY, ok ? "granted" : "asked");
-    if (ok) await enableBackgroundCheck();
+    if (ok) {
+      await ensureExactAlarms();
+      await enableBackgroundCheck();
+    }
   } catch {
     /* плагин недоступен — молча пропускаем */
+  }
+}
+
+/* ═══════════════════════ ПК: веб-уведомления ═══════════════════════
+ *
+ * Просьба: «уведомления на ПК-версии адаптируй под ПК, чтобы от проги
+ * приходили уведомления, типа как из ТГ. А я тыкаю — и пишет про Android».
+ *
+ * На компьютере нет ни каналов Android, ни точных будильников, ни фонового
+ * раннера: там есть Notification API, который Electron (и любой браузер)
+ * отдаёт в центр уведомлений Windows. Поэтому на ПК отдельная, честная
+ * ветка: мы не обещаем «будит раз в час при закрытой игре» — Electron не
+ * держит фоновый процесс, и напоминания доходят, пока окно открыто или
+ * свёрнуто (но не закрыто). Формулировки в интерфейсе соответствуют этому.
+ *
+ * Иконка — /favicon-32.png: в собранном приложении dist лежит в корне,
+ * абсолютный путь работает и в app://, и в http://localhost.
+ */
+
+/** Есть ли в этой среде Notification API? */
+export const canWebNotify = (): boolean =>
+  typeof window !== "undefined" && "Notification" in window;
+
+/** Разрешение уже выдано? */
+export async function webNotifyGranted(): Promise<boolean> {
+  if (!canWebNotify()) return false;
+  try {
+    return Notification.permission === "granted";
+  } catch {
+    return false;
+  }
+}
+
+/** Спросить разрешение (браузер/оболочка покажут свой системный диалог). */
+export async function askWebNotify(): Promise<boolean> {
+  if (!canWebNotify()) return false;
+  try {
+    const r = await Notification.requestPermission();
+    return r === "granted";
+  } catch {
+    return false;
+  }
+}
+
+/** Настоящее уведомление в центр уведомлений Windows. */
+export async function sendWebNotification(
+  title: string,
+  body = "",
+  opts: { tag?: string; url?: string } = {},
+): Promise<boolean> {
+  if (!canWebNotify()) return false;
+  try {
+    let perm = Notification.permission as NotificationPermission;
+    if (perm === "default") perm = await Notification.requestPermission();
+    if (perm !== "granted") return false;
+    const n = new Notification(title, {
+      body,
+      icon: "/favicon-32.png",
+      badge: "/favicon-32.png",
+      tag: opts.tag || "chubgames",
+      silent: false,
+    });
+    // клик по уведомлению — фокус на окно игры
+    n.onclick = () => {
+      try { window.focus(); } catch { /* не всё разрешено */ }
+      n.close();
+    };
+    // сами закроем, чтобы не копить мусор в центре уведомлений
+    setTimeout(() => { try { n.close(); } catch { /* уже закрыто */ } }, 14000);
+    return true;
+  } catch {
+    return false;
   }
 }

@@ -1,6 +1,7 @@
 import { motion } from "framer-motion";
 import { useEffect, useRef, type ReactNode, type CSSProperties } from "react";
 import { sfx, haptic } from "../core/fx";
+import { isDesktop } from "../core/desktop";
 
 type R = "xs" | "sm" | "md" | "lg" | "xl" | "pill";
 const rad = (r: R) => `var(--r-${r})`;
@@ -26,14 +27,33 @@ export function Panel({
 
 /** Сплошная карточка — для списков и плотного контента (читается лучше стекла) */
 export function Card({
-  children, className = "", style, r = "lg", tone = 1, active,
+  children, className = "", style, r = "lg", tone = 1, active, onClick, title,
 }: {
   children?: ReactNode; className?: string; style?: CSSProperties;
   r?: R; tone?: 1 | 2; active?: boolean;
+  /**
+   * Карточка как объект действия (например, незакрытое достижение, которое
+   * ведёт в нужный режим). Без this карточки приходилось оборачивать в
+   * <div onClick> — мышь работала, клавиатура нет.
+   */
+  onClick?: () => void;
+  title?: string;
 }) {
+  const go = onClick
+    ? {
+        role: "button",
+        tabIndex: 0,
+        onClick,
+        onKeyDown: (e: React.KeyboardEvent) => {
+          if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick(); }
+        },
+      }
+    : {};
   return (
     <div
-      className={`solid ${tone === 2 ? "solid-2" : ""} ${className}`}
+      {...go}
+      title={title}
+      className={`solid ${tone === 2 ? "solid-2" : ""} ${onClick ? "solid-hit " : ""}${className}`}
       style={{
         borderRadius: rad(r),
         ...(active
@@ -187,13 +207,23 @@ export function Tap({
     <motion.button
       type="button"
       disabled={disabled}
-      whileTap={disabled ? undefined : { scale: 0.975 }}
-      transition={{ type: "spring", stiffness: 700, damping: 30 }}
+      /*
+       * На телефоне нажатие «продавливает» стекло сильнее (0.955 против 0.98):
+       * палец толще курсора, и отклик должен быть виден, а не угадываться.
+       */
+      whileTap={disabled ? undefined : { scale: isDesktop() ? 0.98 : 0.955 }}
+      transition={{ type: "spring", stiffness: 620, damping: 26 }}
       onPointerDown={startLp}
       onPointerUp={cancelLp}
       onPointerLeave={cancelLp}
       onPointerCancel={cancelLp}
-      onContextMenu={(e) => { if (onLongPress) e.preventDefault(); }}
+      onContextMenu={(e) => {
+        if (!onLongPress) return;
+        e.preventDefault();
+        // Долгого тапа на мыши нет, а закреплять игры как-то надо:
+        // правый клик делает ровно то же самое, что и долгий тап.
+        if (e.nativeEvent?.button === 2) onLongPress();
+      }}
       onClick={() => {
         if (disabled) return;
         // после долгого нажатия обычный клик игнорируем
@@ -301,30 +331,32 @@ export function SectionTitle({
 
 /** Каркас экрана: единые поля, отступ сверху и запас под таб-бар */
 export function Screen({
-  title, right, children, scroll = true, sub,
+  title, right, children, scroll = true, sub, className = "",
 }: {
   title?: string; right?: ReactNode; children: ReactNode;
   scroll?: boolean; sub?: string;
+  /** дополнительный класс страницы: pc-cols / pc-reader и т. п. (см. index.css) */
+  className?: string;
 }) {
   return (
-    <div className="h-full flex flex-col">
+    <div className={`h-full flex flex-col pc-page ${className}`}>
       {title && (
         <div
-          className="flex items-center justify-between gap-3 shrink-0"
+          className="flex items-center justify-between gap-3 shrink-0 pc-page-head"
           style={{
             padding: "0 16px 12px",
             paddingTop: "calc(var(--sat) + 14px)",
           }}
         >
           <div className="min-w-0">
-            <h1 className="t-display clip1">{title}</h1>
-            {sub && <div className="t-caption clip1" style={{ marginTop: 3 }}>{sub}</div>}
+            <h1 className="t-display">{title}</h1>
+            {sub && <div className="t-caption" style={{ marginTop: 3 }}>{sub}</div>}
           </div>
           {right}
         </div>
       )}
       <div
-        className={scroll ? "flex-1 scroll" : "flex-1"}
+        className={scroll ? "flex-1 scroll pc-page-body" : "flex-1 pc-page-body"}
         style={{
           padding: "0 16px",
           paddingBottom: "calc(var(--sab) + 104px)",

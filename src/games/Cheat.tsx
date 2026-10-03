@@ -199,7 +199,7 @@ export default function Cheat({ onExit }: { onExit: () => void }) {
       haptic("heavy");
       g.writing = false;
       if (g.caught >= MAX_CAUGHT) {
-        toast({ title: tr("СПАЛИЛСЯ"), sub: tr("Шитов забрал листок"), icon: "skull", tone: "bad" });
+        toast({ title: tr("СПАЛИЛСЯ"), sub: tr("Кортекс перехватил данные"), icon: "skull", tone: "bad" });
         end();
       }
     }
@@ -248,7 +248,7 @@ export default function Cheat({ onExit }: { onExit: () => void }) {
             sfx.error?.();
             haptic("heavy");
             if (g.caught >= MAX_CAUGHT) {
-              toast({ title: tr("СПАЛИЛСЯ"), sub: tr("Шитов забрал листок"), icon: "skull", tone: "bad" });
+              toast({ title: tr("СПАЛИЛСЯ"), sub: tr("Кортекс перехватил данные"), icon: "skull", tone: "bad" });
               end();
             }
           }
@@ -497,7 +497,7 @@ export default function Cheat({ onExit }: { onExit: () => void }) {
             onRetry={restart}
             onExit={onExit}
             title={G.current.bell ? tr("ЗВОНОК") : tr("ЗАБРАЛИ ЛИСТОК")}
-            sub={G.current.bell ? tr("Пара кончилась — успел сколько успел") : tr("Шитов всё видел")}
+            sub={G.current.bell ? tr("Смена кончилась — успел сколько успел") : tr("Кортекс всё видел")}
           />
         )}
       </div>

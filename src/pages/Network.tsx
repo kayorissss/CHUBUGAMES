@@ -1,30 +1,617 @@
-import { useRef, useState } from "react";
-import { tr } from "../core/i18n";
-import { AnimatePresence, motion } from "framer-motion";
-import { Card, Screen, Divider } from "../ui/Glass";
-import Icon from "../ui/Icon";
+import { useEffect, useState } from "react";
+import { motion } from "framer-motion";
+import { Card, Screen, SectionTitle } from "../ui/Glass";
+import Icon, { type IconName } from "../ui/Icon";
 import { sfx, haptic } from "../core/fx";
-import {
-  measureSpeed, runNetCheck, fmtBytesShort,
-  type NetVerdict, type SpeedResult,
-} from "../core/netcheck";
+import { tr } from "../core/i18n";
+import { isDesktop, pcApi } from "../core/desktop";
+import { APP_VERSION } from "../core/version";
+import { useGame } from "../core/store";
 
-type Tab = "block" | "speed";
+/**
+ * ДОПОЛНИТЕЛЬНОЕ — КАТАЛОГ ПРОГРАММ И РЕЛИЗОВ @kayorissss.
+ *
+ * Заменяет старую проверку глушилок и замер скорости: теперь здесь живут
+ * все проекты автора с GitHub (https://github.com/kayorissss), в первую
+ * очередь Nukefy-VPN и CHUBUGAMES, со списком актуальных ассетов из GitHub
+ * Releases и прямой загрузкой последней версии сразу в папку «Загрузки» на ПК.
+ */
 
-const COLOR: Record<NetVerdict["status"], string> = {
-  ok: "var(--ok)",
-  throttled: "var(--gold)",
-  blocked: "var(--danger)",
-  offline: "#8f8f9c",
-};
+export interface ReleaseAssetItem {
+  name: string;
+  label: string;
+  platform: "win-setup" | "win-portable" | "android" | "other";
+  sizeBytes: number;
+  url: string;
+}
 
-export default function Network({ onBack }: { onBack: () => void }) {
-  const [tab, setTab] = useState<Tab>("block");
+export interface KayoRepoProject {
+  id: string;
+  name: string;
+  title: string;
+  badge: string;
+  icon: IconName;
+  accent: string;
+  repoUrl: string;
+  releasesUrl: string;
+  description: string;
+  features: string[];
+  latestTag: string;
+  publishedAt: string;
+  assets: ReleaseAssetItem[];
+}
+
+const GITHUB_PROFILE_URL = "https://github.com/kayorissss";
+
+const FALLBACK_PROJECTS: KayoRepoProject[] = [
+  {
+    id: "Nukefy-VPN",
+    name: "Nukefy-VPN",
+    title: "Nukefy VPN",
+    badge: "VPN · Обход блокировок",
+    icon: "shield",
+    accent: "#9D6BFF",
+    repoUrl: "https://github.com/kayorissss/Nukefy-VPN",
+    releasesUrl: "https://github.com/kayorissss/Nukefy-VPN/releases",
+    description:
+      "Быстрый и современный VPN-клиент на ядре sing-box для Windows и Android. Поддержка VLESS, Reality, Hysteria2, TUN-режима, раздельного туннелирования и защиты от DPI/глушилок.",
+    features: [
+      "Ядро sing-box с полноценным системным TUN-режимом и низким пингом",
+      "Сборки для Windows 10/11 x64 (Setup + Portable без установки) и Android APK",
+      "Встроенное автообновление, импорт ключей и подписок в один клик",
+    ],
+    latestTag: "v2.5.11",
+    publishedAt: "2026",
+    assets: [
+      {
+        name: "NukefyVPN-Setup-x64.exe",
+        label: "Windows x64 · Установщик (Setup)",
+        platform: "win-setup",
+        sizeBytes: 92_142_670,
+        url: "https://github.com/kayorissss/Nukefy-VPN/releases/latest/download/NukefyVPN-Setup-x64.exe",
+      },
+      {
+        name: "NukefyVPN.exe",
+        label: "Windows x64 · Portable (без установки)",
+        platform: "win-portable",
+        sizeBytes: 91_987_064,
+        url: "https://github.com/kayorissss/Nukefy-VPN/releases/latest/download/NukefyVPN.exe",
+      },
+      {
+        name: "NukefyVPN-android.apk",
+        label: "Android · APK",
+        platform: "android",
+        sizeBytes: 78_105_241,
+        url: "https://github.com/kayorissss/Nukefy-VPN/releases/latest/download/NukefyVPN-android.apk",
+      },
+    ],
+  },
+  {
+    id: "CHUBUGAMES",
+    name: "CHUBUGAMES",
+    title: "CHUBUGAMES",
+    badge: "Игровой хаб · 29 игр",
+    icon: "trophy",
+    accent: "#FF8A2B",
+    repoUrl: "https://github.com/kayorissss/CHUBUGAMES",
+    releasesUrl: "https://github.com/kayorissss/CHUBUGAMES/releases/tag/latest",
+    description:
+      "Коллекция из 29 аркадных мини-игр, казино с 10 тирами кейсов, боссами по расписанию, прокачкой персонажей и глобальной стратегией. Работает полностью офлайн на ПК и Android.",
+    features: [
+      "Единый релиз: Setup EXE, Portable EXE (запуск без установки и админки) и Android APK",
+      "Кастомная игровая оболочка окна на ПК и плавные 60+ FPS на любом экране",
+      "Полное сохранение прогресса, экспорт/импорт профиля и проверка обновлений",
+    ],
+    latestTag: `v${APP_VERSION}`,
+    publishedAt: "2026",
+    assets: [
+      {
+        name: `CHUBUGAMES-${APP_VERSION}-portable.exe`,
+        label: "Windows x64 · Portable (без установки и админки)",
+        platform: "win-portable",
+        sizeBytes: 99_940_552,
+        url: `https://github.com/kayorissss/CHUBUGAMES/releases/download/latest/CHUBUGAMES-${APP_VERSION}-portable.exe`,
+      },
+      {
+        name: `CHUBUGAMES-${APP_VERSION}-setup.exe`,
+        label: "Windows x64 · Установщик (Setup)",
+        platform: "win-setup",
+        sizeBytes: 106_185_227,
+        url: `https://github.com/kayorissss/CHUBUGAMES/releases/download/latest/CHUBUGAMES-${APP_VERSION}-setup.exe`,
+      },
+      {
+        name: "CHUBUGAMES.apk",
+        label: "Android · APK",
+        platform: "android",
+        sizeBytes: 30_584_753,
+        url: "https://github.com/kayorissss/CHUBUGAMES/releases/download/latest/CHUBUGAMES.apk",
+      },
+    ],
+  },
+];
+
+function classifyAsset(name: string): {
+  label: string;
+  platform: ReleaseAssetItem["platform"];
+} {
+  const low = name.toLowerCase();
+  if (low.endsWith(".apk")) {
+    return { label: "Android · APK", platform: "android" };
+  }
+  if (low.endsWith(".exe")) {
+    if (low.includes("setup") || low.includes("install")) {
+      return { label: "Windows x64 · Установщик (Setup)", platform: "win-setup" };
+    }
+    return { label: "Windows x64 · Portable (без установки)", platform: "win-portable" };
+  }
+  return { label: "Файл релиза", platform: "other" };
+}
+
+function fmtSize(bytes: number): string {
+  if (!bytes || bytes <= 0) return "";
+  const mb = bytes / (1024 * 1024);
+  if (mb >= 1) return `${mb.toFixed(1)} МБ`;
+  return `${Math.max(1, Math.round(bytes / 1024))} КБ`;
+}
+
+function openExternalUrl(url: string) {
+  const api = pcApi();
+  if (api?.openExternal) {
+    api.openExternal(url);
+    return;
+  }
+  window.open(url, "_blank", "noopener,noreferrer");
+}
+
+export function NetPanel({ onBusy }: { onBusy?: (busy: boolean) => void }) {
+  const { toast } = useGame();
+  const [projects, setProjects] = useState<KayoRepoProject[]>(FALLBACK_PROJECTS);
+  const [loading, setLoading] = useState(false);
+  const [filter, setFilter] = useState<"all" | "pc" | "android">("all");
+  const [dlState, setDlState] = useState<
+    Record<string, { status: "downloading" | "done" | "error"; pct: number; path?: string; error?: string }>
+  >({});
+
+  const desktop = isDesktop();
+  const api = pcApi();
+
+  useEffect(() => {
+    if (!api?.onDownloadProgress) return;
+    return api.onDownloadProgress((d: { fileName?: string; url?: string; pct?: number }) => {
+      const key = d.url || d.fileName || "";
+      if (!key) return;
+      setDlState((prev) => ({
+        ...prev,
+        [key]: {
+          status: "downloading",
+          pct: Math.max(1, Math.min(99, Number(d.pct) || 0)),
+        },
+      }));
+    });
+  }, [api]);
+
+  const refreshFromGitHub = async () => {
+    setLoading(true);
+    onBusy?.(true);
+    sfx.click();
+    try {
+      const res = await fetch("https://api.github.com/users/kayorissss/repos?per_page=30&sort=updated", {
+        headers: { Accept: "application/vnd.github+json" },
+      });
+      if (!res.ok) throw new Error(`GitHub HTTP ${res.status}`);
+      const repos: any[] = await res.json();
+
+      const updated = await Promise.all(
+        repos
+          .filter((r) => !r.fork && !r.archived)
+          .map(async (repo): Promise<KayoRepoProject> => {
+            const preset = FALLBACK_PROJECTS.find(
+              (p) => p.name.toLowerCase() === String(repo.name || "").toLowerCase(),
+            );
+            let latestTag = preset?.latestTag || "latest";
+            let publishedAt = preset?.publishedAt || "";
+            let assets: ReleaseAssetItem[] = preset?.assets || [];
+
+            try {
+              const relRes = await fetch(
+                `https://api.github.com/repos/kayorissss/${repo.name}/releases?per_page=5`,
+                { headers: { Accept: "application/vnd.github+json" } },
+              );
+              if (relRes.ok) {
+                const relList: any[] = await relRes.json();
+                const rel = relList.find((x) => Array.isArray(x.assets) && x.assets.length > 0) || relList[0];
+                if (rel) {
+                  latestTag = rel.tag_name || rel.name || latestTag;
+                  if (rel.published_at) {
+                    publishedAt = new Date(rel.published_at).toLocaleDateString("ru-RU");
+                  }
+                  const rawAssets = (rel.assets || []).filter(
+                    (a: any) => a?.name && !/\.(sha256|txt|blockmap|yml)$/i.test(a.name),
+                  );
+                  if (rawAssets.length > 0) {
+                    assets = rawAssets.map((a: any) => {
+                      const cls = classifyAsset(a.name);
+                      return {
+                        name: a.name,
+                        label: cls.label,
+                        platform: cls.platform,
+                        sizeBytes: Number(a.size) || 0,
+                        url: a.browser_download_url,
+                      };
+                    });
+                  }
+                }
+              }
+            } catch {
+              /* оставляем преднастроенные данные при лимите GitHub API */
+            }
+
+            return {
+              id: repo.name,
+              name: repo.name,
+              title: preset?.title || repo.name,
+              badge: preset?.badge || (repo.language ? `Проект · ${repo.language}` : "Проект @kayorissss"),
+              icon: preset?.icon || "rocket",
+              accent: preset?.accent || "#A77BFF",
+              repoUrl: repo.html_url || `https://github.com/kayorissss/${repo.name}`,
+              releasesUrl: `https://github.com/kayorissss/${repo.name}/releases`,
+              description: preset?.description || repo.description || "Официальный репозиторий @kayorissss на GitHub.",
+              features: preset?.features || [
+                "Открытый исходный код и готовые сборки в разделе Releases",
+                "Прямая загрузка последней версии прямо из интерфейса",
+              ],
+              latestTag,
+              publishedAt,
+              assets,
+            };
+          }),
+      );
+
+      if (updated.length > 0) {
+        // Nukefy-VPN всегда первым, затем остальные
+        updated.sort((a, b) => {
+          if (a.name === "Nukefy-VPN") return -1;
+          if (b.name === "Nukefy-VPN") return 1;
+          return 0;
+        });
+        setProjects(updated);
+      }
+    } catch {
+      /* при офлайне или лимите API остаются актуальные встроенные данные */
+    } finally {
+      setLoading(false);
+      onBusy?.(false);
+    }
+  };
+
+  useEffect(() => {
+    refreshFromGitHub();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const downloadAsset = async (proj: KayoRepoProject, asset: ReleaseAssetItem) => {
+    sfx.power?.();
+    haptic("medium");
+    const key = asset.url;
+
+    // Если ссылка ведёт на страницу релиза, а не на прямой бинарник
+    if (/\/releases\/tag\//i.test(asset.url)) {
+      openExternalUrl(asset.url);
+      toast({
+        title: tr("Открыта страница релиза"),
+        sub: `${proj.title} · ${asset.name}`,
+        icon: "download",
+      });
+      return;
+    }
+
+    if (desktop && api?.downloadToDownloads) {
+      setDlState((prev) => ({ ...prev, [key]: { status: "downloading", pct: 2 } }));
+      onBusy?.(true);
+      try {
+        const res = await api.downloadToDownloads(asset.url, asset.name);
+        if (res?.ok) {
+          setDlState((prev) => ({
+            ...prev,
+            [key]: { status: "done", pct: 100, path: res.path },
+          }));
+          sfx.legend?.();
+          haptic("success");
+          toast({
+            title: tr("Скачано в «Загрузки»"),
+            sub: `${res.fileName || asset.name}`,
+            icon: "check",
+            tone: "gold",
+          });
+        } else {
+          throw new Error(res?.error || "Ошибка сохранения");
+        }
+      } catch (err: any) {
+        setDlState((prev) => ({
+          ...prev,
+          [key]: { status: "error", pct: 0, error: String(err?.message || err) },
+        }));
+        openExternalUrl(asset.url);
+      } finally {
+        onBusy?.(false);
+      }
+      return;
+    }
+
+    // В браузере или на телефоне — инициируем прямую загрузку файла
+    const a = document.createElement("a");
+    a.href = asset.url;
+    a.download = asset.name;
+    a.target = "_blank";
+    a.rel = "noopener noreferrer";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setDlState((prev) => ({ ...prev, [key]: { status: "done", pct: 100 } }));
+    toast({
+      title: tr("Загрузка началась"),
+      sub: `${asset.name} → ${tr("Загрузки")}`,
+      icon: "download",
+      tone: "gold",
+    });
+  };
+
+  /** Быстрая кнопка «Скачать последнюю версию на ПК» для проекта */
+  const downloadLatestForPc = (proj: KayoRepoProject) => {
+    const bestPc =
+      proj.assets.find((a) => a.platform === "win-setup") ||
+      proj.assets.find((a) => a.platform === "win-portable") ||
+      proj.assets[0];
+    if (bestPc) {
+      downloadAsset(proj, bestPc);
+    } else {
+      openExternalUrl(proj.releasesUrl);
+    }
+  };
 
   return (
+    <div className="kayo-hub">
+      {/* Шапка-баннер профиля GitHub @kayorissss */}
+      <Card r="lg" className="kayo-hero">
+        <div className="kayo-hero-top">
+          <div className="kayo-avatar">
+            <Icon name="sparkle" size={22} />
+          </div>
+          <div className="kayo-hero-info">
+            <div className="kayo-hero-kicker">
+              <span className="kayo-live-dot" />
+              <span>GITHUB · ОФИЦИАЛЬНЫЕ ПРОЕКТЫ АВТОРА</span>
+            </div>
+            <div className="kayo-hero-title">@kayorissss — Программы и Релизы</div>
+            <div className="kayo-hero-sub">
+              Все программы и утилиты разработчика в одном месте. Скачивай последние версии{" "}
+              <b>Nukefy VPN</b> (клиент обхода блокировок и глушилок) и других проектов сразу в папку{" "}
+              <b>«Загрузки»</b> на компьютере или телефоне.
+            </div>
+          </div>
+          <div className="kayo-hero-actions">
+            <button
+              type="button"
+              className="kayo-btn primary"
+              onClick={() => {
+                sfx.click();
+                openExternalUrl(GITHUB_PROFILE_URL);
+              }}
+            >
+              <Icon name="globe" size={14} />
+              <span>Профиль GitHub</span>
+            </button>
+            <button
+              type="button"
+              className="kayo-btn ghost"
+              onClick={refreshFromGitHub}
+              disabled={loading}
+            >
+              <Icon name="refresh" size={14} />
+              <span>{loading ? "Обновляем…" : "Проверить релизы"}</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Панель фильтра платформ */}
+        <div className="net-tabs" role="tablist" aria-label={tr("Платформа")}>
+          {([
+            { id: "all", label: "Все сборки", sub: "Windows Setup · Portable · Android APK", icon: "star" as IconName },
+            { id: "pc", label: "Для ПК (Windows)", sub: "Прямое скачивание .exe в «Загрузки»", icon: "download" as IconName },
+            { id: "android", label: "Для телефона (Android)", sub: "Свежие .apk пакеты", icon: "bolt" as IconName },
+          ] as const).map((t) => {
+            const on = filter === t.id;
+            return (
+              <button
+                key={t.id}
+                type="button"
+                role="tab"
+                aria-selected={on}
+                className={`net-tab ${on ? "on" : ""}`}
+                onClick={() => {
+                  sfx.click();
+                  haptic("light");
+                  setFilter(t.id);
+                }}
+              >
+                <span className={`net-tab-ico ${loading ? "net-scan" : ""}`}>
+                  <Icon name={t.icon} size={16} />
+                </span>
+                <span className="net-tab-txt">
+                  <span className="t-title-sm">{tr(t.label)}</span>
+                  <span className="t-caption">{tr(t.sub)}</span>
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </Card>
+
+      <SectionTitle
+        right={
+          <span className="t-label acc-text">
+            {projects.length} {projects.length === 1 ? "проект" : "проекта"} · GitHub Releases
+          </span>
+        }
+      >
+        {tr("Доступные программы")}
+      </SectionTitle>
+
+      <div className="kayo-grid">
+        {projects.map((proj, idx) => {
+          const visibleAssets = proj.assets.filter((a) => {
+            if (filter === "pc") return a.platform === "win-setup" || a.platform === "win-portable";
+            if (filter === "android") return a.platform === "android";
+            return true;
+          });
+          const assetsToShow = visibleAssets.length > 0 ? visibleAssets : proj.assets;
+
+          return (
+            <motion.div
+              key={proj.id}
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: idx * 0.05, duration: 0.25 }}
+            >
+              <Card
+                r="lg"
+                className="kayo-card"
+                style={{ ["--proj-acc" as any]: proj.accent }}
+              >
+                <div className="kayo-card-head">
+                  <div className="kayo-card-ico">
+                    <Icon name={proj.icon} size={22} />
+                  </div>
+                  <div className="kayo-card-titles">
+                    <div className="kayo-card-row">
+                      <span className="kayo-card-name">{proj.title}</span>
+                      <span className="kayo-card-tag">{proj.latestTag}</span>
+                      <span className="kayo-card-badge">{proj.badge}</span>
+                    </div>
+                    <div className="kayo-card-meta">
+                      <span>github.com/kayorissss/{proj.name}</span>
+                      {proj.publishedAt && <span>· Релиз: {proj.publishedAt}</span>}
+                    </div>
+                  </div>
+                  <div className="kayo-card-cta">
+                    <button
+                      type="button"
+                      className="kayo-btn primary"
+                      onClick={() => downloadLatestForPc(proj)}
+                    >
+                      <Icon name="download" size={14} />
+                      <span>Скачать в «Загрузки» (ПК)</span>
+                    </button>
+                    <button
+                      type="button"
+                      className="kayo-btn ghost"
+                      onClick={() => openExternalUrl(proj.releasesUrl)}
+                    >
+                      <Icon name="globe" size={13} />
+                      <span>Все релизы</span>
+                    </button>
+                  </div>
+                </div>
+
+                <p className="kayo-card-desc">{proj.description}</p>
+
+                <ul className="kayo-card-feats">
+                  {proj.features.map((f) => (
+                    <li key={f}>
+                      <Icon name="check" size={12} />
+                      <span>{f}</span>
+                    </li>
+                  ))}
+                </ul>
+
+                <div className="kayo-assets">
+                  <div className="kayo-assets-title">
+                    <span>ФАЙЛЫ ПОСЛЕДНЕГО РЕЛИЗА ({proj.latestTag})</span>
+                    <button
+                      type="button"
+                      className="kayo-link"
+                      onClick={() => openExternalUrl(proj.repoUrl)}
+                    >
+                      Открыть репозиторий →
+                    </button>
+                  </div>
+                  <div className="kayo-assets-list">
+                    {assetsToShow.map((asset) => {
+                      const st = dlState[asset.url];
+                      const isDownloading = st?.status === "downloading";
+                      const isDone = st?.status === "done";
+                      return (
+                        <div key={asset.name} className={`kayo-asset ${isDone ? "done" : ""}`}>
+                          <div className="kayo-asset-main">
+                            <span className="kayo-asset-ico">
+                              <Icon
+                                name={asset.platform === "android" ? "bolt" : "download"}
+                                size={15}
+                              />
+                            </span>
+                            <div className="kayo-asset-txt">
+                              <div className="kayo-asset-name">{asset.name}</div>
+                              <div className="kayo-asset-sub">
+                                <span>{asset.label}</span>
+                                {asset.sizeBytes > 0 && <span> · {fmtSize(asset.sizeBytes)}</span>}
+                              </div>
+                              {isDownloading && (
+                                <div className="kayo-asset-bar">
+                                  <i style={{ width: `${st.pct}%` }} />
+                                </div>
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="kayo-asset-acts">
+                            {isDone && st?.path && api?.showInFolder && (
+                              <button
+                                type="button"
+                                className="kayo-btn ghost sm"
+                                onClick={() => api.showInFolder(st.path)}
+                              >
+                                Показать в папке
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              className={`kayo-btn ${
+                                asset.platform === "win-setup" || asset.platform === "win-portable"
+                                  ? "primary"
+                                  : "ghost"
+                              } sm`}
+                              disabled={isDownloading}
+                              onClick={() => downloadAsset(proj, asset)}
+                            >
+                              <Icon name={isDone ? "check" : "download"} size={13} />
+                              <span>
+                                {isDownloading
+                                  ? `${st.pct}%`
+                                  : isDone
+                                    ? "Скачать снова"
+                                    : "В Загрузки"}
+                              </span>
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </Card>
+            </motion.div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+export default function NetworkPage({ onBack }: { onBack: () => void }) {
+  return (
     <Screen
-      title={tr("ИНТЕРНЕТ")}
-      sub={tr("Глушилки и скорость")}
+      title={tr("ДОПОЛНИТЕЛЬНОЕ")}
+      sub={tr("Все программы и релизы @kayorissss на GitHub — прямая загрузка в «Загрузки»")}
       right={
         <button
           type="button"
@@ -33,411 +620,15 @@ export default function Network({ onBack }: { onBack: () => void }) {
           style={{
             width: 34, height: 34, borderRadius: "var(--r-sm)",
             background: "var(--btn-bg)", border: "1px solid var(--btn-brd)",
+            color: "var(--text)",
           }}
+          aria-label={tr("Закрыть")}
         >
-          <Icon name="cross" size={15} />
+          <Icon name="cross" size={14} />
         </button>
       }
     >
-      {/* Вкладки */}
-      <div
-        className="flex"
-        style={{
-          gap: 4, padding: 4, marginBottom: 16,
-          background: "var(--btn-bg)", border: "1px solid var(--btn-brd)",
-          borderRadius: "var(--r-md)",
-        }}
-      >
-        {([["block", tr("ГЛУШИЛКИ"), "shield"], ["speed", tr("СКОРОСТЬ"), "speed"]] as const).map(
-          ([id, label, icon]) => {
-            const on = tab === id;
-            return (
-              <button
-                key={id}
-                type="button"
-                onClick={() => { sfx.click(); haptic("light"); setTab(id); }}
-                className="flex-1 t-title-sm flex items-center justify-center"
-                style={{
-                  gap: 7, padding: "10px 8px", borderRadius: "var(--r-sm)",
-                  background: on ? "var(--acc)" : "transparent",
-                  color: on ? "var(--acc-ink)" : "var(--text-mute)",
-                  fontSize: 12, fontWeight: 700, letterSpacing: "0.04em",
-                  transition: "background 0.16s, color 0.16s",
-                }}
-              >
-                <Icon name={icon} size={14} /> {label}
-              </button>
-            );
-          },
-        )}
-      </div>
-
-      <AnimatePresence mode="wait">
-        {tab === "block" ? (
-          <motion.div
-            key="block"
-            initial={{ opacity: 0, x: -12 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -12 }}
-            transition={{ duration: 0.18 }}
-          >
-            <BlockCheck />
-          </motion.div>
-        ) : (
-          <motion.div
-            key="speed"
-            initial={{ opacity: 0, x: 12 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: 12 }}
-            transition={{ duration: 0.18 }}
-          >
-            <SpeedTest />
-          </motion.div>
-        )}
-      </AnimatePresence>
+      <NetPanel />
     </Screen>
-  );
-}
-
-/* ================= ВКЛАДКА: ГЛУШИЛКИ ================= */
-
-function BlockCheck() {
-  const [busy, setBusy] = useState(false);
-  const [v, setV] = useState<NetVerdict | null>(null);
-
-  const check = async () => {
-    setBusy(true);
-    setV(null);
-    sfx.click();
-    const res = await runNetCheck();
-    setV(res);
-    setBusy(false);
-    haptic(res.status === "ok" ? "success" : "error");
-    if (res.status === "ok") sfx.achieve?.();
-    else sfx.error?.();
-  };
-
-  const ru = v?.probes.filter((p) => p.group === "ru") || [];
-  const world = v?.probes.filter((p) => p.group === "world") || [];
-
-  return (
-    <>
-      <Card r="lg" style={{ padding: 14, marginBottom: 14 }}>
-        <div className="t-body" style={{ lineHeight: 1.55 }}>
-          Проверка сравнивает российские сервисы с зарубежными. Если работают
-          только «белые» — интернет режут.
-        </div>
-        <button
-          type="button"
-          disabled={busy}
-          onClick={check}
-          className="w-full t-title-sm"
-          style={{
-            marginTop: 13, padding: "13px 0", borderRadius: "var(--r-md)",
-            background: "var(--acc)", color: "var(--acc-ink)",
-            fontWeight: 700, opacity: busy ? 0.6 : 1,
-          }}
-        >
-          {busy ? "ПРОВЕРЯЮ…" : v ? "ПРОВЕРИТЬ ЕЩЁ РАЗ" : tr("ПРОВЕРИТЬ")}
-        </button>
-      </Card>
-
-      {busy && <Pinging />}
-
-      <AnimatePresence>
-        {v && !busy && (
-          <motion.div
-            initial={{ opacity: 0, y: 14 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0 }}
-          >
-            {/* Вердикт */}
-            <motion.div
-              initial={{ scale: 0.96 }}
-              animate={{ scale: 1 }}
-              transition={{ type: "spring", stiffness: 340, damping: 22 }}
-              style={{
-                padding: "16px 15px", marginBottom: 14,
-                borderRadius: "var(--r-lg)",
-                background: `${COLOR[v.status]}14`,
-                border: `1.5px solid ${COLOR[v.status]}66`,
-              }}
-            >
-              <div className="flex items-center" style={{ gap: 10 }}>
-                <span style={{ color: COLOR[v.status], lineHeight: 0 }}>
-                  <Icon name={v.status === "ok" ? "check" : v.status === "offline" ? "cross" : "warn"} size={22} />
-                </span>
-                <div
-                  className="t-title"
-                  style={{ color: COLOR[v.status], fontSize: 19, letterSpacing: "0.02em" }}
-                >
-                  {v.title}
-                </div>
-              </div>
-              <div className="t-body" style={{ marginTop: 8, lineHeight: 1.55 }}>
-                {v.detail}
-              </div>
-            </motion.div>
-
-            {/* Группы */}
-            <GroupCard
-              title={tr("РОССИЙСКИЕ СЕРВИСЫ")}
-              hint={tr("Обычно доступны всегда")}
-              probes={ru}
-              ok={v.ruOk}
-              total={v.ruTotal}
-              avg={v.ruAvg}
-            />
-            <GroupCard
-              title={tr("ЗАРУБЕЖНЫЕ СЕРВИСЫ")}
-              hint={tr("Первыми отваливаются при шейпинге")}
-              probes={world}
-              ok={v.worldOk}
-              total={v.worldTotal}
-              avg={v.worldAvg}
-            />
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </>
-  );
-}
-
-function Pinging() {
-  return (
-    <Card r="lg" style={{ padding: 22 }}>
-      <div className="flex flex-col items-center">
-        <motion.div
-          animate={{ scale: [1, 1.14, 1], opacity: [0.55, 1, 0.55] }}
-          transition={{ repeat: Infinity, duration: 1.3, ease: "easeInOut" }}
-          style={{ color: "var(--acc)" }}
-        >
-          <Icon name="wifi" size={38} />
-        </motion.div>
-        <div className="t-title-sm" style={{ marginTop: 12 }}>{tr("Пингую хосты")}</div>
-        <div className="t-caption" style={{ marginTop: 4 }}>{tr("это займёт пару секунд")}</div>
-      </div>
-    </Card>
-  );
-}
-
-function GroupCard({
-  title, hint, probes, ok, total, avg,
-}: {
-  title: string; hint: string;
-  probes: NetVerdict["probes"]; ok: number; total: number; avg: number | null;
-}) {
-  const c = ok === 0 ? "var(--danger)" : ok === total ? "var(--ok)" : "var(--gold)";
-  return (
-    <Card r="lg" style={{ padding: 0, marginBottom: 14, overflow: "hidden" }}>
-      <div style={{ padding: "13px 14px" }}>
-        <div className="flex items-baseline justify-between" style={{ gap: 10 }}>
-          <div className="t-label" style={{ fontSize: 9.5 }}>{title}</div>
-          <div className="t-num shrink-0" style={{ fontSize: 15, color: c }}>
-            {ok}/{total}
-          </div>
-        </div>
-        <div className="flex items-baseline justify-between" style={{ marginTop: 3, gap: 10 }}>
-          <div className="t-caption">{hint}</div>
-          <div className="t-caption shrink-0">
-            {avg !== null ? `в среднем ${avg} мс` : tr("нет ответа")}
-          </div>
-        </div>
-      </div>
-      <Divider />
-      {probes.map((p, i) => (
-        <div key={p.id}>
-          <motion.div
-            initial={{ opacity: 0, x: -8 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: i * 0.05 }}
-            className="flex items-center justify-between"
-            style={{ padding: "10px 14px", gap: 10 }}
-          >
-            <span className="t-body clip1">{p.name}</span>
-            <span className="flex items-center shrink-0" style={{ gap: 7 }}>
-              {p.ok ? (
-                <>
-                  <PingBars ms={p.ms || 0} />
-                  <span className="t-num" style={{ fontSize: 11.5, color: "var(--ok)", minWidth: 44, textAlign: "right" }}>
-                    {p.ms} мс
-                  </span>
-                </>
-              ) : (
-                <span className="t-num" style={{ fontSize: 11.5, color: "var(--danger)" }}>{tr("нет связи")}</span>
-              )}
-            </span>
-          </motion.div>
-          {i < probes.length - 1 && <Divider inset={14} />}
-        </div>
-      ))}
-    </Card>
-  );
-}
-
-/** Полоски качества связи по пингу */
-function PingBars({ ms }: { ms: number }) {
-  const level = ms < 120 ? 3 : ms < 400 ? 2 : 1;
-  const c = level === 3 ? "var(--ok)" : level === 2 ? "var(--gold)" : "var(--danger)";
-  return (
-    <span className="flex items-end" style={{ gap: 2, height: 12 }}>
-      {[6, 9, 12].map((h, i) => (
-        <span
-          key={h}
-          style={{
-            width: 3, height: h, borderRadius: 1,
-            background: i < level ? c : "var(--btn-brd)",
-          }}
-        />
-      ))}
-    </span>
-  );
-}
-
-/* ================= ВКЛАДКА: СКОРОСТЬ ================= */
-
-function SpeedTest() {
-  const [busy, setBusy] = useState(false);
-  const [live, setLive] = useState(0);
-  const [loaded, setLoaded] = useState(0);
-  const [res, setRes] = useState<SpeedResult | null>(null);
-  const [err, setErr] = useState<string | null>(null);
-  const ac = useRef<AbortController | null>(null);
-
-  const run = async () => {
-    setBusy(true);
-    setRes(null);
-    setErr(null);
-    setLive(0);
-    setLoaded(0);
-    sfx.click();
-    ac.current = new AbortController();
-    const r = await measureSpeed((b, mbps) => {
-      setLoaded(b);
-      setLive(mbps);
-    }, ac.current.signal);
-    setBusy(false);
-    if (r) {
-      setRes(r);
-      haptic("success");
-      sfx.achieve?.();
-    } else {
-      setErr(tr("Не удалось замерить. Проверь, есть ли вообще интернет."));
-      haptic("error");
-    }
-  };
-
-  // стрелка спидометра: 0..100 Мбит/с на 240 градусов
-  const shown = res ? res.mbps : live;
-  const angle = -120 + Math.min(1, Math.log10(1 + shown) / Math.log10(101)) * 240;
-
-  return (
-    <>
-      <Card r="lg" style={{ padding: 18, marginBottom: 14 }}>
-        <div className="flex flex-col items-center">
-          {/* Спидометр */}
-          <div style={{ position: "relative", width: 200, height: 122 }}>
-            <svg width="200" height="122" viewBox="0 0 200 122">
-              <path
-                d="M18 112 A 82 82 0 0 1 182 112"
-                fill="none" stroke="var(--btn-brd)" strokeWidth="11" strokeLinecap="round"
-              />
-              <motion.path
-                d="M18 112 A 82 82 0 0 1 182 112"
-                fill="none" stroke="var(--acc)" strokeWidth="11" strokeLinecap="round"
-                strokeDasharray="258"
-                animate={{
-                  strokeDashoffset: 258 - (Math.min(1, Math.log10(1 + shown) / Math.log10(101))) * 258,
-                }}
-                transition={{ type: "spring", stiffness: 90, damping: 18 }}
-              />
-              <motion.line
-                x1="100" y1="112" x2="100" y2="44"
-                stroke="var(--text)" strokeWidth="3" strokeLinecap="round"
-                style={{ originX: "100px", originY: "112px" }}
-                animate={{ rotate: angle }}
-                transition={{ type: "spring", stiffness: 90, damping: 16 }}
-              />
-              <circle cx="100" cy="112" r="6" fill="var(--text)" />
-            </svg>
-            {busy && (
-              <motion.div
-                className="absolute inset-0"
-                animate={{ opacity: [0.3, 0.9, 0.3] }}
-                transition={{ repeat: Infinity, duration: 1.1 }}
-                style={{ pointerEvents: "none" }}
-              />
-            )}
-          </div>
-
-          <div className="t-num" style={{ fontSize: 34, marginTop: 2, lineHeight: 1 }}>
-            {shown > 0 ? shown.toFixed(1) : "—"}
-          </div>
-          <div className="t-label" style={{ marginTop: 5 }}>{tr("МБИТ/С")}</div>
-
-          {busy && (
-            <div className="t-caption" style={{ marginTop: 9 }}>
-              скачано {fmtBytesShort(loaded)}
-            </div>
-          )}
-
-          {res && !busy && (
-            <motion.div
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="t-body text-center"
-              style={{ marginTop: 11, lineHeight: 1.5 }}
-            >
-              {res.verdict}
-            </motion.div>
-          )}
-
-          {err && (
-            <div className="t-caption text-center" style={{ marginTop: 11, color: "var(--danger)" }}>
-              {err}
-            </div>
-          )}
-
-          <button
-            type="button"
-            disabled={busy}
-            onClick={run}
-            className="w-full t-title-sm"
-            style={{
-              marginTop: 16, padding: "13px 0", borderRadius: "var(--r-md)",
-              background: "var(--acc)", color: "var(--acc-ink)",
-              fontWeight: 700, opacity: busy ? 0.6 : 1,
-            }}
-          >
-            {busy ? "ИЗМЕРЯЮ…" : res ? "ЗАМЕРИТЬ СНОВА" : tr("ЗАМЕРИТЬ СКОРОСТЬ")}
-          </button>
-        </div>
-      </Card>
-
-      {res && !busy && (
-        <Card r="lg" style={{ padding: 0, overflow: "hidden" }}>
-          {([
-            [tr("Скорость"), `${res.mbps} Мбит/с`],
-            [tr("Скачано"), fmtBytesShort(res.bytes)],
-            [tr("Время замера"), `${(res.ms / 1000).toFixed(1)} с`],
-            [tr("Хватит на"), res.mbps >= 20 ? "видео 1080p" : res.mbps >= 8 ? "видео 720p" : res.mbps >= 3 ? "музыку и соцсети" : tr("только текст")],
-          ] as const).map(([k, val], i, arr) => (
-            <div key={k}>
-              <div className="flex items-center justify-between" style={{ padding: "12px 14px", gap: 10 }}>
-                <span className="t-body">{k}</span>
-                <span className="t-num" style={{ fontSize: 13 }}>{val}</span>
-              </div>
-              {i < arr.length - 1 && <Divider inset={14} />}
-            </div>
-          ))}
-        </Card>
-      )}
-
-      <div className="t-caption" style={{ marginTop: 12, lineHeight: 1.5, padding: "0 2px" }}>
-        Замер качает файлы с российских CDN в несколько потоков и отбрасывает
-        первые доли секунды, пока соединение разгоняется. Цифра близка к
-        Спидтесту, но может отличаться на нестабильной мобильной сети.
-      </div>
-    </>
   );
 }

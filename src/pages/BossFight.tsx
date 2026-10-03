@@ -7,7 +7,7 @@ import HeadView from "../ui/HeadView";
 import { sfx, haptic } from "../core/fx";
 import { fmt } from "../core/format";
 import { useGame } from "../core/store";
-import { readGamble, writeGamble } from "../core/gamble";
+import { updateGamble } from "../core/gamble";
 import BossArena, { freshFx, arenaFx, type ArenaFx } from "../ui/BossArena";
 import {
   BOSSES, bossOfHour, canFight, nextBossIn, readBosses,
@@ -185,9 +185,8 @@ export default function BossFight({ onBack }: { onBack: () => void }) {
         const gotXp = Math.max(1, Math.floor(boss.reward.xp * k));
         addCoins(gotCoins);
         addXp(gotXp);
-        // жетоны для казино
-        const g = readGamble();
-        writeGamble({ ...g, chips: g.chips + gotChips });
+        // жетоны для казино — прирастают к актуальному балансу
+        updateGamble((x) => ({ chips: x.chips + gotChips }));
         const hourNow = Math.floor(Date.now() / (60 * 60 * 1000));
         save({
           // отмечаем только ПЕРВУЮ победу за час — она снимает «полную» награду

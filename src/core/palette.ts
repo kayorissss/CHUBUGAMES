@@ -94,3 +94,22 @@ export function alpha(name: string, a: number, fallback = "#ffffff"): string {
   }
   return `rgba(255,255,255,${a})`;
 }
+
+/**
+ * Цвет для канваса из ЛЮБОГО удобного вида: "var(--acc)", "--acc" или
+ * готового "#rrggbb".
+ *
+ * Зачем: игры веками клали в цвета частиц и всплывашек строки "var(--gold)".
+ * Канвас CSS-переменные не понимает: невалидное значение спецификация
+ * требует игнорировать, и фигура красится ПРОШЛЫМ цветом. Отсюда «что-то
+ * белое мигает», «цвета не те» и «на фиолетовой теме всё съехало» — при
+ * полностью корректной палитре в CSS.
+ */
+export function canvasColor(v: string, fallback = "#ffffff"): string {
+  const raw = (v || "").trim();
+  if (!raw) return fallback;
+  const m = /^var\((.+)\)$/.exec(raw);
+  if (m) return cssVar(m[1].trim(), fallback);
+  if (raw.startsWith("--")) return cssVar(raw, fallback);
+  return raw;
+}

@@ -9,15 +9,134 @@ import {
 import { drawHead } from "../core/head";
 import { fmt } from "../core/format";
 import { sfx, haptic } from "../core/fx";
+import { isPaused } from "../core/pause";
+import { onAdapt, renderScale } from "../core/perf";
+import { softShadows } from "./shell";
 import Icon from "../ui/Icon";
 import type { IconName } from "../ui/Icon";
 import { Bar } from "../ui/Glass";
 
-interface FloatTxt { id: number; x: number; y: number; txt: string; crit: boolean }
+interface FloatTxt {
+  id: number; x: number; y: number; txt: string; crit: boolean;
+  /** когда родился — чистим по возрасту пачкой, а не таймером на цифру */
+  born: number;
+}
+
+/**
+ * Ползунок «сколько уровней взять».
+ *
+ * Палец ловим сами (pointer events): нативный <input type="range"> на
+ * телефоне рисует системный вид и не масштабируется под нашу плитку, а тут
+ * нужны ещё и «доступные по карману» деления. Зажал — повёл — отпустил;
+ * число дублируется и на ручке, и в подписи («УР. 8–11»), потому что
+ * большой палец половину ползунка как раз и закрывает.
+ */
+function LevelSlider({
+  from, want, aff, onChange,
+}: {
+  /** первый доступный уровень (текущий + 1) */
+  from: number;
+  /** сколько выбрано */
+  want: number;
+  /** сколько реально по карману */
+  aff: number;
+  onChange: (v: number) => void;
+}) {
+  const SPAN = 16;
+  const ref = useRef<HTMLDivElement>(null);
+  const drag = useRef(false);
+
+  const max = Math.max(1, Math.min(SPAN, aff));
+  const pick = (clientX: number) => {
+    const el = ref.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    const k = Math.round(((clientX - r.left) / Math.max(1, r.width)) * SPAN);
+    onChange(Math.max(1, Math.min(max, k)));
+  };
+
+  const chosen = Math.max(1, Math.min(want, max));
+  const pct = ((chosen - 0.5) / SPAN) * 100;
+
+  return (
+    <div className="cl-slider">
+      <div
+        ref={ref}
+        className="cl-slider-track"
+        role="slider"
+        tabIndex={0}
+        aria-valuemin={1}
+        aria-valuemax={max}
+        aria-valuenow={chosen}
+        aria-label={tr("Сколько уровней взять")}
+        onKeyDown={(e) => {
+          if (e.key === "ArrowRight" || e.key === "ArrowUp") { e.preventDefault(); onChange(Math.min(max, chosen + 1)); }
+          if (e.key === "ArrowLeft" || e.key === "ArrowDown") { e.preventDefault(); onChange(Math.max(1, chosen - 1)); }
+        }}
+        onPointerDown={(e) => {
+          drag.current = true;
+          try { (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId); } catch { /* noop */ }
+          pick(e.clientX);
+        }}
+        onPointerMove={(e) => { if (drag.current) pick(e.clientX); }}
+        onPointerUp={() => { drag.current = false; }}
+        onPointerCancel={() => { drag.current = false; }}
+      >
+        <div className="cl-slider-cells" aria-hidden>
+          {Array.from({ length: SPAN }, (_, i) => (
+            <span
+              key={i}
+              className={"cl-slider-cell" + (i < aff ? " aff" : "") + (i < chosen ? " on" : "")}
+            />
+          ))}
+        </div>
+        <div className="cl-slider-knob" style={{ left: `${pct}%` }}>
+          <b>{chosen}</b>
+        </div>
+      </div>
+      <div className="cl-slider-foot">
+        <span className="t-label">{tr("УР.")} {from}–{from + chosen - 1}</span>
+        <span className="t-caption">{chosen > 1 ? `+${chosen}` : tr("зажми и веди →")}</span>
+      </div>
+    </div>
+  );
+}
 
 export default function Clicker({ onExit }: { onExit: () => void }) {
   const { s, set, mainFriend, addXp, bump, questProgress, finishGame } = useGame();
   const [floats, setFloats] = useState<FloatTxt[]>([]);
+  /*
+   * ВСПЛЫВАЮЩИЕ ЦИФРЫ — ПАЧКОЙ, А НЕ ПО ОДНОЙ.
+   *
+   * Жалоба друга: «в ЧУБ КЛИКЕРЕ FPS падает до 2, и с автокликером тоже».
+   * Одна из причин настоящая: каждый тап делал ДВА обновления React-состояния
+   * (добавить цифру и через 900 мс убрать её своим таймером), и каждое
+   * перерисовывало всю страницу — список апгрейдов, HUD, кнопки. На
+   * автокликере это 20–40 перерисовок в секунду при том, что контент
+   * изменился на одну строку.
+   *
+   * Теперь цифры копятся в ref и сливаются в состояние не чаще, чем раз в
+   * 110 мс (~9 обновлений в секунду вместо 40), а удаление идёт по возрасту
+   * в том же слиянии — отдельных setTimeout больше нет вовсе.
+   */
+  const floatQueue = useRef<FloatTxt[]>([]);
+  const floatTimer = useRef(0);
+  const flushFloats = useCallback(() => {
+    floatTimer.current = 0;
+    const now = Date.now();
+    // держим последние 8 и только живые
+    const aliveList = floatQueue.current.filter((f) => now - f.born < 900).slice(-8);
+    floatQueue.current = aliveList;
+    setFloats(aliveList);
+    if (aliveList.length > 0 && !floatTimer.current) {
+      floatTimer.current = window.setTimeout(flushFloats, 110);
+    }
+  }, []);
+  const pushFloat = useCallback((f: FloatTxt) => {
+    floatQueue.current = [...floatQueue.current, f].slice(-8);
+    if (!floatTimer.current) floatTimer.current = window.setTimeout(flushFloats, 110);
+  }, [flushFloats]);
+  useEffect(() => () => { if (floatTimer.current) clearTimeout(floatTimer.current); }, []);
   const [combo, setCombo] = useState(0);
   const [comboPct, setComboPct] = useState(0);
   const [tab, setTab] = useState<"tap" | "shop">("tap");
@@ -27,8 +146,13 @@ export default function Clicker({ onExit }: { onExit: () => void }) {
   const sessionTaps = useRef(0);
   const sessionStart = useRef(Date.now());
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  /** Сколько покупать за раз: 1 / 10 / максимум по деньгам */
-  const [buyQty, setBuyQty] = useState<1 | 10 | "max">(1);
+  /**
+   * Сколько уровней брать у каждой покупки. Раньше сверху висел переключатель
+   * «БРАТЬ ×1 / ×10 / МАКС»: три кнопки, чтобы купить «столько, сколько
+   * хочется», — а «МАКС» скупал всё подчистую, когда человек хотел два
+   * уровня. Теперь у каждой карточки свой ползунок: зажал и повёл вправо.
+   */
+  const [take, setTake] = useState<Record<string, number>>({});
   const anim = useRef({ squish: 0, tilt: 0, blink: 0, blinkT: 1200, mouth: 0.08, rings: [] as any[] });
   const photoRef = useRef<HTMLImageElement | null>(null);
 
@@ -70,18 +194,40 @@ export default function Clicker({ onExit }: { onExit: () => void }) {
     const c = canvasRef.current;
     if (!c) return;
     let raf = 0;
-    const dpr = Math.min(2.5, window.devicePixelRatio || 1);
+    /*
+     * РАЗРЕШЕНИЕ РИСОВАНИЯ.
+     *
+     * Вторая причина «2 FPS в кликере»: здесь было Math.min(2.5, devicePixelRatio).
+     * На 27" мониторе с масштабированием 150 % это 2.5 — то есть внутренний
+     * буфер 4608×2304, ~10,6 млн пикселей на КАЖДЫЙ кадр, при том что игра
+     * рисует ещё и полноэкранное свечение. В остальных мини-играх плотность
+     * подбирает core/perf.ts (renderScale), и здесь теперь то же самое:
+     * слабое железо само ужимает растр, а не упорно рисует 10 мегапикселей.
+     */
+    let dpr = Math.min(2, window.devicePixelRatio || 1);
     const resize = () => {
       const r = c.getBoundingClientRect();
-      c.width = r.width * dpr;
-      c.height = r.height * dpr;
+      dpr = renderScale(r.width, r.height);
+      c.width = Math.max(1, Math.floor(r.width * dpr));
+      c.height = Math.max(1, Math.floor(r.height * dpr));
+      // «слабое железо» выключает растер теней прямо в контексте
+      softShadows(c);
     };
     resize();
     const ro = new ResizeObserver(resize);
     ro.observe(c);
+    const offAdapt = onAdapt(resize);
     let last = performance.now();
 
     const loop = (now: number) => {
+      /* На паузе кадр не рисуем (сцена под оверлеем всё равно стоит), но
+         last обновляем — иначе на первом кадре после продолжения анимация
+         лица прыгнет на всё время паузы. */
+      if (isPaused()) {
+        last = now;
+        raf = requestAnimationFrame(loop);
+        return;
+      }
       const dt = Math.min(50, now - last);
       last = now;
       const ctx = c.getContext("2d");
@@ -99,8 +245,11 @@ export default function Clicker({ onExit }: { onExit: () => void }) {
           a.blink = 1;
           if (a.blinkT < -150) { a.blink = 0; a.blinkT = 1800 + Math.random() * 3000; }
         }
-        const r = Math.min(W, H) * 0.36;
-        const cy = H * 0.52 + Math.sin(now * 0.0013) * 6;
+        /* Лицо держим по-настоящему по центру и чуть компактнее: раньше
+           оно сидело ниже середины (0.52) и упиралось в нижнюю панель, а
+           размер 0.36 съедал полэкрана на маленьком телефоне. */
+        const r = Math.min(W, H) * 0.33;
+        const cy = H * 0.46 + Math.sin(now * 0.0013) * 6;
 
         // кольца от тапов
         for (let i = a.rings.length - 1; i >= 0; i--) {
@@ -117,11 +266,16 @@ export default function Clicker({ onExit }: { onExit: () => void }) {
 
         // свечение усиливается со стадией
         const st = stageRef.current;
-        const glow = ctx.createRadialGradient(W / 2, cy, r * 0.4, W / 2, cy, r * (1.7 + st.idx * 0.16));
+        const gr = r * (1.7 + st.idx * 0.16);
+        const glow = ctx.createRadialGradient(W / 2, cy, r * 0.4, W / 2, cy, gr);
         glow.addColorStop(0, `rgba(255,176,32,${0.14 + st.idx * 0.06})`);
         glow.addColorStop(1, "rgba(255,176,32,0)");
         ctx.fillStyle = glow;
-        ctx.fillRect(0, 0, W, H);
+        /* Раньше это был fillRect(0, 0, W, H): полупрозрачный градиент на
+           ВЕСЬ экран — самый дорогой пиксельный операция в игре, и он же
+           рисовался под панелью настроек, где его не видно. Прямоугольник
+           ограничен лицом: то же свечение, в ~8 раз меньше растра. */
+        ctx.fillRect(W / 2 - gr, cy - gr, gr * 2, gr * 2);
 
         // лучи (со 2-й стадии)
         if (st.rays) {
@@ -129,13 +283,17 @@ export default function Clicker({ onExit }: { onExit: () => void }) {
           ctx.translate(W / 2, cy);
           ctx.rotate(now * 0.00022);
           const rays = 12;
+          /* createLinearGradient внутри цикла — 12 объектов градиента на
+             каждый кадр. Градиент живёт в системе координат момента
+             отрисовки, поэтому один объект спокойно служит всем лучам. */
+          const len = r * 1.56;
+          const g2 = ctx.createLinearGradient(0, -r * 0.9, 0, -len);
+          g2.addColorStop(0, `${st.color}55`);
+          g2.addColorStop(1, "rgba(0,0,0,0)");
+          ctx.fillStyle = g2;
           for (let i = 0; i < rays; i++) {
             ctx.rotate((Math.PI * 2) / rays);
-            const len = r * (1.5 + Math.sin(now * 0.002 + i) * 0.12);
-            const g2 = ctx.createLinearGradient(0, -r * 0.9, 0, -len);
-            g2.addColorStop(0, `${st.color}55`);
-            g2.addColorStop(1, "rgba(0,0,0,0)");
-            ctx.fillStyle = g2;
+            ctx.globalAlpha = 0.7 + Math.sin(now * 0.002 + i) * 0.3;
             ctx.beginPath();
             ctx.moveTo(-r * 0.07, -r * 0.9);
             ctx.lineTo(r * 0.07, -r * 0.9);
@@ -143,6 +301,7 @@ export default function Clicker({ onExit }: { onExit: () => void }) {
             ctx.closePath();
             ctx.fill();
           }
+          ctx.globalAlpha = 1;
           ctx.restore();
         }
 
@@ -218,7 +377,7 @@ export default function Clicker({ onExit }: { onExit: () => void }) {
       raf = requestAnimationFrame(loop);
     };
     raf = requestAnimationFrame(loop);
-    return () => { cancelAnimationFrame(raf); ro.disconnect(); };
+    return () => { cancelAnimationFrame(raf); ro.disconnect(); offAdapt(); };
     /* ВАЖНО: `tab` в зависимостях.
        Вкладка «АПГРЕЙДЫ» размонтирует <canvas>, а при возврате React
        создаёт НОВЫЙ элемент. Раньше зависимостью был только mainFriend,
@@ -226,6 +385,18 @@ export default function Clicker({ onExit }: { onExit: () => void }) {
        уже оторванный от DOM канвас — герой пропадал до первого тапа.
        Теперь при смене вкладки цикл пересоздаётся на актуальном канвасе. */
   }, [mainFriend, tab]);
+
+  /*
+   * Вкладка «АПГРЕЙДЫ» — это список и деньги; счётчик кадров там мешал:
+   * он висел ровно над кнопкой перехода. Класс на body, а CSS прячет HUD —
+   * сам счётчик живёт рядом с игрой (App.tsx), а не внутри неё, поэтому
+   * играть с ним нельзя.
+   */
+  useEffect(() => {
+    const cls = "cl-shop";
+    if (tab === "shop") document.body.classList.add(cls);
+    return () => document.body.classList.remove(cls);
+  }, [tab]);
 
 
   useEffect(() => {
@@ -255,11 +426,7 @@ export default function Clicker({ onExit }: { onExit: () => void }) {
       const fx = e.clientX - rect.left;
       const fy = e.clientY - rect.top;
       const id = ++fid.current;
-      setFloats((p) => [
-        ...p.slice(-14),
-        { id, x: fx, y: fy, txt: `+${fmt(gain)}`, crit: isCrit },
-      ]);
-      setTimeout(() => setFloats((p) => p.filter((f) => f.id !== id)), 900);
+      pushFloat({ id, x: fx, y: fy, txt: `+${fmt(gain)}`, crit: isCrit, born: Date.now() });
 
       const a = anim.current;
       a.squish = 1;
@@ -294,28 +461,41 @@ export default function Clicker({ onExit }: { onExit: () => void }) {
    * «цена × 10». Пользователь просил показывать ИТОГОВУЮ цену, а если
    * денег не хватает на всю пачку — сколько получится взять сейчас.
    */
-  const planBuy = useCallback((key: (typeof UPGRADES)[number]["key"], base: number, growth: number) => {
-    const startLvl = s.clicker[key] as number;
-    const limit = buyQty === "max" ? 500 : buyQty;
-    let coins = s.coins;
-    let lvl = startLvl;
-    let count = 0;
-    let total = 0;
-    for (let i = 0; i < limit; i++) {
-      const c = upgradeCost(base, growth, key === "tapPower" ? lvl - 1 : lvl);
-      if (coins < c) break;
-      coins -= c;
-      total += c;
-      lvl++;
-      count++;
-    }
-    // цена следующего уровня — показываем всегда, даже если денег нет
-    const nextCost = upgradeCost(base, growth, key === "tapPower" ? startLvl - 1 : startLvl);
-    return { count, total, nextCost, lvl };
-  }, [s.clicker, s.coins, buyQty]);
+  /**
+   * Что реально можно купить. want — сколько выбрал ползунок, aff —
+   * сколько хватает монет вообще (по этим делениям ползунок подсвечивает
+   * «доступное». Покупаем меньшее: ручку нарочно можно увести вправо
+   * дальше, чем позволяет кошелёк, — тогда игра честно возьмёт ровно
+   * столько, сколько по карману. cap = 16: дальше цены на телефоне уже
+   * не читаются, а считать их — тратить кадры.
+   */
+  const planBuy = useCallback(
+    (key: (typeof UPGRADES)[number]["key"], base: number, growth: number, want: number, cap = 16) => {
+      const startLvl = s.clicker[key] as number;
+      let coins = s.coins;
+      let lvl = startLvl;
+      let aff = 0;
+      for (let i = 0; i < cap; i++) {
+        const c = upgradeCost(base, growth, key === "tapPower" ? lvl - 1 : lvl);
+        if (coins < c) break;
+        coins -= c;
+        aff++;
+        lvl++;
+      }
+      const count = Math.min(Math.max(1, want), aff);
+      // сумма именно на count уровней: цены растут, умножить нельзя
+      let total = 0;
+      for (let i = 0; i < count; i++) {
+        total += upgradeCost(base, growth, key === "tapPower" ? startLvl + i - 1 : startLvl + i);
+      }
+      const nextCost = upgradeCost(base, growth, key === "tapPower" ? startLvl - 1 : startLvl);
+      return { count, total, aff, nextCost, lvl: startLvl + count };
+    },
+    [s.clicker, s.coins],
+  );
 
   const buy = (key: (typeof UPGRADES)[number]["key"], base: number, growth: number) => {
-    const plan = planBuy(key, base, growth);
+    const plan = planBuy(key, base, growth, take[key] ?? 1);
     if (!plan.count) { sfx.error(); haptic("error"); return; }
     sfx.buy();
     haptic("success");
@@ -501,36 +681,10 @@ export default function Clicker({ onExit }: { onExit: () => void }) {
         <div className="flex-1 scroll px-3" style={{ paddingBottom: "calc(var(--sab) + 24px)" }}>
           {/* Выбор размера покупки. Пользователь просил «выбор на сколько
               прокачать сразу» и итоговую цену — вот он. */}
-          <div
-            className="flex items-center"
-            style={{
-              gap: 3, padding: 3, marginBottom: 10,
-              borderRadius: "var(--r-md)",
-              background: "var(--surface)", border: "1px solid var(--surface-brd)",
-            }}
-          >
-            <span className="t-label" style={{ fontSize: 8.5, padding: "0 8px" }}>{tr("БРАТЬ")}</span>
-            {([1, 10, "max"] as const).map((q) => (
-              <button
-                key={String(q)}
-                type="button"
-                onClick={() => { sfx.click(); haptic("light"); setBuyQty(q); }}
-                className="flex-1 t-label"
-                style={{
-                  padding: "8px 0", borderRadius: "var(--r-sm)", fontSize: 10, border: "none",
-                  background: buyQty === q ? "var(--acc)" : "transparent",
-                  color: buyQty === q ? "var(--acc-ink)" : "var(--text-mute)",
-                  transition: "background .16s, color .16s",
-                }}
-              >
-                {q === "max" ? tr("МАКС") : `×${q}`}
-              </button>
-            ))}
-          </div>
-
-          {UPGRADES.map((u) => {
+                    {UPGRADES.map((u) => {
             const lvl = s.clicker[u.key] as number;
-            const plan = planBuy(u.key, u.base, u.growth);
+            const want = Math.max(1, take[u.key] ?? 1);
+            const plan = planBuy(u.key, u.base, u.growth, want);
             const can = plan.count > 0;
             return (
               <div
@@ -573,29 +727,44 @@ export default function Clicker({ onExit }: { onExit: () => void }) {
                   </span>
                 </div>
 
+                {/* ПОЛЗУНОК УРОВНЕЙ: зажми и веди вправо. Доступные по
+                    карману деления подсвечены, остальные тусклые — видно,
+                    «докуда можно», не считая в уме. */}
+                <LevelSlider
+                  from={lvl + 1}
+                  want={want}
+                  aff={plan.aff}
+                  onChange={(v) => {
+                    if (v !== want) haptic("light");
+                    setTake((d) => ({ ...d, [u.key]: v }));
+                  }}
+                />
+
                 <button
                   type="button"
                   disabled={!can}
                   onClick={() => buy(u.key, u.base, u.growth)}
                   className="w-full flex items-center justify-between"
                   style={{
-                    padding: "11px 13px",
+                    padding: "12px 13px",
                     background: can ? "var(--acc)" : "var(--surface-2)",
-                    color: can ? "var(--acc-ink)" : "var(--text-mute)",
+                    /* «КУПИТЬ +ур» было не видно: серые чернила на серой
+                       плашке. Теперь на неактивной кнопке — обычный текст,
+                       а на активной — чернила акцента, которые считаются из
+                       яркости цвета (в том числе на фиолетовой теме). */
+                    color: can ? "var(--acc-ink)" : "var(--text)",
                     border: "none",
                     borderTop: "1px solid var(--surface-brd)",
                     cursor: can ? "pointer" : "default",
                     transition: "background .16s",
                   }}
                 >
-                  <span className="t-label" style={{ fontSize: 10, letterSpacing: "0.08em" }}>
-                    {/* Если денег не хватает на всю пачку — честно пишем,
-                        сколько уровней получится взять прямо сейчас. */}
+                  <span className="t-label" style={{ fontSize: 11, letterSpacing: "0.06em", color: "inherit" }}>
                     {can
-                      ? `${tr("КУПИТЬ")} +${plan.count} ${tr("УР.")}`
+                      ? `${tr("КУПИТЬ")} ${tr("УР.")} ${lvl + 1}–${lvl + plan.count}`
                       : tr("НЕ ХВАТАЕТ МОНЕТ")}
                   </span>
-                  <span className="t-num inline-flex items-center" style={{ gap: 5, fontSize: 13 }}>
+                  <span className="t-num inline-flex items-center" style={{ gap: 5, fontSize: 13, color: "inherit" }}>
                     <Icon name="coin" size={13} />
                     {fmt(can ? plan.total : plan.nextCost)}
                   </span>
@@ -675,10 +844,11 @@ function drawEvolution(
       const len = r * (0.26 + wob * 0.3);
       const bx = cx + Math.cos(a) * r * 0.97;
       const by = cy + Math.sin(a) * r * 0.97;
-      const fg = ctx.createLinearGradient(bx, by, bx + Math.cos(a) * len, by + Math.sin(a) * len);
-      fg.addColorStop(0, `${st.color}bb`);
-      fg.addColorStop(1, `${st.color}00`);
-      ctx.fillStyle = fg;
+      /* Девять createLinearGradient на кадр — при «lighter» это дорого, а
+         эффект даёт почти незаметный: язык пламени и так тонкий. Цвет +
+         альфа по тому же «wob» выглядят так же и стоят одного fill. */
+      ctx.globalAlpha = 0.5 + wob * 0.45;
+      ctx.fillStyle = st.color;
       ctx.beginPath();
       ctx.moveTo(bx + Math.cos(a + 0.16) * r * 0.1, by + Math.sin(a + 0.16) * r * 0.1);
       ctx.lineTo(bx + Math.cos(a) * len, by + Math.sin(a) * len);
@@ -686,6 +856,7 @@ function drawEvolution(
       ctx.closePath();
       ctx.fill();
     }
+    ctx.globalAlpha = 1;
     ctx.globalCompositeOperation = "source-over";
   }
 

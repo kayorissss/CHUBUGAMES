@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { tr } from "../core/i18n";
 import { AnimatePresence, motion } from "framer-motion";
 import { Panel, Screen, Tap } from "../ui/Glass";
-import Icon from "../ui/Icon";
+import Icon, { type IconName } from "../ui/Icon";
 import ItemIcon from "../ui/ItemIcon";
 import { sfx, haptic } from "../core/fx";
 import { fmt } from "../core/format";
@@ -10,10 +10,11 @@ import { useGame } from "../core/store";
 import { bossStats } from "../core/save";
 import { RARITY_COLOR, RARITY_LABEL } from "../core/content";
 import {
-  FREE_CHIPS, GAMBLE_CASES, SLOT_SYMBOLS, freeChipsIn, freeChipsReady,
-  itemById, readGamble, rollItem, runBattle, slotPayout, spinReel,
-  writeGamble,
-  type GambleCase, type GambleStore, type ItemDef, type SlotSymbol,
+  FREE_CHIPS, GAMBLE_CASES, SLOT_SYMBOLS, freeChipsIn, freeChipsReady, symbolName,
+  ITEMS, itemById, readGamble, rollItem, runBattle, shiftItem, slotPayout, spinReel,
+  fmtOdd, fmtPct, slotOdds,
+  updateGamble,
+  type GambleCase, type GambleSave, type GambleStore, type ItemDef, type SkinKind, type SlotSymbol,
 } from "../core/gamble";
 import Wheel, { wheelStopFeedback } from "../ui/Wheel";
 import {
@@ -23,13 +24,24 @@ import {
 
 type Tab = "farm" | "slots" | "cases" | "battle" | "upgrade" | "stuff";
 
-const TABS: { id: Tab; name: string }[] = [
-  { id: "farm",    name: tr("ФЕРМА") },
-  { id: "slots",   name: tr("СЛОТЫ") },
-  { id: "cases",   name: tr("КЕЙСЫ") },
-  { id: "battle",  name: tr("БАТЛ") },
-  { id: "upgrade", name: tr("АПГРЕЙД") },
-  { id: "stuff",   name: tr("ВЕЩИ") },
+/*
+ * Названия вкладок храним русскими оригиналами, а tr() вызываем в render.
+ * На уровне модуля перевод работать не может: словарь языка ещё не выбран.
+ */
+/*
+ * Названия вкладок храним русскими оригиналами, а tr() вызываем в render:
+ * на уровне модуля перевод всегда возвращал русский, потому что язык в
+ * этот момент ещё не выбран стором.
+ */
+/* Порядок вкладок — по значимости, а не по алфавиту кода: СЛОТЫ первыми
+   (просьба буквальная), ферма — в конец, как второстепенный фарм. */
+const TABS: { id: Tab; name: string; icon: IconName; hint: string }[] = [
+  { id: "slots",   name: "Слоты",    icon: "dice",  hint: "три символа, множители" },
+  { id: "cases",   name: "Кейсы",    icon: "case",  hint: "вскрытие и дроп" },
+  { id: "upgrade", name: "Апгрейд",  icon: "bolt",  hint: "обмен предметов" },
+  { id: "battle",  name: "Батл",     icon: "skull", hint: "кейсы наперегонки" },
+  { id: "stuff",   name: "Вещи",     icon: "gift",  hint: "инвентарь и продажа" },
+  { id: "farm",    name: "Ферма",    icon: "leaf",  hint: "жетоны каплями" },
 ];
 
 /** Значок символа слота */
@@ -54,12 +66,19 @@ export default function Casino({ onBack }: { onBack: () => void }) {
   const [tab, setTab] = useState<Tab>("slots");
   const [g, setG] = useState<GambleStore>(() => readGamble());
 
-  const save = useCallback((patch: Partial<GambleStore>) => {
-    setG((prev) => {
-      const next = { ...prev, ...patch };
-      writeGamble(next);
-      return next;
-    });
+  /*
+   * Единственная точка записи казино.
+   *
+   * Раньше сюда прилетал объект, собранный из `g` — состояния, снятого на
+   * ПОСЛЕДНЕМ РЕНДЕРЕ. Между нажатием и записью у нас таймауты: прокрутка
+   * слотов, 2.6 секунды открытия кейса, раунды батла. За это время
+   * хранилище успевает измениться (вторая кнопка, босс, сундук, автосейв),
+   * и запись «поверх своего снимка» затирает чужое — именно так и пропадают
+   * собранные вещи. Теперь патч — функция от актуального состояния:
+   * read-modify-write происходит в момент записи, а не в момент клика.
+   */
+  const save = useCallback<GambleSave>((patch) => {
+    setG(updateGamble(patch));
   }, []);
 
   /* ── бесплатные жетоны ── */
@@ -71,7 +90,7 @@ export default function Casino({ onBack }: { onBack: () => void }) {
 
   const takeFree = () => {
     if (!freeChipsReady(g)) return;
-    save({ chips: g.chips + FREE_CHIPS, lastFree: Date.now() });
+    save((x) => ({ chips: x.chips + FREE_CHIPS, lastFree: Date.now() }));
     sfx.coin?.();
     haptic("success");
     toast({ title: tr("Жетоны получены"), sub: `+${FREE_CHIPS}`, icon: "coin", tone: "gold" });
@@ -106,6 +125,7 @@ export default function Casino({ onBack }: { onBack: () => void }) {
           и текст «через 3:12». */}
       <Panel
         r="lg"
+        className="pc-chips-bar"
         style={{
           padding: 15, marginBottom: 12,
           border: "1.5px solid var(--gold-brd)",
@@ -163,27 +183,37 @@ export default function Casino({ onBack }: { onBack: () => void }) {
         </div>
       </Panel>
 
-      {/* Вкладки */}
-      <div className="flex" style={{ gap: 6, marginBottom: 14, overflowX: "auto" }}>
-        {TABS.map((t) => (
-          <button
-            key={t.id}
-            type="button"
-            onClick={() => { sfx.click(); setTab(t.id); }}
-            className="t-label shrink-0"
-            style={{
-              padding: "9px 13px",
-              borderRadius: "var(--r-sm)",
-              fontSize: 10,
-              background: tab === t.id ? "var(--acc)" : "var(--btn-bg)",
-              color: tab === t.id ? "var(--acc-ink)" : "var(--text-mute)",
-              border: `1px solid ${tab === t.id ? "var(--acc)" : "var(--btn-brd)"}`,
-            }}
-          >
-            {t.name}
-          </button>
-        ))}
-      </div>
+      {/*
+        * Вкладки казино — СЛЕВА, той же панелью, что и в Настройках
+        * (.pc-rail). Просьба: «стиль другой и отличается от всех… вкладки
+        * надо поставить тоже слева… текст на вкладках починить, он сливается».
+        * Три правки сразу: раскладка как у всех, подпись в --text вместо
+        * выцветшего mute, и строка-пояснение под именем — без неё «АПГРЕЙД»
+        * и «БАТЛ» были загадкой.
+        */}
+      <div className="pc-split pc-cas-split">
+      <nav className="pc-rail" role="tablist" aria-label={tr("Разделы казино")}>
+        {TABS.map((t) => {
+          const on = tab === t.id;
+          return (
+            <button
+              key={t.id}
+              type="button"
+              role="tab"
+              aria-selected={on}
+              className={`pc-rail-item ${on ? "on" : ""}`}
+              onClick={() => { sfx.click(); setTab(t.id); }}
+            >
+              <span className="pc-rail-ico"><Icon name={t.icon} size={15} /></span>
+              <span className="pc-rail-txt">
+                <span className="pc-rail-label">{tr(t.name)}</span>
+                <span className="pc-rail-hint">{tr(t.hint)}</span>
+              </span>
+            </button>
+          );
+        })}
+      </nav>
+      <div className="pc-rail-body">
 
       <AnimatePresence mode="wait">
         <motion.div
@@ -193,7 +223,7 @@ export default function Casino({ onBack }: { onBack: () => void }) {
           exit={{ opacity: 0, y: -6 }}
           transition={{ duration: 0.18 }}
         >
-          {tab === "farm"    && <ChipFarm g={g} save={save} />}
+          {tab === "farm"    && <ChipFarm save={save} onTab={setTab} />}
           {tab === "slots"   && <Slots g={g} save={save} />}
           {tab === "cases"   && <Cases g={g} save={save} />}
           {tab === "battle"  && <Battle g={g} save={save} />}
@@ -201,6 +231,8 @@ export default function Casino({ onBack }: { onBack: () => void }) {
           {tab === "stuff"   && <Stuff g={g} save={save} />}
         </motion.div>
       </AnimatePresence>
+      </div>
+      </div>
     </Screen>
   );
 }
@@ -210,95 +242,145 @@ export default function Casino({ onBack }: { onBack: () => void }) {
 const BETS = [10, 25, 50, 100, 250];
 
 /**
- * Слоты.
- *
- * Что было не так (жалоба «скудная анимация, непонятно выиграл или нет»):
- *   1. РЕАЛЬНЫЙ БАГ, а не оформление. Пара младших символов платит меньше
- *      ставки (бургер ×0.5, зуб ×0.7, болт ×0.9), но экран всё равно
- *      писал зелёное «+N жетонов». Расчётом: 42.3 % всех спинов
- *      показывали «выигрыш», после которого жетонов становилось МЕНЬШЕ.
- *      Игрок видел зелёный плюс и терял баланс — отсюда «непонятно».
- *      Теперь считаем ЧИСТЫЙ результат (выплата минус ставка) и красим
- *      по нему: плюс зелёным, возврат части ставки — жёлтым «вернулось»,
- *      ноль — серым. В плюс реально уходит 11.9 % спинов.
- *   2. Барабаны просто меняли иконку каждые 70 мс. Теперь лента символов
- *      едет вертикально и тормозит на своём барабане, а выигрышные
- *      подсвечиваются рамкой и вспышкой.
+ * Ставка «не только кнопками»: нижняя и верхняя границы. Минимум — 5, чтобы
+ * «своя ставка» не превращалась в спин за 1 жетон (анимация длиннее, чем
+ * смысл), максимум — чтобы опечатка в «999999» не съела весь кошелёк с одного
+ * нажатия: не больше половины запаса и не больше 5 000.
  */
-function Slots({ g, save }: { g: GambleStore; save: (p: Partial<GambleStore>) => void }) {
+const BET_MIN = 5;
+const BET_MAX_CAP = 5000;
+
+/** Шансы считаются из весов символа (core/gamble.ts), а не переписаны сюда */
+const ODDS = slotOdds();
+
+/**
+ * СЛОТЫ.
+ *
+ * Просьба: «Слоты должны выглядеть как реальное казино: шик, чтобы видно
+ * было, что лента листается, и чтобы символам были подписи».
+ *
+ * Что было: три плашки, в которых каждые 60 мс менялась одна иконка. Это не
+ * «листается» — это мигающие картинки; и подписи отсутствовали, поэтому
+ * таблица выплат читалась как набор цифр без языка.
+ *
+ * Что стало:
+ *   1. Настоящая лента: у каждого барабана свой столбец символов, он едет
+ *      сверху вниз и тормозит на своём символе (у барабанов разная длина —
+ *      30/34/38 позиций, поэтому они останавливаются по очереди, как в
+ *      живом автомате, а не все разом).
+ *   2. Видно три строки: целевая по центру в светлом «окне», соседние —
+ *      затемнённые. Линия выплат поперёк окна.
+ *   3. Под каждым символом — его имя; те же имена в таблице выплат, рядом с
+ *      множителями.
+ *   4. «Шик»: тёмное сукно, золотая рамка с внутренним бликом, подсветка
+ *      сверху, вспышка на выигрышных барабанах, счётчик последних исходов
+ *      (чтобы полоса результата не была единственной подсказкой).
+ *   5. Честный итог: считаем ЧИСТЫЙ результат (выплата минус ставка) —
+ *      игрок видел зелёный плюс и терял жетоны; теперь плюс зелёным, частичный
+ *      возврат — жёлтым «вернулось», мимо — серым «−ставка».
+ */
+function Slots({ g, save }: { g: GambleStore; save: GambleSave }) {
   const [bet, setBet] = useState(25);
+  /** своё число в поле ставки, пока игрок набирает */
+  const [custom, setCustom] = useState("");
+  /** открыта ли справка с шансами (кнопка «?») */
+  const [showOdds, setShowOdds] = useState(false);
+  const betMax = Math.max(BET_MIN, Math.min(BET_MAX_CAP, Math.floor(g.chips / 2) || BET_MIN));
+
+  const setCustomBet = (raw: string) => {
+    const only = raw.replace(/[^0-9]/g, "").slice(0, 5);
+    setCustom(only);
+    const n = parseInt(only, 10);
+    if (Number.isFinite(n) && n > 0) setBet(Math.max(BET_MIN, Math.min(betMax, n)));
+  };
+  /** длина ленты каждого барабана: разная — поэтому остановка по очереди */
+  const LEN = [30, 34, 38];
+  const [pos, setPos] = useState<number[]>([0, 0, 0]);
+  const [strips, setStrips] = useState<SlotSymbol[][]>([[], [], []]);
   const [reels, setReels] = useState<SlotSymbol[]>(["burger", "tooth", "bolt"]);
   /** null — ещё не крутили; иначе итог последнего спина */
   const [res, setRes] = useState<{ pay: number; net: number; kind: "trip" | "pair" | "miss"; sym: SlotSymbol | null } | null>(null);
   const [spinning, setSpinning] = useState(false);
-  /** какие барабаны уже встали — для поочерёдной остановки */
-  const [stopped, setStopped] = useState([true, true, true]);
+  /** чем кончались последние спины — маленькая бегущая строка казино */
+  const [hist, setHist] = useState<{ net: number; sym: SlotSymbol | null }[]>([]);
   const timers = useRef<number[]>([]);
+  const posRef = useRef(pos);
+  posRef.current = pos;
+  const endedRef = useRef(0);
 
   useEffect(() => () => { timers.current.forEach((t) => { clearTimeout(t); clearInterval(t); }); }, []);
+
+  /** один барабан: едет, пока не дойдёт до своего символа */
+  const runReel = (i: number, onEnd: () => void) => {
+    const tick = () => {
+      const left = LEN[i] - 1 - posRef.current[i];
+      if (left <= 0) {
+        sfx.tap?.();
+        haptic("light");
+        onEnd();
+        return;
+      }
+      setPos((prev) => {
+        const n = [...prev];
+        // последние три позиции — торможение: лента «оседает» на символе
+        n[i] = Math.min(LEN[i] - 1, n[i] + 1);
+        return n;
+      });
+      const speed = left <= 3 ? 120 + (4 - left) * 90 : 40;
+      timers.current.push(window.setTimeout(tick, speed));
+    };
+    tick();
+  };
 
   const spin = () => {
     if (spinning || g.chips < bet) return;
     timers.current.forEach((t) => { clearTimeout(t); clearInterval(t); });
     timers.current = [];
 
+    const final: SlotSymbol[] = [spinReel(), spinReel(), spinReel()];
+    // лента: случайные символы, последний — итоговый
+    setStrips(final.map((f, i) => {
+      const arr = Array.from({ length: LEN[i] - 1 }, () => spinReel());
+      arr.push(f);
+      return arr;
+    }));
+    setPos([0, 0, 0]);
+    posRef.current = [0, 0, 0];
+    setReels(final);
     setSpinning(true);
     setRes(null);
-    setStopped([false, false, false]);
     sfx.click();
     haptic("light");
 
-    const final: SlotSymbol[] = [spinReel(), spinReel(), spinReel()];
+    endedRef.current = 0;
+    for (let i = 0; i < 3; i++) runReel(i, finish);
 
-    // Лента крутится, пока барабан не остановлен
-    const iv = window.setInterval(() => {
-      setReels((prev) => prev.map((cur, i) => (stoppedRef.current[i] ? cur : spinReel())));
-    }, 60);
-    timers.current.push(iv);
+    function finish() {
+      endedRef.current += 1;
+      if (endedRef.current < 3) return;
+      const pay = slotPayout(final, bet);
+      const net = pay - bet;
+      const trip = final[0] === final[1] && final[1] === final[2];
+      const pairSym = final[0] === final[1] ? final[0]
+        : final[1] === final[2] ? final[1]
+        : final[0] === final[2] ? final[0] : null;
+      const kind = trip ? "trip" : pairSym ? "pair" : "miss";
+      const sym = trip ? final[0] : pairSym;
 
-    [560, 900, 1260].forEach((ms, i) => {
-      const t = window.setTimeout(() => {
-        stoppedRef.current[i] = true;
-        setStopped((prev) => { const n = [...prev]; n[i] = true; return n; });
-        setReels((prev) => { const n = [...prev]; n[i] = final[i]; return n; });
-        sfx.tap?.();
-        haptic("light");
+      setRes({ pay, net, kind, sym });
+      setSpinning(false);
+      setHist((h) => [{ net, sym }, ...h].slice(0, 6));
+      save((x) => ({
+        chips: x.chips - bet + pay,
+        spins: x.spins + 1,
+        won: pay > 0 ? x.won + pay : x.won,
+        lost: x.lost + bet,
+      }));
 
-        if (i === 2) {
-          clearInterval(iv);
-          const pay = slotPayout(final, bet);
-          const net = pay - bet;
-          const trip = final[0] === final[1] && final[1] === final[2];
-          const pairSym = final[0] === final[1] ? final[0]
-            : final[1] === final[2] ? final[1]
-            : final[0] === final[2] ? final[0] : null;
-
-          setRes({
-            pay,
-            net,
-            kind: trip ? "trip" : pairSym ? "pair" : "miss",
-            sym: trip ? final[0] : pairSym,
-          });
-          setSpinning(false);
-
-          save({
-            chips: g.chips - bet + pay,
-            spins: g.spins + 1,
-            won: pay > 0 ? g.won + pay : g.won,
-            lost: g.lost + bet,
-          });
-
-          if (net > 0) { sfx.crit?.(); haptic("success"); }
-          else { haptic("light"); }
-        }
-      }, ms);
-      timers.current.push(t);
-    });
+      if (net > 0) { sfx.crit?.(); haptic("success"); }
+      else { haptic("light"); }
+    }
   };
-
-  // ref, чтобы интервал видел актуальные остановки без пересоздания
-  const stoppedRef = useRef([true, true, true]);
-  useEffect(() => { stoppedRef.current = stopped; }, [stopped]);
 
   /** какие барабаны входят в комбинацию — их подсвечиваем */
   const litReel = (i: number) => {
@@ -311,77 +393,60 @@ function Slots({ g, save }: { g: GambleStore; save: (p: Partial<GambleStore>) =>
     : res.pay > 0 ? "part"
     : "miss";
 
-  const toneColor = tone === "win" ? "var(--ok)"
-    : tone === "part" ? "var(--warn)"
-    : "var(--text-mute)";
-
   return (
     <>
-      <Panel r="lg" style={{ padding: 16, marginBottom: 12 }}>
-        {/* Барабаны */}
-        <div className="flex" style={{ gap: 8, marginBottom: 14 }}>
-          {reels.map((r, i) => (
-            <div
-              key={i}
-              className="flex-1 relative overflow-hidden"
-              style={{
-                height: 92,
-                borderRadius: "var(--r-md)",
-                background: "var(--surface-2)",
-                border: `1.5px solid ${litReel(i) ? toneColor : "var(--btn-brd)"}`,
-                boxShadow: litReel(i) ? `0 0 0 2px color-mix(in srgb, ${toneColor} 26%, transparent)` : "none",
-                transition: "border-color .18s, box-shadow .18s",
-              }}
-            >
-              {/* вспышка на выигрышном барабане */}
-              <AnimatePresence>
-                {litReel(i) && (
-                  <motion.div
-                    className="absolute inset-0"
-                    initial={{ opacity: 0.5 }}
-                    animate={{ opacity: 0 }}
-                    exit={{ opacity: 0 }}
-                    transition={{ duration: 0.5 }}
-                    style={{ background: toneColor, pointerEvents: "none" }}
-                  />
-                )}
-              </AnimatePresence>
+      {/* ── автомат ── */}
+      <div className={`pc-slot ${tone === "win" ? "win" : ""}`}>
+        <div className="pc-slot-top">
+          <span className="t-label">{tr("СЛОТЫ «ЧУБКОЙ»")}</span>
+          <button
+            type="button"
+            className={`pc-slot-help ${showOdds ? "on" : ""}`}
+            aria-expanded={showOdds}
+            title={tr("Шансы и выплаты")}
+            onClick={() => { sfx.click(); setShowOdds((v) => !v); }}
+          >
+            ?
+          </button>
+          <span className="pc-slot-chips">
+            <Icon name="ticket" size={12} />
+            <b className="t-num">{fmt(g.chips)}</b>
+          </span>
+        </div>
 
-              <div className="absolute inset-0 flex items-center justify-center">
-                <motion.div
-                  key={`${i}-${r}-${stopped[i]}`}
-                  initial={stopped[i] ? { y: -34, opacity: 0.25 } : { y: -30, opacity: 0.35 }}
-                  animate={{ y: 0, opacity: 1 }}
-                  transition={stopped[i]
-                    ? { type: "spring", stiffness: 420, damping: 24 }
-                    : { duration: 0.06, ease: "linear" }}
-                >
-                  <SlotGlyph id={r} />
-                </motion.div>
+        <div className="pc-slot-window">
+          <span className="pc-slot-payline" aria-hidden />
+          {[0, 1, 2].map((i) => (
+            <div key={i} className={`pc-slot-reel ${litReel(i) ? "lit" : ""}`}>
+              <div
+                className="pc-slot-strip"
+                style={{ transform: `translateY(calc(var(--cell) * ${-pos[i] + 1}))` }}
+              >
+                {strips[i].map((sym, k) => (
+                  <div key={k} className="pc-slot-cell">
+                    <SlotGlyph id={sym} size={34} />
+                    <span className="pc-slot-cap">{tr(symbolName(sym))}</span>
+                  </div>
+                ))}
               </div>
+              {litReel(i) && <span className="pc-slot-flash" aria-hidden />}
             </div>
           ))}
         </div>
 
-        {/* Результат: честный, по чистому итогу */}
-        <div style={{ minHeight: 46, marginBottom: 12 }}>
+        {/* исход спина — по чистому результату, а не по «красивому плюсу» */}
+        <div className="pc-slot-out">
           <AnimatePresence mode="wait">
-            {res && (
+            {res ? (
               <motion.div
                 key={`${res.pay}-${res.net}`}
                 initial={{ opacity: 0, y: 8, scale: 0.96 }}
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0 }}
                 transition={{ type: "spring", stiffness: 380, damping: 26 }}
-                className="flex items-center justify-center"
-                style={{
-                  gap: 9, padding: "9px 12px", borderRadius: "var(--r-sm)",
-                  background: tone === "miss" ? "var(--surface-2)"
-                    : `color-mix(in srgb, ${toneColor} 15%, var(--surface-2))`,
-                  border: `1px solid ${tone === "miss" ? "var(--btn-brd)" : toneColor}`,
-                }}
+                className={`pc-slot-res ${tone}`}
               >
-                <span className="t-title-sm clip1" style={{ color: toneColor, fontSize: 14 }}>
+                <span className="t-title-sm clip1">
                   {res.net > 0
                     ? `${tr("ВЫИГРЫШ")} +${fmt(res.net)}`
                     : res.pay > 0
@@ -389,266 +454,576 @@ function Slots({ g, save }: { g: GambleStore; save: (p: Partial<GambleStore>) =>
                       : `${tr("Мимо")} −${fmt(bet)}`}
                 </span>
                 {res.kind !== "miss" && (
-                  <span className="t-caption shrink-0" style={{ fontSize: 10 }}>
-                    {res.kind === "trip" ? tr("ТРОЙКА") : tr("ПАРА")}
+                  <span className="t-caption">
+                    {res.kind === "trip" ? tr("ТРОЙКА") : tr("ПАРА")} · {tr(symbolName(res.sym!))}
                   </span>
                 )}
               </motion.div>
+            ) : (
+              <span className="pc-slot-idle t-label">
+                {spinning ? tr("ЛЕНТА ИДЁТ…") : tr("СТАВКА ВЫБРАНА — КРУТИ")}
+              </span>
             )}
           </AnimatePresence>
+
+          {hist.length > 0 && (
+            <span className="pc-slot-hist" title={tr("последние спины")}>
+              {hist.map((h, i) => (
+                <b key={i} className={`t-num ${h.net > 0 ? "up" : h.net < 0 ? "down" : "flat"}`}>
+                  {h.net > 0 ? "+" : ""}{fmt(h.net)}
+                </b>
+              ))}
+            </span>
+          )}
         </div>
 
-        {/* Ставка */}
-        <div className="t-label" style={{ fontSize: 9, marginBottom: 6 }}>{tr("СТАВКА")}</div>
-        <div className="flex" style={{ gap: 6, marginBottom: 12 }}>
-          {BETS.map((b) => (
-            <button
-              key={b}
-              type="button"
-              disabled={spinning}
-              onClick={() => { sfx.click(); setBet(b); }}
-              className="t-num flex-1"
-              style={{
-                padding: "9px 0", borderRadius: "var(--r-sm)", fontSize: 12,
-                background: bet === b ? "var(--acc)" : "var(--btn-bg)",
-                color: bet === b ? "var(--acc-ink)" : "var(--text-mute)",
-                border: `1px solid ${bet === b ? "var(--acc)" : "var(--btn-brd)"}`,
-                opacity: g.chips < b ? 0.45 : 1,
-              }}
-            >
-              {b}
-            </button>
-          ))}
-        </div>
-
-        <Tap
-          onClick={spin}
-          accent r="md" center
-          className="w-full py-3.5 t-title"
-          style={{ fontSize: 14, opacity: spinning || g.chips < bet ? 0.5 : 1 }}
-          sound="power"
-        >
-          {spinning ? tr("КРУТИТСЯ…") : g.chips < bet ? tr("НЕ ХВАТАЕТ ЖЕТОНОВ") : `${tr("КРУТИТЬ ЗА")} ${bet}`}
-        </Tap>
-      </Panel>
-
-      {/* Таблица выплат: с честной пометкой, что младшая пара — это возврат части ставки */}
-      <Panel r="lg" style={{ padding: 14 }}>
-        <div className="t-label" style={{ marginBottom: 10 }}>{tr("Выплаты")}</div>
-        <div className="flex items-center" style={{ gap: 10, paddingBottom: 6 }}>
-          <span style={{ width: 18 }} />
-          <span className="t-caption flex-1" style={{ fontSize: 9.5 }}>{tr("три подряд")}</span>
-          <span className="t-caption shrink-0" style={{ fontSize: 9.5, width: 62, textAlign: "right" }}>{tr("пара")}</span>
-        </div>
-        {SLOT_SYMBOLS.map((s) => (
-          <div
-            key={s.id}
-            className="flex items-center"
-            style={{ gap: 10, padding: "6px 0", borderTop: "1px solid var(--surface-brd)" }}
-          >
-            <SlotGlyph id={s.id} size={18} />
-            <span className="t-num flex-1" style={{ fontSize: 12, color: "var(--ok)" }}>×{s.pay3}</span>
-            <span
-              className="t-num shrink-0"
-              style={{
-                fontSize: 12, width: 62, textAlign: "right",
-                color: s.pay2 >= 1 ? "var(--ok)" : "var(--warn)",
-              }}
-            >
-              ×{s.pay2}
+        {/* ставка */}
+        <div className="pc-slot-bets">
+          <span className="t-label">{tr("СТАВКА")}</span>
+          <div className="pc-slot-betrow">
+            {BETS.map((b) => (
+              <button
+                key={b}
+                type="button"
+                disabled={spinning}
+                onClick={() => { sfx.click(); setBet(b); }}
+                className={`pc-slot-bet t-num ${bet === b ? "on" : ""}`}
+                style={{ opacity: g.chips < b ? 0.45 : 1 }}
+                title={`${tr("поставить")} ${b}`}
+              >
+                {b}
+              </button>
+            ))}
+            {/* Своя ставка: «ставить можно не только автоматом, но и самому
+                писать» — поле рядом с чипами, со стрелками −/+ и подсказкой
+                о пределах. Оно не спорит с чипами: кнопка ставит ровно то,
+                что набрано. */}
+            <span className="pc-slot-bet-custom">
+              <button
+                type="button"
+                className="pc-slot-bet-step t-num"
+                disabled={spinning}
+                onClick={() => { sfx.click(); setCustom(""); setBet(Math.max(BET_MIN, bet - 5)); }}
+                aria-label={tr("уменьшить ставку")}
+              >−</button>
+              <input
+                className="pc-slot-bet-input t-num"
+                inputMode="numeric"
+                value={custom || String(bet)}
+                disabled={spinning}
+                onChange={(e) => setCustomBet(e.target.value)}
+                onBlur={() => setCustom("")}
+                aria-label={tr("Своя ставка")}
+                title={`${tr("от")} ${BET_MIN} ${tr("до")} ${betMax}`}
+              />
+              <button
+                type="button"
+                className="pc-slot-bet-step t-num"
+                disabled={spinning}
+                onClick={() => { sfx.click(); setCustom(""); setBet(Math.min(betMax, bet + 5)); }}
+                aria-label={tr("увеличить ставку")}
+              >+</button>
             </span>
           </div>
-        ))}
+        </div>
+
+        <button
+          type="button"
+          className="pc-slot-go"
+          onClick={spin}
+          disabled={spinning || g.chips < bet}
+        >
+          <Icon name="dice" size={15} />
+          {spinning ? tr("КРУТИТСЯ…") : g.chips < bet ? tr("НЕ ХВАТАЕТ ЖЕТОНОВ") : `${tr("КРУТИТЬ ЗА")} ${bet}`}
+        </button>
+      </div>
+
+      {/* ── справки: выплаты + настоящие шансы, по кнопке «?» ──
+          Раньше таблица висела под автоматом всегда и занимала пол-экрана,
+          а вероятностей в ней не было вообще. Теперь это сворачиваемая
+          панель, и в каждой строке — шанс на спин, «1 к N» и вклад символа
+          в возврат. Считается по весам (core/gamble.ts), поэтому не врёт. */}
+      <AnimatePresence initial={false}>
+      {showOdds && (
+      <motion.div
+        initial={{ opacity: 0, y: -8 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: -8 }}
+        transition={{ duration: 0.18 }}
+      >
+      <Panel r="lg" style={{ padding: 14 }}>
+        <div className="t-label" style={{ marginBottom: 10 }}>{tr("Выплаты и шансы")}</div>
+        <div className="pc-slot-odds-sum">
+          <span className="t-caption">{tr("тройка хоть какого символа")}</span>
+          <b className="t-num">{fmtPct(ODDS.anyTripPct)} · {fmtOdd(ODDS.anyTripPct)}</b>
+          <span className="t-caption">{tr("пара")}</span>
+          <b className="t-num">{fmtPct(ODDS.anyPairPct)} · {fmtOdd(ODDS.anyPairPct)}</b>
+          <span className="t-caption">{tr("возврат игроку (RTP)")}</span>
+          <b className="t-num" style={{ color: ODDS.rtpPct >= 100 ? "var(--ok)" : "var(--warn)" }}>{ODDS.rtpPct.toFixed(1).replace(".", ",")} %</b>
+        </div>
+        <div className="pc-slot-odds-head">
+          <span style={{ width: 18 }} />
+          <span className="t-caption">{tr("символ")}</span>
+          <span className="t-caption">{tr("три подряд")}</span>
+          <span className="t-caption">{tr("шанс тройки")}</span>
+          <span className="t-caption">{tr("пара")}</span>
+          <span className="t-caption">{tr("шанс пары")}</span>
+        </div>
+        {SLOT_SYMBOLS.map((sy) => {
+          const row = ODDS.rows.find((r) => r.id === sy.id)!;
+          return (
+            <div key={sy.id} className="pc-slot-odds-row">
+              <SlotGlyph id={sy.id} size={18} />
+              <span className="t-body clip1" style={{ fontSize: 11 }}>{tr(sy.name)}</span>
+              <span className="t-num ok-num">×{sy.pay3}</span>
+              <span className="t-num dim-num">{fmtPct(row.tripPct)}</span>
+              <span className="t-num" style={{ color: sy.pay2 >= 1 ? "var(--ok)" : "var(--warn)" }}>×{sy.pay2}</span>
+              <span className="t-num dim-num">{fmtPct(row.pairPct)}</span>
+            </div>
+          );
+        })}
         <div className="t-caption" style={{ marginTop: 9, lineHeight: 1.5 }}>
           {tr("Жёлтая пара платит меньше ставки — часть жетонов возвращается, но спин всё равно в минус.")}
         </div>
       </Panel>
+      </motion.div>
+      )}
+      </AnimatePresence>
     </>
   );
 }
 
 /* ═══════════════════════════ КЕЙСЫ ═══════════════════════════ */
 
-function Cases({ g, save }: { g: GambleStore; save: (p: Partial<GambleStore>) => void }) {
+/** куда надевается украшение — общий справочник (нужен и в кейсах, и в «Вещах») */
+const ITEM_KIND_LABEL: Record<SkinKind, string> = {
+  hat: tr("на голову"),
+  glasses: tr("на лицо"),
+  chain: tr("на шею"),
+  aura: tr("вокруг героя"),
+  pet: tr("рядом с героем"),
+};
+
+
+
+function Cases({ g, save }: { g: GambleStore; save: GambleSave }) {
   /*
    * Удача главного друга реально влияет на дроп. В карточке друга давно
    * написано «+N% к редким дропам», но число никуда не передавалось —
    * теперь оно идёт в rollItem и двигает шансы rare/epic/legend.
+   *
+   * Что переделано и почему (претензии: «кейсы не выглядят как кейсы»,
+   * «модалка мелкая и неудобная, шансы нечитаемы», «вещи непонятны»):
+   *
+   *   1. Кейс теперь ВЫГЛЯД как кейс: алюминиевый корпус с бликом, ручка,
+   *      замок-защёлка, уголки и цветная подсветка «начинки» по редкости.
+   *      Раньше это была строка: серая иконка 44 px, название и цена.
+   *   2. Клик по кейсу больше НЕ СПИСЫВАЕТ жетоны. Он открывает просмотр
+   *      содержимого, и только кнопка «ОТКРЫТЬ ЗА N» покупает. Попадание
+   *      курсором мимо «ОТКРЫТЬ» стоило 200–800 жетонов, и это выглядело
+   *      как обман.
+   *   3. Модалка — широкая (до 60rem), в две колонки: слева лента/итог,
+   *      справа полный список содержимого с крупными процентами и именами
+   *      вещей. Мелкий квадрат max-w-sm с одной полоской-прокруткой был
+   *      ровно тем «неудобным и нечитаемым».
+   *   4. Проценты — числом, а не только полоской, и с пометкой, куда
+   *      влияет удача друга.
    */
   const { s: save0 } = useGame();
   const luck = bossStats(save0).luckBonus;
   const [opening, setOpening] = useState<GambleCase | null>(null);
   const [got, setGot] = useState<ItemDef | null>(null);
   const [roll, setRoll] = useState<ItemDef[]>([]);
+  /**
+   * Лента в покое — просто витрина: она генерируется ОДИН раз при открытии
+   * просмотра. Генерировать её прямо в render было бы дёрганьем (новое
+   * случайное содержимое на каждое наведение курсора).
+   */
+  const [armed, setArmed] = useState(false);
+  /**
+   * Шансы — по кнопке «?», а не постоянно в модалке (претензия 1.28:
+   * «шансы занимают больше всего места»). Список содержимого остаётся,
+   * проценты доезжают сверху.
+   */
+  const [odds, setOdds] = useState(false);
+  const [spinning, setSpinning] = useState(false);
+  /**
+   * ЛЕНТА. 46 ячеек, призовая — 41-я: разгон 4,4 с, торможение на последней
+   * трети, остановка чувствуется (просьба: «крутилка не баганная, а нормальная
+   * и большая»). Результат показываем СРАЗУ как лента встала — раньше между
+   * остановкой и карточкой висел лишний таймаут, и выглядело это как «жду 20
+   * секунд» (в коде 2600 мс, плюс ожидание анимации: вместе — вечность).
+   */
+  const PRIZE_AT = 41;
+  const ROLL_LEN = 46;
+  const SPIN_MS = 4400;
+  /** приз текущего спина: «пропустить» обязан посадить ленту на НЕГО */
+  const prizeRef = useRef<ItemDef | null>(null);
+  /** игрок нажал «пропустить» — короткий доезд вместо длинного разгона */
+  const [skip, setSkip] = useState(false);
+  const timers = useRef<number[]>([]);
 
-  const open = (c: GambleCase) => {
-    if (g.chips < c.price || opening) return;
-    const prize = rollItem(c, luck);
-    // лента прокрутки: случайные предметы, приз — предпоследний
-    const strip = Array.from({ length: 26 }, () => rollItem(c, luck));
-    strip[22] = prize;
-    setRoll(strip);
+  useEffect(() => () => { timers.current.forEach((t) => window.clearTimeout(t)); }, []);
+
+  /** просмотр кейса: никаких списаний, только содержимое и шанс */
+  const look = (c: GambleCase) => {
+    sfx.click();
+    haptic("light");
     setOpening(c);
+    setOdds(false);
     setGot(null);
-    save({ chips: g.chips - c.price });
+    setRoll(Array.from({ length: ROLL_LEN }, () => rollItem(c, luck)));
+    setSkip(false);
+    setArmed(false);
+    setSpinning(false);
+  };
+
+  const close = () => {
+    timers.current.forEach((t) => window.clearTimeout(t));
+    timers.current = [];
+    setSpinning(false);
+    setOpening(null);
+    setGot(null);
+  };
+
+  /** выдача приза — одна и та же на обычный конец ленты и на «пропустить» */
+  const land = (prize: ItemDef) => {
+    setSpinning(false);
+    setGot(prize);
+    // приз кладём в АКТУАЛЬНЫЙ инвентарь (см. core/gamble.ts)
+    save((x) => ({ items: shiftItem(x, prize.id, 1) }));
+    sfx.legend?.();
+    haptic("success");
+  };
+
+  /** «Пропустить»: короткий доезд до той же ячейки, обещанный приз не меняется */
+  const fastForward = () => {
+    if (!spinning) return;
+    timers.current.forEach((t) => window.clearTimeout(t));
+    timers.current = [];
+    setSkip(true);
+    setArmed(true);
+    const prize = prizeRef.current;
+    if (prize) timers.current.push(window.setTimeout(() => land(prize), 340));
+  };
+
+  /** покупка и прокрутка */
+  const buy = (c: GambleCase) => {
+    if (g.chips < c.price || spinning) return;
+    const prize = rollItem(c, luck);
+    prizeRef.current = prize;
+    // в уже показанной витрине меняем только призовую ячейку — лента
+    // продолжается туда, куда игрок уже смотрит
+    setRoll((prev) => {
+      const strip = prev.length === ROLL_LEN ? [...prev] : Array.from({ length: ROLL_LEN }, () => rollItem(c, luck));
+      strip[PRIZE_AT] = prize;
+      return strip;
+    });
+    setGot(null);
+    setSkip(false);
+    setSpinning(true);
+    // ленту возвращаем в ноль БЕЗ анимации, иначе она «уедет» обратно на глазах
+    setArmed(false);
+    save((x) => ({ chips: Math.max(0, x.chips - c.price) }));
     sfx.click();
     haptic("light");
 
-    window.setTimeout(() => {
-      setGot(prize);
-      save({
-        chips: g.chips - c.price,
-        items: { ...g.items, [prize.id]: (g.items[prize.id] || 0) + 1 },
-      });
-      sfx.legend?.();
-      haptic("success");
-    }, 2600);
+    timers.current.push(window.setTimeout(() => setArmed(true), 50));
+
+    /* Тики: 14 штук с нарастающим интервалом. Это таймауты, а не rAF, —
+       интерфейс за них не перерисовывается и кадры не съедает. */
+    for (let i = 0; i < 14; i++) {
+      const t = 140 + Math.pow(i / 13, 2.1) * (SPIN_MS - 260);
+      timers.current.push(window.setTimeout(() => sfx.wheelTick?.(), t));
+    }
+    timers.current.push(window.setTimeout(() => land(prize), SPIN_MS + 80));
   };
+
+  // Esc закрывает просмотр — как и везде в приложении
+  useEffect(() => {
+    if (!opening) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      e.stopPropagation();
+      timers.current.forEach((t) => window.clearTimeout(t));
+      timers.current = [];
+      setSpinning(false);
+      setOpening(null);
+      setGot(null);
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [opening]);
 
   return (
     <>
-      {GAMBLE_CASES.map((c) => (
-        <Panel key={c.id} r="lg" style={{ padding: 14, marginBottom: 10 }}>
-          <div className="flex items-center" style={{ gap: 12, marginBottom: 12 }}>
-            <span
-              className="shrink-0 flex items-center justify-center"
-              style={{
-                width: 44, height: 44, borderRadius: "var(--r-sm)",
-                background: "var(--surface-2)", border: "1px solid var(--btn-brd)",
-              }}
-            >
-              <Icon name="case" size={21} />
+      <div className="pc-cases">
+        {GAMBLE_CASES.map((c) => (
+          <button key={c.id} type="button" className="pc-case" onClick={() => look(c)}>
+            {/* сам чемодан: корпус, блик, ручка, замок, уголки, подсветка
+                начинки — всё на CSS, без растровой картинки */}
+            <span className="pc-case-art" aria-hidden style={{ ["--tint" as never]: c.tint }}>
+              <span className="pc-case-glow" />
+              <span className="pc-case-handle" />
+              <span className="pc-case-body">
+                <span className="pc-case-seam" />
+                <span className="pc-case-lock" />
+                {/* номер ступени + иконка: десять одинаковых чемоданов без
+                    номеров превращаются в кашу, а линейка читается именно
+                    по ступеням */}
+                <span className="pc-case-plate t-display">{c.tier}</span>
+                <span className="pc-case-mark">
+                  <Icon name={c.icon} size={15} />
+                </span>
+              </span>
+              <span className="pc-case-corner c1" />
+              <span className="pc-case-corner c2" />
+              <span className="pc-case-corner c3" />
+              <span className="pc-case-corner c4" />
             </span>
-            <span className="flex-1 min-w-0">
-              <span className="t-title-sm block">{c.name}</span>
-              <span className="t-caption block" style={{ marginTop: 2 }}>
-                легенда {(c.odds.legend * 100).toFixed(1)}%
+
+            <span className="pc-case-info">
+              <span className="t-label pc-case-kicker">
+                {tr("КЕЙС")} {c.tier}
+                <b className="pc-case-tag">{tr(c.tag)}</b>
+              </span>
+              <span className="t-title-sm pc-case-name clip1">{c.name}</span>
+              {/* Проценты с карточек убраны: на десяти плитках три строки
+                  шансов съедали больше места, чем сам кейс (претензия
+                  «шансы занимают больше всего места»). Они — под «?» в
+                  модалке, а здесь осталась полоса редкостей и потолок. */}
+              <span className="t-caption pc-case-jackpot">
+                {tr("макс. ценность")} <b className="t-num">{fmt(c.jackpot)}</b>
+              </span>
+              <span className="pc-case-bar">
+                {(["common", "rare", "epic", "legend"] as const).map((r) => (
+                  <i key={r} style={{ width: `${c.odds[r] * 100}%`, background: RARITY_COLOR[r] }} />
+                ))}
               </span>
             </span>
-            <Tap
-              onClick={() => open(c)}
-              accent r="sm" center
-              className="shrink-0 t-title"
-              style={{
-                fontSize: 12, padding: "10px 16px",
-                opacity: g.chips < c.price ? 0.45 : 1,
-              }}
-              sound="power"
-            >
-              {c.price}
-            </Tap>
-          </div>
 
-          {/* Шансы полоской */}
-          <div className="flex" style={{ height: 5, borderRadius: 99, overflow: "hidden" }}>
-            {(["common", "rare", "epic", "legend"] as const).map((r) => (
-              <span
-                key={r}
-                style={{ width: `${c.odds[r] * 100}%`, background: RARITY_COLOR[r] }}
-              />
-            ))}
-          </div>
-        </Panel>
-      ))}
+            <span className="pc-case-foot">
+              <span className={`pc-case-price t-num ${g.chips < c.price ? "poor" : ""}`}>
+                <Icon name="ticket" size={12} />
+                {fmt(c.price)}
+              </span>
+              <span className="pc-case-cta">
+                {g.chips < c.price ? tr("МАЛО ЖЕТОНОВ") : tr("СМОТРЕТЬ")}
+                <Icon name="chevron" size={11} />
+              </span>
+            </span>
+          </button>
+        ))}
+      </div>
 
-      {/* Открытие кейса */}
+      <div className="t-caption pc-case-note">
+        <Icon name="info" size={11} />
+        {tr("Клик по кейсу — только просмотр: жетоны тратятся кнопкой «ОТКРЫТЬ ЗА».")}
+        {luck > 0 && ` · ${tr("удача друга")} +${Math.round(luck * 100)}% ${tr("к редким")}`}
+      </div>
+
+      {/* ── просмотр и вскрытие ── */}
       <AnimatePresence>
         {opening && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[80] flex items-center justify-center px-5"
-            style={{ background: "var(--scrim-strong)", backdropFilter: "blur(16px)" }}
+            className="pc-case-scrim"
+            onClick={close}
           >
-            <div className="w-full max-w-sm">
-              {!got ? (
-                <>
-                  <div className="t-label text-center" style={{ marginBottom: 14 }}>
-                    {opening.name}
-                  </div>
-                  {/* Лента */}
-                  <div
-                    style={{
-                      position: "relative", height: 96, overflow: "hidden",
-                      borderRadius: "var(--r-lg)", border: "1.5px solid var(--btn-brd)",
-                      background: "var(--surface-2)",
-                    }}
-                  >
-                    <motion.div
-                      className="flex items-center h-full"
-                      initial={{ x: 0 }}
-                      animate={{ x: -(22 * 84) + 140 }}
-                      transition={{ duration: 2.4, ease: [0.15, 0.6, 0.15, 1] }}
-                      style={{ gap: 8, paddingLeft: 8 }}
-                    >
-                      {roll.map((it, i) => (
-                        <span
-                          key={i}
-                          className="shrink-0 flex flex-col items-center justify-center"
-                          style={{
-                            width: 76, height: 76, borderRadius: "var(--r-md)",
-                            background: "var(--surface)",
-                            border: `1.5px solid ${RARITY_COLOR[it.rarity]}`,
-                            color: RARITY_COLOR[it.rarity],
-                          }}
-                        >
-                          <ItemIcon id={it.id} size={30} />
-                        </span>
-                      ))}
-                    </motion.div>
-                    {/* указатель */}
-                    <span
-                      style={{
-                        position: "absolute", left: "50%", top: 0, bottom: 0,
-                        width: 2, background: "var(--acc)", transform: "translateX(-50%)",
-                      }}
-                    />
-                  </div>
-                </>
-              ) : (
-                <motion.div
-                  initial={{ scale: 0.8, opacity: 0 }}
-                  animate={{ scale: 1, opacity: 1 }}
-                  transition={{ type: "spring", stiffness: 320, damping: 22 }}
+            <motion.div
+              initial={{ opacity: 0, y: 16, scale: 0.97 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 10, scale: 0.98 }}
+              transition={{ type: "spring", stiffness: 340, damping: 28 }}
+              className="pc-case-modal"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="pc-case-mhead">
+                <span className="t-label pc-case-mkicker">{tr("КЕЙС")}</span>
+                <span className="t-display pc-case-mname">{opening.name}</span>
+                {/* «?» — крошечная кнопка с шансами: просьба 1.28 — «шансы
+                    можно увидеть, нажав на вопросик маленький». */}
+                <button
+                  type="button"
+                  className={`pc-case-mhelp ${odds ? "on" : ""}`}
+                  aria-expanded={odds}
+                  title={tr("Шансы выпадения")}
+                  onClick={() => { sfx.click(); setOdds((v) => !v); }}
                 >
-                  <Panel r="xl" strong className="p-6 text-center">
-                    <div
-                      className="t-label"
-                      style={{ color: RARITY_COLOR[got.rarity], marginBottom: 12 }}
+                  ?
+                </button>
+                <button type="button" className="pc-case-mx" onClick={close} aria-label={tr("Закрыть")}>
+                  <Icon name="cross" size={14} />
+                </button>
+              </div>
+
+              <div className="pc-case-mbody">
+                {/* левая колонка: лента или итог */}
+                <div className="pc-case-mleft">
+                  {got ? (
+                    <motion.div
+                      initial={{ scale: 0.84, opacity: 0 }}
+                      animate={{ scale: 1, opacity: 1 }}
+                      transition={{ type: "spring", stiffness: 320, damping: 22 }}
+                      className="pc-case-prize"
+                      style={{ ["--rc" as never]: RARITY_COLOR[got.rarity] }}
                     >
-                      {RARITY_LABEL[got.rarity]}
+                      <span className="t-label" style={{ color: RARITY_COLOR[got.rarity] }}>
+                        {RARITY_LABEL[got.rarity]}
+                      </span>
+                      <span className="pc-case-prize-art">
+                        <ItemIcon id={got.id} size={58} />
+                      </span>
+                      <span className="t-display pc-case-prize-name">{got.name}</span>
+                      <span className="t-caption">
+                        {tr("ценность")} <b className="t-num">{fmt(got.value)}</b> {tr("жетонов")} ·{" "}
+                        {ITEM_KIND_LABEL[got.kind]}
+                      </span>
+                    </motion.div>
+                  ) : (
+                    <div className="pc-case-strip">
+                      {/* лента: приз на 42-й ячейке, окно центрировано на нём */}
+                      <div
+                        className={`pc-case-strip-tape ${skip ? "skip" : ""}`}
+                        style={{ transform: armed ? `translateX(calc(var(--step) * -${PRIZE_AT}))` : "translateX(0)" }}
+                      >
+                        {roll.map((it, i) => (
+                          <span
+                            key={i}
+                            className={`pc-case-cell ${armed && i === PRIZE_AT ? "prize" : ""}`}
+                            style={{ borderColor: RARITY_COLOR[it.rarity] }}
+                            title={it.name}
+                          >
+                            <ItemIcon id={it.id} size={28} />
+                            <span className="pc-case-cell-name clip1">{it.name}</span>
+                          </span>
+                        ))}
+                      </div>
+                      <span className="pc-case-needle" aria-hidden />
+                      {spinning && <span className="pc-case-hood" aria-hidden />}
+                      {spinning && !skip && (
+                        <button type="button" className="pc-case-skip" onClick={fastForward}>
+                          {tr("ПРОПУСТИТЬ")}
+                          <Icon name="chevron" size={10} />
+                        </button>
+                      )}
                     </div>
-                    <span
-                      className="inline-flex items-center justify-center"
-                      style={{
-                        width: 92, height: 92, borderRadius: "var(--r-lg)",
-                        background: "var(--surface-2)",
-                        border: `2px solid ${RARITY_COLOR[got.rarity]}`,
-                        color: RARITY_COLOR[got.rarity],
-                        boxShadow: `0 0 40px -10px ${RARITY_COLOR[got.rarity]}`,
-                        marginBottom: 14,
-                      }}
-                    >
-                      <ItemIcon id={got.id} size={44} />
+                  )}
+
+                  <div className="t-caption pc-case-hint">
+                    {got
+                      ? tr("Предмет уже в разделе «Вещи»: там его можно надеть, осмотреть или продать.")
+                      : spinning
+                        ? tr("ЛЕНТА ИДЁТ…")
+                        : tr("Жми «ОТКРЫТЬ» — лента прокрутится и покажет, что выпало.")}
+                  </div>
+                </div>
+
+                {/* правая колонка: читаемые шансы и что внутри */}
+                <div className="pc-case-mright">
+                  <div className="t-label pc-case-rcap">
+                    {tr("Что может выпасть")}
+                    <span className="pc-case-rcap-cap">
+                      {tr("до")} <b className="t-num">{fmt(opening.cap)}</b>
                     </span>
-                    <div className="t-title" style={{ fontSize: 17, marginBottom: 4 }}>
-                      {got.name}
+                  </div>
+                  {(["legend", "epic", "rare", "common"] as const).map((r) => {
+                    /* тот же фильтр, что у rollItem: список должен совпадать
+                       с реальным дропом, иначе «что может выпасть» врёт */
+                    const items = ITEMS.filter((i) => i.rarity === r && i.value <= opening.cap);
+                    if (!items.length) return null;
+                    const pct = opening.odds[r] * 100;
+                    return (
+                      <div key={r} className="pc-case-row" style={{ ["--rc" as never]: RARITY_COLOR[r] }}>
+                        {odds && (
+                          <span className="pc-case-row-pct t-num">
+                            {pct.toFixed(pct < 10 ? 2 : 1)}%
+                          </span>
+                        )}
+                        <span className="min-w-0">
+                          <span className="t-label pc-case-row-r">
+                            {RARITY_LABEL[r]} · {items.length}
+                          </span>
+                          <span className="pc-case-row-names">
+                            {items.slice(0, 4).map((i) => i.name).join(" · ")}
+                            {items.length > 4 ? ` · +${items.length - 4}` : ""}
+                          </span>
+                        </span>
+                      </div>
+                    );
+                  })}
+
+                  <div className="pc-case-mid">
+                    <span className="t-caption">
+                      {tr("шансы на выпадение — по «?» вверху")}
+                      {luck > 0 ? ` · ${tr("удача друга")} +${Math.round(luck * 100)}%` : ` (${tr("нет активного друга")})`}
+                    </span>
+                  </div>
+
+                  {/* панель шансов: ровно те же проценты, из которых крутится
+                      лента, плюс поправка на удачу друга — «спрятать» не
+                      значит «спутать» */}
+                  {odds && (
+                    <div className="pc-case-odds">
+                      {(["legend", "epic", "rare", "common"] as const).map((r) => (
+                        <div key={r} className={`pc-case-odd ${r}`}>
+                          <i style={{ background: RARITY_COLOR[r] }} />
+                          <span className="pc-case-odd-name">{RARITY_LABEL[r]}</span>
+                          <span className="pc-case-odd-pct t-num">{fmtPct(opening.odds[r])}</span>
+                          {luck > 0 && r !== "common" ? (
+                            <span className="pc-case-odd-up t-num">→ {fmtPct(opening.odds[r] * (1 + luck * (r === "rare" ? 0.15 : 0.35)))}</span>
+                          ) : null}
+                        </div>
+                      ))}
+                      <div className="t-caption pc-case-odds-note">
+                        <Icon name="info" size={11} />
+                        {tr("прокрутка честная: проценты = веса в rollRarity; редкость дороже потолка кейса выпасть не может")}
+                      </div>
                     </div>
-                    <div className="t-caption" style={{ marginBottom: 18 }}>
-                      ценность {got.value} жетонов
-                    </div>
-                    <Tap
-                      onClick={() => { setOpening(null); setGot(null); sfx.click(); }}
-                      accent r="md" center
-                      className="w-full py-3.5 t-title"
-                      style={{ fontSize: 14 }}
-                      sound="coin"
-                    >{tr("ЗАБРАТЬ")}</Tap>
-                  </Panel>
-                </motion.div>
-              )}
-            </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="pc-case-mfoot">
+                {got ? (
+                  <>
+                    <button type="button" className="pc-case-ghost" onClick={close}>
+                      {tr("ЗАКРЫТЬ")}
+                    </button>
+                    <button
+                      type="button"
+                      className="pc-case-open"
+                      disabled={g.chips < opening.price}
+                      onClick={() => buy(opening)}
+                    >
+                      <Icon name="refresh" size={14} />
+                      {tr("ЕЩЁ РАЗ")} · {fmt(opening.price)}
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button type="button" className="pc-case-ghost" onClick={close} disabled={spinning}>
+                      {tr("ОТМЕНА")}
+                    </button>
+                    <button
+                      type="button"
+                      className="pc-case-open"
+                      disabled={spinning || g.chips < opening.price}
+                      onClick={() => buy(opening)}
+                    >
+                      <Icon name="case" size={14} />
+                      {spinning
+                        ? tr("КРУТИТСЯ…")
+                        : g.chips < opening.price
+                          ? tr("НЕ ХВАТАЕТ ЖЕТОНОВ")
+                          : `${tr("ОТКРЫТЬ ЗА")} ${fmt(opening.price)}`}
+                    </button>
+                  </>
+                )}
+              </div>
+            </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
@@ -658,9 +1033,9 @@ function Cases({ g, save }: { g: GambleStore; save: (p: Partial<GambleStore>) =>
 
 /* ═══════════════════════════ КЕЙС-БАТЛ ═══════════════════════════ */
 
-const FOES = ["Лёха", "Макс", "Серёга", "Артём", "Кудря", "Шитов"];
+const FOES = ["Кайзер", "Титан", "Спарк", "Рейзер", "Мираж", "Кортекс"];
 
-function Battle({ g, save }: { g: GambleStore; save: (p: Partial<GambleStore>) => void }) {
+function Battle({ g, save }: { g: GambleStore; save: GambleSave }) {
   const [rounds, setRounds] = useState(3);
   const [caseId, setCaseId] = useState(GAMBLE_CASES[0].id);
   const [live, setLive] = useState<ReturnType<typeof runBattle> | null>(null);
@@ -678,7 +1053,7 @@ function Battle({ g, save }: { g: GambleStore; save: (p: Partial<GambleStore>) =
     const res = runBattle(c, rounds);
     setLive(res);
     setStep(0);
-    save({ chips: g.chips - cost });
+    save((x) => ({ chips: Math.max(0, x.chips - cost) }));
     sfx.click();
 
     // раунды открываются по одному
@@ -688,19 +1063,20 @@ function Battle({ g, save }: { g: GambleStore; save: (p: Partial<GambleStore>) =
         sfx.click();
         haptic("light");
         if (i === rounds) {
-          const gained: Record<string, number> = { ...g.items };
-          if (res.win) {
-            // победитель забирает всё
-            for (const r of res.list) {
-              gained[r.mine.id] = (gained[r.mine.id] || 0) + 1;
-              gained[r.foe.id] = (gained[r.foe.id] || 0) + 1;
+          save((x) => {
+            // победитель забирает всё; проигравший остаётся при своём
+            let items = x.items;
+            if (res.win) {
+              for (const r of res.list) {
+                items = shiftItem({ ...x, items }, r.mine.id, 1);
+                items = shiftItem({ ...x, items }, r.foe.id, 1);
+              }
             }
-          }
-          save({
-            chips: g.chips - cost,
-            items: gained,
-            battles: g.battles + 1,
-            battleWins: g.battleWins + (res.win ? 1 : 0),
+            return {
+              items,
+              battles: x.battles + 1,
+              battleWins: x.battleWins + (res.win ? 1 : 0),
+            };
           });
           if (res.win) { sfx.legend?.(); haptic("success"); }
           else { sfx.gameOver?.(); haptic("error"); }
@@ -713,85 +1089,161 @@ function Battle({ g, save }: { g: GambleStore; save: (p: Partial<GambleStore>) =
   return (
     <>
       {!live ? (
-        <Panel r="lg" style={{ padding: 15 }}>
-          <div className="t-title-sm" style={{ marginBottom: 4 }}>{tr("Кейс-батл")}</div>
-          <div className="t-caption" style={{ marginBottom: 14, lineHeight: 1.5 }}>
-            Открываете кейсы одновременно с соперником. У кого сумма ценности
-            больше — забирает все предметы, включая чужие.
+        <div className="pc-battle">
+          <div className="pc-battle-rule">
+            <span className="pc-battle-rule-ico"><Icon name="skull" size={15} /></span>
+            <span className="min-w-0">
+              <span className="t-title-sm">{tr("Что это")}</span>
+              <span className="t-caption">
+                {tr("Вы и соперник по очереди открываете ОДИН И ТОТ ЖЕ кейс. Раунд берёт тот, у кого выпавшая вещь дороже. Кто выиграл больше раундов — забирает ВСЕ предметы, и свои, и чужие.")}
+              </span>
+            </span>
           </div>
 
-          <div className="t-label" style={{ marginBottom: 8 }}>{tr("Кейс")}</div>
-          <div className="flex" style={{ gap: 6, marginBottom: 14 }}>
-            {GAMBLE_CASES.map((x) => (
-              <button
-                key={x.id}
-                type="button"
-                onClick={() => { sfx.click(); setCaseId(x.id); }}
-                className="t-caption flex-1"
-                style={{
-                  padding: "9px 4px", borderRadius: "var(--r-sm)", fontSize: 10,
-                  background: caseId === x.id ? "var(--acc)" : "var(--btn-bg)",
-                  color: caseId === x.id ? "var(--acc-ink)" : "var(--text-mute)",
-                  border: `1px solid ${caseId === x.id ? "var(--acc)" : "var(--btn-brd)"}`,
-                }}
-              >
-                {x.price}
-              </button>
-            ))}
+          <div className="pc-battle-picks">
+            <div className="t-label pc-battle-cap">{tr("1 · КЕЙС — что вскрываем")}</div>
+            <div className="pc-battle-cases">
+              {GAMBLE_CASES.map((x) => (
+                <button
+                  key={x.id}
+                  type="button"
+                  onClick={() => { sfx.click(); haptic("light"); setCaseId(x.id); }}
+                  className={`pc-battle-case ${caseId === x.id ? "on" : ""}`}
+                  title={x.name}
+                >
+                  <span className="t-body clip1">{x.name}</span>
+                  <span className="pc-battle-case-price t-num">
+                    <Icon name="ticket" size={10} />{fmt(x.price)}
+                  </span>
+                  <span className="pc-battle-case-legend">
+                    {tr("легенда")} {(x.odds.legend * 100).toFixed(1)}%
+                  </span>
+                </button>
+              ))}
+            </div>
+
+            <div className="t-label pc-battle-cap">{tr("2 · РАУНДОВ — сколько дуэлей")}</div>
+            <div className="pc-battle-rounds">
+              {[1, 3, 5].map((r) => (
+                <button
+                  key={r}
+                  type="button"
+                  onClick={() => { sfx.click(); setRounds(r); }}
+                  className={`pc-battle-round ${rounds === r ? "on" : ""}`}
+                >
+                  <b className="t-num">{r}</b>
+                  <span className="t-caption">
+                    {r === 1 ? tr("одна дуэль — всё или ничего") : r === 3 ? tr("обычная — спокойнее") : tr("длинная — дешевле в среднем")}
+                  </span>
+                </button>
+              ))}
+            </div>
           </div>
 
-          <div className="t-label" style={{ marginBottom: 8 }}>{tr("Раундов")}</div>
-          <div className="flex" style={{ gap: 6, marginBottom: 16 }}>
-            {[1, 3, 5].map((r) => (
-              <button
-                key={r}
-                type="button"
-                onClick={() => { sfx.click(); setRounds(r); }}
-                className="t-num flex-1"
-                style={{
-                  padding: "9px 0", borderRadius: "var(--r-sm)", fontSize: 12,
-                  background: rounds === r ? "var(--acc)" : "var(--btn-bg)",
-                  color: rounds === r ? "var(--acc-ink)" : "var(--text-mute)",
-                  border: `1px solid ${rounds === r ? "var(--acc)" : "var(--btn-brd)"}`,
-                }}
-              >
-                {r}
-              </button>
-            ))}
+          <div className="pc-battle-sum">
+            <span>
+              <span className="t-label">{tr("стоит")}</span>
+              <b className={`t-num ${g.chips < cost ? "poor" : ""}`}>{fmt(cost)}</b>
+            </span>
+            <Icon name="chevron" size={12} />
+            <span>
+              <span className="t-label">{tr("на кону")}</span>
+              <b className="t-num gold">{rounds * 2} ×</b>
+              <span className="t-caption">{tr("предметов")}</span>
+            </span>
+            <span>
+              <span className="t-label">{tr("средняя ценность")}</span>
+              <b className="t-num">≈{fmt(Math.round(c.price * 1.05))}</b>
+            </span>
           </div>
 
-          <Tap
+          <button
+            type="button"
+            className="pc-battle-go"
             onClick={start}
-            accent r="md" center
-            className="w-full py-3.5 t-title"
-            style={{ fontSize: 14, opacity: g.chips < cost ? 0.5 : 1 }}
-            sound="power"
+            disabled={g.chips < cost}
           >
-            {g.chips < cost ? "НЕ ХВАТАЕТ ЖЕТОНОВ" : `В БОЙ ЗА ${cost}`}
-          </Tap>
+            <Icon name="fist" size={14} />
+            {g.chips < cost ? tr("НЕ ХВАТАЕТ ЖЕТОНОВ") : `${tr("В БОЙ ЗА")} ${fmt(cost)}`}
+          </button>
 
           {g.battles > 0 && (
-            <div className="t-caption" style={{ marginTop: 12, textAlign: "center" }}>
-              побед {g.battleWins} из {g.battles}
+            <div className="pc-battle-record">
+              <Icon name="medal" size={12} />
+              {tr("побед")} <b className="t-num">{g.battleWins}</b> {tr("из")} <b className="t-num">{g.battles}</b>
+              <span className="t-caption">
+                ({Math.round((g.battleWins / Math.max(1, g.battles)) * 100)}%)
+              </span>
             </div>
           )}
-        </Panel>
+        </div>
       ) : (
         <Panel r="lg" style={{ padding: 15 }}>
-          <div className="flex" style={{ gap: 10, marginBottom: 12 }}>
-            <div className="flex-1 text-center">
-              <div className="t-label">{tr("ТЫ")}</div>
-              <div className="t-num acc-text" style={{ fontSize: 20 }}>
-                {fmt(live.list.slice(0, step).reduce((a, b) => a + b.mine.value, 0))}
+          {(() => {
+            const mineSum = live.list.slice(0, step).reduce((a, b) => a + b.mine.value, 0);
+            const foeSum = live.list.slice(0, step).reduce((a, b) => a + b.foe.value, 0);
+            const tot = mineSum + foeSum || 1;
+            const lead = mineSum === foeSum ? 0 : mineSum > foeSum ? 1 : -1;
+            return (
+              <div className="pc-battle-board">
+                <div className="pc-battle-side me">
+                  <span className="t-label">{tr("ТЫ")}</span>
+                  <span className="t-num pc-battle-total">{fmt(mineSum)}</span>
+                </div>
+                {/* полоса перевеса — сразу видно, кто впереди, без счёта в уме */}
+                <div className="pc-battle-tug" aria-hidden>
+                  <i className="me" style={{ width: `${(mineSum / tot) * 100}%` }} />
+                  <i className="foe" style={{ width: `${(foeSum / tot) * 100}%` }} />
+                  <span className="pc-battle-tug-mark" />
+                </div>
+                <div className="pc-battle-side foe">
+                  <span className="t-label">{foe.toUpperCase()}</span>
+                  <span className="t-num pc-battle-total">{fmt(foeSum)}</span>
+                </div>
+                {/* «полоски-бой» (просьба 1.28): у обоих участников своя
+                    шкала, заполненная от большего счёта, и дорожка раундов —
+                    по ней видно, кто забрал какой раунд, не считая цифры */}
+                <div className="pc-battle-bars">
+                  <span className="pc-battle-bar">
+                    <i
+                      className="me"
+                      style={{ width: `${(mineSum / Math.max(mineSum, foeSum, 1)) * 100}%` }}
+                    />
+                  </span>
+                  <span className="pc-battle-bar">
+                    <i
+                      className="foe"
+                      style={{ width: `${(foeSum / Math.max(mineSum, foeSum, 1)) * 100}%` }}
+                    />
+                  </span>
+                </div>
+                <div className="pc-battle-status">
+                  <span className="t-label">
+                    {tr("раунд")} {Math.min(step, live.list.length)}/{live.list.length}
+                  </span>
+                  <span className="pc-battle-pips" aria-hidden>
+                    {live.list.map((rr, i) => (
+                      <i
+                        key={i}
+                        className={
+                          i >= step
+                            ? "wait"
+                            : rr.mine.value > rr.foe.value
+                              ? "win"
+                              : rr.mine.value < rr.foe.value
+                                ? "lose"
+                                : "tie"
+                        }
+                      />
+                    ))}
+                  </span>
+                  <span className={`pc-battle-lead ${lead > 0 ? "up" : lead < 0 ? "down" : ""}`}>
+                    {lead > 0 ? tr("ведёшь ты") : lead < 0 ? tr("ведёт соперник") : tr("равно")}
+                  </span>
+                </div>
               </div>
-            </div>
-            <div className="flex-1 text-center">
-              <div className="t-label">{foe.toUpperCase()}</div>
-              <div className="t-num" style={{ fontSize: 20 }}>
-                {fmt(live.list.slice(0, step).reduce((a, b) => a + b.foe.value, 0))}
-              </div>
-            </div>
-          </div>
+            );
+          })()}
 
           {live.list.slice(0, step).map((r, i) => (
             <motion.div
@@ -811,6 +1263,7 @@ function Battle({ g, save }: { g: GambleStore; save: (p: Partial<GambleStore>) =
                 }}
               >
                 <ItemIcon id={r.mine.id} size={17} />
+                <span className="t-caption clip1 flex-1">{r.mine.name}</span>
                 <span className="t-num" style={{ fontSize: 11 }}>{r.mine.value}</span>
               </span>
               <span
@@ -823,6 +1276,7 @@ function Battle({ g, save }: { g: GambleStore; save: (p: Partial<GambleStore>) =
                 }}
               >
                 <span className="t-num" style={{ fontSize: 11 }}>{r.foe.value}</span>
+                <span className="t-caption clip1 flex-1" style={{ textAlign: "right" }}>{r.foe.name}</span>
                 <ItemIcon id={r.foe.id} size={17} />
               </span>
             </motion.div>
@@ -862,9 +1316,14 @@ function Battle({ g, save }: { g: GambleStore; save: (p: Partial<GambleStore>) =
 
 /* ═══════════════════════════ АПГРЕЙД ═══════════════════════════ */
 
-function Upgrade({ g, save }: { g: GambleStore; save: (p: Partial<GambleStore>) => void }) {
+function Upgrade({ g, save }: { g: GambleStore; save: GambleSave }) {
   const owned = Object.entries(g.items).filter(([, n]) => n > 0);
-  const [fromId, setFromId] = useState<string | null>(owned[0]?.[0] ?? null);
+  /**
+   * 1.28: «апгрейд — мультивыбор предметов». Ставка собирается из НЕСКОЛЬКИХ
+   * вещей: выбрал дубли/мусор, слил их в один спин и крутишь колесо на
+   * суммарную ценность. Одиночный выбор остаётся тем же случаем мультивыбора.
+   */
+  const [sel, setSel] = useState<Record<string, boolean>>({});
   const [multId, setMultId] = useState(WHEEL_MULTS[1].id);
   const [fast, setFast] = useState(false);
   const [spinning, setSpinning] = useState(false);
@@ -872,15 +1331,23 @@ function Upgrade({ g, save }: { g: GambleStore; save: (p: Partial<GambleStore>) 
   const [res, setRes] = useState<null | { zone: WheelZone; gained: number }>(null);
   const [help, setHelp] = useState(false);
 
-  const from = fromId ? itemById(fromId) : null;
+  const picked = owned
+    .filter(([id]) => !!sel[id])
+    .map(([id, n]) => ({ id, n, it: itemById(id) }))
+    .filter((x): x is { id: string; n: number; it: ItemDef } => !!x.it);
+  const stake = picked.reduce((a, x) => a + x.it.value, 0);
   const mult = WHEEL_MULTS.find((m) => m.id === multId) ?? WHEEL_MULTS[1];
   const sectors = buildWheel(mult.mult);
   const chance = winChance(mult.mult);
 
-  // Если предмет кончился, переключаемся на любой оставшийся
+  // Если выбранная вещь закончилась (её сожгли или продали) — убираем из ставки
   useEffect(() => {
-    if (fromId && !g.items[fromId]) setFromId(Object.keys(g.items)[0] ?? null);
-  }, [g.items, fromId]);
+    setSel((v) => {
+      const next: Record<string, boolean> = {};
+      for (const k of Object.keys(v)) if (v[k] && g.items[k]) next[k] = true;
+      return Object.keys(next).length === Object.keys(v).length ? v : next;
+    });
+  }, [g.items]);
 
   /**
    * ЗАВИСАНИЕ КОЛЕСА — что было сломано.
@@ -899,7 +1366,7 @@ function Upgrade({ g, save }: { g: GambleStore; save: (p: Partial<GambleStore>) 
    * RAF вообще не пойдут (вкладка ушла в фон, слабый телефон), стоит
    * страховочный таймер: он доведёт спин до конца в любом случае.
    */
-  const pendingRef = useRef<null | { zone: WheelZone; itemId: string; staked: number; mult: number }>(null);
+  const pendingRef = useRef<null | { zone: WheelZone; ids: string[]; staked: number; mult: number }>(null);
   const guardRef = useRef(0);
 
   const settle = useCallback(() => {
@@ -909,22 +1376,33 @@ function Upgrade({ g, save }: { g: GambleStore; save: (p: Partial<GambleStore>) 
     window.clearTimeout(guardRef.current);
 
     const gained = zonePayout(p.zone, p.staked, p.mult);
-    const items = { ...g.items };
-    items[p.itemId] = (items[p.itemId] || 1) - 1;
-    if (items[p.itemId] <= 0) delete items[p.itemId];
     // Выигрыш и утешительные выплаты приходят жетонами: подбирать
-    // предмет ровно нужной цены не всегда возможно.
-    save({ items, chips: g.chips + gained });
+    // предмет ровно нужной цены не всегда возможно. Сгорают же сами вещи —
+    // все выбранные, одним save(), иначе часть стека осталась бы на складе.
+    save((x) => {
+      let items = x.items;
+      const eq = { ...x.equipped };
+      for (const id of p.ids) {
+        const it = itemById(id);
+        const left = (items[id] || 0) - 1;
+        items = { ...items, [id]: Math.max(0, left) };
+        if (left <= 0) {
+          delete items[id];
+          if (it && eq[it.kind] === id) delete eq[it.kind];
+        }
+      }
+      return { items, equipped: eq, chips: x.chips + gained };
+    });
     setRes({ zone: p.zone, gained });
     setSpinning(false);
     wheelStopFeedback(p.zone === "win");
-  }, [g.items, g.chips, save]);
+  }, [save]);
 
   const start = () => {
-    if (!from || spinning || pendingRef.current) return;
+    if (!picked.length || spinning || pendingRef.current) return;
     setRes(null);
     const r = spinTo(sectors, mult.mult);
-    pendingRef.current = { zone: r.zone, itemId: from.id, staked: from.value, mult: mult.mult };
+    pendingRef.current = { zone: r.zone, ids: picked.map((x) => x.id), staked: stake, mult: mult.mult };
     setAngle(r.angle);
     setSpinning(true);
     sfx.click();
@@ -988,18 +1466,37 @@ function Upgrade({ g, save }: { g: GambleStore; save: (p: Partial<GambleStore>) 
       </AnimatePresence>
 
       <Panel r="lg" style={{ padding: 15, marginBottom: 12 }}>
-        <div className="t-label" style={{ marginBottom: 9 }}>{tr("1 · ЧТО СТАВИМ")}</div>
+        <div className="pc-up-pickhead">
+          <span className="t-label">{tr("1 · ЧТО СТАВИМ — можно несколько вещей")}</span>
+          <button
+            type="button"
+            className="t-label pc-up-pickall"
+            disabled={spinning}
+            onClick={() => {
+              sfx.click();
+              setSel((v) => {
+                const any = owned.some(([id]) => !v[id]);
+                const next: Record<string, boolean> = {};
+                if (any) for (const [id] of owned) next[id] = true;
+                return next;
+              });
+              setRes(null);
+            }}
+          >
+            {tr("выбрать всё / очистить")}
+          </button>
+        </div>
         <div className="flex flex-wrap" style={{ gap: 6, marginBottom: 16 }}>
           {owned.map(([id, n]) => {
             const it = itemById(id);
             if (!it) return null;
-            const on = fromId === id;
+            const on = !!sel[id];
             return (
               <button
                 key={id}
                 type="button"
                 disabled={spinning}
-                onClick={() => { sfx.click(); setFromId(id); setRes(null); }}
+                onClick={() => { sfx.tap(); haptic("light"); setSel((v) => ({ ...v, [id]: !v[id] })); setRes(null); }}
                 className="flex items-center"
                 style={{
                   gap: 7, padding: "9px 12px", borderRadius: "var(--r-sm)",
@@ -1015,7 +1512,11 @@ function Upgrade({ g, save }: { g: GambleStore; save: (p: Partial<GambleStore>) 
                 }}
               >
                 <ItemIcon id={id} size={18} />
+                <span className="t-body clip1" style={{ fontSize: 10.5 }}>{it.name}</span>
                 <span className="t-num" style={{ fontSize: 11.5 }}>×{n}</span>
+                <span className={`pc-up-tick ${on ? "on" : ""}`} aria-hidden>
+                  <Icon name="check" size={9} />
+                </span>
               </button>
             );
           })}
@@ -1049,7 +1550,7 @@ function Upgrade({ g, save }: { g: GambleStore; save: (p: Partial<GambleStore>) 
         </div>
       </Panel>
 
-      {from && (
+      {picked.length > 0 && (
         <Panel r="lg" style={{ padding: 15 }}>
           <Wheel
             sectors={sectors}
@@ -1065,11 +1566,17 @@ function Upgrade({ g, save }: { g: GambleStore; save: (p: Partial<GambleStore>) 
             className="flex items-center justify-center"
             style={{ gap: 8, marginTop: 12, marginBottom: 12 }}
           >
-            <span style={{ color: RARITY_COLOR[from.rarity], lineHeight: 0 }}>
-              <ItemIcon id={from.id} size={26} />
-            </span>
+            {picked.slice(0, 5).map((x) => (
+              <span key={x.id} style={{ color: RARITY_COLOR[x.it.rarity], lineHeight: 0 }}>
+                <ItemIcon id={x.id} size={24} />
+              </span>
+            ))}
+            {picked.length > 5 ? (
+              <span className="t-label pc-up-more">+{picked.length - 5}</span>
+            ) : null}
             <Icon name="chevron" size={14} />
-            <span className="t-num acc-text" style={{ fontSize: 16 }}>{mult.label}</span>
+            <span className="t-num acc-text" style={{ fontSize: 15 }}>{fmt(stake)}</span>
+            <span className="t-label" style={{ fontSize: 8 }}>{tr("ставка")} · {mult.label}</span>
           </div>
 
           <AnimatePresence mode="wait">
@@ -1101,24 +1608,33 @@ function Upgrade({ g, save }: { g: GambleStore; save: (p: Partial<GambleStore>) 
             )}
           </AnimatePresence>
 
-          {/* Быстрый режим — отдельным переключателем, как просили */}
-          <button
-            type="button"
-            onClick={() => { setFast((v) => !v); sfx.click(); }}
-            className="flex items-center justify-center w-full"
-            style={{
-              gap: 8, padding: "9px 0", marginBottom: 9,
-              borderRadius: "var(--r-sm)",
-              background: fast ? "var(--acc-soft)" : "var(--btn-bg)",
-              border: `1px solid ${fast ? "var(--acc)" : "var(--btn-brd)"}`,
-              color: fast ? "var(--acc)" : "var(--text-mute)",
-            }}
-          >
-            <Icon name="speed" size={14} />
-            <span className="t-label" style={{ fontSize: 10 }}>
-              {fast ? tr("БЫСТРЫЙ АПГРЕЙД") : tr("ОБЫЧНЫЙ АПГРЕЙД")}
-            </span>
-          </button>
+          {/* Режимы — ДВА явных переключателя, как просили («нужен обычный
+              апгрейд и отдельно ускоренный»). Раньше это была одна кнопка,
+              которая молча меняла надпись: невозможно было догадаться, что
+              она вообще делает. Шансы в обоих режимах ОДИНАКОВЫЕ — режим
+              меняет только прокрутку, а не математику. */}
+          <div className="pc-up-modes">
+            <button
+              type="button"
+              className={`pc-up-mode ${!fast ? "on" : ""}`}
+              aria-pressed={!fast}
+              onClick={() => { setFast(false); sfx.click(); }}
+            >
+              <Icon name="refresh" size={13} />
+              <span className="t-label">{tr("ОБЫЧНЫЙ")}</span>
+              <span className="t-caption">{tr("колесо крутится 4.2 с — видно, как падает")}</span>
+            </button>
+            <button
+              type="button"
+              className={`pc-up-mode ${fast ? "on" : ""}`}
+              aria-pressed={fast}
+              onClick={() => { setFast(true); sfx.click(); }}
+            >
+              <Icon name="speed" size={13} />
+              <span className="t-label">{tr("УСКОРЕННЫЙ")}</span>
+              <span className="t-caption">{tr("1.2 с — тот же шанс, быстрее серия")}</span>
+            </button>
+          </div>
 
           {/* Главная кнопка: раньше она была такой же серой, как всё
               вокруг, и было «непонятно куда жать». */}
@@ -1151,8 +1667,18 @@ function Upgrade({ g, save }: { g: GambleStore; save: (p: Partial<GambleStore>) 
  * успеваешь поймать ограниченное число фишек.
  */
 
-const FARM_MS = 20000;
+/**
+ * 1.28, пункт про ферму: «убери 20 с на один забег, они и так по 20 длятся,
+ * между забегами перерыва нет». Таймер раунда выключен: забег идёт, пока игрок
+ * сам его не завершит, и новый можно начать сразу — без ожидания и без
+ * «опоздал». FARM_MS = 0 значит «срока нет»; вернёшь число — вернётся и раунд
+ * на N миллисекунд (старая логика целиком на месте).
+ */
+const FARM_MS = 0;
 const FARM_SPAWN_MS = 620;
+/** сколько живёт уже собранная фишка: анимация вылета */
+const FARM_GONE_MS = 240;
+const TIMED = FARM_MS > 0;
 
 interface FarmChip {
   id: number;
@@ -1162,8 +1688,10 @@ interface FarmChip {
   life: number;
   val: number;
   gold: boolean;
-  /** уже собрана — проигрываем вылет и убираем */
-  taken?: boolean;
+  /** собран: время в мс, когда игрок её зацепил. По нему фишка и улетает —
+      отдельный setTimeout на каждый тап в слабом телефоне был лишней
+      пачкой таймеров (просьба 1.28: «ферму оптимизировать по максимуму») */
+  taken?: number;
 }
 
 /**
@@ -1184,12 +1712,14 @@ interface FarmChip {
  * при 70 % точности ≈ 280 жетонов = 11 спинов по 25. Ферма остаётся
  * основным бесплатным источником, поэтому награда не режется.
  */
-function ChipFarm({ g, save }: { g: GambleStore; save: (p: Partial<GambleStore>) => void }) {
+function ChipFarm({ save, onTab }: { save: GambleSave; onTab?: (t: Tab) => void }) {
   const [phase, setPhase] = useState<"idle" | "play" | "over">("idle");
   const [chips, setChips] = useState<FarmChip[]>([]);
   const [earned, setEarned] = useState(0);
   const [left, setLeft] = useState(FARM_MS);
   const [combo, setCombo] = useState(0);
+  /** лучший комбо-множитель за забег — нужен для итога, а не для игры */
+  const [maxCombo, setMaxCombo] = useState(0);
   const [missed, setMissed] = useState(0);
   const areaRef = useRef<HTMLDivElement>(null);
   const nextId = useRef(1);
@@ -1197,14 +1727,22 @@ function ChipFarm({ g, save }: { g: GambleStore; save: (p: Partial<GambleStore>)
   const lastSpawn = useRef(0);
   const rafRef = useRef(0);
   const comboRef = useRef(0);
+  /**
+   * Оптимизация (просьба 1.28). Список фишек ведётся в ref, и ОДИН раз за
+   * кадр уезжает в React, если изменился. Раньше aging и спавн работали
+   * внутри `setChips(prev => ...)`, а промахи и комбо обновлялись прямо там
+   * же — то есть сайд-эффекты внутри апдейтера: двойной вызов в StrictMode
+   * удваивал счётчик «Упустил», а лишний проход фильтра по массиву шёл
+   * каждый кадр.
+   */
   const chipsRef = useRef<FarmChip[]>([]);
-  useEffect(() => { chipsRef.current = chips; }, [chips]);
 
   const start = () => {
-    setChips([]); setEarned(0); setCombo(0); comboRef.current = 0;
+    chipsRef.current = [];
+    setChips([]); setEarned(0); setCombo(0); setMaxCombo(0); comboRef.current = 0;
     setMissed(0);
     setLeft(FARM_MS);
-    endAt.current = performance.now() + FARM_MS;
+    endAt.current = TIMED ? performance.now() + FARM_MS : Infinity;
     lastSpawn.current = 0;
     setPhase("play");
     sfx.power?.();
@@ -1216,47 +1754,51 @@ function ChipFarm({ g, save }: { g: GambleStore; save: (p: Partial<GambleStore>)
     if (phase !== "play") return;
     const loop = (now: number) => {
       const remain = endAt.current - now;
-      setLeft(Math.max(0, remain));
+      if (TIMED) setLeft(Math.max(0, remain));
       if (remain <= 0) {
         setPhase("over");
         sfx.gameOver?.();
         return;
       }
+      /* один проход по списку: убираем улетевшие и просроченные, считаем
+         промахи, и только потом — новый спавн. За кадр максимум один setChips */
+      const prev = chipsRef.current;
+      let changed = false;
+      let expired = 0;
+      const live: FarmChip[] = [];
+      for (const c of prev) {
+        if (c.taken) {
+          /* собранная фишка доигрывает вылет и исчезает сама — по метке
+             времени, без отдельного таймера на каждый тап */
+          if (now - c.taken < FARM_GONE_MS) live.push(c);
+          else changed = true;
+          continue;
+        }
+        if (now - c.born >= c.life) { expired++; changed = true; continue; }
+        live.push(c);
+      }
+      if (expired > 0) {
+        comboRef.current = 0;
+        setCombo(0);
+        setMissed((m) => m + expired);
+      }
       if (now - lastSpawn.current > FARM_SPAWN_MS) {
         lastSpawn.current = now;
         const gold = Math.random() < 0.16;
-        setChips((cs) => {
-          // просроченные считаем промахом и рвём комбо
-          const expired = cs.filter((c) => !c.taken && now - c.born >= c.life).length;
-          if (expired > 0) {
-            comboRef.current = 0;
-            setCombo(0);
-            setMissed((m) => m + expired);
-          }
-          return [
-            ...cs.filter((c) => now - c.born < c.life),
-            {
-              id: nextId.current++,
-              x: 10 + Math.random() * 80,
-              y: 12 + Math.random() * 72,
-              born: now,
-              life: gold ? 1150 : 1700,
-              val: gold ? 25 : 8,
-              gold,
-            },
-          ];
+        changed = true;
+        live.push({
+          id: nextId.current++,
+          x: 10 + Math.random() * 80,
+          y: 12 + Math.random() * 72,
+          born: now,
+          life: gold ? 1150 : 1700,
+          val: gold ? 25 : 8,
+          gold,
         });
-      } else {
-        setChips((cs) => {
-          const expired = cs.filter((c) => !c.taken && now - c.born >= c.life).length;
-          if (expired > 0) {
-            comboRef.current = 0;
-            setCombo(0);
-            setMissed((m) => m + expired);
-          }
-          const alive = cs.filter((c) => now - c.born < c.life);
-          return alive.length === cs.length ? cs : alive;
-        });
+      }
+      if (changed) {
+        chipsRef.current = live;
+        setChips(live);
       }
       rafRef.current = requestAnimationFrame(loop);
     };
@@ -1270,11 +1812,11 @@ function ChipFarm({ g, save }: { g: GambleStore; save: (p: Partial<GambleStore>)
     if (phase !== "over" || paid.current) return;
     paid.current = true;
     if (earned > 0) {
-      save({ chips: g.chips + earned });
+      save((x) => ({ chips: x.chips + earned }));
       sfx.coin?.();
       haptic("success");
     }
-  }, [phase, earned, g.chips, save]);
+  }, [phase, earned, save]);
 
   useEffect(() => { if (phase === "play") paid.current = false; }, [phase]);
 
@@ -1282,13 +1824,12 @@ function ChipFarm({ g, save }: { g: GambleStore; save: (p: Partial<GambleStore>)
     if (c.taken) return;
     comboRef.current += 1;
     setCombo(comboRef.current);
+    setMaxCombo((v) => Math.max(v, comboRef.current));
     const bonus = 1 + Math.min(comboRef.current, 10) * 0.05;
     setEarned((e) => e + Math.round(c.val * bonus));
     // помечаем собранной — анимация вылета, затем удаление
-    setChips((cs) => cs.map((x) => (x.id === c.id ? { ...x, taken: true } : x)));
-    window.setTimeout(() => {
-      setChips((cs) => cs.filter((x) => x.id !== c.id));
-    }, 220);
+    chipsRef.current = chipsRef.current.map((x) => (x.id === c.id ? { ...x, taken: performance.now() } : x));
+    setChips(chipsRef.current);
     if (c.gold) { sfx.crit?.(); haptic("medium"); }
     else { sfx.coin?.(); haptic("light"); }
   }, []);
@@ -1315,15 +1856,36 @@ function ChipFarm({ g, save }: { g: GambleStore; save: (p: Partial<GambleStore>)
 
   const secs = (left / 1000).toFixed(1);
   const mult = 1 + Math.min(combo, 10) * 0.05;
-  const progress = Math.max(0, Math.min(1, left / FARM_MS));
+  /* без срока полоса показывает не «остаток времени», а то, насколько
+     раскачано комбо — тот же индикатор, но про то, что влияет на награду */
+  const progress = TIMED ? Math.max(0, Math.min(1, left / FARM_MS)) : Math.min(combo, 10) / 10;
 
   return (
     <>
+      {/* Правила, СРОК и НАГРАДА — три вещи, о которых спрашивали: «нет
+          таймера, нет срока, не объяснено, за что это и что даёт». */}
       <Panel r="lg" style={{ padding: 13, marginBottom: 12 }}>
-        <div className="t-label" style={{ marginBottom: 7, fontSize: 9.5 }}>{tr("КАК ЭТО РАБОТАЕТ")}</div>
-        <div className="t-caption" style={{ lineHeight: 1.6, fontSize: 11 }}>
-          {tr("Двадцать секунд на то, чтобы собирать фишки. Веди пальцем по экрану — фишки собираются касанием, тапать по каждой не нужно. Золотая дороже, но живёт меньше. Ловишь без промаха — растёт комбо и надбавка.")}
+        <div className="pc-farm-rule">
+          <span>
+            <Icon name="clock" size={13} />
+            <b className="t-num">{TIMED ? `${(FARM_MS / 1000).toFixed(0)} c` : tr("без срока")}</b>
+            <span className="t-caption">{tr("забег идёт, пока не завершишь; между забегами перерыва нет")}</span>
+          </span>
+          <span>
+            <Icon name="ticket" size={13} />
+            <span className="t-caption">{tr("награда — жетоны: они тратятся на кейсы, апгрейд и слоты")}</span>
+          </span>
+          <span>
+            <Icon name="fire" size={13} />
+            <span className="t-caption">{tr("ловишь без промаха — растёт комбо: до +50% к фишкам")}</span>
+          </span>
         </div>
+        {onTab && (
+          <button type="button" className="pc-farm-go" onClick={() => { sfx.click(); onTab("slots"); }}>
+            <Icon name="dice" size={12} />
+            {tr("КУДА ПОТРАТИТЬ ЖЕТОНЫ")}
+          </button>
+        )}
       </Panel>
 
       <Panel r="lg" style={{ padding: 14 }}>
@@ -1342,17 +1904,17 @@ function ChipFarm({ g, save }: { g: GambleStore; save: (p: Partial<GambleStore>)
             </div>
           </div>
           <div className="text-right shrink-0">
-            <div className="t-label" style={{ fontSize: 9 }}>{tr("ВРЕМЯ")}</div>
+            <div className="t-label" style={{ fontSize: 9 }}>{TIMED ? tr("ВРЕМЯ") : tr("СЕРИЯ")}</div>
             <div
               className="t-num"
-              style={{ fontSize: 22, lineHeight: 1.1, color: left < 5000 ? "var(--danger)" : undefined }}
+              style={{ fontSize: 22, lineHeight: 1.1, color: TIMED && left < 5000 ? "var(--danger)" : undefined }}
             >
-              {phase === "play" ? secs : (FARM_MS / 1000).toFixed(1)}
+              {TIMED ? (phase === "play" ? secs : (FARM_MS / 1000).toFixed(1)) : combo}
             </div>
           </div>
         </div>
 
-        {/* Полоса времени — цифру в углу на бегу не читают */}
+        {/* Полоса: без срока это шкала комбо, с сроком — остаток времени */}
         <div
           style={{
             height: 5, borderRadius: 999, background: "var(--surface-2)",
@@ -1362,7 +1924,7 @@ function ChipFarm({ g, save }: { g: GambleStore; save: (p: Partial<GambleStore>)
           <div
             style={{
               height: "100%", width: `${progress * 100}%`,
-              background: left < 5000 ? "var(--danger)" : "var(--acc)",
+              background: TIMED && left < 5000 ? "var(--danger)" : combo >= 10 ? "var(--gold-brd)" : "var(--acc)",
               transition: "width .1s linear",
             }}
           />
@@ -1382,33 +1944,17 @@ function ChipFarm({ g, save }: { g: GambleStore; save: (p: Partial<GambleStore>)
           }}
         >
           {phase === "play" && chips.map((c) => (
-            <motion.div
+            /* Чистый CSS вместо `motion` на каждую фишку: пружина на
+               каждый спавн и на каждый вылет стоила React-перерисовок в
+               тот момент, когда игрок и так водит пальцем (2 кадра у
+               друга на ПК рождались в том числе здесь) */
+            <div
               key={c.id}
-              initial={{ scale: 0.3, opacity: 0 }}
-              animate={c.taken
-                ? { scale: 1.5, opacity: 0, y: -22 }
-                : { scale: 1, opacity: 1, y: 0 }}
-              transition={c.taken
-                ? { duration: 0.22, ease: "easeOut" }
-                : { type: "spring", stiffness: 520, damping: 22 }}
-              style={{
-                position: "absolute",
-                left: `${c.x}%`, top: `${c.y}%`,
-                transform: "translate(-50%, -50%)",
-                width: c.gold ? 52 : 44, height: c.gold ? 52 : 44,
-                marginLeft: c.gold ? -26 : -22,
-                marginTop: c.gold ? -26 : -22,
-                borderRadius: "50%",
-                background: c.gold ? "var(--acc)" : "var(--surface)",
-                border: `2.5px solid ${c.gold ? "var(--gold-brd)" : "var(--btn-brd)"}`,
-                color: c.gold ? "var(--acc-ink)" : "var(--text)",
-                display: "flex", alignItems: "center", justifyContent: "center",
-                boxShadow: c.gold ? "0 4px 16px -4px var(--acc-glow)" : "none",
-                pointerEvents: "none",
-              }}
+              className={`pc-farm-chip ${c.gold ? "gold" : ""} ${c.taken ? "gone" : ""}`}
+              style={{ left: `${c.x}%`, top: `${c.y}%` }}
             >
-              <span className="t-num" style={{ fontSize: c.gold ? 13 : 11 }}>{c.val}</span>
-            </motion.div>
+              {c.val}
+            </div>
           ))}
 
           {phase !== "play" && (
@@ -1418,14 +1964,28 @@ function ChipFarm({ g, save }: { g: GambleStore; save: (p: Partial<GambleStore>)
             >
               {phase === "over" ? (
                 <>
-                  <div className="t-display" style={{ fontSize: 24 }}>{tr("ВРЕМЯ ВЫШЛО")}</div>
+                  <div className="t-display" style={{ fontSize: 24 }}>
+                    {TIMED ? tr("ВРЕМЯ ВЫШЛО") : tr("ЗАБЕГ ОКОНЧЕН")}
+                  </div>
                   <div className="t-num acc-text" style={{ fontSize: 34, marginTop: 6 }}>
                     +{fmt(earned)}
                   </div>
                   <div className="t-caption" style={{ marginTop: 4 }}>{tr("жетонов на счёт")}</div>
+                  {/* «что мне это даёт» — награда обязана быть переводима в
+                      понятные вещи, а не оставаться просто числом */}
+                  <div className="pc-farm-worth">
+                    <span>
+                      <Icon name="case" size={12} />
+                      ≈ {Math.max(0, Math.floor(earned / GAMBLE_CASES[0].price))} × {GAMBLE_CASES[0].name}
+                    </span>
+                    <span>
+                      <Icon name="dice" size={12} />
+                      ≈ {Math.max(0, Math.floor(earned / 25))} {tr("спинов по 25")}
+                    </span>
+                  </div>
                   {missed > 0 && (
                     <div className="t-caption" style={{ marginTop: 6, color: "var(--text-mute)" }}>
-                      {tr("Упустил")}: {missed}
+                      {tr("Упустил")} <b className="t-num">{missed}</b> · {tr("макс. комбо")} ×{(1 + Math.min(maxCombo, 10) * 0.05).toFixed(2)}
                     </div>
                   )}
                 </>
@@ -1442,14 +2002,20 @@ function ChipFarm({ g, save }: { g: GambleStore; save: (p: Partial<GambleStore>)
           )}
         </div>
 
+        {/* Кнопка теперь двойная: в забеге она его и завершает (на ловлю
+            во время беда нажимать не нужно — поле работает), после —
+            запускает следующий без перерыва */}
         <Tap
-          onClick={start}
+          onClick={() => {
+            if (phase === "play") { setPhase("over"); sfx.coin?.(); haptic("success"); }
+            else start();
+          }}
           accent r="md" center
           className="w-full py-3.5 t-title"
-          style={{ fontSize: 14, marginTop: 12, opacity: phase === "play" ? 0.5 : 1 }}
+          style={{ fontSize: 14, marginTop: 12 }}
           sound="power"
         >
-          {phase === "play" ? tr("ЛОВИ!") : phase === "over" ? tr("ЕЩЁ РАЗ") : tr("НАЧАТЬ")}
+          {phase === "play" ? `${tr("ЗАВЕРШИТЬ")} · +${fmt(earned)}` : phase === "over" ? tr("ЕЩЁ РАЗ") : tr("НАЧАТЬ")}
         </Tap>
       </Panel>
     </>
@@ -1458,32 +2024,143 @@ function ChipFarm({ g, save }: { g: GambleStore; save: (p: Partial<GambleStore>)
 
 /* ═══════════════════════════ ВЕЩИ ═══════════════════════════ */
 
-function Stuff({ g, save }: { g: GambleStore; save: (p: Partial<GambleStore>) => void }) {
-  const owned = Object.entries(g.items).filter(([, n]) => n > 0);
+/**
+ * ВЕЩИ — таблица, а не простыня карточек (просьба 1.28: «сделай таблицу,
+ * если не влезает — страницы, продавай сразу много, виси́ замки»).
+ *
+ *  · сортировка по любому столбцу (клик по шапке, повторный клик — в обратную сторону);
+ *  · постранично по 12 строк, если вещей больше;
+ *  · мультивыделение чекбоксами и «продать выбранное» с подтверждением;
+ *  · замок на вещи — его нельзя продать ни поштучно, ни пачкой.
+ */
+const STUFF_PAGE = 12;
+const STUFF_SELL_RATE = 0.6;
+const STUFF_LOCK_KEY = "chubgames.stuff.locks";
+type StuffSort = "name" | "kind" | "rarity" | "count" | "value";
 
-  const sell = (id: string) => {
-    const it = itemById(id);
-    if (!it) return;
-    const items = { ...g.items };
-    items[id] = (items[id] || 1) - 1;
-    if (items[id] <= 0) delete items[id];
-    const eq = { ...g.equipped };
-    if (eq[it.kind] === id && !items[id]) delete eq[it.kind];
-    save({ items, equipped: eq, chips: g.chips + Math.floor(it.value * 0.6) });
-    sfx.coin?.();
+const RARITY_RANK: Record<string, number> = { common: 0, rare: 1, epic: 2, legend: 3 };
+
+function readStuffLocks(): Record<string, boolean> {
+  try {
+    const raw = window.localStorage.getItem(STUFF_LOCK_KEY);
+    return raw ? (JSON.parse(raw) as Record<string, boolean>) : {};
+  } catch {
+    return {};
+  }
+}
+
+function Stuff({ g, save }: { g: GambleStore; save: GambleSave }) {
+  const rows0 = Object.entries(g.items)
+    .filter(([, n]) => n > 0)
+    .map(([id, n]) => ({ id, n, it: itemById(id) }))
+    .filter((x): x is { id: string; n: number; it: ItemDef } => !!x.it);
+
+  const [sort, setSort] = useState<StuffSort>("rarity");
+  const [asc, setAsc] = useState(false);
+  const [page, setPage] = useState(0);
+  const [sel, setSel] = useState<Record<string, boolean>>({});
+  /** замок: помеченную вещь нельзя продать ни поштучно, ни пачкой */
+  const [locks, setLocks] = useState<Record<string, boolean>>(() => readStuffLocks());
+  /** подтверждение продажи — до него жетоны не списываются */
+  const [ask, setAsk] = useState<{ ids: string[] } | null>(null);
+  /**
+   * Осмотр вещи. Просьба: «вещи непонятны, их же никак не осмотреть» —
+   * в списке были иконка, имя и две кнопки, и всё.
+   */
+  const [look, setLook] = useState<string | null>(null);
+
+  const rows = [...rows0].sort((a, b) => {
+    const d = asc ? 1 : -1;
+    switch (sort) {
+      case "name": return d * a.it.name.localeCompare(b.it.name, "ru");
+      case "kind": return d * ITEM_KIND_LABEL[a.it.kind].localeCompare(ITEM_KIND_LABEL[b.it.kind], "ru");
+      case "count": return d * (a.n - b.n);
+      case "value": return d * (a.it.value - b.it.value);
+      default: return d * (RARITY_RANK[a.it.rarity] - RARITY_RANK[b.it.rarity]);
+    }
+  });
+  const pages = Math.max(1, Math.ceil(rows.length / STUFF_PAGE));
+  const cur = Math.min(page, pages - 1);
+  const view = rows.slice(cur * STUFF_PAGE, cur * STUFF_PAGE + STUFF_PAGE);
+  const sellPrice = (it: ItemDef) => Math.floor(it.value * STUFF_SELL_RATE);
+  const picked = rows.filter((r) => sel[r.id] && !locks[r.id]).map((r) => r.id);
+  const pickedSum = picked.reduce((a, id) => a + sellPrice(itemById(id)!), 0);
+
+  const pick = (k: StuffSort) => {
+    sfx.click();
+    if (k === sort) setAsc((v) => !v);
+    else { setSort(k); setAsc(k === "name" || k === "kind"); }
+  };
+
+  const toggleSel = (id: string) => {
+    sfx.tap();
     haptic("light");
+    setSel((s) => {
+      const n = { ...s };
+      if (n[id]) delete n[id];
+      else n[id] = true;
+      return n;
+    });
+  };
+
+  const toggleLock = (id: string) => {
+    sfx.tap();
+    haptic("light");
+    setLocks((l) => {
+      const n = { ...l };
+      if (n[id]) delete n[id];
+      else n[id] = true;
+      try {
+        window.localStorage.setItem(STUFF_LOCK_KEY, JSON.stringify(n));
+      } catch { /* приватный режим: просто не запомнится */ }
+      return n;
+    });
+    setSel((s) => {
+      const n = { ...s };
+      delete n[id];
+      return n;
+    });
+  };
+
+  /**
+   * Продажа. Один вызов save() на всю пачку — иначе каждый предмет писал бы
+   * «свой» баланс, и часть жетонов терялась бы.
+   */
+  const sellMany = (ids: string[]) => {
+    if (!ids.length) return;
+    save((x) => {
+      let items = x.items;
+      const eq = { ...x.equipped };
+      let gain = 0;
+      for (const id of ids) {
+        const it = itemById(id);
+        if (!it) continue;
+        const left = (items[id] || 0) - 1;
+        items = { ...items, [id]: Math.max(0, left) };
+        if (left <= 0) {
+          delete items[id];
+          if (eq[it.kind] === id) delete eq[it.kind];
+        }
+        gain += sellPrice(it);
+      }
+      return { items, equipped: eq, chips: x.chips + gain };
+    });
+    setSel({});
+    setAsk(null);
+    sfx.coin?.();
+    haptic("success");
   };
 
   const equip = (it: ItemDef) => {
     const eq = { ...g.equipped };
     if (eq[it.kind] === it.id) delete eq[it.kind];
     else eq[it.kind] = it.id;
-    save({ equipped: eq });
+    save(() => ({ equipped: eq }));
     sfx.click();
     haptic("light");
   };
 
-  if (!owned.length) {
+  if (!rows0.length) {
     return (
       <Panel r="lg" style={{ padding: 22, textAlign: "center" }}>
         <Icon name="case" size={30} />
@@ -1500,75 +2177,278 @@ function Stuff({ g, save }: { g: GambleStore; save: (p: Partial<GambleStore>) =>
         ничего не меняло: предмет помечался, но на голове не появлялся.
       */}
       <Panel r="lg" style={{ padding: "10px 12px", marginBottom: 8 }}>
-        <div className="t-caption" style={{ fontSize: 10.5, lineHeight: 1.4 }}>
-          {tr("Надетые украшения видно на главном друге во вкладке «Друзья».")}
+        <div className="pc-stuff-tools">
+          <span className="t-caption" style={{ fontSize: 10.5, lineHeight: 1.4 }}>
+            {tr("Надетые украшения видно на главном друге во вкладке «Персонажи».")}
+          </span>
+          <span className="pc-stuff-bulk">
+            <span className="t-label">
+              {picked.length
+                ? `${tr("выбрано")} ${picked.length} · ${tr("продавать за")} `
+                : `${rows0.length} ${tr("видов")}`}
+              {picked.length ? <b className="t-num acc-text">{fmt(pickedSum)}</b> : null}
+            </span>
+            {picked.length > 0 && (
+              <>
+                <button type="button" className="t-label pc-stuff-sort" onClick={() => { sfx.click(); setSel({}); }}>
+                  {tr("СНЯТЬ ВЫДЕЛЕНИЕ")}
+                </button>
+                <button type="button" className="t-label pc-stuff-sort" onClick={() => { sfx.click(); setAsk({ ids: picked }); }}>
+                  <Icon name="coin" size={11} />
+                  {tr("ПРОДАТЬ ВЫБРАННОЕ")}
+                </button>
+              </>
+            )}
+            {rows.length > STUFF_PAGE && (
+              <span className="pc-stuff-pager">
+                <button
+                  type="button"
+                  className="pc-stuff-pager-btn"
+                  disabled={cur === 0}
+                  onClick={() => { sfx.click(); setPage(Math.max(0, cur - 1)); }}
+                  aria-label={tr("Назад")}
+                >
+                  <Icon name="chevron" size={10} style={{ transform: "rotate(180deg)" }} />
+                </button>
+                <span className="t-num">
+                  {cur + 1} / {pages}
+                </span>
+                <button
+                  type="button"
+                  className="pc-stuff-pager-btn"
+                  disabled={cur >= pages - 1}
+                  onClick={() => { sfx.click(); setPage(Math.min(pages - 1, cur + 1)); }}
+                  aria-label={tr("Вперёд")}
+                >
+                  <Icon name="chevron" size={10} />
+                </button>
+              </span>
+            )}
+          </span>
         </div>
       </Panel>
 
-      {owned.map(([id, n]) => {
-        const it = itemById(id);
-        if (!it) return null;
-        const on = g.equipped[it.kind] === id;
-        return (
-          <Panel
-            key={id}
-            r="lg"
-            style={{
-              padding: 12, marginBottom: 8,
-              border: on ? `1.5px solid ${RARITY_COLOR[it.rarity]}` : undefined,
-            }}
-          >
-            <div className="flex items-center" style={{ gap: 11 }}>
-              <span
-                className="shrink-0 flex items-center justify-center"
-                style={{
-                  width: 42, height: 42, borderRadius: "var(--r-sm)",
-                  background: "var(--surface-2)",
-                  border: `1px solid ${RARITY_COLOR[it.rarity]}`,
-                  color: RARITY_COLOR[it.rarity],
-                }}
+      <Panel r="lg" style={{ padding: 0, overflow: "hidden" }}>
+        <div className="pc-stuff-table">
+          <div className="pc-stuff-tr pc-stuff-thead">
+            <span className="pc-stuff-td pc-stuff-td-chk" aria-hidden />
+            {([
+              ["name", tr("ВЕЩЬ"), false],
+              ["kind", tr("КУДА"), true],
+              ["rarity", tr("РЕДКОСТЬ"), true],
+              ["count", tr("ЕСТЬ"), false],
+              ["value", tr("ЦЕННОСТЬ"), true],
+            ] as [StuffSort, string, boolean][]).map(([k, label, dim]) => (
+              <button
+                key={k}
+                type="button"
+                className={`pc-stuff-th ${sort === k ? "on" : ""} ${dim ? "hide-sm" : ""}`}
+                onClick={() => pick(k)}
+                title={tr("Сортировать")}
               >
-                <ItemIcon id={id} size={21} />
-              </span>
-              <span className="flex-1 min-w-0">
-                <span className="t-title-sm clip1 block">{it.name}</span>
-                <span
-                  className="t-label block"
-                  style={{ marginTop: 2, fontSize: 9, color: RARITY_COLOR[it.rarity] }}
-                >
-                  {RARITY_LABEL[it.rarity]} · {n} шт
+                {label}
+                <Icon name={sort === k ? (asc ? "arrowUp" : "arrowDown") : "sort"} size={9} />
+              </button>
+            ))}
+            <span className="pc-stuff-th hide-sm">{tr("ПРОДАТЬ ЗА")}</span>
+            <span className="pc-stuff-th">{tr("ДЕЙСТВИЯ")}</span>
+          </div>
+
+          {view.map(({ id, n, it }) => {
+            const on = g.equipped[it.kind] === id;
+            const locked = !!locks[id];
+            const isSel = !!sel[id];
+            return (
+              <div
+                key={id}
+                className={`pc-stuff-tr ${isSel ? "sel" : ""} ${on ? "worn" : ""}`}
+                style={{ ["--rc" as never]: RARITY_COLOR[it.rarity] }}
+              >
+                <span className="pc-stuff-td pc-stuff-td-chk">
+                  <button
+                    type="button"
+                    className={`pc-stuff-check ${isSel ? "on" : ""}`}
+                    role="checkbox"
+                    aria-checked={isSel}
+                    disabled={locked}
+                    title={locked ? tr("на вещи замок") : tr("выделить")}
+                    onClick={() => toggleSel(id)}
+                  >
+                    {isSel ? <Icon name="check" size={9} /> : null}
+                  </button>
                 </span>
-              </span>
-              <button
-                type="button"
-                onClick={() => equip(it)}
-                className="t-label shrink-0"
-                style={{
-                  padding: "8px 11px", borderRadius: "var(--r-sm)", fontSize: 9,
-                  background: on ? "var(--acc)" : "var(--btn-bg)",
-                  color: on ? "var(--acc-ink)" : "var(--text)",
-                  border: `1px solid ${on ? "var(--acc)" : "var(--btn-brd)"}`,
-                }}
+                <span className="pc-stuff-td pc-stuff-td-name">
+                  <button
+                    type="button"
+                    className="pc-stuff-hit"
+                    onClick={() => { sfx.click(); setLook(id); }}
+                    title={tr("Осмотреть")}
+                  >
+                    <span className="pc-stuff-ico">
+                      <ItemIcon id={id} size={19} />
+                    </span>
+                    <span className="clip1">{it.name}</span>
+                    {on ? <span className="pc-stuff-worn">{tr("надето")}</span> : null}
+                  </button>
+                </span>
+                <span className="pc-stuff-td pc-stuff-td-kind hide-sm">{ITEM_KIND_LABEL[it.kind]}</span>
+                <span className="pc-stuff-td pc-stuff-td-rar hide-sm" style={{ color: RARITY_COLOR[it.rarity] }}>
+                  {RARITY_LABEL[it.rarity]}
+                </span>
+                <span className="pc-stuff-td pc-stuff-td-num t-num">{n}</span>
+                <span className="pc-stuff-td pc-stuff-td-num t-num hide-sm">{fmt(it.value)}</span>
+                <span className="pc-stuff-td pc-stuff-td-num t-num pc-stuff-sellnum">{fmt(sellPrice(it))}</span>
+                <span className="pc-stuff-td pc-stuff-td-act">
+                  <button
+                    type="button"
+                    className={`pc-stuff-lock ${locked ? "on" : ""}`}
+                    onClick={() => toggleLock(id)}
+                    title={locked ? tr("Снять замок") : tr("Запереть — нельзя продать")}
+                    aria-label={locked ? tr("Снять замок") : tr("Запереть")}
+                  >
+                    <Icon name="lock" size={11} />
+                  </button>
+                  <button type="button" className="pc-stuff-abtn" onClick={() => equip(it)}>
+                    {on ? tr("СНЯТЬ") : tr("НАДЕТЬ")}
+                  </button>
+                  <button
+                    type="button"
+                    className="pc-stuff-abtn sell"
+                    disabled={locked}
+                    onClick={() => { sfx.click(); setAsk({ ids: [id] }); }}
+                  >
+                    {tr("ПРОДАТЬ")}
+                  </button>
+                </span>
+              </div>
+            );
+          })}
+        </div>
+        <div className="t-caption pc-stuff-foot">
+          <Icon name="info" size={11} />
+          {tr("Продажа возвращает 60% ценности. Вещь с замком не продаётся — ни поштучно, ни в пачке.")}
+        </div>
+      </Panel>
+
+      {/* ── ПОДТВЕРЖДЕНИЕ ПРОДАЖИ ── */}
+      <AnimatePresence>
+        {ask && (() => {
+          const list = ask.ids.map((id) => itemById(id)!).filter(Boolean);
+          const sum = list.reduce((a, it) => a + sellPrice(it), 0);
+          return (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="pc-case-scrim"
+              onClick={() => setAsk(null)}
+            >
+              <motion.div
+                initial={{ opacity: 0, y: 12, scale: 0.98 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 8, scale: 0.98 }}
+                transition={{ type: "spring", stiffness: 340, damping: 28 }}
+                className="pc-stuff-confirm"
+                onClick={(e) => e.stopPropagation()}
               >
-                {on ? "СНЯТЬ" : tr("НАДЕТЬ")}
-              </button>
-              <button
-                type="button"
-                onClick={() => sell(id)}
-                className="t-label shrink-0"
-                style={{
-                  padding: "8px 10px", borderRadius: "var(--r-sm)", fontSize: 9,
-                  background: "var(--btn-bg)", border: "1px solid var(--btn-brd)",
-                  color: "var(--text-mute)",
-                }}
+                <div className="t-label">{tr("ПРОДАТЬ")}</div>
+                <div className="t-display pc-stuff-confirm-sum">
+                  +{fmt(sum)} <span className="t-caption">{tr("жетонов")}</span>
+                </div>
+                <div className="pc-stuff-confirm-list">
+                  {list.map((it) => (
+                    <span key={it.id} style={{ ["--rc" as never]: RARITY_COLOR[it.rarity] }}>
+                      <Icon name="check" size={10} />
+                      <b className="clip1">{it.name}</b>
+                      <i className="t-num">+{fmt(sellPrice(it))}</i>
+                    </span>
+                  ))}
+                </div>
+                <div className="t-caption">
+                  {tr("Вещи уйдут с склада сразу — вернуть их можно только новым дропом из кейса.")}
+                </div>
+                <div className="pc-stuff-actions">
+                  <button type="button" className="pc-case-ghost" onClick={() => setAsk(null)}>{tr("ОТМЕНА")}</button>
+                  <button type="button" className="pc-case-open" onClick={() => sellMany(ask.ids)}>
+                    <Icon name="coin" size={13} />
+                    {tr("ПРОДАТЬ")} · {fmt(sum)}
+                  </button>
+                </div>
+              </motion.div>
+            </motion.div>
+          );
+        })()}
+      </AnimatePresence>
+
+      {/* ── ОСМОТР ВЕЩИ ── */}
+      <AnimatePresence>
+        {look && (() => {
+          const it = itemById(look);
+          if (!it) return null;
+          const n = g.items[look] || 0;
+          const on = g.equipped[it.kind] === look;
+          const locked = !!locks[look];
+          return (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="pc-case-scrim"
+              onClick={() => setLook(null)}
+            >
+              <motion.div
+                initial={{ opacity: 0, y: 14, scale: 0.97 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 8, scale: 0.98 }}
+                transition={{ type: "spring", stiffness: 340, damping: 28 }}
+                className="pc-stuff-modal"
+                style={{ ["--rc" as never]: RARITY_COLOR[it.rarity] }}
+                onClick={(e) => e.stopPropagation()}
               >
-                {Math.floor(it.value * 0.6)}
-              </button>
-            </div>
-          </Panel>
-        );
-      })}
-      <div className="t-caption" style={{ marginTop: 10, lineHeight: 1.5, textAlign: "center" }}>{tr("Продажа даёт 60% ценности.")}</div>
+                <button type="button" className="pc-case-mx" onClick={() => setLook(null)} aria-label={tr("Закрыть")}>
+                  <Icon name="cross" size={14} />
+                </button>
+                <div className="pc-stuff-art"><ItemIcon id={it.id} size={72} /></div>
+                <div className="t-label" style={{ color: RARITY_COLOR[it.rarity] }}>
+                  {RARITY_LABEL[it.rarity]}
+                </div>
+                <div className="t-display pc-stuff-name">{it.name}</div>
+                <div className="pc-stuff-rows">
+                  <span><Icon name="ticket" size={12} />{tr("ценность")} <b className="t-num">{fmt(it.value)}</b> {tr("жетонов")}</span>
+                  <span><Icon name="user" size={12} />{ITEM_KIND_LABEL[it.kind]}</span>
+                  <span><Icon name="case" size={12} />{tr("в наличии")} <b className="t-num">{n}</b></span>
+                  <span>
+                    <Icon name={on ? "check" : "eye"} size={12} />
+                    {on ? tr("надето на главного героя") : tr("не надето")}
+                  </span>
+                  <span>
+                    <Icon name="lock" size={12} />
+                    {locked ? tr("заперта: продажа запрещена") : `${tr("свободна")} · ${tr("продажа за")} ${fmt(sellPrice(it))}`}
+                  </span>
+                </div>
+                <div className="t-caption pc-stuff-note">
+                  {tr("Украшение видно на герое во вкладке «Персонажи» и в играх, где герой участвует. Продажа возвращает 60% ценности, надеть и снять можно в любой момент.")}
+                </div>
+                <div className="pc-stuff-actions">
+                  <button
+                    type="button"
+                    className="pc-case-ghost"
+                    disabled={locked}
+                    onClick={() => { setLook(null); setAsk({ ids: [it.id] }); }}
+                  >
+                    <Icon name="coin" size={13} />
+                    {tr("ПРОДАТЬ")} · {fmt(sellPrice(it))}
+                  </button>
+                  <button type="button" className="pc-case-open" onClick={() => { equip(it); }}>
+                    <Icon name={on ? "cross" : "check"} size={13} />
+                    {on ? tr("СНЯТЬ") : tr("НАДЕТЬ")}
+                  </button>
+                </div>
+              </motion.div>
+            </motion.div>
+          );
+        })()}
+      </AnimatePresence>
     </>
   );
 }

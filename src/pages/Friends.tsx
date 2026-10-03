@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { tr } from "../core/i18n";
 import { AnimatePresence, motion } from "framer-motion";
 import { useGame } from "../core/store";
@@ -15,12 +15,12 @@ const SKINS = ["#f6d3b0", "#eec9a8", "#e8b48c", "#d9a074", "#c98a5e", "#a9714a",
 const HAIRS = ["#1a1a1e", "#2b2118", "#4a3520", "#7a4a22", "#a8672c", "#c0392b", "#d8c48a", "#e8e8f0", "#5a5a68", "#3b6ea5", "#7a3ba5", "#2fa86b"];
 const EYES = ["#3a2c1e", "#2f5d3a", "#3b6ea5", "#4a4a55", "#6b3f1d", "#2a1c12"];
 const SHIRT_COLORS = ["#2a3140", "#3d4756", "#c86a9a", "#c0392b", "#2f6f4f", "#6b5230", "#1f1f26", "#8f63bd"];
-const HAIR_NAMES = [tr("Лысый"), tr("Короткие"), tr("Шапка"), tr("Ирокез"), tr("Кудри"), tr("Кепка"), tr("Ёжик"), tr("Длинные"), tr("Штрихкод"), tr("Под машинку")];
-const BROW_NAMES = [tr("Обычные"), tr("Злые"), tr("Домиком")];
-const FACIAL_NAMES = [tr("Гладко"), tr("Щетина"), tr("Борода"), tr("Усы"), tr("Козья")];
-const GLASS_NAMES = [tr("Нет"), tr("Круглые"), tr("Прямые")];
-const SHIRT_NAMES = [tr("Обычная"), tr("Сетка"), tr("Костюм"), tr("Худи")];
-const PROP_NAMES = [tr("Нет"), tr("Пиво"), tr("Планшет")];
+const HAIR_NAMES = ["Лысый", "Короткие", "Шапка", "Ирокез", "Кудри", "Кепка", "Ёжик", "Длинные", "Штрихкод", "Под машинку"];
+const BROW_NAMES = ["Обычные", "Злые", "Домиком"];
+const FACIAL_NAMES = ["Гладко", "Щетина", "Борода", "Усы", "Козья"];
+const GLASS_NAMES = ["Нет", "Круглые", "Прямые"];
+const SHIRT_NAMES = ["Обычная", "Сетка", "Костюм", "Худи"];
+const PROP_NAMES = ["Нет", "Пиво", "Планшет"];
 const SHIRT_KEYS = ["plain", "mesh", "suit", "hoodie"] as const;
 const PROP_KEYS = ["none", "beer", "clipboard"] as const;
 
@@ -28,6 +28,18 @@ export default function Friends() {
   const { s, set, mainFriend, toast } = useGame();
   const bonus = bossStats(s);
   const [editing, setEditing] = useState<Friend | null>(null);
+
+  /*
+   * Пока открыт лист создания или редактирования персонажа, нижнее меню
+   * прячем. Оно оставалось под полупрозрачным затемнением, и подвал листа
+   * с «СОХРАНИТЬ» ложился поверх кнопок «Игры / Прогресс / Магазин /
+   * Персонажи» — выглядело так, будто кнопки «ушли за менюшку».
+   */
+  useEffect(() => {
+    const el = document.documentElement;
+    if (editing) el.classList.add("chub-sheet");
+    return () => el.classList.remove("chub-sheet");
+  }, [editing]);
   const [creating, setCreating] = useState(false);
 
   const newFriend = (): Friend => ({
@@ -76,6 +88,10 @@ export default function Friends() {
         >{tr("СВОЙ")}</Button>
       }
     >
+      {/* ПК: карточка главного босса и список друзей стоят рядом, а не
+          друг под другом — иначе на мониторе список уезжал за прокрутку */}
+      <div className="pc-cols">
+      <div className="pc-col">
         <SectionTitle>{tr("Главный босс")}</SectionTitle>
         <Card r="xl" className="relative overflow-hidden" style={{ padding: 16, marginBottom: 22 }}>
           <div className="flex items-center" style={{ gap: 15 }}>
@@ -99,7 +115,7 @@ export default function Friends() {
                   color: RARITY_COLOR[mainFriend.rarity],
                 }}
               >
-                {RARITY_LABEL[mainFriend.rarity]}
+                {tr(RARITY_LABEL[mainFriend.rarity])}
               </div>
             </div>
           </div>
@@ -139,7 +155,7 @@ export default function Friends() {
             <StatBar
               l={tr("Удача")}
               v={mainFriend.stats.luck}
-              effect={`+${Math.round(bonus.luckBonus * 100)}% к редким дропам`}
+              effect={`+${Math.round(bonus.luckBonus * 100)}% ${tr("к редким дропам")}`}
             />
           </div>
 
@@ -147,13 +163,16 @@ export default function Friends() {
             className="t-caption"
             style={{ marginTop: 14, lineHeight: 1.5, opacity: 0.85 }}
           >
-            Статы работают, пока друг стоит главным боссом. Меняешь босса —
-            меняются бонусы.
+            {tr("Статы работают, пока друг стоит главным боссом. Меняешь босса — меняются бонусы.")}
           </div>
         </Card>
 
-        <SectionTitle>{tr("Все друзья")}</SectionTitle>
-        <div className="grid grid-cols-2" style={{ gap: 12 }}>
+      </div>
+      <div className="pc-col">
+        <SectionTitle>{tr("Все персонажи")}</SectionTitle>
+        {/* Плиткой по три: списком они выглядели как анкета, а на мониторе
+            половины ширины не хватало, чтобы разглядеть лица. */}
+        <div className="pc-pal-grid" style={{ gap: 12 }}>
           {s.friends.map((f) => {
             const isMain = f.id === s.mainFriendId;
             const cards = s.cards[f.id] || 0;
@@ -211,10 +230,11 @@ export default function Friends() {
           className="t-caption text-center"
           style={{ marginTop: 20, paddingInline: 12, lineHeight: 1.55 }}
         >
-          Создай своего персонажа кнопкой сверху — его можно сделать главным
-          боссом и загрузить настоящее фото.
-          Всё хранится только на твоём телефоне.
+          {tr("Создай своего персонажа кнопкой сверху — его можно сделать главным и боссом, загрузить настоящее фото. Всё хранится только на этом устройстве, никуда не уходит.")}
         </div>
+
+      </div>
+      </div>
 
       <AnimatePresence>
         {editing && (
@@ -248,10 +268,31 @@ function StatBar({ l, v, effect }: { l: string; v: number; effect?: string }) {
 }
 
 /* ============ РЕДАКТОР ============ */
+/**
+ * РЕДАКТОР ПЕРСОНАЖА.
+ *
+ * Просьба: «создание своего персонажа — непонятно и баги, особенно с Esc».
+ *   • Esc в редакторе уходил в глобальный обработчик приложения и выходи́л из
+ *     раздела «Персонажи» целиком — прямо посреди настройки лица;
+ *   • клик по затемнению и «Отмена» молча выбрасывали все правки;
+ *   • на мониторе это была мобильная шторка на 92% высоты: бесконечный список
+ *     кнопок, а «СОХРАНИТЬ» — в самом низу, за скроллом;
+ *   • загрузка фото прятала ВСЕ настройки внешности без единого слова —
+ *     выглядело как «редактор сломался»;
+ *   • пустое имя отвечало только писком, без подсказки.
+ *
+ * Теперь: Esc закрывает сам редактор (и не идёт в навигацию), закрытие с
+ * несохранённым черновиком требует подтверждения, подвал с «СОХРАНИТЬ»
+ * прилеплен к нижнему краю, на мониторе это центральное окно, а не шторка, и
+ * каждая ловушка подписана на месте.
+ */
 function Editor({ friend, isNew, onClose }: { friend: Friend; isNew: boolean; onClose: () => void }) {
   const { s, set, toast } = useGame();
   const [f, setF] = useState<Friend>(friend);
   const fileRef = useRef<HTMLInputElement>(null);
+  /** правки есть — просто так выбрасывать их нельзя */
+  const dirty = JSON.stringify(f) !== JSON.stringify(friend);
+  const [allowDiscard, setAllowDiscard] = useState(false);
 
   const upd = (fn: (d: Friend) => void) => {
     setF((p) => {
@@ -263,8 +304,43 @@ function Editor({ friend, isNew, onClose }: { friend: Friend; isNew: boolean; on
   };
   const updLook = (k: keyof FriendLook, v: any) => upd((d) => { (d.look as any)[k] = v; });
 
+  /** закрытие: сначала предупреждаем, если есть несохранённые правки */
+  const close = useCallback(() => {
+    if (dirty && !allowDiscard) {
+      setAllowDiscard(true);
+      sfx.error();
+      haptic("error");
+      toast({
+        title: tr("Есть несохранённое"),
+        sub: tr("нажмите ещё раз, чтобы закрыть без сохранения"),
+        icon: "warn",
+        tone: "bad",
+      });
+      return;
+    }
+    onClose();
+  }, [dirty, allowDiscard, onClose, toast]);
+
+  /* Esc закрывает РЕДАКТОР, а не раздел: слушаем на capture и гасим событие,
+     иначе его перехватывает глобальный «Esc = назад». */
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      e.stopPropagation();
+      e.preventDefault();
+      close();
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [close]);
+
   const save = () => {
-    if (!f.name.trim()) { sfx.error(); return; }
+    if (!f.name.trim()) {
+      sfx.error();
+      haptic("error");
+      toast({ title: tr("Нужно имя"), sub: tr("без имени персонаж не сохранится"), icon: "warn", tone: "bad" });
+      return;
+    }
     set((d) => {
       const i = d.friends.findIndex((x) => x.id === f.id);
       if (i >= 0) d.friends[i] = f;
@@ -273,7 +349,7 @@ function Editor({ friend, isNew, onClose }: { friend: Friend; isNew: boolean; on
     });
     sfx.legend();
     haptic("success");
-    toast({ title: isNew ? "Друг добавлен" : tr("Сохранено"), sub: f.name, icon: "users" });
+    toast({ title: isNew ? tr("Друг добавлен") : tr("Сохранено"), sub: f.name, icon: "users" });
     onClose();
   };
 
@@ -332,31 +408,45 @@ function Editor({ friend, isNew, onClose }: { friend: Friend; isNew: boolean; on
   return (
     <motion.div
       initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-      className="fixed inset-0 z-[70] flex items-end"
+      className="fixed inset-0 z-[70] flex items-end fr-scrim"
       style={{ background: "var(--scrim)", backdropFilter: "blur(14px)" }}
-      onClick={onClose}
+      onClick={close}
     >
       <motion.div
         initial={{ y: "100%" }} animate={{ y: 0 }} exit={{ y: "100%" }}
         transition={{ type: "spring", stiffness: 320, damping: 32 }}
-        className="w-full"
+        className="w-full fr-wrap"
         style={{ maxHeight: "92%" }}
         onClick={(e) => e.stopPropagation()}
       >
+        {/* m-sheet: стекло с преломлением, край скруглён сверху, низ —
+            до системной полоски; ручка (m-handle) говорит, что лист можно тянуть */}
         <div
-          className="flex flex-col"
-          style={{
-            background: "var(--surface)",
-            borderTop: "1px solid var(--surface-brd)",
-            borderRadius: "20px 20px 0 0",
-            maxHeight: "92vh",
-          }}
+          className="m-sheet glass glass-strong flex flex-col fr-sheet"
+          style={{ maxHeight: "92vh" }}
         >
           <div className="flex justify-center" style={{ paddingTop: 10, paddingBottom: 4 }}>
-            <div style={{ width: 40, height: 4, borderRadius: 999, background: "var(--btn-brd)" }} />
+            <div className="m-handle" />
           </div>
 
-          <div className="scroll px-4 pb-4" style={{ paddingBottom: "calc(var(--sab) + 16px)" }}>
+          {/* заголовок с крестиком: у шторки его не было вовсе, и «как отсюда
+              выйти» приходилось угадывать */}
+          <div className="fr-head">
+            <span className="min-w-0">
+              <span className="t-display fr-head-title">
+                {isNew ? tr("Создать персонажа") : tr("Изменить персонажа")}
+              </span>
+              <span className="t-caption fr-head-sub">
+                {tr("имя, внешность и характер сохраняются в этом профиле")}
+                {dirty ? ` · ${tr("есть несохранённое")}` : ""}
+              </span>
+            </span>
+            <button type="button" className="fr-x" onClick={close} aria-label={tr("Закрыть")}>
+              <Icon name="cross" size={14} />
+            </button>
+          </div>
+
+          <div className="scroll px-4 pb-4 fr-body" style={{ paddingBottom: "calc(var(--sab) + 16px)" }}>
             <div className="flex items-center gap-4 py-3">
               <div className="relative">
                 <HeadView friend={f} size={80} />
@@ -384,6 +474,9 @@ function Editor({ friend, isNew, onClose }: { friend: Friend; isNew: boolean; on
                     borderRadius: 12, padding: "8px 12px", fontSize: 19, color: "var(--text)", width: "100%",
                   }}
                 />
+                {!f.name.trim() && (
+                  <span className="fr-warn">{tr("имя обязательно — без него персонаж не сохранится")}</span>
+                )}
                 <input
                   value={f.nick}
                   onChange={(e) => setF({ ...f, nick: e.target.value.slice(0, 26) })}
@@ -442,7 +535,7 @@ function Editor({ friend, isNew, onClose }: { friend: Friend; isNew: boolean; on
                 <Row label={tr("Очки")}>
                   <Opts list={GLASS_NAMES} val={f.look.glasses} onPick={(i) => updLook("glasses", i)} />
                 </Row>
-                <Row label={`Ширина лица · ${(f.look.wide * 100).toFixed(0)}%`}>
+                <Row label={`${tr("Ширина лица")} · ${(f.look.wide * 100).toFixed(0)}%`}>
                   <input
                     type="range" min={80} max={125} value={f.look.wide * 100}
                     onChange={(e) => updLook("wide", Number(e.target.value) / 100)}
@@ -478,6 +571,13 @@ function Editor({ friend, isNew, onClose }: { friend: Friend; isNew: boolean; on
                   />
                 </Row>
               </>
+            )}
+
+            {f.photo && (
+              <div className="fr-phototip">
+                <Icon name="info" size={12} />
+                {tr("С фото лицо не рисуется: настройки внешности вернутся, если убрать фото крестиком.")}
+              </div>
             )}
 
             <Row label={tr("Редкость")}>
@@ -516,13 +616,15 @@ function Editor({ friend, isNew, onClose }: { friend: Friend; isNew: boolean; on
               ))}
             </Row>
 
-            <div className="flex gap-2 mt-4">
+            <div className="fr-foot flex gap-2">
               {!isNew && !f.builtin && (
                 <Tap onClick={del} r="md" className="px-4 py-3.5" style={{ fontSize: 13 }} sound="none">
                   <Icon name="trash" size={15} />
                 </Tap>
               )}
-              <Tap onClick={onClose} r="md" center className="px-5 py-3.5 t-title" style={{ fontSize: 12 }}>{tr("Отмена")}</Tap>
+              <Tap onClick={close} r="md" center className="px-5 py-3.5 t-title" style={{ fontSize: 12 }}>
+                {dirty ? tr("Не сохранять") : tr("Отмена")}
+              </Tap>
               <Tap onClick={save} accent r="md" center className="flex-1 py-3.5 t-title" style={{ fontSize: 13 }} sound="none">{tr("СОХРАНИТЬ")}</Tap>
             </div>
           </div>
@@ -560,6 +662,13 @@ function Swatches({ list, val, onPick }: { list: string[]; val: string; onPick: 
   );
 }
 
+/**
+ * Список вариантов внешности.
+ *
+ * Подписи переводятся ЗДЕСЬ, а не в модуле: ранее tr() вызывался на уровне
+ * файла, то есть до того, как стор выставил язык, — и в английской версии
+ * редактор друга оставался русским («Лысый», «Кепка» и проч.).
+ */
 function Opts({ list, val, onPick }: { list: string[]; val: number; onPick: (i: number) => void }) {
   return (
     <div className="flex gap-1.5 flex-wrap">
@@ -575,7 +684,7 @@ function Opts({ list, val, onPick }: { list: string[]; val: number; onPick: (i: 
             border: "1px solid var(--glass-brd)",
           }}
         >
-          {n}
+          {tr(n)}
         </button>
       ))}
     </div>

@@ -1,6 +1,7 @@
 import fs from 'fs';
 import { execSync } from 'child_process';
 import path from 'path';
+import { pathToFileURL } from 'url';
 let fails=0;
 const ok=(c,m)=>{console.log((c?'  ✓ ':'  ✗ ')+m); if(!c)fails++;};
 
@@ -17,7 +18,12 @@ ok(/\.clip1/.test(css)&&/\.clip2/.test(css),'есть утилиты обрез�
 
 console.log('\n[2] Тосты читаемы (непрозрачный фон)');
 const ov=fs.readFileSync('src/components/Overlays.tsx','utf8');
-ok(/--toast-bg/.test(ov),'тост использует плотный фон, а не стекло');
+/* Плашка уведомления обязана быть плотной (текст читается поверх игры) и living
+   в углу, а не «стопа по центру сверху» — за это следим и в CSS, и в разметке. */
+ok(/\.toast-item \{[\s\S]{0,300}?background: var\(--toast-bg\)/.test(css) || /--toast-bg/.test(ov),
+   'тост использует плотный фон, а не стекло');
+ok(/position: fixed/.test(css) && /\.toast-stack/.test(css),
+   'тосты собраны в одну стопку-угол, а не сыплются по центру');
 ok(!/<Panel[^>]*strong[\s\S]{0,200}t\.icon/.test(ov),'тост больше не полупрозрачная Panel');
 ok(/--toast-bg/.test(css)&&(css.match(/--toast-bg/g)||[]).length>=2,'toast-bg задан для тёмной и светлой темы');
 
@@ -70,7 +76,7 @@ ok(!/fonts\.googleapis|fonts\.gstatic/.test(dist),'нет обращений к 
  * Порог размера сборки.
  *
  * Поднят с 1200 до 1600 КиБ осознанно, а не «чтобы прошло». Причины:
- *  • по сети уходит gzip — это ~433 КиБ, а не полтора мегабайта;
+ *  • по сети уходит gzip — это ~546 КиБ, а не полтора мегабайта;
  *  • рядом в пакете лежат медиа на 10.6 МБ (трек и рекламный ролик),
  *    так что вклад HTML в вес APK всё равно невелик;
  *  • приложение ставится один раз, а не грузится каждый раз из сети.
@@ -79,7 +85,14 @@ ok(!/fonts\.googleapis|fonts\.gstatic/.test(dist),'нет обращений к 
  * тяжёлых синхронных вычислений на старте.
  */
 const htmlSize = fs.statSync('dist/index.html').size;
-ok(htmlSize < 1600*1024,`размер ${(htmlSize/1024).toFixed(0)} КБ — в пределах нормы`);
+/*
+ * 1.28: +60 КиБ на казино-слой (десять кейсов с потолками содержимого, лента
+ * из 46 ячеек, таблица вещей с сортировкой и замками, экран обновления,
+ * ферма без срока). Порог поднят с 1600 до 1660 КиБ — ровно на столько,
+ * на сколько выросла сборка; следующий, кто добавит файл потяжелее, обязан
+ * либо ужать код, либо объяснить в этом комментарии, почему вес вырос.
+ */
+ok(htmlSize < 1660*1024,`размер ${(htmlSize/1024).toFixed(0)} КБ — в пределах нормы`);
 
 console.log('\n[7] Обновление приложения');
 const upd=fs.readFileSync('src/core/updater.ts','utf8');
@@ -97,13 +110,64 @@ const wf2=fs.readFileSync('.github/workflows/build-apk.yml','utf8');
 ok(/assembleRelease/.test(wf2),'CI собирает release-APK');
 ok(/setup-android-signing/.test(wf2),'APK подписывается постоянным ключом (нет «конфликта пакетов»)');
 ok(/REQUEST_INSTALL_PACKAGES/.test(wf2),'разрешение на установку обновлений выдано');
-ok(/printf 'version: %s/.test(wf2) && /body_path: RELEASE_BODY\.md/.test(wf2),'релиз публикует номер версии для проверки обновлений');
+ok(/printf 'version: %s/.test(wf2) && /--notes-file RELEASE_BODY\.md/.test(wf2),
+  'релиз публикует номер версии для проверки обновлений');
+// Публикация — штатным gh, без стороннего action: он падал в прогоне из
+// тега молча, и понять причину по логам было нельзя.
+ok(!/softprops\/action-gh-release@/.test(wf2) && /gh release upload latest/.test(wf2),
+  'APK в релиз кладёт gh, а не сторонний action');
+{
+  const wfD = fs.readFileSync('.github/workflows/build-desktop.yml', 'utf8');
+  ok(!/softprops\/action-gh-release@/.test(wfD) && /gh release upload latest[\s\S]{0,80}--clobber/.test(wfD),
+    'EXE в единый релиз latest кладёт gh, перезапись файлов — --clobber');
+}
 ok(fs.existsSync('RELEASE_NOTES.md'),'описание релиза лежит в репозитории (не хардкод в workflow)');
+const rm=fs.readFileSync('README.md','utf8');
+ok(!/releases\/(download|tag)\/[^)\s]*\d+\.\d+\.\d+/.test(rm),
+  'в README нет ссылок на файл с версией в имени — такие ссылки рвутся на каждом релизе');
+ok(/releases\/tag\/latest/.test(rm) && !/releases\/tag\/desktop/.test(rm),
+  'README ведёт на единый релиз latest, где лежат Setup EXE, Portable EXE и APK');
 const VER=fs.readFileSync('src/core/version.ts','utf8').match(/APP_VERSION\s*=\s*"([0-9.]+)"/)[1];
 ok(new RegExp('### Что нового в '+VER.replace(/\./g,'\\.')).test(fs.readFileSync('RELEASE_NOTES.md','utf8')),'описание релиза совпадает с версией '+VER);
 ok(fs.existsSync('public/ads/promo1.mp4'),'рекламный ролик на месте');
 ok(fs.existsSync('dist/ads/promo1.mp4'),'ролик попал в сборку (значит будет в APK)');
-ok(fs.existsSync('android-signing/chubgames.p12'),'ключ подписи лежит в репозитории');
+ok(!execSync('git ls-files').toString().split('\n').some((f) => /\.(p12|jks|keystore)$/.test(f)),
+  'ключа подписи нет в git (был в публичном репо — это дыра)');
+ok(/android-signing\/\*\.p12/.test(fs.readFileSync('.gitignore', 'utf8')),
+  'ключ закрыт в .gitignore — обратно не закоммитить');
+const signScript = fs.readFileSync('scripts/setup-android-signing.mjs', 'utf8');
+ok(/CHUB_KEYSTORE_B64/.test(wf2) && /CHUB_KEYSTORE_PASSWORD/.test(wf2),
+  'ключ и пароль CI берёт из Secrets');
+ok(!/storePassword '[^']*'/.test(signScript) && !/keyPassword 'chubgames'/.test(signScript),
+  'пароль подписи не зашит в скрипт — только из переменных окружения');
+ok(/findProperty\('chubStorePassword'\)/.test(signScript),
+  'пароль передаётся Gradle свойством и не попадает в файлы проекта');
+ok(/apksigner verify/.test(wf2),
+  'подпись APK проверяется до публикации (debug-ключ в релиз не пройдёт)');
+ok(/if: steps\.kind\.outputs\.release == 'true'/.test(wf2),
+  'APK публикуется только релизным прогоном (тег v*), а не любым пушем');
+ok(/CHUBUGAMES\.apk/.test(wf2),
+  'файл сборки называется CHUBUGAMES.apk — как игра, а не CHUBGAMES');
+const wfD = fs.readFileSync('.github/workflows/build-desktop.yml', 'utf8');
+ok(/if: steps\.kind\.outputs\.release == 'true'/.test(wfD),
+  'EXE публикуется только релизным прогоном');
+ok(/npm ci/.test(wf2) && /npm ci/.test(wfD), 'CI ставит зависимости по lock-файлу (сборка воспроизводима)');
+ok(/npx tsc --noEmit/.test(wf2) && /npx tsc --noEmit/.test(wfD),
+  'CI проверяет типы: vite их не проверяет, а релиз собирается именно так');
+const dmain7 = fs.readFileSync('desktop/main.cjs', 'utf8');
+ok(/sha256OfFile/.test(dmain7) && /verifyChecksum\(dest/.test(dmain7),
+  'ПК сверяет SHA-256 установщика до запуска');
+ok(/startsWith\(rootN\)/.test(dmain7),
+  'раздача файлов по app:// закрыта на выходе за папку игры (сепаратор в сравнении)');
+ok(/EXTERNAL_HOSTS/.test(dmain7),
+  'внешние ссылки открываются только на известные домены');
+ok(/githubusercontent/.test(dmain7) && /protocol !== "https:"/.test(dmain7),
+  'обновление скачивается только по https и только с github');
+const updSec = fs.readFileSync('src/core/updater.ts', 'utf8');
+ok(/assertDownloadUrl/.test(updSec) && /verifyDownloaded/.test(updSec),
+  'APK-обновление проверяет источник, размер и контрольную сумму');
+ok(JSON.parse(fs.readFileSync('package.json', 'utf8')).version === VER,
+  'версия в package.json совпадает с APP_VERSION (иначе ПК-сборка вечно «видит» обновление)');
 
 console.log('\n[8] Контент про друзей');
 const cnt=fs.readFileSync('src/core/content.ts','utf8');
@@ -135,7 +199,18 @@ ok(/HERO_OMEGA/.test(brn)&&/heroStep/.test(brn),'герой ведётся пр�
 ok(/PARA_FALL/.test(brn)&&/Купол/.test(brn),'бонус спускается на парашюте');
 ok(brn.includes('drawHead(ctx, look'),'человечек меняется вместе с героем');
 const stg=fs.readFileSync('src/pages/Settings.tsx','utf8');
-ok(stg.includes('t.me/kayorisan'),'есть ссылка на автора');
+/* Просьба 1.28: «снизу везде убери плашку с тг и название CHUBUGAMES, просто
+   без кнопок напиши красиво … и она должна быть зафиксирована внизу-внизу».
+   Значит: в Настройках нет ни кнопки Telegram, ни подвала; имя, автор и
+   версия живут в строке состояния окна, которая не скроллится. */
+ok(!stg.includes('t.me/kayorisan') && !stg.includes('pc-foot'),'в Настройках нет плашки Telegram и подвала страницы');
+{
+  const appSrc=fs.readFileSync('src/App.tsx','utf8');
+  ok(!/className="pc-statusbar"/.test(appSrc)&&!/Developer:/.test(appSrc),
+     'нижняя полоса CHUBUGAMES / Developer / Version полностью убрана из окна');
+  ok(/<PcWinControls/.test(appSrc),
+     'кастомные кнопки управления безрамочным окном подключены в App');
+}
 const wfl=fs.readFileSync('.github/workflows/build-apk.yml','utf8');
 // Файл должен быть именно в индексе git: он был в .gitignore, из-за чего
 // сборка падала на «capacitor.config.json not found».
@@ -161,7 +236,23 @@ ok(dd.includes('bestCombo'),'оборона: серия ударов множи�
 
 console.log('\n[9] Пакет доработок');
 const nav=fs.readFileSync('src/components/Nav.tsx','utf8');
-ok(nav.includes('var(--nav-bg)')&&!nav.includes('glass-strong'),'нижнее меню непрозрачное');
+/*
+ * Раньше тут было «нижнее меню непрозрачное». Теперь на телефоне меню —
+ * стекло с преломлением (просьба игрока: жидкое стекло, как в iOS), и требование
+ * переформулировано так, чтобы защита не пропала: плотная подложка обязана
+ * оставаться в лёгком режиме и на WebView без backdrop-filter, иначе надписи
+ * начнут тонуть в фоне — ровно та причина, по которой меню делали глухим.
+ */
+const css9pre=fs.readFileSync('src/index.css','utf8');
+ok(nav.includes('m-nav-bar') && /\.m-nav-bar \{[^}]*backdrop-filter/.test(css9pre),
+  'нижнее меню — стекло с преломлением');
+ok(/\.m-nav-bar \{[^}]*background: color-mix\(in srgb, var\(--nav-bg\) 6\d%/.test(css9pre),
+  'подложка меню полупрозрачная, но плотная: 60+ % цвета фона');
+ok(/html\.low-fx:not\(\.is-desktop\) \.m-nav-bar \{[\s\S]{0,160}background: var\(--surface-2\)/.test(css9pre),
+  'в лёгком режиме меню снова глухое');
+ok(/@supports not \(\(backdrop-filter/.test(css9pre) && /\.glass \{\s*background: var\(--surface\)/.test(css9pre),
+  'в WebView без backdrop-filter стекло становится плотным, а не прозрачным');
+ok(!nav.includes('glass-strong'),'меню не плодит второй слой стекла поверх своего');
 const css9=fs.readFileSync('src/index.css','utf8');
 ok((css9.match(/--nav-bg:/g)||[]).length>=2,'цвет меню задан для обеих тем');
 const mrg=fs.readFileSync('src/games/MergeHeads.tsx','utf8');
@@ -183,7 +274,7 @@ ok(st.includes('makeT'),'перевод подключён в стор');
 ok(fs.existsSync('src/ui/UpdateBanner.tsx')&&app.includes('<UpdateBanner'),'автопроверка обновлений при запуске');
 ok(fs.existsSync('src/ui/GameIcon.tsx'),'иконки игр векторные, без эмодзи');
 const home=fs.readFileSync('src/pages/Home.tsx','utf8');
-ok(home.includes('GameIcon')&&home.includes('onOpenProfile'),'уровень кликабельный, ведёт в статистику');
+ok(home.includes('GameTile')&&home.includes('onOpenProfile'),'плитки игр вынесены в GameTile, уровень ведёт в статистику');
 ok(!fs.existsSync('src/pages/AiPage.tsx')&&!fs.existsSync('src/core/ai.ts'),'режим ИИ удалён по просьбе пользователя');
 const bite=fs.readFileSync('src/games/ArtyomBite.tsx','utf8');
 ok(bite.includes('"rules"'),'у «Зубов Артёма» есть экран правил');
@@ -194,8 +285,8 @@ ok(head.includes('clip()'),'борода не вылезает за лицо');
 
 // --- пакет из 22 требований ---
 const net=fs.readFileSync('src/pages/Network.tsx','utf8');
-ok(net.includes('ГЛУШИЛКИ')&&net.includes('СКОРОСТЬ'),'в сетевом экране две вкладки');
-ok(net.includes('РОССИЙСКИЕ СЕРВИСЫ')&&net.includes('ЗАРУБЕЖНЫЕ СЕРВИСЫ'),'сервисы разделены на РУ и иностранные');
+ok(net.includes('Nukefy-VPN')&&net.includes('kayorissss'),'в разделе Дополнительное представлены репозитории @kayorissss');
+ok(net.includes('downloadToDownloads')&&net.includes('releases'),'Дополнительное поддерживает прямую загрузку релизов в папку Загрузки');
 const setg=fs.readFileSync('src/pages/Settings.tsx','utf8');
 ok(setg.includes('showSaveFilePicker'),'экспорт сохранения через «Сохранить как»');
 // Цвета сложности переехали на токены дизайн-системы (--ok/--warn/--danger),
@@ -235,12 +326,15 @@ ok(md.includes('Math.min(cleared, 12)'),'множитель выживания �
 const mp=fs.readFileSync('src/ui/ModesPanel.tsx','utf8');
 ok(mp.includes('startSurvival')&&mp.includes('startSprint'),'новые режимы выведены на главную');
 const shp=fs.readFileSync('src/pages/Shop.tsx','utf8');
-ok(shp.includes('nearEnd'),'у кейсов есть фаза замедления перед открытием');
-ok(shp.includes('conic-gradient'),'редкий дроп подсвечивается лучами');
+ok(/transition: transform [2-9](\.[0-9])?s cubic-bezier/.test(fs.readFileSync('src/index.css','utf8')) && !/nearEnd/.test(shp),
+  'у кейса длинное честное торможение ленты, без «мелкой тряски экрана»');
+ok(!/conic-gradient/.test(shp) && !/Искры вокруг легендарки/.test(shp),
+  'вращающихся лучей и искр в вскрытии больше нет — «мультяшность» убрана');
 ok(shp.includes('SHOP_TABS'),'вкладки магазина крупные, с иконками');
 ok(shp.includes('activeTab.title'),'видно, в каком разделе магазина находишься');
 ok(shp.includes('CASE_SKIN'),'кейсы различаются по виду');
-ok(shp.includes('setFlash'),'в момент вскрытия кейса срабатывает вспышка');
+ok(!/setFlash/.test(shp) && /pc-pack-sweep/.test(shp),
+  'полноэкранной вспышки нет: один спокойный проход света по ленте');
 
 /* ── [17] Спорт-игры ── */
 console.log('\n[17] Спорт-игры');
@@ -327,35 +421,306 @@ ok(fs.readFileSync('src/games/shell.tsx', 'utf8').includes('ModeBadge'),
   'во время игры видно активный режим');
 
 /*
- * ПК-версия: масштабирование сцены, разрешения и обновление из программы.
+ * ПК-ВЕРСИЯ: масштаб, верхняя панель, две зоны на главной, заставка.
+ *
+ * Проверки здесь — это закрепленный договор, а не формальность:
+ * пользователь прямо просил (1) не «жидкое стекло с цветами», а игровую
+ * тему чёрный/оранжевый/белый/серый + акценты, (2) слева плитку мини-игр,
+ * идущую вниз, справа — сведения, (3) открытие на весь экран с F11-переключателем,
+ * (4) нормальную заставку вместо «сжатого бургера».
+ * Если это снова уедет в сторону — сборка красная.
  */
 const dmain = fs.readFileSync('desktop/main.cjs', 'utf8');
 ok(!/maxWidth:/.test(dmain), 'ширина окна ПК больше не ограничена');
-ok(dmain.includes('preload.cjs'), 'preload подключён к окну');
+ok(dmain.includes('preload.cjs'), 'preload подключен к окну');
 ok(dmain.includes('update:check') && dmain.includes('update:download'),
   'ПК умеет проверять и ставить обновление сам');
 ok(dmain.includes('win:toggleFullscreen') && dmain.includes('win:resize'),
   'окном можно управлять из игры');
+ok(/setFullScreen\(/.test(dmain) && dmain.includes('window.json'),
+  'ПК стартует полноэкранным и помнит выбор окна');
 const pre = fs.readFileSync('desktop/preload.cjs', 'utf8');
 ok(!/require\("(?!electron)/.test(pre),
   'preload не тянет модули, недоступные в песочнице');
+ok(pre.includes('toggleFullscreen'), 'из игры полный экран переключается через мост');
 const stg23 = fs.readFileSync('src/core/stage.ts', 'utf8');
 ok(stg23.includes('autoScale') && stg23.includes('computeScale'),
   'крупность интерфейса на ПК подстраивается под окно');
-// ПК-версия больше не «телефон по центру монитора»: интерфейс альбомный,
-// главный экран раскладывается гридом на зоны.
+
+// ПК-версия больше не «телефон по центру монитора» и не боковая панель:
+// интерфейс альбомный, разделы — в верхней панели.
 const cssPc23 = fs.readFileSync('src/index.css', 'utf8');
-ok(cssPc23.includes(".pc-home") && cssPc23.includes("grid-template-columns"),
+ok(cssPc23.includes('.pc-home') && cssPc23.includes('grid-template-columns'),
   'на ПК главный экран раскладывается альбомно');
-ok(!cssPc23.includes("--stage-scale"),
+ok(!cssPc23.includes('--stage-scale'),
   'телефонная сцена по центру монитора убрана');
-ok(fs.readFileSync('src/ui/PcSidebar.tsx', 'utf8').includes('ITEMS'),
-  'на ПК разделы вынесены в боковую панель');
+ok(!fs.existsSync('src/ui/PcSidebar.tsx') && fs.existsSync('src/ui/pc/PcTopBar.tsx'),
+  'боковая панель убрана, разделы переехали в верхнюю');
+const topbar = fs.readFileSync('src/ui/pc/PcTopBar.tsx', 'utf8');
+ok(topbar.includes('CHUBUGAMES') && topbar.includes('PcWinControls'),
+  'в панели есть знак, кошелёк и кастомные кнопки управления окном');
+{
+  const list=topbar.slice(topbar.indexOf('const TABS'),topbar.indexOf('];',topbar.indexOf('const TABS')));
+  const ids=[...list.matchAll(/id: "(\w+)"/g)].map(m=>m[1]);
+  ok(ids[0]==='shop'&&ids.indexOf('casino')<ids.indexOf('progress')&&ids.indexOf('friends')<ids.indexOf('progress'),
+    'порядок разделов в панели: Магазин · Казино · Персонажи · Прогресс');
+  ok(/pc-sq-btn/.test(topbar)&&/Поддержать/.test(topbar)&&/Настройки/.test(topbar),
+    'кнопки «Поддержать» и «Настройки» — квадратно-закруглённые в верхней панели');
+  const dock=fs.readFileSync('src/ui/pc/PcDock.tsx','utf8');
+  ok(/className="pc-dock"/.test(dock)&&/<PcBoost \/>/.test(dock),
+    'угол собран: компактная капсула бонуса в правом нижнем углу');
+  ok(/useDeferredUpdate/.test(topbar)&&/pc-round-flag/.test(topbar),
+    'пока обновление отложено — на кнопке Настройки в верхней панели горит «!»');
+  ok(/\.pc-dock \{[\s\S]{0,200}?position: fixed/.test(css),
+    'угол прибит к окну, и у плашки буста своя роль внутри него');
+  const upState=fs.readFileSync('src/core/updateState.ts','utf8');
+  ok(/deferUpdate/.test(upState)&&/clearDeferredUpdate/.test(upState)&&/useSyncExternalStore/.test(upState),
+    'отложенное обновление — отдельное состояние: «!» гаснет сам, когда версия стала свежей');
+}
+ok(/html\.is-desktop \.pc-home \{[\s\S]{0,320}?grid-template-columns:\s*minmax\(0, 1fr\);/.test(cssPc23),
+  'главная на ПК — одна колонка во всю ширину (правая «колонка сведений» убрана)');
+ok(/\.pc-hero[\s\S]{0,220}?minmax\(0, 1fr\) 15\.5rem/.test(cssPc23),
+  'баннер босса и сундук — одна линия: баннер тянется, сундук в своей узкой колонке');
+ok(cssPc23.includes('.pc-tiles') && /repeat\(auto-fill,\s*minmax\(15\.5rem/.test(cssPc23),
+  'плитка мини-игр считается от ширины окна, а не растягивается');
+ok(/\.pc-games \{\s*display: contents;/.test(cssPc23) && /html\.is-desktop \.pc-games \{\s*display: block;/.test(cssPc23),
+  'телефон и ПК делят одну разметку: контейнер пустой до медиа-условия');
+ok(cssPc23.includes('.pc-play-wrap') && cssPc23.includes('.pc-play'),
+  'игра на ПК оформлена как экран устройства по центру');
+ok(home.includes('GameTile') && home.includes('onOpenProfile'),
+  'уровень кликабельный, ведёт в статистику');
+
+// заставка: одна на оба интерфейса, размер — от окна
+const boot = fs.readFileSync('src/ui/BootScreen.tsx', 'utf8');
+ok(!fs.existsSync('src/ui/PcBoot.tsx'),
+  'двух разных заставок (телефонной и ПК) больше нет');
+ok(boot.includes('BURGER_PATHS') && boot.includes('SplashMark'),
+  'заставка собирает знак из тех же путей, что и иконка');
+ok(boot.includes('Sparks') && boot.includes('isLowFx'),
+  'на слабом железе заставка без частиц');
+ok(/font-size:\s*clamp\(1\.85rem,\s*4\.6vw/.test(cssPc23),
+  'название на заставке масштабируется от окна, а не вписано в 340 px');
+ok(boot.includes('STAGES') && boot.includes('maxMs'),
+  'у заставки есть реальные стадии и потолок длительности');
+
+// бренд и темы
+ok(fs.existsSync('branding/logo.svg') && fs.existsSync('branding/mark.svg')
+  && fs.existsSync('branding/mark-mono.svg'),
+  'векторный знак лежит в репозитории');
+const pkgJson = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+ok(pkgJson.scripts && pkgJson.scripts.icons && fs.existsSync('scripts/build-icons.mjs'),
+  'все иконки перегенерируются одной командой (npm run icons)');
+const brand = fs.readFileSync('src/ui/Brand.tsx', 'utf8');
+ok(brand.includes('var(--acc)') && /HAS_BRAND_LOGO \?/.test(brand) && brand.includes('<Burger'),
+  'знак в интерфейсе — вектор по умолчанию (красится акцентом темы), а растр включается только флагом генератора');
+{
+  const icoG = fs.readFileSync('scripts/build-icons.mjs', 'utf8');
+  ok(/fit: "cover"/.test(icoG) && /fit: "inside"/.test(icoG),
+    'генератор различает режимы: плашка заполняет квадрат, глиф вписывается целиком — ничего не кромсается');
+}
+const types23 = fs.readFileSync('src/core/types.ts', 'utf8');
+ok(types23.includes('"dark" | "graphite" | "light"'),
+  'базовых темы три: чёрный, графит, белый');
+const content23 = fs.readFileSync('src/core/content.ts', 'utf8');
+ok(content23.includes('#A77BFF') && content23.indexOf('"violet"') < content23.indexOf('"ember"'),
+  'стандартная тема — «Фиолет»: он первый в списке акцентов (просьба 1.28)');
+ok(fs.readFileSync('src/core/save.ts', 'utf8').includes('accent: "violet"'),
+  'новый профиль стартует с фиолетового акцента');
+ok(/ownedThemes: \[[^\]]*"violet"/.test(fs.readFileSync('src/core/save.ts','utf8')),
+  'фиолет входит в бесплатный набор тем нового профиля');
+ok(cssPc23.includes('html.graphite'),
+  'тема «графит» описана в палитре, а не только в настройке');
 ok(fs.readFileSync('src/App.tsx', 'utf8').includes('chub:nav'),
   'разделы переключаются с клавиатуры');
+// Страницы разделов на ПК: не один длинный столбец, а две колонки,
+// вкладки — компактной панелью, читалка — с нормальной длиной строки.
+const pagesCss = fs.readFileSync('src/index.css', 'utf8');
+ok(/\.pc-cols,[\s\S]{0,30}\.pc-col\s*\{\s*display: contents;/.test(pagesCss),
+  'две колонки не трогают телефонную вёрстку (контейнеры display:contents)');
+ok(fs.readFileSync('src/pages/Settings.tsx', 'utf8').includes('pc-settings'),
+  'настройки на ПК — панель разделов слева и широкая сетка карточек справа');
+ok(fs.readFileSync('src/pages/Friends.tsx', 'utf8').includes('pc-pal-grid'),
+  'персонажи: плитка по три карточки вместо списка');
+{
+  /* ---------- ПК-интерфейс после разбора придирок (1.25.1) ---------- */
+  const bar = fs.readFileSync('src/ui/pc/PcTopBar.tsx', 'utf8');
+  ok(!/pc-bar-hint/.test(bar) && !/pc-bar-ver/.test(bar),
+    'в панели нет подсказки F11/Esc и номера версии');
+  ok(!/id: "boss"|id: "fanfic"|id: "network"/.test(bar),
+    'в панели нет кнопок-дублей: босс, фанфики и сеть — на своих местах');
+  ok(/onClick=\{\(\) => go\("home"\)\}/.test(bar), 'клик по CHUBUGAMES ведёт на главную');
+  ok(/Персонажи/.test(bar) && !/"Друзья"/.test(bar), 'вкладка «Персонажи» вместо «Друзья»');
+  ok(/pc-bar-tail/.test(bar), 'Настройки — в правом углу панели');
+  ok(/pc-bar-level/.test(bar) && /pc-bar-wallet/.test(bar),
+    'уровень с опытом и валюты живут в панели одной строкой');
+  ok(/"nav.friends": "Персонажи"/.test(fs.readFileSync('src/core/i18n.ts', 'utf8')),
+    'на телефоне вкладка тоже называется «Персонажи»');
+
+  const home = fs.readFileSync('src/pages/Home.tsx', 'utf8');
+  ok(/className="pc-hero"/.test(home) && home.indexOf('pc-hero') < home.indexOf('pc-games'),
+    'босс и сундук — отдельная линия над библиотекой, а не карточка в колонке');
+  ok(/\bboss2\b/.test(home) && /boss2-name/.test(css),
+    'баннер босса — тонкая полоса с постером, именем, таймером и входом в бой');
+  ok(/ChestCard/.test(home) && /\.chest2-cells/.test(css),
+    'ежечасный сундук — карточка с ячейками накопления, а не полоска');
+  /* всё, что дублировало верхнюю панель или уехало в неё, не должно вернуться */
+  /* Всё, что дублировало верхнюю панель или уехало в неё, не должно
+     вернуться на главную. Сморим на классы и вызовы, а не на слова: в
+     комментариях как раз объяснено, что именно убрали. */
+  for (const [re, what] of [
+    [/\bStat\b|pc-head-stats/, 'строка «уклонов, тапов и монет всего»'],
+    [/readGamble\(\)/, 'кошелёк казино на главной'],
+    [/AdModal/, 'карточка рекламы в колонке'],
+    [/FanficCard|fanfic-feed/, 'плашка фанфиков'],
+  ]) {
+    ok(!re.test(home), `на главной нет лишнего: ${what}`);
+  }
+  const boost = fs.readFileSync('src/ui/pc/PcBoost.tsx', 'utf8');
+  ok(/className="pc-boost"/.test(boost) && /html\.is-desktop \.pc-boost \{[\s\S]{0,160}?position: relative/.test(css),
+    'бонус за ролик — плашка внутри угла, а не карточка на главной и не «fixed» сама по себе');
+  ok(/pc && !game && \(\s*<PcDock/.test(fs.readFileSync('src/App.tsx', 'utf8')),
+    'угол монтируется один раз на уровне приложения и прячется в игре');
+  ok(!/className="pc-head"/.test(home) || /html\.is-desktop \.pc-head \{/s.test(css),
+    'шапка уровня и монет на ПК скрыта (уровень и кошелёк — в панели)');
+
+  /* Раньше проверка запрещала любому правилу в файле ширину 34rem. Идея
+     была в том, что игра на компьютере не должна жить в мобильной колонке,
+     а доставалось всем: модалка офлайна тоже имеет право на 34rem. Теперь
+     запрещено именно play-блокам, а не всему stylesheet-у. */
+  ok(/html\.is-desktop \.pc-play \{[^}]*width: 100%/s.test(css) &&
+     !/\.pc-play[a-z-]*\s*\{[^}]*width: min\(34rem/s.test(css),
+    'игра на ПК занимает всё окно, а не колонку 34rem');
+  ok(/html\.is-desktop \.pc-play \{[^}]*transform: translateZ\(0\)/s.test(css),
+    'у игрового блока остаётся containing block — оверлеи не разлипаются по окну');
+
+  const set = fs.readFileSync('src/pages/Settings.tsx', 'utf8');
+  ok(/className="pc-rail" role="tablist"/.test(set) && /pc-rail-item/.test(set) && /pc-set-blk/.test(set),
+    'настройки: панель разделов слева (.pc-rail), блоки — ячейки широкой сетки');
+  ok(!/pc-blk pc-[ab] pc-r\d/.test(set),
+    'в настройках больше нет жёстких строк pc-rN: блоки не наползают, когда один вырастает');
+  ok(/sec === "system" && \(/.test(set) && /sec === "look" && \(/.test(set),
+    'каждая группа настроек режется активной вкладкой');
+  ok(!/pc-foot/.test(set),
+    'подвала с версией внутри настроек больше нет — он в строке состояния окна');
+  ok(/html\.is-desktop \.pc-rail-item\.on \{[\s\S]{0,260}?color: var\(--text\)/.test(css),
+    'выбранная вкладка настроек подписана читаемым цветом, а не «по акценту»');
+  ok(!/<div className="pc-col">/.test(set), 'старых колонок pc-col в настройках больше нет');
+
+  const shop = fs.readFileSync('src/pages/Shop.tsx', 'utf8');
+  ok(/pc-shop-packs/.test(shop) && /pc-shop-coll/.test(shop),
+    'магазин: кейсы плиткой, коллекция списком');
+  ok(/pc-skin-fig/.test(shop) && /setReveal/.test(shop),
+    'магазин: после покупки скин проявляется на сцене справа');
+  ok(/\.pc-pal-grid \{[^}]*repeat\(3, minmax\(0, 1fr\)\)/s.test(css)
+    || /html\.is-desktop \.pc-pal-grid \{[^}]*repeat\(3/s.test(css),
+    'плитка персонажей на ПК — по три в ряд');
+}
+ok(['Progress', 'Casino'].every((pg) => {
+    const t = fs.readFileSync(`src/pages/${pg}.tsx`, 'utf8');
+    // 1.28: Казино переехало на левую рейку (.pc-rail) — это тоже «панель»,
+    // а не тянущийся ряд чипов
+    return t.includes('pc-tabs-row') || t.includes('pc-seg') || t.includes('pc-rail');
+  }) && fs.readFileSync('src/pages/Network.tsx', 'utf8').includes('net-tabs'),
+  'ряды вкладок на ПК — панель, а не тянущаяся на всю ширину полоска');
+{
+  /* Просьба 1.28: «вкладка Сеть — полный ужас, красиво расположи вкладки и
+     добавь анимации, типа вай-фай грузится». */
+  const net = fs.readFileSync('src/pages/Network.tsx', 'utf8');
+  ok(/className="net-tabs" role="tablist"/.test(net) && /className=\{`net-tab \$\{on \? "on" : ""\}`\}/.test(net),
+    'Сеть: вкладки «Глушилки» и «Скорость» — отдельная панель с подписями');
+  ok(/net-scan/.test(net) && /animation: net-scan/.test(css) && /@keyframes net-scan/.test(css),
+    'Сеть: полоски сигнала анимируются, когда идёт замер (CSS, без rAF)');
+  ok(/\.net-tab\.on \{[\s\S]{0,160}?--acc-ink/.test(css),
+    'Сеть: активная вкладка — акцент с контрастными чернилами, текст не сливается');
+  ok(/export function NetPanel/.test(net) && /export default function NetworkPage/.test(net),
+    'Дополнительное: панель открывается и в Настройках, и на всю страницу');
+}
+
+console.log('\n[37] 1.27: общие вкладки, уровень первым, точка награды, казино');
+{
+  const css37 = fs.readFileSync('src/index.css', 'utf8');
+  const prog = fs.readFileSync('src/pages/Progress.tsx', 'utf8');
+  const cas37 = fs.readFileSync('src/pages/Casino.tsx', 'utf8');
+  const rew = fs.readFileSync('src/core/rewards.ts', 'utf8');
+  const bar37 = fs.readFileSync('src/ui/pc/PcTopBar.tsx', 'utf8');
+
+  ok(/\.pc-seg-item\.on \{[\s\S]{0,240}?--acc-hi/.test(css37),
+    'сегменты вкладок залиты акцентом так же, как вкладки Магазина');
+  ok(prog.includes('className="pc-seg"') && /Достижения/.test(prog) && !/tr\("Ачивки"\)/.test(prog),
+    'в Прогрессе вкладки — pc-seg, раздел называется «Достижения», а не «Ачивки»');
+  ok(/<LevelHero \/>/.test(prog) && prog.indexOf('<LevelHero />') < prog.indexOf('className="pc-seg"'),
+    'уровень — ПЕРВЫЙ блок страницы прогресса, над вкладками');
+  ok(/pc-lvlhero-num/.test(css37) && /pc-lvlhero-bar i \{/.test(css37),
+    'плитка уровня свёрстана классами: число, полоса опыта, остаток XP');
+  ok(/hasLoot/.test(bar37) && /pc-tab-dot/.test(bar37),
+    'на вкладке «Прогресс» в верхней панели есть красная точка «есть награда»');
+  ok(/export function hasLoot/.test(rew) && /export function dailyState/.test(rew),
+    '«есть что забрать» считается в одном месте (core/rewards.ts)');
+  ok(/onClick=\{to && !done \?/.test(prog) && /pc-ach-go/.test(prog),
+    'незакрытое достижение кликабельно и подписано, в какой режим оно ведёт');
+  ok(/function achTarget/.test(prog) && /solid-hit/.test(css37),
+    'клик по карточке — с классом-курсором и поддержкой клавиатуры (Card onClick)');
+
+  const tabList = cas37.slice(cas37.indexOf('const TABS'), cas37.indexOf('];', cas37.indexOf('const TABS')));
+  ok(/\{ id: "slots",\s+name: "Слоты"/.test(tabList) && tabList.indexOf('"slots"') < tabList.indexOf('"farm"'),
+    'СЛОТЫ — первая вкладка казино, ферма в конце (1.28: названия в нормальном регистре)');
+  ok(/className="pc-rail" role="tablist" aria-label=\{tr\("Разделы казино"\)\}/.test(cas37),
+    'вкладки казино — панель слева (.pc-rail), как в настройках (просьба 1.28)');
+  ok(/html\.is-desktop \.pc-chips-bar \{[\s\S]{0,120}?display: flex/.test(css37),
+    'шапка «жетоны казино» на ПК — компактная полоса, а не жирная плита');
+}
+// Магазин: вкладки уехали в левый вертикальный список — ряд чипов сверху
+// там выглядел тремя баннерами, а не навигацией.
+ok(fs.readFileSync('src/pages/Shop.tsx', 'utf8').includes('pc-shop-nav'),
+  'магазин: выбор раздела — вертикальный список слева');
+{
+  const shop = fs.readFileSync('src/pages/Shop.tsx', 'utf8');
+  ok(!/title=\{tr\("МАГАЗИН"\)}\s*right=/.test(shop),
+    'магазин: валюта из шапки убрана (она в верхней панели)');
+  ok(/pc-skin-stage/.test(shop) && /pc-skin-list/.test(shop),
+    'скины: список слева, превью персонажа справа');
+}
+ok(fs.readFileSync('src/pages/Fanfic.tsx', 'utf8').includes('pc-reader'),
+  'читалка фанфиков ограничена по ширине строки');
+const glass23 = fs.readFileSync('src/ui/Glass.tsx', 'utf8');
+ok(glass23.includes('className = ""') && glass23.includes('pc-page'),
+  'Screen умеет свой класс — страницы просят особый режим раскладки');
 const wfDesk = fs.readFileSync('.github/workflows/build-desktop.yml', 'utf8');
 ok(wfDesk.includes('Remove outdated assets'),
   'сборка ПК чистит устаревшие exe из релиза');
+// Публикация и чистка ассетов: порядок важен. Если удалять старые файлы
+// ДО загрузки новых, упавшая публикация оставит релиз пустым — и ссылка
+// скачивания превратится в 404 для всех.
+{
+  const order = (txt) => {
+    const st = (txt.match(/^      - name: (.+)$/gm) || []).map((l) => l.replace(/^      - name: /, ''));
+    return [st.findIndex((n) => /Publish/.test(n)), st.findIndex((n) => /Remove/.test(n))];
+  };
+  const [a, b] = order(wfDesk);
+  ok(a > -1 && b > -1 && a < b, 'на ПК сначала выкладываем exe, потом чистим старые');
+  const wfApk = fs.readFileSync('.github/workflows/build-apk.yml', 'utf8');
+  const [c, d] = order(wfApk);
+  ok(c > -1 && d > -1 && c < d, 'на Android сначала выкладываем APK, потом убираем старое имя');
+}
+// Плавающие теги latest/desktop обязаны указывать на коммит, из которого
+// реально собран файл: иначе страница релиза показывает майский коммит, а
+// «Source code (zip/tar.gz)» не соответствует выложенному exe/apk.
+{
+  const d = fs.readFileSync('.github/workflows/build-desktop.yml', 'utf8');
+  const a = fs.readFileSync('.github/workflows/build-apk.yml', 'utf8');
+  ok(/Point the floating tag at the built commit/.test(d) && /git\/refs\/tags\/latest/.test(d),
+    'на ПК единый релизный тег latest передвигается на собранный коммит');
+  ok(/Point the floating tag at the built commit/.test(a) && /git\/refs\/tags\/latest/.test(a),
+    'на Android релизный тег latest передвигается на собранный коммит');
+  ok(/TITLE="CHUBUGAMES \$APP_VER/.test(d) && /TITLE="CHUBUGAMES \$APP_VER/.test(a),
+    'единый релиз называется CHUBUGAMES $APP_VER (Setup + Portable + APK)');
+  ok(/gh release edit latest[^\n]*--latest/.test(a),
+    'бейдж «Latest» закреплён за единым релизом явно');
+  ok(!/--draft/.test(d) && !/--draft/.test(a),
+    'дата публикации не подделывается проходом через draft: есть риск оставить релиз неопубликованным');
+  ok(/Собрано:/.test(d) && /Собрано:/.test(a),
+    'в теле обоих релизов есть метка сборки — дата, коммит и номер прогона');
+}
 ok(wfDesk.includes('sha256sum'),
   'в описании релиза публикуются хеши файлов');
 ok(dmain.includes('IS_PORTABLE'),
@@ -387,7 +752,20 @@ ok(ar19.includes('drawFighter') && ar19.includes('groundY'),
 const st18 = fs.readFileSync('src/pages/Settings.tsx', 'utf8');
 ok(st18.indexOf('settings.update') < st18.indexOf('settings.appearance'),
   'раздел обновления в самом верху настроек');
-ok(st18.includes('KAYORISAN'), 'автор указан как KAYORISAN');
+/* Просьба 1.28: «вкладка Система: убери проверку сети оттуда, если и так
+   отдельная вкладка есть; обновление сверху, ниже уведомления — и растяни
+   плашки». */
+ok(!/onOpen\?\.\("network"\)/.test(st18) && !/Проверка сети на всю страницу/.test(st18),
+  'в «Системе» больше нет строки про проверку сети');
+ok(/pc-set-wide/.test(st18),
+  'плашки «Системы» растянуты на всю ширину, а не сложены колонкой');
+/* Просьба 1.27.2: из Настроек убрали автора/разработчика и подпись
+   «все друзья, шутки…». Издатель при этом никуда не делся — он в свойствах
+   exe (package.json → author.name, см. проверку builder-метаданных). */
+ok(!/KAYORISAN/.test(st18) && !/t\.me\//.test(st18) && !/variant="primary"[^>]*\n[^>]*Telegram/.test(st18),
+  'в Настройках нет ни плашки автора, ни кнопки Telegram: только содержательные блоки');
+ok(!/settings\.forOurs/.test(st18) && !/settings\.offline/.test(st18),
+  'подвал Настроек: «работает офлайн» и «сделано для своих» убраны');
 ok(st18.includes('saveFileNative'), 'выгрузка сохранения работает на телефоне');
 ok(fs.readFileSync('src/core/notify.ts', 'utf8').includes('initNotificationsOnFirstRun'),
   'разрешение на уведомления спрашивается при первом запуске');
@@ -452,7 +830,10 @@ const css19 = fs.readFileSync('src/index.css', 'utf8');
 ok(css19.includes('html.low-fx'), 'в стилях есть блок облегчённого режима');
 ok(/html\.low-fx[\s\S]{0,900}backdrop-filter:\s*none/.test(css19), 'размытие отключается на слабых');
 const shell19 = fs.readFileSync('src/games/shell.tsx', 'utf8');
-ok(shell19.includes('canvasScaleCap'), 'канвас игр учитывает слабый телефон');
+// кап dpr заменён бюджетом пикселей (см. [28]): он учитывает и слабый
+// телефон, и огромное окно на слабом компьютере
+ok(/renderScale\(/.test(shell19) && !/min\(canvasScaleCap\(\), *dpr\)/.test(shell19),
+  'канвас игр учитывает слабое устройство');
 const app19b = fs.readFileSync('src/App.tsx', 'utf8');
 ok(app19b.includes('applyPerfMode'), 'режим производительности применяется при запуске');
 const set19 = fs.readFileSync('src/pages/Settings.tsx', 'utf8');
@@ -540,7 +921,8 @@ ok(wheel21.includes('WHEEL_RTP'), 'возврат колеса задан явн
 ok(/burn/.test(wheel21) && /win/.test(wheel21), 'у колеса есть выигрышные и сгорающие секторы');
 const cas21 = fs.readFileSync('src/pages/Casino.tsx', 'utf8');
 ok(cas21.includes('ChipFarm'), 'в казино есть заработок жетонов');
-ok(cas21.includes('БЫСТРЫЙ АПГРЕЙД'), 'есть быстрый режим прокрутки');
+ok(/pc-up-mode[\s\S]{0,400}?ОБЫЧНЫЙ/.test(cas21) && /УСКОРЕННЫЙ/.test(cas21),
+  'у апгрейда два явных режима с объяснением (обычный и ускоренный)');
 const fx21 = fs.readFileSync('src/core/fx.ts', 'utf8');
 ok(fx21.includes('wheelTick'), 'у колеса есть звук вращения');
 
@@ -671,6 +1053,1448 @@ ok(!/borderRadius: "50%"/.test(cd27) && !/border: "2px solid var\(--acc\)"/.test
   'вокруг цифр отсчёта нет колец');
 ok(/var\(--surface\)/.test(sh27), 'плашка итогов непрозрачная');
 ok(/var\(--surface-2\)/.test(sh27), 'шапка игры непрозрачная');
+
+console.log('\n[28] Производительность на слабом ПК');
+const pf28 = fs.readFileSync('src/core/perf.ts', 'utf8');
+ok(/export function renderScale/.test(pf28) && /pixelBudget/.test(pf28),
+  'разрешение рисования считается из бюджета пикселей, а не из devicePixelRatio');
+ok(/renderScale\(r\.width, r\.height\)/.test(sh27) && /setTransform\(scale, 0, 0, scale/.test(sh27),
+  'useCanvas берёт буфер из бюджета и рисует в CSS-пикселях');
+ok(!/min\(canvasScaleCap\(\), *dpr\)/.test(sh27),
+  'канвас больше не разгоняется до dpr на всё окно (главная причина 2–7 FPS)');
+ok(/fpsFeed\(now\)/.test(sh27), 'кадры считает цикл игры, отдельного rAF на индикатор нет');
+ok(/export function fpsWatch/.test(pf28), 'для игр без канваса есть резервный счётчик кадров');
+const app28 = fs.readFileSync('src/App.tsx', 'utf8');
+const st28 = fs.readFileSync('src/core/store.tsx', 'utf8');
+ok(/pc && game \? null/.test(app28), 'главный экран размонтирован, пока открыта игра');
+ok(/!lowFx && !game && <Aurora/.test(app28), 'фоновая аура не рисуется под игрой');
+ok(/isPlaying\(\)/.test(st28) && /n >= 5/.test(st28),
+  'автодоход во время игры капает, но дёргает React раз в 5 секунд');
+ok(/\.page-dormant/.test(css), 'экран под игрой выключен из отрисовки (телефон)');
+ok(/html\.is-playing .*animation: none/s.test(css), 'анимации под оверлеем игры остановлены');
+ok(/softShadows/.test(sh27) && /defineProperty\(ctx, "shadowBlur"/.test(sh27),
+  'в лёгком режиме канвас не платит кадрами за размытые тени');
+ok(/export function adaptStep|adaptStep\(fCur/.test(pf28) && /adaptValue/.test(pf28),
+  'разрешение подстраивается по кадрам самой игры, а не по догадке при старте');
+ok(sh27.indexOf('fpsFeed(now)') < sh27.indexOf('const ctx = c.getContext'),
+  'счёт кадров идёт до рисования: смена разрешения не даёт чёрной вспышки');
+const hud28 = fs.readFileSync('src/ui/PcHud.tsx', 'utf8');
+ok(/<div className={`fps-hud \$\{tone\}`}/.test(hud28) && /fps-hud-worst/.test(hud28),
+  'счётчик FPS показывает кадры, миллисекунды и просадки');
+ok(/\.fps-hud \{[^}]*pointer-events: none/s.test(css), 'счётчик не перехватывает клики игры');
+ok(/fpsHud !== false && <FpsHud/.test(app28) && /fpsHud/.test(set25),
+  'FPS включён по умолчанию и выключается в настройках');
+ok(/writeQuality/.test(pf28) && /part="perf"/.test(set25),
+  'качество картинки — одна ручка в настройках, с замером железа');
+
+console.log('\n[29] Клавиатура и мышь в играх');
+const km29 = fs.readFileSync('src/core/keymouse.ts', 'utf8');
+// клавиши живут в keymap.ts (их можно переназначить), а слой keymouse.ts
+// только спрашивает у него «какое это действие»
+const kp29 = fs.readFileSync('src/core/keymap.ts', 'utf8');
+for (const [k, n] of [['KeyW','W'],['KeyA','A'],['KeyS','S'],['KeyD','D'],
+                      ['ArrowUp','↑'],['ArrowDown','↓'],['ArrowLeft','←'],['ArrowRight','→'],
+                      ['Space','пробел'],['Enter','Enter'],['ShiftLeft','SHIFT']])
+  ok(km29.includes(k) || kp29.includes(k), `клавиша ${n} работает в играх`);
+ok(/export function bind/.test(kp29) && /export function actionFor/.test(kp29),
+  'клавишу можно назначить самому, и слой ввода это учитывает');
+ok(!/KeyW/.test(km29), 'слой больше не держит хардкод клавиш — иначе настройка игнорировалась бы');
+ok(/pointerdown/.test(km29) && /pointerup/.test(km29) && /"click"/.test(km29),
+  'пробел шлёт pointerdown/pointerup и click — нажимаются и канвас, и DOM-кнопки');
+ok(/!== "CANVAS"/.test(km29), 'на канвасе лишнего клика нет: прицел-перетаскивание не ломается');
+ok(/inField\(e\.target\)/.test(km29), 'в полях ввода клавиши остаются вводу');
+ok(/window\.addEventListener\("blur"/.test(km29), 'при потере фокуса кнопки сбрасываются (герой не бежит вечно)');
+ok(/Math\.min\(64, t - last\)/.test(km29), 'шаг движения не зависит от лагов: дельта клампится');
+ok(/s\.settings\.keys === false/.test(app28) && /settings\.keys/.test(set25),
+  'управление с клавиатуры отключается тумблером');
+ok(/onKeysPtr/.test(pf28 + km29) && /el\.style\.transform/.test(hud28),
+  'кольцо курсора ходит без перерисовок React');
+ok(/NATIVE_KEY_GAMES/.test(km29) && /handlesKeysNatively\(game\)/.test(app28),
+  'игры, которые читают клавиши сами, не получают двойное нажатие');
+ok(/translate3d\(\$\{k\.x\}px/.test(hud28),
+  'кольцо появляется сразу в точке указателя, а не в углу поля');
+ok(/state\.usingKeys = false;/.test(km29),
+  'движение мыши снимает клавиатурное кольцо: можно целиться мышью');
+ok(/top: calc\(var\(--sat, 0px\) \+ 58px\)/.test(css),
+  'счётчик FPS стоит под шапкой игры, а не поверх «рекорда»');
+
+console.log('\n[30] ЧУБУПА УНИВЕРСАЛИС 5: кампания, общий удар, панель, консоль');
+{
+  const md = fs.readFileSync('src/games/europa/model.ts', 'utf8');
+  const eu = fs.readFileSync('src/games/Europa.tsx', 'utf8');
+  const css30 = fs.readFileSync('src/index.css', 'utf8');
+
+  ok(fs.existsSync('src/games/europa/model.ts'), 'правила режима вынесены из React в модель');
+  ok(/export const LEVELS/.test(md) && (md.match(/^    id: \d+,$/gm) || []).length >= 5,
+    'уровней не меньше пяти (1)…');
+  ok(!/const LEVELS =/.test(eu), 'UI не держит свою копию карты — уровни в модели');
+  ok(/prog \|\| 1/.test(eu) && /prog = Math\.min/.test(eu),
+    'прогресс кампании открыт в сохранении: победил — открылся следующий уровень');
+
+  // общий удар несколькими зданиями
+  ok(/setStrike\(\)/.test(eu) === false && /useState<number\[\]>\(\[\]\)/.test(eu),
+    'удар — список зданий, а не одно «выбранное»');
+  ok(/shiftKey.*setStrike|setStrike[\s\S]{0,400}shiftKey/.test(eu) || /e\.shiftKey/.test(eu),
+    'Shift+клик добавляет здание в общий удар');
+  ok(/strikePower\(provs\.filter\(\(p\) => strike\.includes\(p\.id\)\)\)/.test(eu) && /verdictFor\(srcs/.test(eu),
+    'сила удара считается по всем собранным зданиям, а не по последнему клику');
+  ok(/froms.length > 1|many: best\.froms\.length/.test(eu + md),
+    'множественный удар есть и у игрока, и у ИИ');
+  ok(/applyBattleResult/.test(eu) && /applyBattleResult/.test(md),
+    'итог боя исполняет модель — у игрока и ИИ один и тот же закон потерь');
+
+  // панель прокачки СПРАВА, консоль СЛЕВА СВЕРХУ, подсказки СЛЕВА снизу
+  const side30 = css30.slice(css30.indexOf('.eu-side {'), css30.indexOf('.eu-side::-webkit-scrollbar'));
+  /* Панель — наложение, а не колонка flex: именно из-за колонки она «дёргала
+     вёрстку», сужая карту на 306 px при каждом выборе здания. */
+  ok(/position: absolute/.test(side30) && /right: 10px/.test(side30) && !/flex: 0 0/.test(side30),
+    'панель здания — наложение справа: карта не сдвигается при её открытии');
+  ok(/\.eu-map \{\s*position: absolute;\s*inset: 0/.test(css30) && !/max-width: min\(100%, 74vh\)/.test(css30),
+    'карта растянута на всё свободное место, а не собрана в квадрат по высоте');
+  ok(/eu-map[\s\S]{0,7000}<SidePanel/.test(eu), 'в разметке карта идёт до панели: панель справа');
+  const con30 = css30.slice(css30.indexOf('.eu-console {'), css30.indexOf('.eu-line {'));
+  ok(/left: 8px/.test(con30) && /top: 8px/.test(con30), 'консоль событий — слева сверху');
+  ok(/max-width: 5\d%|max-width: 6\d%/.test(con30), 'консоль не перекрывает карту целиком');
+  ok(/pointer-events: none/.test(con30), 'консоль не перехватывает клики по карте');
+  /* Легенду «твоё/чужое/в ударе» и плашку «КАК ИГРАТЬ» убрали по просьбе:
+     они объясняли то, что и так видно в бою, и ели место под картой. */
+  ok(!/eu-hints/.test(css30) && !/eu-hints/.test(eu), 'легенды значков снизу больше нет');
+  ok(!/eu-how/.test(css30) && !/tr\("КАК ИГРАТЬ"\)/.test(eu), 'плашки «КАК ИГРАТЬ» в выборе уровня больше нет');
+
+  /* Приказ об ударе: собранное войско → клик по цели → плашка у точки нажатия */
+  ok(/className="eu-order"/.test(eu) && /setOrder\(\{ \.\.\.at, to: p\.id \}\)/.test(eu),
+    'клик по чужому зданию поднимает приказ ровно у точки нажатия');
+  ok(/className="eu-order-go"/.test(eu) && /onClick=\{\(\) => attack\(t\.id\)\}/.test(eu),
+    'в приказе есть большая кнопка «АТАКОВАТЬ», бьющая по выбранной цели');
+  ok(/pickGround/.test(eu) && /mapRef/.test(eu),
+    'клик по свободному месту карты тоже отдаёт приказ (ближайшая доступная цель)');
+  ok(/className="eu-log/.test(eu) && /\.eu-log \{[\s\S]{0,200}?overflow-y: auto/.test(css30) &&
+     /overscroll-behavior: contain/.test(css30),
+    'внизу — журнал событий с колёсиком, а не загадочная строка «в ударе»');
+
+  /* Залипание интерфейса после удара — то, из-за чего «дальше ничего не нажимается» */
+  ok(/const attack = \(to\?: number\) =>/.test(eu) && /if \(phase !== "play" \|\| battle\) return;/.test(eu),
+    'удар принимает цель и не принимает второй удар, пока бой анимируется');
+  ok(/\} finally \{[\s\S]{0,160}?setBattle\(null\)/.test(eu),
+    'итоги боя исполняются в try/finally: фаза возвращается всегда');
+  ok(/if \(phase === "battle" && !battle\) setPhase\("play"\)/.test(eu),
+    'есть самовосстановление: "battle" без самого боя больше не вешает интерфейс');
+
+  /* Прокачка: человекочитаемо, а не четыре числа подряд */
+  ok(/eu-row-now/.test(eu) && /прокачать до/.test(eu) && /\.eu-row-dots i\.on/.test(css30),
+    'в прокачке видно текущий уровень и «прокачать до N» с делениями-потолком');
+  ok(/eu-cap-btn/.test(eu), 'панель подписывает, где информация, а где кнопки');
+  ok(/onClose=\{\(\) => \{ setSel\(null\); setOrder\(null\); \}\}/.test(eu) &&
+     /setSel\(null\);\n      return;/.test(eu),
+    'панель здания закрывается: крестик и тап по пустому месту');
+
+  /* FPS в этом режиме — слева: справа стоит панель здания */
+  ok(/\.is-europa \.fps-hud \{[\s\S]{0,80}?left:/.test(css30),
+    'счётчик кадров в стратегии прижат к левому краю');
+  ok(/is-europa/.test(fs.readFileSync('src/App.tsx', 'utf8')),
+    'режим стратегии помечен классом на обёртке игры');
+
+  /* Выбор уровня */
+  ok(/className="eu-levels2"/.test(eu) && /eu-lvl2-why/.test(eu) && /eu-lvl2-map/.test(eu),
+    'уровни — карточки с мини-картой и внятной причиной блокировки');
+
+  /* Плашка итога на ПК — альбомная (претензия «больше и не квадратная») */
+  ok(/html\.is-desktop \.go-plate \{[\s\S]{0,120}?grid-template-columns/.test(css),
+    'плашка итога на компьютере альбомная: итог слева, награда и кнопки справа');
+  ok(/className="go-plate-wrap"/.test(fs.readFileSync('src/games/shell.tsx', 'utf8')),
+    'обёртка плашки итога переведена на класс, а не на max-w-sm');
+
+  // производительность режима: никаких размытий иBackdrop-стёкол на карте
+  const euCss = (css30.match(/\.eu-[a-z-]+ \{[^}]*\}/g) || []).join('\n');
+  ok(!/backdrop-filter|filter:\s*blur/.test(euCss),
+    'в стиле режима нет blur и backdrop-filter — карта не должна жечь кадры');
+  ok(/will-change: transform/.test(euCss), 'узлы карты анимируются transform-ом');
+  ok(/html\.low-fx \.eu-/.test(css30), 'в лёгком режиме декор карты выключается');
+  ok(/isLowFx\(\)/.test(eu) && /lowFx \? /.test(eu),
+    'анимации боя слушают лёгкий режим: на слабом железе они мгновенные');
+
+  // анимация боя: марш → столкновение → итог
+  ok(/motion\.circle/.test(eu) && /eu-dot/.test(eu), 'войска идут точками по полю (SVG, без перерасчёта layout)');
+  ok(/eu-clash/.test(eu) && /eu-result/.test(eu), 'есть вспышка столкновения и плашка итога');
+  ok(/strike\.includes\(p\.id\)/.test(eu) && /\.eu-road\.queued/.test(css30),
+    'дорога заявленного в общий удар здания подсвечивается — очередь удара видно на карте');
+  ok(/: 620\)/.test(eu) && /: 980\)/.test(eu) && /: 2300\)/.test(eu),
+    'бой разложен по времени: марш, удар, итог');
+  ok(/ВЗЯТО|ОТБИЛИСЬ/.test(eu), 'итог назван словами: взято или отбились');
+
+  // оценка опасности чужого здания
+  ok(/ПЕРЕВЕС|ОПАСНО|САМОУБИЙСТВО/.test(md), 'вердикт называется словами, а не только числом');
+  ok(/eu-warn/.test(eu), 'предупреждение об опасности вынесено в отдельный блок');
+  ok(/КТО СМОТРИТ НА ТЕБЯ/.test(eu), 'показано, кто в этот момент может ударить по тебе');
+
+  // у каждого здания своё войско и своя роль
+  ok((md.match(/name: "/g) || []).length > 40, 'зданий и уровней много, а не три копии');
+  ok((md.match(/ \{ name: "[^"]+", at: \d+, icon:/g) || []).length >= 6, 'рангов не меньше шести');
+  ok(/troop:/.test(md) && (md.match(/troop: "/g) || []).length >= 10,
+    'у каждого типа здания своё войско и название его «банды»');
+  ok(/action: "(reinforce|siege|agitate|sabotage)"/.test(md), 'у зданий есть спецдействия');
+
+  // раунды и сколько получил
+  ok(/РАУНД/.test(eu) && /banner/.test(eu), 'сверху показан номер раунда и сколько казны пришло');
+  ok(/раундов/.test(eu) && /turns/.test(md), 'остаток раундов виден в панели');
+
+  // ранг
+  ok(/rankOf\(glory\)/.test(eu) && /gloryFor\(/.test(md),
+    'ранг считается по сумме славы за все партии');
+  // клавиши режима
+  ok(/for \(const code of codesFor\(act\)\)/.test(eu),
+    'ходьба по дорогам берёт клавиши из настроек, а не из хардкода');
+  ok(/code === "Space"/.test(eu) && /e\.key === "Enter"/.test(eu),
+    'пробел закрывает раунд, Enter бьёт — с клавиатуры играть можно целиком');
+  ok(/handlesKeysNatively|europa/.test(fs.readFileSync('src/core/keymouse.ts', 'utf8')),
+    'слой клавиш не дублирует ввод в стратегию');
+  ok(/n >= 1 && n <= 4/.test(eu) && /recruit\(3\)/.test(eu) && /recruit\(0\)/.test(eu),
+    'цифры 1…4 качают здания, 5 и 6 нанимают с клавиатуры');
+
+  // тексты и подписи
+  const rules30 = fs.readFileSync('src/core/rules.ts', 'utf8');
+  const ru = rules30.slice(rules30.indexOf('europa: {'), rules30.indexOf('europa: {') + 1600);
+  ok(/5 уровней|от первого этажа/.test(ru), 'правила описывают кампанию, а не одну карту');
+  ok(/Shift\+клик/.test(ru), 'в правилах сказано про общий удар');
+  const en30 = fs.readFileSync('src/core/i18n-en.ts', 'utf8');
+  for (const k of ['ОТПРАВИТЬ В УДАР', 'КТО СМОТРИТ НА ТЕБЯ', 'СЛЕДУЮЩИЙ РАУНД', 'КАК ИГРАТЬ']) {
+    ok(en30.includes(`"${k}":`), `переведено: ${k}`);
+  }
+}
+{
+  // переassignирование клавиш: настройка есть, работает через общий слой
+  const kmap = fs.readFileSync('src/core/keymap.ts', 'utf8');
+  const km30 = fs.readFileSync('src/core/keymouse.ts', 'utf8');
+  const st30 = fs.readFileSync('src/pages/Settings.tsx', 'utf8');
+  const card = fs.readFileSync('src/ui/KeymapCard.tsx', 'utf8');
+  ok(fs.existsSync('src/core/keymap.ts'), 'назначение клавиш вынесено в общий модуль');
+  ok(/export function bind/.test(kmap) && /export function unbind/.test(kmap) && /export function resetKeymap/.test(kmap),
+    'клавишу можно назначить, снять и всё вернуть');
+  ok(/ALWAYS: Record<KeyAction/.test(kmap), 'стрелки, пробел и Shift остаются всегда — потерять управление нельзя');
+  ok(/actionFor\(e\.code\)|keyAction\(e\.code\)/.test(km30), 'слой ввода читает настройки, а не хардкод');
+  ok(st30.includes('<KeymapCard />'), 'карточка клавиш стоит в настройках');
+  ok(/жми любую клавишу/.test(card), 'режим назначения объясняет, что делать');
+  ok(/"F12"/.test(card) && /MetaLeft/.test(card),
+    'служебные клавиши (Alt, Win, F1…F12) назначать запрещено — можно заклинить систему');
+}
+
+console.log('\n[31] Экраны режима собраны по-настоящему (renderToStaticMarkup)');
+{
+  // Проверка не «поиск подстрок в исходнике», а реальная сборка разметки:
+  // esbuild packует Europa.tsx, React рисует его на Node, и мы смотрим, что
+  // получилось. Так видно пустой панель, отсутствующий шанс боя и цену,
+  // уехавшую в NaN.
+  // черновик держим в репозитории (в .tmp-ui-render и под .gitignore-подобным
+  // именем): esbuild должен видеть node_modules, а на delete мы не надеемся
+  const outDir = path.join(process.cwd(), '.tmp-ui-render');
+  fs.mkdirSync(outDir, { recursive: true });
+  const entry = path.join(outDir, 'entry.tsx');
+  fs.writeFileSync(entry, [
+    'import { renderToStaticMarkup } from "react-dom/server";',
+    'import React from "react";',
+    'import { MapNode, SidePanel, BattleMark, LevelPick } from "../src/games/Europa";',
+    'import { freshProvs, LEVELS, fight, verdictFor, rankOf } from "../src/games/europa/model";',
+    'const P = (id, over) => Object.assign(JSON.parse(JSON.stringify(freshProvs(LEVELS[id])[0])), over);',
+    'export function render() {',
+    '  const out = {};',
+    '  const ps = freshProvs(LEVELS[1]);',
+    '  const me = ps[0], foe = ps.find((x) => x.owner !== "me");',
+    '  const res = fight([me], foe, false);',
+    '  out.map = renderToStaticMarkup(React.createElement(MapNode, {',
+    '    p: me, active: true, queued: true, siegeReady: false, target: false,',
+    '    onPick() {}, onQueue() {},',
+    '  }));',
+    '  out.mine = renderToStaticMarkup(React.createElement(SidePanel, {',
+    '    p: me, provs: ps, gold: 120, onBuy() {}, onRecruit() {}, onSpecial() {},',
+    '    onToggleStrike() {}, queued: false, onAttack() {}, froms: [], vw: null,',
+    '    threats: [], siegeReady: false, play: true,',
+    '  }));',
+    '  out.foe = renderToStaticMarkup(React.createElement(SidePanel, {',
+    '    p: foe, provs: ps, gold: 120, onBuy() {}, onRecruit() {}, onSpecial() {},',
+    '    onToggleStrike() {}, queued: false, onAttack() {}, froms: [me],',
+    '    vw: verdictFor([me], foe, false), threats: [], siegeReady: false, play: true,',
+    '  }));',
+    '  out.battle = renderToStaticMarkup(React.createElement(BattleMark, {',
+    '    battle: { to: foe.id, froms: [me.id], res, step: 2 }, provs: ps, step: 2, lowFx: false,',
+    '  }));',
+    '  out.pick = renderToStaticMarkup(React.createElement(LevelPick, {',
+    '    unlocked: 2, rank: rankOf(900), glory: 900, onStart() {}, onExit() {},',
+    '  }));',
+    '  return out;',
+    '}',
+  ].join('\n'));
+  let r31 = null;
+  try {
+    const esbuild = await import('esbuild');
+    await esbuild.build({
+      entryPoints: [entry],
+      outfile: path.join(outDir, 'out.mjs'),
+      bundle: true, format: 'esm', platform: 'node', jsx: 'automatic',
+      external: ['react', 'react-dom'], logLevel: 'error',
+    });
+    const g = globalThis;
+    g.localStorage = { store: new Map(), getItem(k) { return this.store.get(k) ?? null; }, setItem(k, v) { this.store.set(k, String(v)); }, removeItem(k) { this.store.delete(k); } };
+    g.matchMedia = g.matchMedia || (() => ({ matches: false, addEventListener() {}, removeEventListener() {} }));
+    g.ResizeObserver = g.ResizeObserver || class { observe() {} unobserve() {} disconnect() {} };
+    r31 = (await import(pathToFileURL(path.join(outDir, 'out.mjs')).href)).render();
+  } catch (e) {
+    ok(false, `экраны режима собраны: ${String(e.message).slice(0, 120)}`);
+  }
+  if (r31) {
+    ok(/eu-node/.test(r31.map) && />8</.test(r31.map) && /eu-node-army/.test(r31.map),
+      'узел карты показывает название здания и его войско');
+    ok(/queued/.test(r31.map) && /active/.test(r31.map), 'узел умеет выглядеть «выбранным» и «в ударе»');
+    ok(/eu-row/.test(r31.mine) && (r31.mine.match(/eu-row /g) || []).length >= 4,
+      'панель своего здания даёт все четыре ветки прокачки');
+    ok(/НАНЯТЬ|RECRUIT/.test(r31.mine), 'в панели есть наём войска');
+    ok(!/NaN|undefined%/.test(r31.mine + r31.foe + r31.map), 'в панели нет NaN и «undefined» — цены и проценты живые');
+    ok(/ШАНС|ОDDS|odds/i.test(r31.foe) && /%/.test(r31.foe), 'по чужому зданию показан шанс взятия в процентах');
+    ok(/УДАРИТЬ|STRIKE/.test(r31.foe), 'по чужому зданию есть кнопка удара');
+    ok(/eu-dot/.test(r31.battle), 'бой рисует точки-отряды');
+    ok(/ВЗЯТО|ОТБИЛИСЬ/.test(r31.battle), 'бой показывает итог словами');
+    ok((r31.battle.match(/eu-dot/g) || []).length >= 2, 'в удар идёт несколько точек, а не одна');
+    ok((r31.pick.match(/eu-lvl/g) || []).length >= 10, `экран выбора уровня показывает все пять уровней`);
+    ok(/locked/.test(r31.pick), 'закрытые уровни помечены как закрытые');
+  }
+  fs.rmSync(outDir, { recursive: true, force: true });
+}
+
+console.log('\n[32] Жидкое стекло на телефоне (только мобильная оболочка)');
+{
+  const css32 = fs.readFileSync('src/index.css', 'utf8');
+  const mob = css32.slice(css32.indexOf('ЖИДКОЕ СТЕКЛО НА ТЕЛЕФОНЕ'));
+  ok(/html:not\(\.is-desktop\)/.test(mob), 'стеклянная ветка ограничена телефоном: ПК не затронут');
+  const blur32 = (mob.match(/--glass-blur:\s*(\d+)px/) || [])[1];
+  ok(+blur32 >= 16 && +blur32 <= 32, `радиус преломления в потолке: ${blur32}px (больше — уже минус кадры)`);
+  ok(/--glass-sat:\s*1[5-9]\d%/.test(mob), 'стекло насыщает фон (saturate), иначе оно молочное, а не цветное');
+  ok(/backdrop-filter: blur\(var\(--glass-blur\)\) saturate\(var\(--glass-sat\)\)/.test(mob),
+    'преломление собирается из переменных, а не захардкожено');
+  ok(/--r-lg:\s*2\dpx/.test(mob) && /--r-xl:\s*2\dpx/.test(mob),
+    'на телефоне скругления крупнее — край под пальцем');
+  ok(/::before \{[\s\S]{0,400}linear-gradient\(\s*168deg/.test(mob), 'верхний блик стекла усилен на мобильной ветке');
+  ok(/::after \{[\s\S]{0,300}rgba\(0, 0, 0, 0\.1\d\)/.test(mob), 'объём: нижняя тень внутри стекла');
+  ok(/--glass-shadow:[^;]*rgba\(0, 0, 0/.test(mob) && /--glass-inset:[^;]*inset 0 1px 0/.test(mob),
+    'тень в два слоя + внутренний свет — то, что делает панель объёмной');
+  ok(/html\.light:not\(\.is-desktop\)/.test(mob), 'для светлой темы есть свой набор стеклянных переменных');
+  ok(/\.pc-page-head h1/.test(mob) && /clamp\(\d+px, \d+\.\d+vw/.test(mob),
+    'заголовок страницы на телефоне крупный (big title)');
+  ok(/-webkit-overflow-scrolling: touch/.test(mob) && /overscroll-behavior: contain/.test(mob),
+    'скролл с инерцией и без «тянучки» за край экрана');
+  ok(/body::before \{[\s\S]{0,320}pointer-events: none/.test(mob),
+    'верхний свет не перехватывает касания');
+  ok(/html\.low-fx:not\(\.is-desktop\)[\s\S]{0,120}--glass-blur: 0px/.test(mob),
+    'в лёгком режиме преломление выключается, а радиусы и грани остаются');
+
+  const fr = fs.readFileSync('src/pages/Friends.tsx', 'utf8');
+  ok(fr.includes('m-sheet') && fr.includes('m-handle'), 'редактор друга — стеклянный лист снизу с ручкой');
+  ok(/spring|stiffness/.test(fr.slice(fr.indexOf('m-sheet') - 700, fr.indexOf('m-sheet'))),
+    'лист выезжает пружиной, а не телепортируется');
+  const gp = fs.readFileSync('src/ui/Glass.tsx', 'utf8');
+  ok(/isDesktop\(\) \? 0\.98 : 0\.955/.test(gp), 'нажатие на телефоне продавливает стекло сильнее');
+
+  const eu32 = fs.readFileSync('src/games/Europa.tsx', 'utf8');
+  ok(!/\bPanel\b|glass/.test(eu32), 'стратегия стекло не использует — ей и так тяжело на слабом телефоне');
+
+  const cap32 = JSON.parse(fs.readFileSync('capacitor.config.json', 'utf8'));
+  ok(cap32.android && /#0D0D10/i.test(cap32.android.backgroundColor),
+    'WebView стартует тёмным: вспышка белого при запуске убрана');
+  ok(cap32.android.zoomingEnabled === false, 'пинч-зум выключен: он ломает игры на канвасе');
+
+  const patch = fs.readFileSync('scripts/patch-android-glass.mjs', 'utf8');
+  ok(fs.existsSync('scripts/patch-android-glass.mjs'), 'правка системных полосок вынесена в скрипт, а не в sed внутри YAML');
+  ok(/navigationBarColor/.test(patch) && !/<item name="android:windowBackground"/.test(patch),
+    'скрипт красит полоски, но не лезет в тему сплэша (там живёт заставка Capacitor)');
+  ok(/идемпотентен|уже наши|уже прозрачные/.test(patch), 'скрипт можно запускать дважды — он не удваивает правки');
+  const wf32 = fs.readFileSync('.github/workflows/build-apk.yml', 'utf8');
+  ok(/node scripts\/patch-android-glass\.mjs android\/app\/src\/main\/res/.test(wf32),
+    'сборка APK вызывает правку полосок');
+  ok(wf32.indexOf('patch-android-glass') < wf32.indexOf('gradlew'),
+    'полоски красятся до gradle-сборки, иначе правка бы не попала в APK');
+
+  const ver32 = fs.readFileSync('src/core/version.ts', 'utf8');
+  const v32 = ver32.match(/APP_VERSION\s*=\s*"([0-9.]+)"/)[1];
+  ok(fs.readFileSync('src/core/changelog.ts', 'utf8').includes(`"${v32}"`), `в changelog есть версия ${v32}`);
+  ok(fs.readFileSync('RELEASE_NOTES.md', 'utf8').includes('жидкое стекло') ||
+     fs.readFileSync('RELEASE_NOTES.md', 'utf8').includes('ЖИДКОЕ СТЕКЛО'), 'в описании релиза есть про жидкое стекло');
+  ok(/жидкое\s+стекл/i.test(fs.readFileSync('README.md', 'utf8')), 'README описывает мобильное стекло');
+}
+
+console.log('\n[33] Android без ключа подписи: preview вместо сломанного релиза');
+{
+  const wf = fs.readFileSync('.github/workflows/build-apk.yml', 'utf8');
+  ok(/id: signs/.test(wf) && /signed=(true|false)/.test(wf),
+    'прогон отдельно определяет, заданы ли секреты подписи');
+  ok(/CHUB_ALLOW_UNSIGNED: \$\{\{ steps\.signs\.outputs\.signed == 'true' && '0' \|\| '1' \}\}/.test(wf),
+    '«можно ли без ключа» выводится из наличия секретов, а не из «это релиз»');
+  ok(/TASK=assembleRelease\n.*signed.*'true'|if \[ "\$\{\{ steps\.kind\.outputs\.release \}\}" = "true" \] && \[ "\$\{\{ steps\.signs\.outputs\.signed \}\}" = "true" \]/.test(wf),
+    'assembleRelease только когда ключ есть: без него release-APK всё равно не установить');
+  const latestIf = (wf.match(/name: Publish APK to Releases\n\s+if: (.+)/) || [])[1] || '';
+  ok(/release == 'true'/.test(latestIf),
+    'APK всегда выкладывается в единый релиз latest на релизных сборках');
+  ok(!/name: Publish preview APK/.test(wf),
+    'отдельные preview-релизы отключены — все сборки идут в единый релиз latest');
+  ok(/Remove the misspelled legacy asset\n\s+if: .*release == 'true'/.test(wf),
+    'чистка старых файлов выполняется на каждом релизе');
+  ok(/node scripts\/patch-android-glass\.mjs/.test(wf),
+    'правка системных полосок стоит в сборке');  {
+    // Дубликаты ищем только внутри job `build`: у verify свои шаги, и одинаковые
+    // имена в разных джобах — норма. А два upload-artifact с одним именем в
+    // одной джобе дают 409 «artifact already exists» и роняют сборку.
+    const bi = wf.search(/^ {2}build:$/m);
+    const rest = bi >= 0 ? wf.slice(bi) : '';
+    const nx = rest.slice(1).match(/^ {2}[A-Za-z][\w-]*:$/m);
+    const body = nx ? rest.slice(0, rest.indexOf(nx[0])) : rest;
+    const names = (body.match(/^      - name: (.+)$/gm) || []).map((x) => x.replace(/^      - name: /, '').trim());
+    const dup = names.filter((n, i) => names.indexOf(n) !== i);
+    ok(names.length > 20 && dup.length === 0,
+      `шаги джобы build не повторяются (шагов ${names.length}${dup.length ? ', дубли: ' + [...new Set(dup)].join(', ') : ''})`);
+  }
+  const rm = fs.readFileSync('README.md', 'utf8');
+  ok(/preview/i.test(rm) && /PASTE-INTO-SECRETS/.test(rm),
+    'README объясняет, что делать без ключа и где взять значения');
+}
+
+console.log('\n[34] 1.27: цвета, уведомления, пауза, защита от падений, издатель');
+{
+  const css = fs.readFileSync('src/index.css', 'utf8');
+  const store = fs.readFileSync('src/core/store.tsx', 'utf8');
+  const theme = fs.readFileSync('src/core/theme.ts', 'utf8');
+  const shell = fs.readFileSync('src/games/shell.tsx', 'utf8');
+  const desk = fs.readFileSync('src/core/desktop.ts', 'utf8');
+  const ov = fs.readFileSync('src/components/Overlays.tsx', 'utf8');
+  const app = fs.readFileSync('src/App.tsx', 'utf8');
+  const mainf = fs.readFileSync('src/main.tsx', 'utf8');
+  const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+  const builder = fs.readFileSync('desktop/builder.yml', 'utf8');
+
+  /* цвет: акцентная кнопка на ПК не должна терять заливку — это и был баг
+     «текст не видно»: правило плотности стекла перебивало .glass-acc */
+  ok(/html\.is-desktop \.glass\.glass-acc \{[^}]*background:/.test(css),
+    'акцентная кнопка на ПК получает свою заливку явно (иначе --acc-ink тонет)');
+  ok(/\.glass-acc \{[\s\S]{0,400}?--acc-hi/.test(css),
+    'заливка акцента собрана из --acc-hi/--acc-lo, а не захардкоженным миксом');
+  ok(!/color: "var\(--n-[45]00\)"/.test(fs.readFileSync('src/pages/Settings.tsx', 'utf8')),
+    'ни один текст не закрашен нейтральной ступенью --n-400/--n-500 (контраст < 3)');
+
+  /* тема: чернила и текст считаются из яркости, а не зашиты */
+  ok(/export function inkOn/.test(theme) && /export function accentText/.test(theme),
+    'core/theme.ts умеет подбирать чернила и читаемый акцентный текст');
+  ok(/accentTokens\(acc\.hex/.test(store),
+    'store выставляет --acc-* из accentTokens(), а не константами');
+  ok(/const MAX_TOASTS = 3;/.test(store) && /\.slice\(-MAX_TOASTS\)/.test(store),
+    'уведомления идут очередью: на экране не больше трёх');
+  ok(/chub:toastrule/.test(store) && /chub:toastrule/.test(ov),
+    'наведение мыши на уведомление откладывает авто-скрытие');
+  ok(/toast-stack\.pc/.test(css) && /\.toast-x \{/.test(css),
+    'стопка уведомлений живёт в углу и закрывается крестиком');
+
+  /* пауза */
+  ok(/isPaused\(\)/.test(shell), 'цикл useCanvas пропускает кадры на паузе');
+  ok(/last = now;/.test(shell), 'dt не накапливается: после паузы нет прыжка на полэкрана');
+  ok(/Icon name="pause"/.test(shell), 'в шапке игры есть кнопка паузы (на телефоне клавиатуры нет)');
+  ok(/toggleEscape/.test(desk) && /isPlaying\(\) && toggleEscape\(\)/.test(desk),
+    'Esc внутри игры = пауза, а не мгновенный выход');
+  ok(/html\.is-paused \.game-stage/.test(css) && /game-stage/.test(app),
+    'на паузе CSS-анимации сцены тоже замирают');
+  ok(/<PauseOverlay/.test(app) && /resumeWithCountdown/.test(fs.readFileSync('src/core/pause.ts', 'utf8')),
+    'пауза показывает меню с отсчётом 3-2-1');
+  ok(/setPauseExitHandler\(game \? \(\) => setGame\(null\) : null\)/.test(app),
+    'выход из паузы возвращает в библиотеку и снимает паузу');
+
+  /* защита от падений */
+  const bug = fs.readFileSync('src/ui/BugGuard.tsx', 'utf8');
+  ok(/getDerivedStateFromError/.test(bug) && /static getDerivedStateFromError/.test(bug),
+    'есть ErrorBoundary с экраном падения и двумя действиями');
+  ok(/<BugGuard kind="app"/.test(mainf), 'всё приложение под границей — белого экрана не будет');
+  ok(/<BugGuard kind="page">/.test(app), 'каждая страница под своей границей');
+  ok(/installCrashWatch/.test(app), 'невыловленные reject/error не молчат, а сообщают о себе');
+  ok(/\.bug-card \{/.test(css), 'экран падения свёрстан классами, а не инлайн-костылем');
+
+  /* издатель */
+  ok(pkg.author && pkg.author.name === 'KAYORISAN',
+    'package.json → author.name = KAYORISAN: из него electron-builder берёт Publisher/CompanyName');
+  ok(/KAYORISAN/.test(builder) && /uninstallDisplayName/.test(builder),
+    'builder.yml подписывает и удаление установки тем же издателем');
+  ok(!('"win"' in pkg), 'в package.json нет мёртвого блока win (electron-builder читает desktop/builder.yml)');
+}
+
+console.log('\n[35] 1.27: клавиши, светлая тема, лёгкость');
+{
+  const css = fs.readFileSync('src/index.css', 'utf8');
+  /* Мышь + стрелки + WASD одновременно. Игры со «своим» клавиатурным кодом
+     обязаны брать клавиши из карты (core/keymap): там стрелки всегда, а
+     сравнение по e.key ломается на русской раскладке (KeyA — это «ф»). */
+  for (const f of ['src/games/BurgerRain.tsx', 'src/games/MergeHeads.tsx', 'src/games/ShitovRun.tsx']) {
+    const t = fs.readFileSync(f, 'utf8');
+    ok(/actionFor\(e\.code\)/.test(t) && /core\/keymap/.test(t),
+      `${f.split('/').pop()}: клавиши читаются из keymap (стрелки + WASD + свои)`);
+    ok(!/e\.key === "Arrow/.test(t),
+      `${f.split('/').pop()}: больше нет сверки по e.key (ломалось на не-латинице)`);
+  }
+  ok(/up: \["KeyW"\], down: \["KeyS"\], left: \["KeyA"\], right: \["KeyD"\]/.test(
+    fs.readFileSync('src/core/keymap.ts', 'utf8')),
+    'WASD — назначение по умолчанию, а не «если игрок сам проставит»');
+
+  /* Светлая тема: не белое по чёрному */
+  ok(/html\.light \{\n[\s\S]{0,600}?--n-100: #fbfbfd/.test(css),
+    'светлая тема: фон карточек приглушён, а не чистый #ffffff');
+  ok(/--n-900: #23232c;/.test(css),
+    'светлая тема: текст #23232c — гало от чистого чёрного убрано');
+  ok(/html\.light \.aurora \{[\s\S]{0,60}?opacity: 0\.42/.test(css),
+    'светлая тема: декоративный ореол приглушён');
+
+  /* Шрифтовые роли существовали как var(), но не были определены */
+  ok(/--font-display: "Unbounded"/.test(css) && /--font-num: "Inter Variable"/.test(css),
+    '--font-display и --font-num определены (раньше var() в пустоту)');
+
+  /* Библиотека не должна рисовать то, чего не видно */
+  ok(/html\.is-desktop \.pc-tile \{[\s\S]{0,140}?content-visibility: auto/.test(css) &&
+     /contain-intrinsic-size/.test(css),
+    'плитка библиотеки: content-visibility + contain-intrinsic-size (скролл без лишних отрисовок)');
+}
+
+console.log('\n[36] 1.27: кошелёк казино нельзя потерять');
+{
+  const gm = fs.readFileSync('src/core/gamble.ts', 'utf8');
+  const casino = fs.readFileSync('src/pages/Casino.tsx', 'utf8');
+  ok(/const KEY_BAK = `\$\{KEY\}\.bak`;/.test(gm),
+    'хранилище казино пишется в два ключа: основной + зеркало');
+  ok(/function sane\(/.test(gm) && /function parse\(/.test(gm),
+    'прочитанное состояние проверяется на пригодность, а не принимается на веру');
+  ok(/if \(bak\) \{[\s\S]{0,200}?localStorage\.setItem\(KEY, JSON\.stringify\(bak\)\)/.test(gm),
+    'битый основной ключ восстанавливается из зеркала сразу, а не обнуляется');
+  ok(/export function updateGamble/.test(gm) && /export type GamblePatch =[\s\S]{0,80}=> Partial<GambleStore>/.test(gm),
+    'запись — одна функция read-modify-write по актуальному состоянию');
+  ok(/next\.chips = Math\.max\(0, Math\.floor\(next\.chips \|\| 0\)\);/.test(gm) &&
+     /if \(typeof n === "number" && n > 0\)/.test(gm),
+    'перед записью вычищаются отрицательные жетоны и обнулённые позиции');
+  ok(/export function shiftItem/.test(gm),
+    'изменение позиции инвентаря — общая функция, а не ручной перебор ключей');
+  ok(/const save = useCallback<GambleSave>/.test(casino) && /updateGamble\(patch\)/.test(casino),
+    'казино пишет через save() → updateGamble, минуя свой снимок состояния');
+  ok(!/writeGamble\(/.test(casino) && !/writeGamble\(/.test(fs.readFileSync('src/ui/ChestCard.tsx', 'utf8')) &&
+     !/writeGamble\(/.test(fs.readFileSync('src/pages/BossFight.tsx', 'utf8')),
+    'ни один экран не дёргает writeGamble напрямую — иначе записи затирают друг друга');
+  /* сам баг: патч, собранный из g внутри таймаута, — это и есть потерянные вещи */
+  const stale = casino.match(/save\(\{[^}]*\bg\.(chips|items|battles|won|lost)\b[^}]*\}\)/g) || [];
+  ok(stale.length === 0,
+    'в save() не передаётся объект, собранный из снимка рендера (stale closure = потерянные вещи)');
+  ok(/save\(\(x\) => \(\{[\s\S]{0,220}?items: shiftItem\(x,/.test(casino),
+    'приз кейса кладётся в актуальный инвентарь, а не в «g.items двухсекундной давности»');
+  ok(/for \(const id of p\.ids\)[\s\S]{0,260}?items = \{ \.\.\.items, \[id\]: Math\.max\(0, left\) \}/.test(casino) &&
+     /return \{ items, equipped: eq, chips: x\.chips \+ gained \}/.test(casino),
+    'ставка апгрейда сгорает целиком (все выбранные вещи) и от АКТУАЛЬНОГО инвентаря, а не от снимка рендера');
+}
+
+console.log('\n[38] 1.27: слоты — автомат, а не мигающие плашки');
+{
+  const css = fs.readFileSync('src/index.css', 'utf8');
+  const gm = fs.readFileSync('src/core/gamble.ts', 'utf8');
+  const cas = fs.readFileSync('src/pages/Casino.tsx', 'utf8');
+  const slots = cas.slice(cas.indexOf('function Slots('), cas.indexOf('/* ═══════════════════════════ КЕЙСЫ'));
+
+  ok(/name: "БУРГЕР"/.test(gm) && /export function symbolName/.test(gm),
+    'у каждого символа барабана есть имя, и оно доступно отовсюду (подписи)');
+  ok(/const LEN = \[30, 34, 38\]/.test(slots),
+    'у барабанов разная длина ленты — они останавливаются по очереди, как в живом автомате');
+  ok(/className="pc-slot-strip"/.test(slots) && /translateY\(calc\(var\(--cell\)/.test(slots),
+    'лента реально едет (translate по cell), а не мигает сменой иконки');
+  ok(/\.pc-slot-reel \{[\s\S]{0,200}?height: calc\(var\(--cell\) \* 3\)/.test(css) &&
+     /\.pc-slot-window \{[\s\S]{0,300}?grid-template-columns: repeat\(3/.test(css),
+    'в окне видно три строки ленты — «прокрутка» читается глазом');
+  ok(/className="pc-slot-cap">\{tr\(symbolName\(sym\)\)\}/.test(slots),
+    'под символом в ленте подпись его имени');
+  ok(/tr\(sy\.name\)/.test(slots), 'в таблице выплат символы названы, а не только иконки');
+  ok(/\.pc-slot-payline \{/.test(css), 'есть линия выплат поперёк окна');
+  ok(/setHist\(\(h\) => \[\{ net, sym \}, \.\.\.h\]\.slice\(0, 6\)\)/.test(slots) &&
+     /className="pc-slot-hist"/.test(slots),
+    'ряд последних исходов виден — полоса результата не единственная подсказка');
+  ok(/const net = pay - bet;/.test(slots) && /tone === "win"/.test(slots),
+    'окрашивается ЧИСТЫЙ итог (выплата минус ставка), а не «красивый плюс»');
+  ok(/save\(\(x\) => \(\{\s*chips: x\.chips - bet \+ pay,/.test(slots),
+    'баланс слотов правится от актуального состояния');
+  ok(/\.pc-slot\.win \{[\s\S]{0,140}?animation: pcslotwin/.test(css) &&
+     /html\.low-fx \.pc-slot\.win \{ animation: none; \}/.test(css),
+    'золотая вспышка выигрыша есть, и она выключается в лёгком режиме');
+  ok(!/setInterval\(\(\) => \{[\s\S]{0,80}?spinReel\(\)\)\);/.test(slots),
+    'нет интервала, который просто подменял иконки каждые 60 мс');
+}
+
+console.log('\n[39] 1.27: кейсы как кейсы, вещи можно осмотреть');
+{
+  const css = fs.readFileSync('src/index.css', 'utf8');
+  const cas = fs.readFileSync('src/pages/Casino.tsx', 'utf8');
+  ok(/className="pc-case-art"/.test(cas) && /\.pc-case-body \{/.test(css) &&
+     /\.pc-case-handle \{/.test(css) && /\.pc-case-lock \{/.test(css),
+    'у кейса нарисован чемодан (корпус, ручка, замок, уголки), а не серая иконка');
+  ok(/className="pc-cases"/.test(cas) && /\.pc-cases \{[^}]*auto-fill/.test(css),
+    'кейсы — сетка карточек на всю ширину, а не три строки друг под другом');
+  ok(/\.pc-case-modal \{[^}]*min\(60rem/.test(css) && /\.pc-case-mbody \{[^}]*grid-template-columns/.test(css),
+    'модалка кейса широкая и в две колонки (лента + шансы), а не max-w-sm');
+  ok(/pc-case-row-pct/.test(cas) && /opening\.odds\[r\] \* 100/.test(cas),
+    'шансы показаны числом процентов на каждую редкость, а не только полоской');
+  ok(/pc-case-row-names/.test(cas), 'в модалке видно, какие именно вещи могут выпасть');
+  /* клик по карточке не должен тратить жетоны */
+  ok(/const look = \(c: GambleCase\)/.test(cas) && /const buy = \(c: GambleCase\)/.test(cas),
+    'просмотр кейса и покупка — два разных действия');
+  ok(!/onClick=\{\(\) => open\(c\)\}/.test(cas) && /onClick=\{\(\) => look\(c\)\}/.test(cas),
+    'клик по карточке кейса только смотрит: жетоны снимает кнопка «ОТКРЫТЬ ЗА»');
+  ok(/chips: Math\.max\(0, x\.chips - c\.price\)/.test(cas),
+    'цена кейса снимается от актуального баланса, ровно один раз');
+  ok(/if \(e\.key !== "Escape"\) return;/.test(cas), 'Esc закрывает просмотр кейса');
+  ok(/pc-case-cell-name clip1">\{it\.name\}/.test(cas), 'у ячеек ленты есть подписи предметов');
+  ok(/className="pc-stuff-hit/.test(cas) && /pc-stuff-modal/.test(cas),
+    'вещь можно осмотреть: карточка ведёт в модалку с подробностями');
+  ok(/ITEM_KIND_LABEL/.test(cas) && /на голову/.test(cas) && /рядом с героем/.test(cas),
+    'у каждого украшения подписано, куда оно надевается');
+  ok(/tr\("в наличии"\)/.test(cas), 'в осмотре видно, сколько таких предметов');
+  ok(/тот же шанс, быстрее серия/.test(cas) && /\.pc-up-mode\.on/.test(css),
+    'обычный и ускоренный режимы подписаны одинаковостью шансов: режим не меняет математику');
+  ok(/className="pc-stuff-actions"/.test(cas) && /ПРОДАТЬ/.test(cas) && /НАДЕТЬ/.test(cas),
+    'из осмотра можно надеть и продать, не возвращаясь в список');
+}
+
+console.log('\n[40] 1.27: кейс-батл понятен, у фермы есть срок и награда');
+{
+  const css = fs.readFileSync('src/index.css', 'utf8');
+  const cas = fs.readFileSync('src/pages/Casino.tsx', 'utf8');
+  ok(/className="pc-battle-rule"/.test(cas) && /Вы и соперник по очереди открываете/.test(cas),
+    'правила батла объяснены одной строкой прямо на экране настройки');
+  ok(/className=\{`pc-battle-case /.test(cas) && /\{x\.name\}/.test(cas),
+    'выбор кейса в батле — с названием и ценой, а не голыми числами');
+  ok(/className=\{`pc-battle-round \$\{rounds === r \? "on"/.test(cas) && /одна дуэль — всё или ничего/.test(cas),
+    'выбор числа раундов подписан: чем отличается 1, 3 и 5');
+  ok(/className="pc-battle-sum"/.test(cas) && /на кону/.test(cas) && /средняя ценность/.test(cas),
+    'перед боем видно: сколько стоит, что на кону и средняя ценность');
+  ok(/className="pc-battle-tug"/.test(cas) && /\.pc-battle-tug \{/.test(css),
+    'на табло есть полоса перевеса — кто ведёт, видно без счёта в уме');
+  ok(/pc-battle-lead/.test(cas) && /ведёшь ты/.test(cas), 'под табло подписано, кто ведёт');
+  ok(/r\.mine\.name/.test(cas) && /r\.foe\.name/.test(cas),
+    'в раундах показаны имена предметов, а не только иконки с цифрами');
+  ok(/className="pc-battle-record"/.test(cas), 'статистика побед осталась и подписана');
+
+  ok(/pc-farm-rule/.test(cas) && /забег идёт, пока не завершишь; между забегами перерыва нет/.test(cas),
+    'у фермы описан забег: без таймера на 20 с, между забегами перерыва нет (просьба 1.28)');
+  ok(/const FARM_MS = 0/.test(cas) && /const TIMED = FARM_MS > 0/.test(cas) &&
+     /endAt.current = TIMED \? performance.now\(\) \+ FARM_MS : Infinity/.test(cas),
+    'срока у забега нет: обратный отсчёт выключён на уровне константы, а не «ещё 20 секунд, и ты свободен»');
+  ok(/if \(phase === "play"\) \{ setPhase\("over"\)/.test(cas),
+    'забег можно завершить самому — кнопка в тот же момент выдаёт наловленное');
+  ok(/награда — жетоны: они тратятся на кейсы/.test(cas),
+    'ферма объясняет, ЧТО за награда и куда она тратится');
+  ok(/className="pc-farm-worth"/.test(cas) && /GAMBLE_CASES\[0\]\.price/.test(cas),
+    'итог фермы переведён в понятные вещи: сколько кейсов и спинов это');
+  ok(/setMaxCombo\(\(v\) => Math\.max\(v, comboRef\.current\)\)/.test(cas) && /макс\. комбо/.test(cas),
+    'в итоге фермы виден лучший комбо-множитель забега');
+  ok(/onTab\?: \(t: Tab\) => void/.test(cas) && /onTab\("slots"\)/.test(cas),
+    'с фермы можно уйти тратить жетоны — ссылка на слоты');
+  /* имена классов не должны пересекаться: иначе стиль одной секации лез в другую */
+  ok(!/\.pc-battle-side\.me \.pc-battle-sum \{/.test(css) && /\.pc-battle-total \{/.test(css),
+    'табло батла использует свои классы и не наследует стиль строки «стоит/на кону»');
+}
+
+console.log('\n[41] 1.27: вкладки настроек и полный перевод названий игр');
+{
+  const css = fs.readFileSync('src/index.css', 'utf8');
+  const set = fs.readFileSync('src/pages/Settings.tsx', 'utf8');
+  const content = fs.readFileSync('src/core/content.ts', 'utf8');
+  const en = fs.readFileSync('src/core/i18n-en.ts', 'utf8');
+
+  ok(/html\.is-desktop \.pc-cols\.pc-set-cols \{[^}]*grid-auto-rows: min-content/.test(css),
+    'сетка настроек: auto-строки и align-items: start — плашки не наезжают друг на друга');
+  ok(/\.pc-set-item \{[^}]*min-width: 0/.test(css),
+    'блоки настроек умеют сжиматься (min-width: 0) — длинные подписки не распирают колонку');
+  ok(/html\.is-desktop \.pc-cols > \.pc-set-span \{[^}]*grid-column: 1 \/ -1/.test(css),
+    'плашка «Об игре» на всю ширину и по центру');
+  ok(/chubgames\.settingsTab/.test(set), 'выбранная вкладка настроек запоминается');
+  /* Просьба: вкладки слева и именно в этом порядке. */
+  const secs = set.slice(set.indexOf('const SECS'), set.indexOf('];', set.indexOf('const SECS')));
+  const secIds = [...secs.matchAll(/id: "(\w+)"/g)].map((m) => m[1]);
+  ok(JSON.stringify(secIds) === JSON.stringify(['system', 'look', 'net', 'game', 'profile']),
+    'вкладки настроек: Система · Оформление · Сеть · Игра · Профиль (в таком порядке, «Экран» удалён)');
+  ok(/hint: "/.test(secs) && /\.pc-rail-hint \{/.test(css),
+    'у каждой вкладки настроек есть подпись-пояснение (что там — видно сразу)');
+
+  /* Язык менял «почти всё, кроме названий режимов от Лёхи бургера до Башни
+     Лёхи» — проверим это машиной: у КАЖДОЙ строки GAME_META должен быть
+     английский вариант в словаре. */
+  const i = content.indexOf('export const GAME_META');
+  const body = content.slice(i, content.indexOf('\n];', i));
+  const missing = [];
+  for (const m of body.matchAll(/(?:name|tag|desc): "([^"]+)"/g)) {
+    if (!en.includes('"' + m[1] + '":')) missing.push(m[1]);
+  }
+  ok(missing.length === 0,
+    missing.length ? `нет перевода у ${missing.length} строк списка игр: ${missing.slice(0, 3).join(' / ')}`
+      : 'названия, теги и описания ВСЕХ мини-игр переведены на английский');
+  ok(/Имена друзей и прозвища НЕ переводятся/.test(en),
+    'правило перевода задокументировано в шапке словаря (имена собственные — нет, режимы — да)');
+}
+
+console.log('\n[42] 1.27: версия, список изменений и перевод идут в одном месте');
+{
+  const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+  const ver = fs.readFileSync('src/core/version.ts', 'utf8');
+  const chlog = fs.readFileSync('src/core/changelog.ts', 'utf8');
+  const notes = fs.readFileSync('RELEASE_NOTES.md', 'utf8');
+  const readme = fs.readFileSync('README.md', 'utf8');
+  const m = ver.match(/APP_VERSION = "([^"]+)"/);
+  ok(m && m[1] === pkg.version, `APP_VERSION (${m && m[1]}) = версия package.json (${pkg.version})`);
+  ok(chlog.includes('"' + pkg.version + '": ['),
+    'в CHANGELOG есть запись текущей версии — экран «что нового» покажется сам');
+  ok(notes.includes('### Что нового в ' + pkg.version),
+    'RELEASE_NOTES начинается с описания текущей версии');
+  ok(/1\.27/.test(readme), 'README рассказывает про текущий релиз (дизайн и починки)');
+  ok(pkg.author && pkg.author.name === 'KAYORISAN', 'издатель в package.json не потерялся');
+  /* телефонная ветка стекла не должна была пострадать от редизайна ПК */
+  const css = fs.readFileSync('src/index.css', 'utf8');
+  ok(/html\.light:not\(\.is-desktop\)/.test(css),
+    'мобильная светлая тема стекла осталась отдельным правилом');
+  ok(/html\.is-desktop \.glass \{/.test(css) && /html\.is-desktop \.glass\.glass-acc \{/.test(css),
+    'плотность стекла на ПК и возврат залипки акценту живут рядом — правило не перебивает себя');
+}
+
+console.log('\n[43] 1.27: магазин — кейсы без свечения, взрослое вскрытие, понятные скины');
+{
+  const css = fs.readFileSync('src/index.css', 'utf8');
+  const shp = fs.readFileSync('src/pages/Shop.tsx', 'utf8');
+  const content = fs.readFileSync('src/core/content.ts', 'utf8');
+  const cases = shp.slice(shp.indexOf('function Cases()'), shp.indexOf('function Skins()'));
+  const skins = shp.slice(shp.indexOf('function Skins()'));
+
+  /* ── свечения за иконками убраны ── */
+  ok(!/boxShadow: `0 10px 26px -12px \$\{skin\.ink\}`/.test(cases),
+    'за иконкой кейса нет цветного ореола (просили убрать: «выглядит мерзко»)');
+  ok(!/linear-gradient\(135deg, \$\{skin\.glow\}/.test(cases),
+    'цветная светящаяся подложка под всей карточкой кейса убрана');
+  ok(/className="pc-pack-ico/.test(cases) && /\.pc-pack-ico \{[^}]*inset 0 1px 0/.test(css),
+    'иконка кейса — плоская металлическая плашка с внутренней кромкой');
+  ok(/className="pc-pack-edge"/.test(cases) && /\.pc-pack-edge \{[^}]*height: 2px/.test(css),
+    'кейсы различаются узкой цветной линией сверху вместо свечения');
+  ok(!/animate=\{\{ y: \[0, -4, 0\] \}\}/.test(cases),
+    'иконка кейса не «дышит» вечно — бесконечные петли на витрине убраны');
+
+  /* ── модалка вскрытия ── */
+  ok(/className="pc-case-modal"/.test(cases) && /\.pc-case-modal \{[^}]*min\(60rem/.test(css),
+    'модалка кейса в магазине — та же широкая оболочка, что в казино');
+  ok(/className="pc-case-mhead"/.test(cases) && /pc-case-mx/.test(cases),
+    'у модалки есть шапка с названием и крестиком (закрыть можно)');
+  ok(/pc-case-row-pct/.test(cases) && /СОДЕРЖИМОЕ/.test(cases),
+    'в модалке видно содержимое и шансы числом — пока лента ещё идёт');
+  ok(/s\.friends\.filter\(\(f\) => f\.rarity === r\)/.test(cases),
+    'список содержимого строится из реального пула карточек, а не на глаз');
+  ok(/className="pc-shop-cell/.test(cases) && /pc-shop-cell-name clip1">\{f\.name\}/.test(cases),
+    'в ленте у каждой головы есть подпись — лента читается, а не мельтешит');
+  ok(!/rotateY: 90/.test(cases) && !/scale: 0\.6/.test(cases),
+    'итог не «выпрыгивает» через rotateY/scale — появление мягкое');
+  ok(!/repeat: Infinity/.test(cases.slice(cases.indexOf('pc-case-mbody'))),
+    'внутри модалки вскрытия нет ни одной бесконечной анимации');
+  ok(/requestAnimationFrame\(\(\) => setArmed\(true\)\)/.test(cases),
+    'лента трогается на следующем кадре — переход считается от нулевой точки');
+  ok(/className="pc-case-ghost"[\s\S]{0,400}?ЕЩЁ РАЗ/.test(cases) && /open\(pack\.id\)/.test(cases),
+    'из итога можно открыть тот же кейс ещё раз, не закрывая модалку');
+  ok(/html\.low-fx \.pc-pack-sweep \{ display: none; \}/.test(css),
+    'в лёгком режиме проход света выключен');
+
+  /* ── скины ── */
+  ok(/onClick=\{\(\) => \{ sfx\.tap\(\); haptic\("light"\); setLook\(sk\.id\); \}\}/.test(skins),
+    'клик по строке скина только разглядывает: не надевает и не покупает');
+  ok(!/disabled=\{!owned && s\.coins < sk\.price\}/.test(skins) && /\.pc-skin-row\.poor \{/.test(css),
+    'недоступный скин можно посмотреть — он приглушён, но не выключен');
+  ok(/className="pc-skin-facts"/.test(skins) && /SKIN_EFFECT/.test(skins),
+    'в витрине подписано, что скин меняет в цифрах и где его видно');
+  // карта эффектов объявлена над компонентом — берём из всего файла, а не из среза Skins()
+  const eff = shp.slice(shp.indexOf('const SKIN_EFFECT'), shp.indexOf('};', shp.indexOf('const SKIN_EFFECT')));
+  for (const id of ['king', 'gold', 'ghost']) {
+    ok(new RegExp(id + ': "\\+').test(eff), `эффект скина ${id} описан так же, как он посчитан в коде`);
+  }
+  ok(/\+8% монет в Burger Rain/.test(content) && !/шанс уклона в Burger Rain/.test(content),
+    'описание «Призрака» совпадает с кодом: у него +8% монет, а не «шанс уклона»');
+  ok(/autoRate/.test(fs.readFileSync('src/core/save.ts', 'utf8')) && /1\.05/.test(fs.readFileSync('src/core/save.ts', 'utf8')),
+    'скины king/gold действительно умножают монеты (подпись не врёт)');
+}
+
+console.log('\n[44] 1.27: поддержка — спокойно, на токенах, по-человечески в двух колонках');
+{
+  const css = fs.readFileSync('src/index.css', 'utf8');
+  const don = fs.readFileSync('src/pages/Donate.tsx', 'utf8');
+  const donCode = don.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\n\s*\/\/[^\n]*/g, '');
+  ok(!/rgba\(\s*255,\s*176,\s*32/.test(donCode) && !/255,\s*107,\s*90/.test(donCode) &&
+     !/#[0-9a-fA-F]{3,6}/.test(donCode),
+    'в поддержке нет вбитых цветов хексами: плашка перекрашивается токенами темы');
+  ok(/\.pc-don-hero \{[\s\S]{0,600}?--gold-brd/.test(css) &&
+     /\.pc-don-ico \{[\s\S]{0,400}?--gold-soft/.test(css),
+    'золото поддержки живёт в CSS переменными, а не строками в разметке');
+  ok(!/repeat: Infinity/.test(don),
+    'бесконечных «дышащих» циклов на странице нет — экран не жужжит и не ест кадры');
+  /* два абзаца раньше были написаны мимо tr() → при английском язык страницы ломался */
+  const raw = don.match(/>\s*[А-ЯЁа-яё][^<{]*[а-яё]{3,}[^<>{}]*<\/(div|span)>/g) || [];
+  const untranslated = raw.filter((x) => !/\{tr\(/.test(x));
+  ok(untranslated.length === 0,
+    untranslated.length ? `текст поддержки без tr(): ${untranslated[0].slice(0, 60)}` : 'весь текст поддержки проходит через tr()');
+  const en = fs.readFileSync('src/core/i18n-en.ts', 'utf8');
+  for (const key of [
+    'CHUBUGAMES бесплатный и без обязательной рекламы',
+    'Поддержка добровольная и ни на что не влияет в игре',
+    'идеи, баги, предложения',
+  ]) {
+    ok(en.includes(key), `в переводе есть строка поддержки «${key.slice(0, 32)}…»`);
+  }
+  ok(/className={`pc-don \$\{pc \? "pc-don-wide" : ""\}`}/.test(don) &&
+     /\.pc-don\.pc-don-wide \{[\s\S]{0,80}?grid-template-columns/.test(css),
+    'на мониторе поддержка — две колонки, а не узкая полоса под левым краем');
+  ok(/aria-label=\{tr\("Закрыть"\)\}/.test(don), 'кнопка закрытия поддержки доступна с клавиатуры/скринридера');
+}
+
+console.log('\n[45] 1.27: редактор персонажа — Esc, черновик, подвал, подсказки');
+{
+  const css = fs.readFileSync('src/index.css', 'utf8');
+  const fr = fs.readFileSync('src/pages/Friends.tsx', 'utf8');
+  const ed = fr.slice(fr.indexOf('function Editor({'));
+  const en = fs.readFileSync('src/core/i18n-en.ts', 'utf8');
+
+  ok(/if \(e\.key !== "Escape"\) return;/.test(ed) && /window\.addEventListener\("keydown", onKey, true\)/.test(ed),
+    'Esc слушается на capture: закрывается редактор, а не весь раздел «Персонажи»');
+  ok(/e\.stopPropagation\(\)/.test(ed), 'Esc не уходит дальше — глобальная «назад» его не получит');
+  ok(/const dirty = JSON\.stringify\(f\) !== JSON\.stringify\(friend\)/.test(ed),
+    'наличие правок определяется сравнением с исходником, а не на глаз');
+  ok(/if \(dirty && !allowDiscard\) \{/.test(ed) && /ещё раз, чтобы закрыть без сохранения/.test(ed),
+    'закрытие с несохранённым черновиком требует второго нажатия');
+  ok(/onClick=\{close\}/.test(ed) && !/className="w-full"\n         style=\{\{ maxHeight: "92%" \}\}/.test(ed),
+    'клик по затемнению и крестик идут через close, а не через сырой onClose');
+  ok(/className="fr-foot flex gap-2"/.test(ed) && /\.fr-foot \{[^}]*position: sticky/.test(css),
+    'подвал с «СОХРАНИТЬ» прилеплен к нижнему краю — его не надо искать под скроллом');
+  ok(/dirty \? tr\("Не сохран/.test(ed),
+    'кнопка отмены честно называется «Не сохранять», когда есть правки');
+  ok(/className="fr-head"/.test(ed) && /aria-label=\{tr\("Закрыть"\)\}/.test(ed),
+    'у редактора есть заголовок и доступная кнопка закрытия');
+  ok(/html\.is-desktop \.fr-scrim \{[^}]*align-items: center/.test(css) &&
+     /html\.is-desktop \.fr-wrap \{[^}]*min\(44rem/.test(css),
+    'на мониторе редактор — центральное окно, а не мобильная шторка');
+  ok(/html\.is-desktop \.fr-sheet \.m-handle \{ display: none; \}/.test(css),
+    'ручка «потяни меня» на компьютере скрыта');
+  ok(/className="fr-phototip"/.test(ed) && /--info-brd:/.test(css),
+    'исчезновение настроек внешности при фото объяснено на месте, а не молчит');
+  ok(/className="fr-warn"/.test(ed) && /Нужно имя/.test(ed),
+    'пустое имя подписано под полем, а не отвечает только писком');
+  /* страницы «Персонажи»: весь видимый текст обязан проходить через tr() */
+  /* строковый поиск построчно: русский текст в разметке обязан быть обёрнут
+     в tr(); комментарии и строки с tr() пропускаем */
+  const bare = fr.split('\n')
+    .map((l, i) => [i + 1, l.trim()])
+    .filter(([n, l]) => /[А-ЯЁ][а-яё]{2,}/.test(l)
+      && !l.startsWith('*') && !l.startsWith('//') && !l.startsWith('/*') && !l.startsWith('{/*')
+      && !l.startsWith('*/}') && !l.includes('/*')
+      && !/tr\(/.test(l) && !/console\./.test(l) && !/^\/\*\*/.test(l)
+      && !/(?:const|let|var|case|title:|text:|name:|desc:|sub:|label:|\")/.test(l));
+  ok(bare.length === 0,
+    bare.length ? `в «Персонажах» текст мимо tr(): ${bare[0][0]}: ${bare[0][1].slice(0, 48)}`
+      : 'весь текст страницы проходит через tr()');
+  ok(en.includes('"Создать персонажа"') && en.includes('"Не сохранять"'),
+    'новые подписи редактора есть в английском словаре');
+}
+
+console.log('\n[46] 1.27: ежедневный вход — страница с наградами, а не семь квадратиков');
+{
+  const css = fs.readFileSync('src/index.css', 'utf8');
+  const prog = fs.readFileSync('src/pages/Progress.tsx', 'utf8');
+  const app = fs.readFileSync('src/App.tsx', 'utf8');
+  const daily = prog.slice(prog.indexOf('function Daily()'), prog.indexOf('/* ============', prog.indexOf('function Daily()') + 10));
+
+  ok(/className="pc-daily-grid"/.test(daily) && /\.pc-daily-grid \{[^}]*repeat\(7/.test(css),
+    'лесенка входа — сетка на семь дней, а не «grid grid-cols-7» inline-стилями');
+  ok(/pc-daily-rew t-num/.test(daily) && /\{fmt\(r\.coins\)\}/.test(daily),
+    'на каждом дне показана РЕАЛЬНАЯ награда, а не просто иконка монеты');
+  ok(/pc-daily-gem/.test(daily) && /r\.gems > 0 &&/.test(daily),
+    'дни с кристаллами помечены отдельным бейджем');
+  ok(/className=\{`pc-daily-day \$\{isNext \? "on"/.test(daily) && /\.pc-daily-day\.on \{/.test(css),
+    'день, который можно забрать сегодня, выделен акцентом');
+  ok(/pc-daily-check/.test(daily) && /\.pc-daily-day\.done \{[^}]*opacity/.test(css),
+    'забранное состояние читается галочкой, а не «просто тусклой плиткой»');
+  ok(/tr\("Серия продолжается/.test(daily),
+    'правило серии (пропуск обнуляет) подписано под плиткой');
+  ok(!/Забрать \$\{DAILY_LADDER/.test(daily) && /fmt\(DAILY_LADDER\[streakIdx\]\.coins\)/.test(daily),
+    'кнопка забора использует общий fmt() и tr(), а не toLocaleString с русской подписью');
+  ok(/nudgeRef/.test(app) && /Ежедневный вход ждёт/.test(app) && !/setTab\("progress"\)/.test(app.slice(app.indexOf('nudgeRef'), app.indexOf('nudgeRef') + 900)),
+    'при первом запуске появляется напоминание, но раздел сам не переключается');
+  ok(/if \(nudgeRef\.current \|\| s\.daily\.lastClaim \|\| splash\) return;/.test(app),
+    'напоминание не вылезет повторно: ни после забранного входа, ни на заставке');
+  ok(/КРАСНАЯ|pc-seg-dot/.test(prog), 'точка «есть награда» на вкладке ежедневных наград осталась');
+}
+
+console.log('\n[47] 1.27: в ЧУБУПА УНИВЕРСАЛИС видно поединок');
+{
+  const css = fs.readFileSync('src/index.css', 'utf8');
+  const eu = fs.readFileSync('src/games/Europa.tsx', 'utf8');
+  const bm = eu.slice(eu.indexOf('export function BattleMark'), eu.indexOf('export function SidePanel'));
+
+  ok(/className=\{`eu-dot def/.test(bm),
+    'у цели есть свой гарнизон на поле: бой выглядит столкновением, а не «переездом»');
+  ok(/const mx = \(ax \+ to\.x\) \/ 2 \* 100/.test(bm) && /const my = \(ay \+ to\.y\) \/ 2 \* 100/.test(bm),
+    'удар принимается в середине дороги — стороны реально сходятся, а не врезаются в здание');
+  ok(/const atkPos = step === 0 \? 0\.42 : step === 1 \? 0\.5 : win \? 1 : 0\.3/.test(bm) &&
+     /const defPos = step === 0 \? 0\.62 : step === 1 \? 0\.5 : win \? 0\.92 : 0\.66/.test(bm),
+    'шаги боя: марш → сход → итог со вдавливанием победителя и отбросом проигравшего');
+  ok(bm.split('eu-clash').length >= 3 && /\.eu-clash\.two/.test(css),
+    'удар рисуют две волны с задержкой — он читается ударом, а не миганием');
+  ok(/className="eu-loss atk"/.test(bm) && /className="eu-loss def"/.test(bm) &&
+     /\.eu-loss \{/.test(css),
+    'потери всплывают над обеими колоннами, а не только в плашке итога');
+  ok(/\.eu-dot\.atk \{[^}]*--acc/.test(css) && /\.eu-dot\.def \{[^}]*--danger/.test(css),
+    'свои и чужие в бою различаются цветами сторон');
+  ok(/\.eu-dot\.clash \{[^}]*stroke-width/.test(css),
+    'в момент удара точки тяжелеют — на масштабе карты иначе столкновение не видно');
+  ok(/html\.low-fx \.eu-dot \{ filter: none; \}/.test(css) && /lowFx \? 0\.01 : 0\.5/.test(bm),
+    'в лёгком режиме замес собирается за один кадр и без свечения');
+  ok(!/animate=\{\{[^}]*repeat: Infinity/.test(bm),
+    'в бою нет бесконечных петель — анимация конечна и не ест кадры во время хода');
+}
+
+console.log('\n[48] В JSX нет классов без правил в CSS');
+{
+  /* Класс без определения — это «иконки кривые», «что-то наезжает» и
+     «стиль поехал» ровно на одном из двух устройств. Такие дыры не видно
+     ни в tsc, ни глазами: элемент просто живёт на inline-стилях. Поэтому
+     сверяем каждый проектный className со stylesheet-ом. */
+  const RE = /^(pc|eu|chub|toast|game|bug)-[a-z0-9-]+$/;
+  const files = [];
+  (function walk(d) {
+    for (const e of fs.readdirSync(d, { withFileTypes: true })) {
+      const p = path.join(d, e.name);
+      if (e.isDirectory()) walk(p);
+      else if (/\.tsx$/.test(e.name)) files.push(p);
+    }
+  })("src");
+
+  const used = new Map();
+  for (const f of files) {
+    const s = fs.readFileSync(f, "utf8");
+    for (const m of s.matchAll(/className=(?:"([^"]*)"|'([^']*)'|\{`([^`]*)`\})/g)) {
+      const raw = (m[1] || m[2] || m[3] || "").replace(/\$\{[^}]*\}/g, " ");
+      for (const c of raw.split(/\s+/)) {
+        if (!RE.test(c)) continue;
+        if (!used.has(c)) used.set(c, new Set());
+        used.get(c).add(f);
+      }
+    }
+  }
+  const missing = [...used].filter(([c]) => {
+    const esc = c.replace(/-/g, "\\-");
+    return !new RegExp("\\." + esc + "(?=[\\s,{:>])").test(css);
+  });
+  ok(missing.length === 0,
+    `каждый из ${used.size} проектных классов описан в index.css` +
+    (missing.length ? ` · нет правил у: ${missing.map(([c]) => c).join(", ")}` : ""));
+  ok(used.size > 250, "аудит правда видит разметку, а не пустой список");
+}
+
+console.log('\n[49] 1.27.1: офлайн и обновление на ПК — окна, а не полосы');
+{
+  const up = fs.readFileSync("src/ui/UpdateBanner.tsx", "utf8");
+  const ovl = fs.readFileSync("src/components/Overlays.tsx", "utf8");
+
+  ok(/html\.is-desktop \.pc-modal-card \{[\s\S]{0,420}max-height:/.test(css),
+    "карточка ограничена по высоте: на мониторе это окно, а не растянутая полоса");
+  ok(/html\.is-desktop \.pc-modal-card \{[\s\S]{0,420}overflow: hidden/.test(css),
+    "шапка и подвал скруглены вместе с карточкой — углы не расползаются");
+  ok(/html\.is-desktop \.pc-modal-body \{[\s\S]{0,220}overflow-y: auto/.test(css),
+    "список изменений скроллится внутри окна, кнопки всегда на месте");
+  ok(/\.pc-modal-foot \.btn-acc,[\s\S]{0,120}\{[\s\S]{0,120}width: auto/.test(css),
+    "кнопка «Обновить сейчас» на ПК не тянется через весь экран");
+  ok(/const pc = isDesktop\(\)/.test(up) && /pc-modal-card/.test(up),
+    "баннер обновления различает компьютер и собирается в карточку");
+  ok(/className=\{pc \? "pc-modal-card" : "flex flex-col min-h-0"\}/.test(up),
+    "на телефоне экран обновления остался полноэкранным — ветка не тронута");
+  ok(/if \(!pc \|\| !info\) return;[\s\S]{0,220}"Escape"/.test(up),
+    "на ПК окно обновления закрывается Esc, как любое модальное");
+  ok(/pc \? "pc-offline pc-modal-card" : "w-full max-w-xs"/.test(ovl),
+    "офлайн-плашка на ПК — карточка фиксированной ширины, на телефоне как была");
+  ok(/onClick=\{\(e\) => e\.stopPropagation\(\)\}/.test(ovl),
+    "клик по самой плашке её не закрывает — закрывает только затемнение");
+  ok(/html\.is-desktop \.pc-foot \{[\s\S]{0,220}justify-content: space-between/.test(css),
+    "подвал Настроек в одну строку: версия больше не наезжает на подпись");
+  ok(/\.pc-shop-tab\.on \.pc-shop-tab-ico \{/.test(css) &&
+     /\.pc-wallet-gem \{/.test(css) && /\.pc-tab-gear \{/.test(css),
+    "иконки разделов магазина, алмазы и шестерёнка получили свои правила");
+}
+
+console.log('\n[50] 1.27.2 · телефон: уведомления, системный «назад», разрешения');
+{
+  const app = fs.readFileSync("src/App.tsx", "utf8");
+  const and = fs.readFileSync("src/core/android.ts", "utf8");
+  const bug = fs.readFileSync("src/ui/BugGuard.tsx", "utf8");
+  const nt = fs.readFileSync("src/core/notify.ts", "utf8");
+  const st = fs.readFileSync("src/pages/Settings.tsx", "utf8");
+  const wn = fs.readFileSync("src/ui/WhatsNew.tsx", "utf8");
+  const up = fs.readFileSync("src/ui/UpdateBanner.tsx", "utf8");
+
+  ok(/createPortal\(/.test(app) && /document\.body/.test(app),
+    "оверлеи монтируются в body — анимация страницы не тянет их за собой");
+  ok(/\.toast-stack \{[\s\S]{0,420}align-items: center/.test(css) &&
+     /\.toast-stack \{[\s\S]{0,420}right: 0/.test(css),
+    "на телефоне стопка уведомлений по центру сверху, а не «где-то слева»");
+  ok(/\.toast-item \{[\s\S]{0,340}width: min\(21rem, 100%\)/.test(css),
+    "плашка не шире экрана и не липнет к краям на узком телефоне");
+  ok(/useEffect\(\(\) => installSystemBack\(\), \[\]\)/.test(app),
+    "жест «назад» на Android подключён в оболочке");
+  ok(/App\.addListener\("backButton"/.test(and) && /App\.minimizeApp\(\)/.test(and),
+    "на корневом экране «назад» сворачивает приложение, а не молчит");
+  ok(/if \(backDepth\(\) > 0\)[\s\S]{0,90}history\.back\(\)/.test(and),
+    "сначала закрывается слой: сворачивается только пустой корень");
+  ok(/isPaused\(\)[\s\S]{0,140}resumeWithCountdown\(\)/.test(and),
+    "на паузе «назад» снимает паузу с отсчётом, а не выбрасывает из игры");
+  ok(/useSystemBack\(show, close\)/.test(wn) && /useSystemBack\(!!\s*info,\s*later\)/.test(up),
+    "окна «что нового» и обновления тоже слушают системный «назад»");
+  ok(/console\.warn\("\[chub\] фоново:"/.test(bug) && /CODE_ERROR/.test(bug),
+    "отказы плагинов и сети не выпрыгивают ошибкой при входе — только падение кода");
+  ok(/checkExactNotificationSetting/.test(nt) && /exact_alarm/.test(nt),
+    "точных будильников просят разрешение: иначе напоминание «в 19:00» не приедет никогда");
+  ok(/export async function sendTestNotification/.test(nt) && /sendTestNotification/.test(st),
+    "в настройках есть пробное уведомление — «работают или нет» видно сразу");
+  ok(/setTimeout\(\(\) => \{ void initNotificationsOnFirstRun\(\); \}, 1400\)/.test(app),
+    "разрешение спрашивается после Splash, а не в первую миллисекунду запуска");
+}
+
+console.log('\n[51] 1.27.2 · телефон: возврат из паузы и уровни в ЛЁХА БУРГЕР');
+{
+  const br = fs.readFileSync("src/games/BurgerRain.tsx", "utf8");
+  const po = fs.readFileSync("src/ui/PauseOverlay.tsx", "utf8");
+
+  ok((br.match(/name: "/g) || []).length >= 10, "у забега десять ступеней с именами — есть к чему идти");
+  ok(/const lv = brLevel\(g\.elapsed \/ 1000\)/.test(br) && /const LEV = BR_LEVELS\[g\.lv - 1\]/.test(br),
+    "уровень считается в игровом цикле и реально влияет на темп");
+  ok(/\/ LEV\.speed/.test(br) && /\(diff\.spawn \* LEV\.spawn\)/.test(br),
+    "время полёта и интервал спавна берут коэффициенты уровня");
+  ok(/const k = LEV\.kinds/.test(br) && /if \(k >= 5 && roll > 0\.94\)/.test(br),
+    "набор снарядов растёт по уровням, а не по «таймеру в минуты»");
+  ok(/say\(g, BONUS_LABEL\[b\.type\], BONUS_COLOR\[b\.type\], 1500\)/.test(br),
+    "поднятый бонус подписан плашкой по центру — видно, что именно поднял");
+  ok(/say\(g, "ЯРОСТЬ!", "--danger", 1800\)/.test(br) && /say\(g, "ЯРОСТЬ ПРОШЛА", "--info", 1200\)/.test(br),
+    "начало и конец ярости заявлены текстом, а не только миганием");
+  ok(/rgba\(214, 40, 40/.test(br) && /ctx\.fillRect\(0, 0, W, 3\)/.test(br),
+    "в ярости верх экрана наливается красным и пульсирует кромкой");
+  ok(/ctx\.fillStyle = cssVar\(g\.bannerC/.test(br) && /ctx\.fillStyle = cssVar\(p\.c/.test(br),
+    "плашки берут цвет через cssVar: var() канвас игнорирует молча");
+  ok(!/c: "var\(--/.test(br), "в игре не осталось var()-цветов, уходящих прямо в канвас");
+
+  /* То же правило — по всем играм: ctx.fillStyle = "var(--x)" не цвет,
+     а «оставь прошлый цвет»; такие дыры не видно ни в одной проверке. */
+  const gameFiles = fs.readdirSync("src/games").filter((f) => f.endsWith(".tsx"));
+  const bad = gameFiles.filter((f) =>
+    /ctx\.(fillStyle|strokeStyle|shadowColor)\s*=\s*"var\(/.test(fs.readFileSync(path.join("src/games", f), "utf8")));
+  ok(bad.length === 0, "ни одна игра не красит канвас через var()" + (bad.length ? " — " + bad.join(", ") : ""));
+
+  ok(/if \(countdown > 0\) \{[\s\S]{0,240}pause-resume/.test(po) && /<Countdown n=\{countdown\}/.test(po),
+    "возврат из паузы: меню уже закрыто, отсчёт идёт над полем игры");
+  ok(!/pause-count/.test(po) && !css.includes(".pause-count"),
+    "цифра поверх карточки убрана — именно она и выглядела как «меню не пропадает»");
+  ok(/\.pause-resume \{[\s\S]{0,260}pointer-events: none/.test(css),
+    "отсчёт не перехватывает касания: руки уже в игре");
+  ok(/hasKeyboard\(\) && \(/.test(po), "подсказка про Esc — только там, где клавиатура есть");
+}
+
+console.log('\n[52] 1.27.2 · ЧУБ КЛИКЕР: ползунок уровней, читаемая покупка, HUD не мешает');
+{
+  const cl = fs.readFileSync("src/games/Clicker.tsx", "utf8");
+  const hud = fs.readFileSync("src/ui/PcHud.tsx", "utf8");
+  const app = fs.readFileSync("src/App.tsx", "utf8");
+
+  ok(/Math\.min\(W, H\) \* 0\.33/.test(cl) && /H \* 0\.46/.test(cl),
+    "лицо поднято к центру и чуть уменьшено — не упирается в нижнюю панель");
+  ok(!/setBuyQty/.test(cl) && !/tr\("МАКС"\)/.test(cl) && !/"БРАТЬ"/.test(cl),
+    "переключателя «БРАТЬ ×1 ×10 МАКС» в разметке больше нет");
+  ok(/function LevelSlider/.test(cl) && /onPointerDown=\{/.test(cl) && /touch-action: none/.test(css),
+    "количество берут пальцем по ползунку, и список апгрейдов при этом не скроллится");
+  ok(/\.cl-slider-knob \{[\s\S]{0,420}color: var\(--acc-ink\)/.test(css),
+    "ручка ползунка залита акцентом и читается на любой теме");
+  ok(/const count = Math\.min\(Math\.max\(1, want\), aff\)/.test(cl),
+    "больше, чем по карману, не купится — сколько бы ручку ни тянули");
+  ok(/color: can \? "var\(--acc-ink\)" : "var\(--text\)"/.test(cl),
+    "подпись «КУПИТЬ» видна и на фиолетовом акценте, и когда денег не хватает");
+  ok(!/fps-hud-scale/.test(hud) && !css.includes(".fps-hud-scale"),
+    "строчка «разрешение» под счётчиком кадров убрана");
+  ok(/body\.cl-shop \.fps-hud \{\n  display: none/.test(css),
+    "на вкладке апгрейдов счётчик кадров не показывается");
+  ok(/game === "clicker" \? " is-clicker"/.test(app) && /\.is-clicker \.fps-hud \{/.test(css),
+    "в кликере счётчик опущен ниже кнопки «АПГРЕЙДЫ»");
+}
+
+console.log('\n[53] 1.27.2 · ПОБЕГ ОТ ШИТОВА: падение после прыжка и страховка кадра');
+{
+  const sr = fs.readFileSync("src/games/ShitovRun.tsx", "utf8");
+  const sh = fs.readFileSync("src/games/shell.tsx", "utf8");
+
+  ok(/const shrink = Math\.max\(0\.2, Math\.min\(1, 1 - g\.y \* 1\.55\)\)/.test(sr),
+    "радиус тени не может уйти в минус — на нём цикл и обрывался");
+  const badEllipse = sr.split("\n").filter((l) => /ctx\.ellipse\(/.test(l) && /1 - g\.y/.test(l));
+  ok(badEllipse.length === 0, "ни один ctx.ellipse не считает радиус как (1 - g.y) без клампа");
+  ok(/ctx\.ellipse\(heroX, groundY \+ 3, heroR \* 0\.8 \* shrink/.test(sr),
+    "тень сжимается и гаснет вместе с высотой прыжка");
+  ok(/try \{\n          drawRef\.current/.test(sh) && /brokenFrames >= 30/.test(sh),
+    "битый кадр больше не убивает игру: цикл переживает сбой и глушит спам");
+  ok(/console\.error\("\[chub\] кадр игры упал:"/.test(sh),
+    "причина сбоя кадра пишется в консоль, а не исчезает молча");
+  ok(/свисток на цепочке/.test(sr) && /кепи: тулья и козырёк/.test(sr),
+    "у Шитова куртка, кепи и свисток — силуэт читается с одного кадра");
+}
+
+console.log('\n[54] 1.27.2 · телефон: «!» о наградах, меню снизу, лишние плашки');
+{
+  const nav = fs.readFileSync("src/components/Nav.tsx", "utf8");
+  const clm = fs.readFileSync("src/core/claimable.ts", "utf8");
+  const pg = fs.readFileSync("src/pages/Progress.tsx", "utf8");
+  const st = fs.readFileSync("src/pages/Settings.tsx", "utf8");
+
+  ok(/"nav\.settings": "Настройки"/.test(i18n) && /label: "nav\.settings"/.test(nav),
+    "в нижнем меню справа — «Настройки», а не «Ещё»");
+  ok(/m-nav-flag/.test(nav) && /content: "!"/.test(css),
+    "на «Прогрессе» горит красный кружок с «!» — не безликая точка");
+  ok(/claimableCount\(claimables\(s\)\)/.test(nav) && /dailyState\(s\)\.canClaim/.test(clm),
+    "«!» считается по всем четырём источникам наград: ежедневка, задания, сундук, босс");
+  ok(/chestReady\(readFriendship\(\)\)/.test(clm) && /canFight\(readBosses\(\)\)/.test(clm),
+    "сундук и босс проверяются по-настоящему, а не «на глазок»");
+  ok(/minWidth: 0/.test(nav) && /textOverflow: "ellipsis"/.test(nav),
+    "подписи кнопок не вылезают за свои плитки («Персонажи» влезает)");
+  ok(/\.m-nav-ico \{/.test(css), "иконки нижнего меню сидят в одинаковой коробке");
+  ok(!/pc-prog-row[\s\S]{0,420}УРОВЕНЬ/.test(pg), "второй плашки уровня в Прогрессе больше нет");
+  ok(/\.pc-lvlhero-cap \{[\s\S]{0,240}opacity: 1/.test(css),
+    "подпись «УРОВЕНЬ» не тает на акцентной заливке");
+  ok(/\.pc-lvlhero-xp \{[\s\S]{0,260}--text-dim/.test(css),
+    "строка опыта читается и на светлой, и на цветной теме");
+  ok(!/settings\.author/.test(st) && !/Все друзья, шутки/.test(st),
+    "из Настроек убраны «автор и разработчик» и «все друзья, шутки…»");
+}
+
+console.log('\n[55] 1.27.2 · телефон: уровни и треки в РИТМЕ РАДОМИРА, иконка из фото');
+{
+  const beat = fs.readFileSync("src/games/RadomirBeat.tsx", "utf8");
+  const ico = fs.readFileSync("scripts/build-icons.mjs", "utf8");
+
+  ok(/BEAT_LEVELS: \{ name: string/.test(beat) && (beat.match(/name: "/g) || []).length >= 4,
+    "у ритма четыре ступени: НОВИЧОК, В РИТМЕ, РАЗОГРЕВ, БЕЗ РИТМА");
+  ok(/gap: 460[\s\S]{0,400}gap: 210/.test(beat),
+    "ступени правда разные: шаг нот от 460 мс до 210 мс");
+  ok(/lives: 6[\s\S]{0,400}lives: 3/.test(beat) && /g\.lives = L\.lives/.test(beat),
+    "жизни берутся из уровня, а не всегда пять");
+  ok(/BEAT_LEVELS\[lv\]\.mult/.test(beat),
+    "награда растёт вместе с риском: за «БЕЗ РИТМА» платят вдвое");
+  ok(/femboichik\.mp3/.test(beat) && /Eiffel_65_-_Move_Your_Body/.test(beat),
+    "в приложении два трека: «Фембойчик» и Eiffel 65");
+  ok(/if \(!res\.ok\) throw new Error\("нет файла"\)/.test(beat),
+    "нет файла в сборке — откат на синтезированный бит, а не чёрный экран");
+  ok(/trackId === "own"/.test(beat),
+    "свой файл играет только когда его явно выбрали, а не «потому что был»");
+  ok(/readNum\(LV_KEY/.test(beat) && /localStorage\.setItem\(TRACK_KEY/.test(beat),
+    "уровень и трек запоминаются: не надо выставлять руками каждый заход");
+  ok(/function chartFromOnsets\(ons: Onset\[\], lv = 1\)/.test(beat) && /const minGap = L\.gap;/.test(beat),
+    "плотность нот берётся из уровня: все четыре ступени дают разные чарты");
+  ok(/onsetsRef/.test(beat) && /\}, \[lv\]\);/.test(beat),
+    "смена уровня пересобирает чарт из онсетов в памяти, а не качает трек заново");
+
+  ok(/\.greyscale\(\)/.test(ico),
+    "monochrome-слой сделан из яркости — Android перекрашивает его сам");
+  ok(/size \* 0\.66/.test(ico),
+    "картинка в adaptive-иконке не вылезает за безопасную зону (66% холста)");
+  ok(/chubugamesmaxlogo\.png/.test(ico) && /chubulogo\.png/.test(ico),
+    "генератор ищет присланный арт по имени: chubugamesmaxlogo.png (иконка) и chubulogo.png (знак)");
+  ok(/findSource/.test(ico) && /"branding", "public"/.test(ico),
+    "источники ищутся и в branding/, и в public/ — можно кинуть файл веб-загрузкой");
+  ok(/function writeIco\(/.test(ico),
+    "ICO собирается вручную: контейнер = заголовок + PNG-тела, иначе electron-builder берёт шаблон");
+  ok(/brandAsset\.ts/.test(ico) && /HAS_BRAND_LOGO/.test(ico),
+    "флаг наличия растрового логотипа генерируется — <img> не грузится, когда файла нет");
+}
+
+console.log('\n[56] 1.28 · ПК: настройки с рейкой, угол с круглыми кнопками, экран обновления, шансы слотов');
+{
+  const css56 = fs.readFileSync('src/index.css', 'utf8');
+  const set56 = fs.readFileSync('src/pages/Settings.tsx', 'utf8');
+  const cas56 = fs.readFileSync('src/pages/Casino.tsx', 'utf8');
+  const up56 = fs.readFileSync('src/ui/UpdateBanner.tsx', 'utf8');
+  const flow = fs.readFileSync('src/pages/UpdateFlow.tsx', 'utf8');
+  const app56 = fs.readFileSync('src/App.tsx', 'utf8');
+  const desktopSet = fs.readFileSync('src/ui/DesktopSettings.tsx', 'utf8');
+
+  ok(/\.pc-rail-item \{[\s\S]{0,320}?color: var\(--text\)/.test(css56),
+    'подписи вкладок рейки — --text: не сливаются с фоном панели ни на одной теме');
+  ok(/html\.is-desktop \.pc-settings \{[\s\S]{0,200}?grid-template-columns: 15\.5rem minmax\(0, 1fr\)/.test(css56),
+    'настройки на ПК: панель 15.5rem слева + содержимое на остальную ширину');
+  ok(/html\.is-desktop \.pc-cas-split \{[\s\S]{0,140}?grid-template-columns: 12\.5rem/.test(css56),
+    'казино: та же рейка, но уже — шесть коротких названий');
+  ok(/pc-set-stack/.test(set56) && /html\.is-desktop \.pc-rail-body \.pc-set-stack \{[\s\S]{0,200}?auto-fit/.test(css56),
+    'вкладки «Игра» и прочие растянуты сеткой auto-fit, а не собраны в вертикальную полосу');
+  ok(/sendWebNotification/.test(set56) && /askWebNotify/.test(set56),
+    'уведомления на ПК идут через Notification API, а не через текст про Android');
+  ok(/\{desktop \? tr\("Разрешить уведомления Windows"\) : tr\("Разрешить уведомления"\)\}/.test(set56),
+    'подпись кнопки разрешения меняется по платформе — на ПК нет слов про телефон');
+  ok(/Напоминания на ПК шлёт открытое|напоминания работают, пока игра открыта/i.test(set56),
+    'честная формулировка: на ПК напоминания шлёт открытое приложение');
+  ok(/startDesktopNotify/.test(app56) && /notifyFlags/.test(app56),
+    'планировщик напоминаний ПК запускается один раз на уровне приложения и читает настройки через ref');
+  ok(/if \(pc && info\)/.test(up56) && /upd-plate/.test(up56) && /deferUpdate\(info\.version\)/.test(up56),
+    'на ПК плашка «вышло обновление» ведёт на экран обновления, а «попозже» оставляет «!»');
+  ok(/checkUpdate|api\.checkUpdate/.test(flow) && /downloadUpdate/.test(flow) && /pc-upd-orbit/.test(flow),
+    'экран обновления: проверка, загрузка с прогрессом и лобби ожидания');
+  ok(/useSystemBack\(true, onBack\)/.test(flow),
+    'экран обновления закрывается системным «назад», как любая подстраница');
+  ok(/className="pc-upd"/.test(flow) && /\.pc-upd \{[\s\S]{0,160}?grid-template-columns: 13\.5rem/.test(css56),
+    'экран обновления на ПК — ступени слева и большая сцена справа');
+  ok(!/DesktopSettings part="screen"/.test(set56) && desktopSet.includes('part = "all"'),
+    'блок «Экран» из настроек убран, а сам компонент оставлен для других мест');
+  ok(/className=\{`pc-slot-help/.test(cas56) && /export function slotOdds/.test(fs.readFileSync('src/core/gamble.ts','utf8')),
+    'шансы слотов — за кнопкой «?» и считаются из весов, а не переписаны в разметку');
+  ok(/pc-slot-bet-input/.test(cas56) && /setCustomBet/.test(cas56) && /BET_MAX_CAP/.test(cas56),
+    'ставка в слотах пишется руками и упирается в разумный потолок');
+  ok(/\.pc-win-controls \{[\s\S]{0,300}?display: inline-flex/.test(css56) && /\.pc-sq-btn \{[\s\S]{0,300}?border-radius: 10px/.test(css56),
+    'кастомные кнопки окна и квадратно-закруглённые кнопки в верхней панели оформлены');
+  ok(/html\.is-desktop \.pc-page-head h1 \{[\s\S]{0,320}?line-height: 1\.32/.test(css56) &&
+     /html\.is-desktop \.pc-page-head h1 \{[\s\S]{0,320}?overflow: visible/.test(css56),
+    'заголовки страниц на ПК не обрезаются сверху и не сжимаются в одну строку');
+}
+
+console.log('\n[57] 1.28 · ЧУБ КЛИКЕР: FPS и пауза');
+{
+  const ck = fs.readFileSync('src/games/Clicker.tsx', 'utf8');
+  const shl = fs.readFileSync('src/games/shell.tsx', 'utf8');
+  ok(/export function softShadows/.test(shl), 'softShadows экспортируется — игры могут брать тот же приём');
+  ok(/renderScale\(r\.width, r\.height\)/.test(ck) && /onAdapt\(resize\)/.test(ck),
+    'кликер рисует столько, сколько тянет железо, и перестраивается, когда адаптив меняет растр');
+  ok(!/Math\.min\(2\.5, window\.devicePixelRatio/.test(ck),
+    'старый «dpr до 2.5» убран: на 27" это было ~10 млн пикселей на кадр');
+  ok(/if \(isPaused\(\)\) \{[\s\S]{0,200}?raf = requestAnimationFrame\(loop\);\n        return;/.test(ck),
+    'на паузе кликер не рисует кадры, но держит цикл и last — без прыжка лица после продолжения');
+  ok(/pushFloat\(\{/.test(ck) && !/setTimeout\(\(\) => setFloats\(\(p\) => p\.filter/.test(ck),
+    'всплывающие цифры сливаются в состояние пачкой (~9 раз/с), а не двумя апдейтами на тап');
+  ok(/ctx\.fillRect\(W \/ 2 - gr, cy - gr, gr \* 2, gr \* 2\)/.test(ck) && !/ctx\.fillRect\(0, 0, W, H\)/.test(ck),
+    'свечение лица ограничено рамкой лица: полноэкранного полупрозрачного градиента нет');
+  ok(!/createLinearGradient\(bx, by/.test(ck),
+    'языки пламени больше не строят по градиенту на каждый кадр');
+}
+
+
+console.log('\n[58] 1.28: казино — кейсы как в CS2/Standoff2 (десять ступеней, иконки, шансы под «?», без лагов)');
+{
+  const gm = fs.readFileSync('src/core/gamble.ts', 'utf8');
+  const css = fs.readFileSync('src/index.css', 'utf8');
+  const src = fs.readFileSync('src/pages/Casino.tsx', 'utf8');
+  const cases = src.slice(src.indexOf('function Cases('), src.indexOf('function Battle('));
+
+  /* ── линейка из десяти ступеней ── */
+  ok((gm.match(/price: \d/g) || []).length === 10,
+    'кейсов ровно десять ступеней (просьба 1.28: «мало, мало иконок»)');
+  ok(/id: "pack"/.test(gm) && /id: "throne"/.test(gm),
+    'линейка начинается с «ПАЧКИ БУЛОК» и кончается «ТРОНОМ ХАБА»');
+  ok(/price: 10_?000/.test(gm), 'верхняя ступень стоит 10 000 — «дорогущий, самый верхний»');
+  ok(/tier: 1[,\n][\s\S]*tier: 10/.test(gm), 'ступени пронумерованы 1…10: порядок «от дешёвых к дорогим» честный');
+  ok(/export const caseById/.test(gm) && /export const CHEAPEST_CASE/.test(gm) && /export const TOP_CASE/.test(gm),
+    'линейка доступна отовсюду через caseById/CHEAPEST_CASE/TOP_CASE (ферма, итоги забега)');
+  ok(/jackpot: \d/.test(gm) && /cap: \d/.test(gm),
+    'у кейса в данных есть джекпот и потолок содержимого — карточке есть что показать вместо процентов');
+
+  /* ── иконки и цвет ступени ── */
+  ok(/icon: "(case|gift|lock|burger|bolt|trophy|star|skull|crown)"/.test(gm) &&
+     /<Icon name=\{c\.icon\}/.test(cases),
+    'у каждого кейса своя иконка из данных, и она нарисована на корпусе');
+  ok(/tint: "#/.test(gm) && /\["--tint" as never\]: c\.tint/.test(cases),
+    'цвет ступени приходит из данных кейса и ложится в --tint корпуса');
+  ok(/\.pc-case-glow \{[\s\S]{0,240}?var\(--tint\)/.test(css) && /\.pc-case-mark \{/.test(css),
+    'подсветка и плашка редкости окрашены тинтом — десять кейсов различаются издалека');
+
+  /* ── содержимое ограничено ступенью ── */
+  ok(/for \(let guard = 0; guard < 4; guard\+\+\)/.test(gm) && /i\.value <= c\.cap/.test(gm),
+    'из редкости берётся только то, что не дороже потолка ступени, иначе — скат на редкость ниже');
+  ok(/export function caseExpectation/.test(gm),
+    'средний возврат кейса считается из весов (нужен для плашки «до» и для честности)');
+
+  /* ── шансы: маленькая «?» вместо полосы процентов ── */
+  ok(/className=\{`pc-case-mhelp \$\{odds \? "on" : ""\}`\}/.test(cases),
+    'шансы вызываются крошечной кнопкой «?» в шапке модалки');
+  ok(/\{odds && \(\n\s*<div className="pc-case-odds">/.test(cases),
+    'панель шансов существует только когда её открыли');
+  ok(!/pc-case-odds-line/.test(cases) && /макс\. ценность/.test(cases) && /\{fmt\(c\.jackpot\)\}/.test(cases),
+    'проценты убраны с карточек кейсов: осталась максимальная ценность (претензия «шансы занимают больше всего места»)');
+
+  /* ── модалка: две колонки, которые не ползут друг по другу ── */
+  ok(/\.pc-case-mbody \{[\s\S]{0,140}?minmax\(0, 1\.35fr\) minmax\(0, 1fr\)/.test(css),
+    'тело модалки — две колонки через minmax(0, …): ничего не налезает и не разъезжается');
+  ok(/\.pc-case-mright \{[\s\S]{0,320}?min-width: 0[\s\S]{0,200}?max-height: min\(52vh, 30rem\)/.test(css),
+    'правая колонка прокручивается внутри своей плашки и не раздувает модалку');
+
+  /* ── анимация: большая, плавная, с пропуском ── */
+  ok(/const SPIN_MS = 4400/.test(cases) &&
+     /\.pc-case-strip-tape \{[\s\S]{0,700}?transition: transform 4\.4s/.test(css),
+    'лента едет 4,4 с одним CSS-переходом: без шагов, без тряски и без per-frame JS');
+  ok(/const PRIZE_AT = 41/.test(cases) && /const ROLL_LEN = 46/.test(cases) &&
+     /translateX\(calc\(var\(--step\) \* -\$\{PRIZE_AT\}\)\)/.test(cases) &&
+     /i === PRIZE_AT \? "prize"/.test(cases),
+    'призовая ячейка посчитана (42-я из 46), остановка ленты и подсветка смотрят ровно на неё');
+  ok(/className="pc-case-skip"/.test(cases) && /const fastForward = \(\)/.test(cases),
+    'во время прокрутки в окне есть «ПРОПУСТИТЬ» (просьба 1.28 про ожидание результата)');
+  ok(/\.pc-case-strip-tape\.skip \{[\s\S]{0,160}?transition: transform 0\.32s/.test(css),
+    '«пропустить» — короткий доезд тем же переходом, а не скачок в конец');
+  ok(/const land = \(prize: ItemDef\) => \{\n\s*setSpinning\(false\);\n\s*setGot\(prize\);/.test(cases),
+    'итог показывается в тот же момент, когда лента встала');
+  ok(!/2600\)/.test(cases), 'лишний таймаут между остановкой ленты и итогом убран');
+  ok(/setSkip\(false\);\n\s*setArmed\(false\);/.test(cases), 'состояние «пропущено» сбрасывается при новом просмотре');
+}
+
+
+console.log('\n[59] 1.28: апгрейд — мультивыбор; батл — полоски');
+{
+  const src = fs.readFileSync('src/pages/Casino.tsx', 'utf8');
+  const css = fs.readFileSync('src/index.css', 'utf8');
+  const up = src.slice(src.indexOf('function Upgrade('), src.indexOf('/* ═══', src.indexOf('function Upgrade(')));
+  const bt = src.slice(src.indexOf('function Battle('), src.indexOf('/* ═══', src.indexOf('function Battle(')));
+
+  ok(/const \[sel, setSel\] = useState<Record<string, boolean>>\(\{\}\)/.test(up) &&
+     /setSel\(\(v\) => \(\{ \.\.\.v, \[id\]: !v\[id\] \}\)\)/.test(up),
+    'в апгрейд выбирается НЕСКОЛЬКО предметов (просьба 1.28: «мультивыбор»), тап переключает');
+  ok(/const stake = picked\.reduce\(\(a, x\) => a \+ x\.it\.value, 0\)/.test(up) &&
+     /staked: stake/.test(up),
+    'колесо крутится на суммарную ценность ставки, а не на одну вещь');
+  ok(/if \(left <= 0\) \{\n\s*delete items\[id\];/.test(up) && /if \(it && eq\[it\.kind\] === id\) delete eq\[it\.kind\]/.test(up),
+    'сгоревшие вещи удаляются из склада, а надетая сгоревшая вещь снимается с героя');
+  ok(/const \[fromId, setFromId\]/.test(up) === false,
+    'одиночный выбор из прошлого не остался второй параллельной системой');
+  ok(/pc-up-pickall/.test(up) && /\.pc-up-pickall \{/.test(css),
+    'есть «выбрать всё / очистить» — иначе мультивыбор был бы десятью тапами');
+
+  ok(/className="pc-battle-bars"/.test(bt) && /\.pc-battle-bars \{[\s\S]{0,120}?grid-column: 1 \/ -1/.test(css),
+    'у боя появились полоски участников на всю ширину табло');
+  ok(/className="pc-battle-pips"/.test(bt) && /\.pc-battle-pips i\.win \{/.test(css),
+    'дорожка раундов: забрал\|отдал\|ничья\|ещё не сыграно — видно без счёта в уме');
+  ok(/width: \`\$\{\(mineSum \/ Math\.max\(mineSum, foeSum, 1\)\) \* 100\}%\`/.test(bt),
+    'полоска считается от большего счёта: лидер заполнен, отстающий короче');
+}
+
+
+console.log('\n[60] 1.28: главная — плашка босса переделана под событие');
+{
+  const home = fs.readFileSync('src/pages/Home.tsx', 'utf8');
+  const css = fs.readFileSync('src/index.css', 'utf8');
+  ok(/className="boss2-ribbon"/.test(home) && /className="boss2-corners"/.test(home) && /className="boss2-sweep"/.test(home),
+    'у плашки есть лента «ивент часа», скобы по углам и проход света — украшение, о котором просили');
+  ok(/className="boss2-quote">«\{boss\.quote\}»/.test(home),
+    'на плашке читается реплика дежурного (раньше был только ник)');
+  ok(/className="boss2-loot"/.test(home) && /boss\.reward\.coins/.test(home) &&
+     /boss\.reward\.chips/.test(home) && /boss\.reward\.xp/.test(home),
+    'награда босса видна до входа в бой: монеты, жетоны, опыт');
+  ok(/className="boss2-stats"/.test(home) && /GIMMICK\[boss\.gimmick\]/.test(home),
+    'прочность, урон и особая механика подписаны — «чем он опасен» больше не загадка');
+  ok(/html\.low-fx \.boss2-sweep \{ display: none; \}/.test(css),
+    'в лёгком режиме проход света по плашке выключен');
+  ok(/\.boss2-stats \{[\s\S]{0,120}?grid-column: 1 \/ -1/.test(css),
+    'строка характеристик тянется на всю ширину баннера, а не ломает сетку');
+}
+
+
+console.log('\n[61] 1.28: ферма — оптимизация цикла');
+{
+  const src = fs.readFileSync('src/pages/Casino.tsx', 'utf8');
+  const farm = src.slice(src.indexOf('function ChipFarm('), src.indexOf('/* ═══', src.indexOf('function ChipFarm(')));
+  const css = fs.readFileSync('src/index.css', 'utf8');
+
+  ok(/chipsRef = useRef<FarmChip\[\]>\(\[\]\)/.test(farm) && !/useEffect\(\(\) => \{ chipsRef\.current = chips; \}/.test(farm),
+    'список фишек живёт в ref: зеркала «ref ← state ← ref» и второго прохода фильтра в кадр нет');
+  ok(!/setChips\(\(cs\) =>/.test(farm),
+    'в setChips больше нет сайд-эффектов: комбо и «упущено» считаются ВНЕ апдейтера (StrictMode удваивал счётчик промахов)');
+  ok(/if \(changed\) \{\n\s*chipsRef\.current = live;\n\s*setChips\(live\);/.test(farm),
+    'в React уезжает максимум один setChips за кадр — и только когда список реально изменился');
+  ok(/taken: performance\.now\(\)/.test(farm) && !/window\.setTimeout\(\(\) => \{\n\s*setChips\(\(cs\) => cs\.filter/.test(farm),
+    'вылет фишки считается по метке времени в цикле, а не отдельным setTimeout на каждый тап');
+  ok(/className=\{`pc-farm-chip \$\{c\.gold \? "gold" : ""\} \$\{c\.taken \? "gone" : ""\}`\}/.test(farm) &&
+     /@keyframes farmOut \{/.test(css) && /html\.low-fx \.pc-farm-chip,/.test(css),
+    'сама фишка — CSS-анимация вместо framer-motion на каждую: меньше перерисовок на слабом ПК, в лёгком режиме выключено');
+}
+
+
+console.log('\n[62] 1.28: конфиг electron-builder жив — CI падает на валидации схемы, а не на «магии»');
+{
+  const yml = fs.readFileSync('desktop/builder.yml', 'utf8');
+  /* блоки верхнего уровня, БЕЗ строк-комментариев: иначе собственные пояснения
+     в yml («у `nsis:` additionalProperties:false») ловятся как содержимое */
+  const block = (key) => {
+    const out = [];
+    let on = false;
+    for (const l of yml.split('\n')) {
+      if (l.trim() && !/^\s/.test(l)) { on = l.trim().startsWith(key + ':'); continue; }
+      if (on && !l.trim().startsWith('#')) out.push(l);
+    }
+    return out.join('\n');
+  };
+  const nsis = block('nsis');
+  const win = block('win');
+  ok(!/publisherName/.test(nsis) && /publisherName/.test(win),
+    'publisherName стоит под win: (в схеме electron-builder у nsis additionalProperties:false — прошлая правка роняла сборку EXE на валидации конфига)');
+  ok(/signAndEditExecutable: true/.test(win),
+    'свойства файла (CompanyName/ProductName) пишет electron-builder — без сертификата, но честно');
+  const wf = fs.readFileSync('.github/workflows/build-apk.yml', 'utf8');
+  ok(!/uses: android-actions\/setup-android@v3/.test(wf) && /Prepare Android SDK/.test(wf) &&
+     /usr\/local\/lib\/android\/sdk/.test(wf),
+    'SDK для APK берётся с раннера (с ручным cmdline-tools на крайний случай): упавший из-за Node 24 экшен убран');
+  ok(/set \+e/.test(wf) && !/sdkmanager --version 2>\/dev\/null \| head/.test(wf),
+    'диагностика SDK не гонит sdkmanager через head: под `set -o pipefail` SIGPIPE от head убивал шаг с кодом 141');
+  ok(/commandlinetools-linux-\d+_latest\.zip/.test(wf) && !/commandlinetools-linux-[0-9]+\.[0-9]+_latest/.test(wf),
+    'cmdline-tools качаются по точному имени архива (псевдо-версии вида 11.0 — это 404)');
+}
+
+console.log('\n[63] 1.28 · иконка и логотип из присланного арта (не «наш бургер»)');
+{
+  const ico63 = fs.readFileSync('scripts/build-icons.mjs', 'utf8');
+  const brand63 = fs.readFileSync('src/ui/Brand.tsx', 'utf8');
+  const boot63 = fs.readFileSync('src/ui/BootScreen.tsx', 'utf8');
+  const flag63 = fs.readFileSync('src/core/brandAsset.ts', 'utf8');
+
+  const px = (f) => {
+    const b = fs.readFileSync(f);
+    // IHDR PNG: 8 байт сигнатуры, длина, тип, затем width/height big-endian
+    return b.subarray(16, 24).readUInt32BE(0) + 'x' + b.subarray(20, 24).readUInt32BE(0);
+  };
+  const has = (f) => fs.existsSync(f);
+
+  ok(has('branding/chubugamesmaxlogo.png') && has('branding/chubulogo.png'),
+    'исходники арта лежат в branding/ — их не надо приносить заново в каждой сборке');
+  ok(ico63.includes('PH_PNG') && /quality: 96/.test(ico63),
+    'растры отдаются 256-цветным PNG: иконка ездит внутри APK и не должна весить мегабайты');
+
+  //launcher-иконка: 48dp по всем пяти плотностям + слои 108dp
+  for (const [d, k] of [['mdpi', 1], ['hdpi', 1.5], ['xhdpi', 2], ['xxhdpi', 3], ['xxxhdpi', 4]]) {
+    const base = Math.round(48 * k);
+    const fg = Math.round(108 * k);
+    ok(px(`android-icons/mipmap-${d}/ic_launcher.png`) === base + 'x' + base,
+      `mipmap-${d}/ic_launcher.png — ровно ${base}px: плотность выбрана правильно`);
+    ok(px(`android-icons/mipmap-${d}/ic_launcher_foreground.png`) === fg + 'x' + fg &&
+       px(`android-icons/mipmap-${d}/ic_launcher_monochrome.png`) === fg + 'x' + fg,
+      `mipmap-${d}: adaptive-слои на холсте ${fg}px (108dp) — force-max-аспект Android не обрежет`);
+    ok(has(`android-icons/mipmap-${d}/ic_launcher_round.png`),
+      `mipmap-${d}/ic_launcher_round.png — круглая версия на месте`);
+  }
+
+  const ico63b = fs.readFileSync('desktop/res/icon.ico');
+  ok(ico63b.readUInt16LE(2) === 1 && ico63b.readUInt16LE(4) === 7,
+    'icon.ico — контейнер типа «иконка» с семью размерами, а не переименованный PNG');
+  ok(ico63b[6] === 16 && ico63b[7] === 16,
+    'первая запись ICO — 16px: на мелочи Windows берёт её, а не растягивает 256');
+  const off0 = ico63b.readUInt32LE(6 + 12);
+  ok(ico63b.subarray(off0, off0 + 8).toString('hex') === '89504e470d0a1a0a',
+    'внутри ICO лежат PNG-тела (Vista+), иначе Windows показывает мыло на 256px');
+
+  ok(has('public/brand/logo.png') && has('public/brand/logo-glyph.png'),
+    'логотип интерфейса собран из присланного знака — оба файла лежат в public/brand/');
+  ok(/HAS_BRAND_LOGO = true/.test(flag63),
+    'brandAsset.ts говорит, что присланный растр есть: интерфейс показывает его, а не вектор');
+  ok(/BRAND_LOGO_IS_GLYPH = false/.test(flag63),
+    'цветная плашка важнее плоского знака: в шапке и на заставке — она же, что и на рабочем столе');
+  ok(/const ui = BRAND \|\| MARK;/.test(ico63),
+    'приоритет источника зашит в генератор: есть цвет — берём цвет, нет — силуэт под тему');
+  ok(/BRAND_LOGO_IS_GLYPH \?\s*\(/.test(brand63) && /url\(\$\{BRAND_LOGO_GLYPH_URL\}\)/.test(brand63) &&
+     /background: "var\(--acc\)"/.test(brand63),
+    'BrandMark: силуэт лежит под маской и берёт цвет акцента темы — читаем и на тёмной, и на белой');
+  ok(boot63.includes('BRAND_LOGO_GLYPH_URL') && /opacity: glyph && !low \? 0 : 1/.test(boot63),
+    'заставка: вектор собирается, а потом встает присланный знак — шапка, иконка и заставка показывают одно');
+  ok(/glyph && low/.test(boot63),
+    'на слабом железе заставка не анимирует перетекание, а сразу отдаёт готовый знак');
+}
 
 console.log(fails===0?'\n✅ ВСЕ ПРОВЕРКИ ВЁРСТКИ ПРОЙДЕНЫ\n':`\n❌ ПРОВАЛЕНО: ${fails}\n`);
 process.exit(fails?1:0);

@@ -2,6 +2,7 @@ import { motion } from "framer-motion";
 import { springSoft } from "../core/motion";
 import { sfx, haptic } from "../core/fx";
 import { useGame } from "../core/store";
+import { claimableCount, claimables } from "../core/claimable";
 
 export type Tab = "home" | "progress" | "shop" | "friends" | "settings";
 
@@ -44,7 +45,7 @@ const TABS: { id: Tab; label: string; icon: (a: boolean) => React.ReactNode }[] 
     ),
   },
   {
-    id: "settings", label: "nav.more",
+    id: "settings", label: "nav.settings",
     icon: (a) => (
       <svg width="21" height="21" viewBox="0 0 24 24" fill={a ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2">
         <circle cx="12" cy="12" r="3.2" />
@@ -55,32 +56,37 @@ const TABS: { id: Tab; label: string; icon: (a: boolean) => React.ReactNode }[] 
 ];
 
 export default function Nav({ tab, onTab }: { tab: Tab; onTab: (t: Tab) => void }) {
-  const { t } = useGame();
+  const { t, s } = useGame();
+  /* Красный кружок с «!» на «Прогрессе»: ровно то, о чём просили — увидеть
+     ещё до входа, что внутри лежит награда. Считаем по всем четырём
+     источникам (ежедневка, задания, сундук, босс). */
+  const loot = claimableCount(claimables(s)) > 0;
   return (
     <div
-      className="fixed left-0 right-0 z-50"
+      className="m-nav fixed left-0 right-0 z-50"
       style={{
         bottom: 0,
         // запас под системную полоску жестов Xiaomi/iPhone
-        padding: "0 12px calc(var(--sab) + 10px)",
-        paddingTop: 10,
-        // растушёвка, чтобы контент не «упирался» в панель
+        padding: "0 10px calc(var(--sab) + 10px)",
+        paddingTop: 12,
+        // растушёвка, чтобы контент не «упирался» в панель: сама панель
+        // стеклянная (m-nav-bar), поэтому градиент нужен только под ней
         background:
-          "linear-gradient(to top, var(--bg) 62%, color-mix(in srgb, var(--bg) 55%, transparent) 88%, transparent)",
+          "linear-gradient(to top, var(--bg) 46%, color-mix(in srgb, var(--bg) 40%, transparent) 82%, transparent)",
       }}
     >
+      {/*
+       * Стиль полосы — в CSS (класс m-nav-bar): преломление, блик по верхней
+       * кромке и тень в два слоя. Здесь только геометрия.
+       */}
       <div
-        className="flex items-center justify-around relative"
-        style={{
-          borderRadius: 18,
-          padding: "7px 5px",
-          background: "var(--nav-bg)",
-          border: "1px solid var(--nav-brd)",
-          boxShadow: "0 -2px 24px -8px rgba(0,0,0,0.6), 0 8px 28px -14px rgba(0,0,0,0.9)",
-        }}
+        className="m-nav-bar flex items-center justify-around relative"
+        style={{ padding: "7px 5px" }}
       >
         {TABS.map((item) => {
           const active = tab === item.id;
+          /* min-width:0 обязателен: flex-1 без него не сжимается уже
+             содержимого, и «Персонажи» выползали за свою кнопку. */
           return (
             <button
               key={item.id}
@@ -90,21 +96,21 @@ export default function Nav({ tab, onTab }: { tab: Tab; onTab: (t: Tab) => void 
                 haptic("light");
                 onTab(item.id);
               }}
-              className="relative flex flex-col items-center justify-center flex-1 py-1.5"
-              style={{ color: active ? "var(--acc-ink)" : "var(--text-mute)", zIndex: 2 }}
+              className="m-nav-item relative flex flex-col items-center justify-center flex-1 py-1.5"
+              style={{ minWidth: 0, color: active ? "var(--acc-ink)" : "var(--text-mute)", zIndex: 2 }}
             >
               {active && (
                 <motion.div
                   layoutId="navpill"
                   transition={springSoft}
-                  className="absolute"
+                  className="m-nav-pill absolute"
                   style={{
-                    inset: "-1px 4px", borderRadius: 13, background: "var(--acc)",
-                    boxShadow: "0 6px 20px -6px var(--acc-glow)", zIndex: -1,
+                    inset: "-1px 4px", borderRadius: "var(--r-md)", background: "var(--acc)", zIndex: -1,
                   }}
                 />
               )}
               <motion.div
+                className="m-nav-ico"
                 animate={{ scale: active ? 1.08 : 1, y: active ? -1.5 : 0 }}
                 transition={springSoft}
               >
@@ -112,12 +118,17 @@ export default function Nav({ tab, onTab }: { tab: Tab; onTab: (t: Tab) => void 
               </motion.div>
               <span
                 style={{
-                  fontSize: 8.5, fontWeight: 800, letterSpacing: "0.06em",
+                  fontSize: 8.5, fontWeight: 800, letterSpacing: "0.04em",
                   marginTop: 2.5, textTransform: "uppercase",
+                  maxWidth: "100%", width: "100%", textAlign: "center",
+                  overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
                 }}
               >
                 {t(item.label)}
               </span>
+              {item.id === "progress" && loot && (
+                <span className="m-nav-flag" aria-label={t("nav.hasLoot")} />
+              )}
             </button>
           );
         })}
