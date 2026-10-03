@@ -314,9 +314,6 @@ export default function Settings({
           onToggle={() => set((d) => { d.settings.fx = !d.settings.fx; })}
         />
         <Divider inset={14} />
-        {/* Блок «Производительность» убран по просьбе пользователя:
-            режим и так определяется автозамером FPS при запуске. */}
-        <Divider inset={14} />
         <Seg
           label={t("settings.language")}
           value={s.settings.lang || "ru"}

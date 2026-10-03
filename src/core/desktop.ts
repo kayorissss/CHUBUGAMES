@@ -28,14 +28,21 @@ export const isDesktop = (): boolean => {
   if (typeof window === "undefined") return false;
   // Протокол app:// поднимает только наша Electron-оболочка
   if (window.location.protocol === "app:") return true;
-  // Запас на случай запуска через electron в разработке
-  if (/electron/i.test(navigator.userAgent)) return true;
+  // Запас на случай запуска через electron в разработке или при наличии моста
+  if (/electron/i.test(navigator.userAgent) || Boolean((window as any).chubDesktop)) return true;
   if (/[?&]pc=1/.test(window.location.search) || window.location.hash === "#pc") return true;
+  if (/[?&]pc=0/.test(window.location.search) || window.location.hash === "#mobile") return false;
   try {
-    return localStorage.getItem(FORCE_KEY) === "1";
+    const forced = localStorage.getItem(FORCE_KEY);
+    if (forced === "1") return true;
+    if (forced === "0") return false;
   } catch {
-    return false;
+    /* приватный режим */
   }
+  // В браузере на ПК и в веб-предпросмотре автоматически включаем ПК-раскладку
+  const isMobileUa = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || "");
+  if (!isMobileUa && window.innerWidth >= 760) return true;
+  return false;
 };
 
 /** Включить/выключить ПК-раскладку вручную (тумблер в настройках) */

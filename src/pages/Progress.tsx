@@ -223,10 +223,10 @@ function Daily() {
         <ModesPanel />
       </div>
 
-      /* ЗОНА 3 — показатели сезона и заданий.
+      {/* ЗОНА 3 — показатели сезона и заданий.
          Уровень здесь был ВТОРЫМ: крупная плашка уровня уже живёт первым
          блоком страницы, и дубль попросили убрать. Сезонный опыт и счётчик
-         готовых заданий оставили — уровень они не повторяют. */
+         готовых заданий оставили — уровень они не повторяют. */}
       <div className="pc-blk pc-a pc-r2">
         <SectionTitle>{tr("Сезон и задания")}</SectionTitle>
         <Card r="lg" style={{ padding: 14, marginBottom: 0 }}>
@@ -335,7 +335,7 @@ function Season() {
         )}
       </Card>
 
-      <div className="flex flex-col" style={{ gap: 8 }}>
+      <div className="flex flex-col pc-season-grid" style={{ gap: 8 }}>
         {Array.from({ length: SEASON_TIERS }).map((_, i) => {
           const rw = seasonReward(i);
           const unlocked = i < tier;
@@ -463,8 +463,9 @@ function Skills() {
         )}
       </Card>
 
+      <div className="pc-skills-grid">
       {branches.map((b) => (
-        <div key={b.k} style={{ marginBottom: 22 }}>
+        <div key={b.k} className="pc-skill-col" style={{ marginBottom: 22 }}>
           <SectionTitle>
             <span className="inline-flex items-center" style={{ gap: 7 }}>
               <Icon name={b.icon} size={14} accent /> {b.name}
@@ -511,6 +512,7 @@ function Skills() {
           })}
         </div>
       ))}
+      </div>
     </>
   );
 }
@@ -550,14 +552,15 @@ function Achievements({ onPlay }: { onPlay?: (g: GameId) => void }) {
         <Chip active={filter === "todo"} onClick={() => setFilter("todo")}>{tr("Не получены")}</Chip>
         <Chip active={filter === "done"} onClick={() => setFilter("done")}>{tr("Получены")}</Chip>
       </div>
+      <div className="pc-ach-grid">
       {list.map((a, i) => {
         const done = !!s.achievements[a.id];
         const to = onPlay ? achTarget(a.id) : null;
         return (
           <motion.div key={a.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: Math.min(0.3, i * 0.02) }}>
             <Card
-              r="md" tone={2} className="flex items-center"
-              style={{ padding: 12, gap: 12, marginBottom: 8, opacity: done ? 1 : 0.58 }}
+              r="md" tone={2} className="flex items-center pc-ach-card"
+              style={{ padding: 12, gap: 12, marginBottom: 8, opacity: done ? 1 : 0.68 }}
               onClick={to && !done ? () => { sfx.click(); onPlay?.(to.game); } : undefined}
             >
               <div
@@ -586,9 +589,6 @@ function Achievements({ onPlay }: { onPlay?: (g: GameId) => void }) {
                 <span className="t-num" style={{ fontSize: 11.5, color: done ? "var(--acc)" : "var(--text-mute)" }}>
                   +{fmt(a.reward)}
                 </span>
-                {/* «незакрытые кликабельны и ведут в нужный режим» — просьба
-                    дословная; куда вести — подписано, чтобы это не был
-                    тычок вслепую */}
                 {to && !done && (
                   <span className="pc-ach-go">
                     {to.label}
@@ -600,6 +600,7 @@ function Achievements({ onPlay }: { onPlay?: (g: GameId) => void }) {
           </motion.div>
         );
       })}
+      </div>
     </>
   );
 }
@@ -626,10 +627,11 @@ function Stats() {
   return (
     <>
       <SectionTitle>{tr("По играм")}</SectionTitle>
+      <div className="pc-stats-grid">
       {GAME_META.map((g) => {
         const st = s.games[g.id];
         return (
-          <Card key={g.id} r="md" tone={2} style={{ padding: 13, marginBottom: 8 }}>
+          <Card key={g.id} r="md" tone={2} className="pc-stat-card" style={{ padding: 13, marginBottom: 8 }}>
             <div className="flex items-center" style={{ gap: 9, marginBottom: 12 }}>
               <span style={{ lineHeight: 0 }}><GameIcon id={g.id} size={19} /></span>
               <span className="t-title-sm clip1">{g.name}</span>
@@ -643,6 +645,7 @@ function Stats() {
           </Card>
         );
       })}
+      </div>
       <div style={{ marginTop: 22 }}>
         <SectionTitle>{tr("Общее")}</SectionTitle>
       </div>

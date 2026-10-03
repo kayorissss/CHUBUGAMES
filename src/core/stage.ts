@@ -56,8 +56,11 @@ export function writeStage(s: StageSettings) {
  * новой ПК-раскладки (.pc-bar, .pc-tiles в index.css).
  */
 export function autoScale(winW: number): number {
-  const k = Math.pow(Math.max(320, winW) / 1366, 0.85);
-  return Math.max(0.95, Math.min(1.5, Math.round(k * 100) / 100));
+  if (winW < 1024) return 0.92;
+  if (winW < 1260) return 0.96;
+  if (winW <= 1960) return 1.0;
+  const k = 1 + Math.min(0.08, (winW - 1960) / 12000);
+  return Math.round(k * 100) / 100;
 }
 
 export function computeScale(winW: number, mode: UiScaleMode, zoom: number): number {

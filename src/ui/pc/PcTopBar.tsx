@@ -96,7 +96,7 @@ export function PcWinControls({ floating = false }: { floating?: boolean }) {
 
   return (
     <div
-      className={`pc-win-controls ${floating ? "pc-win-floating" : ""}`}
+      className={`pc-win-controls ${floating ? "floating pc-win-floating" : ""}`}
       role="group"
       aria-label={tr("Управление окном")}
     >
@@ -133,7 +133,7 @@ export function PcWinControls({ floating = false }: { floating?: boolean }) {
 
       <button
         type="button"
-        className="pc-win-btn close"
+        className="pc-win-btn pc-win-close close"
         onClick={onClose}
         title={tr("Закрыть")}
         aria-label={tr("Закрыть")}
@@ -216,7 +216,9 @@ export default function PcTopBar({
               onClick={() => trigger(it.to)}
               className={`pc-tab ${on ? "on" : ""}`}
             >
-              <Icon name={it.icon} size={14} />
+              <span className="pc-tab-ico">
+                <Icon name={it.icon} size={15} />
+              </span>
               <span className="pc-tab-label">{tr(it.label)}</span>
               {dot && <span className="pc-tab-dot" aria-label={tr("есть награда")} />}
             </button>
@@ -224,7 +226,7 @@ export default function PcTopBar({
         })}
       </nav>
 
-      {/* Правая часть: уровень, валюты, квадратно-скруглённые Поддержка и Настройки, кнопки окна */}
+      {/* Правая часть: уровень, валюты, квадратно-скруглённые иконки Поддержка и Настройки, кнопки окна */}
       <div className="pc-bar-tail">
         <button
           type="button"
@@ -245,7 +247,7 @@ export default function PcTopBar({
             className="pc-bar-coin"
             title={tr("Монеты — открыть магазин")}
           >
-            <span className="pc-coin-dot" />
+            <Icon name="coin" size={13} accent />
             <span className="t-num">{fmt(s.coins)}</span>
           </button>
 
@@ -255,7 +257,7 @@ export default function PcTopBar({
             className="pc-bar-coin gem"
             title={tr("Кристаллы")}
           >
-            <span className="pc-gem-dot" />
+            <Icon name="gem" size={13} />
             <span className="t-num">{fmt(s.gems)}</span>
           </button>
 
@@ -265,40 +267,36 @@ export default function PcTopBar({
             className="pc-bar-coin chip"
             title={tr("Жетоны казино")}
           >
-            <Icon name="dice" size={12} />
+            <Icon name="dice" size={13} />
             <span className="t-num">{fmt(chips)}</span>
           </button>
         </div>
 
-        {/* Квадратно-закруглённые кнопки Поддержать и Настройки в верхней панели */}
-        <div className="pc-bar-actions" role="group" aria-label={tr("Быстрые действия")}>
+        {/* Квадратно-закруглённые иконки Поддержать и Настройки в верхней панели */}
+        <div className="pc-bar-actions pc-top-actions" role="group" aria-label={tr("Быстрые действия")}>
           <button
             type="button"
             onClick={() => {
               sfx.click();
               setSubFn(onDonate ? null : "donate");
             }}
-            className={`pc-sq-btn heart ${onDonate ? "on" : ""}`}
-            title={tr("Поддержать проект")}
+            className={`pc-sq-btn pc-sq-support heart ${onDonate ? "on" : ""}`}
+            title={tr("Поддержать")}
             aria-label={tr("Поддержать")}
           >
-            <Icon name="heart" size={15} />
-            <span className="pc-sq-label">{tr("Поддержать")}</span>
+            <Icon name="heart" size={16} />
           </button>
 
           <button
             type="button"
             onClick={() => go("settings")}
-            className={`pc-sq-btn gear ${onSettings ? "on" : ""}`}
+            className={`pc-sq-btn gear ${onSettings ? "on" : ""} ${later ? "has-update" : ""}`}
             title={later ? `${tr("Настройки")} · ${tr("доступна версия")} ${later}` : tr("Настройки")}
             aria-label={tr("Настройки")}
           >
-            <Icon name="gear" size={15} />
-            <span className="pc-sq-label">{tr("Настройки")}</span>
+            <Icon name="gear" size={16} />
             {later && (
-              <span className="pc-sq-flag pc-round-flag" aria-label={tr("есть обновление")}>
-                !
-              </span>
+              <span className="pc-sq-flag pc-round-flag" aria-label={tr("есть обновление")} />
             )}
           </button>
         </div>

@@ -260,7 +260,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
     const light = s.settings.theme === "light";
     const tk = accentTokens(acc.hex, {
       light,
-      surface: light ? "#ffffff" : "#16161c",
+      surface: light ? "#ffffff" : "#111726",
       mono: acc.id === "mono" || acc.id === "grey",
     });
     for (const k in tk) root.style.setProperty(`--${k}`, tk[k]);

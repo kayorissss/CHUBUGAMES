@@ -773,7 +773,7 @@ function Themes() {
   return (
     <>
       <SectionTitle>{tr("Темы")}</SectionTitle>
-      <div className="grid grid-cols-2" style={{ gap: 12 }}>
+      <div className="grid grid-cols-2 pc-themes-grid" style={{ gap: 12 }}>
         {ACCENTS.map((a) => {
           const owned = s.ownedThemes.includes(a.id);
           const active = s.settings.accent === a.id;

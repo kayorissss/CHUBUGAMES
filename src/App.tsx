@@ -104,8 +104,14 @@ function CrashWatch() {
 
 function Shell() {
   const { s, toast } = useGame();
-  /** ПК-раскладка: верхняя панель вместо нижнего меню, две колонки на главной */
-  const pc = isDesktop();
+  /** ПК-раскладка: верхняя панель вместо нижнего меню, широкая сетка разделов */
+  const [pc, setPc] = useState(() => {
+    const on = isDesktop();
+    if (typeof document !== "undefined") {
+      document.documentElement.classList.toggle("is-desktop", on);
+    }
+    return on;
+  });
   const [splash, setSplash] = useState(true);
   /*
    * Стартовый раздел умеет приходить из адреса: ?tab=settings. Нужно это
@@ -171,7 +177,18 @@ function Shell() {
    * Класс на <html> позволяет прятать чисто мобильные элементы.
    */
   useEffect(() => {
-    if (!isDesktop()) return;
+    const syncPc = () => {
+      const next = isDesktop();
+      document.documentElement.classList.toggle("is-desktop", next);
+      setPc(next);
+    };
+    syncPc();
+    window.addEventListener("resize", syncPc);
+    return () => window.removeEventListener("resize", syncPc);
+  }, []);
+
+  useEffect(() => {
+    if (!pc) return;
     document.documentElement.classList.add("is-desktop");
     const offKeys = initDesktopKeys();
     const offStage = initStage();
@@ -187,7 +204,7 @@ function Shell() {
       offStage();
       window.removeEventListener("chub:nav", onNav);
     };
-  }, []);
+  }, [pc]);
 
   /* При первом запуске система сама спросит про уведомления — тумблер в
      настройках после этого только включает и выключает напоминания.
